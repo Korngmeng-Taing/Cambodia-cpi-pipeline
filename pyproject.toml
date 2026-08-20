@@ -70,7 +70,7 @@ exclude = [
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
-ignore = ["E501"]
+ignore = ["E501", "EXE002", "BLE001", "DTZ007", "S110", "RUF015", "SIM117"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"

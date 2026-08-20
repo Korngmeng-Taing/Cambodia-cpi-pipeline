@@ -133,13 +133,12 @@ def segment_khmer_words(text: str) -> str:
     """
     if not text:
         return text
-    # Khmer consonant cluster boundary: starts with base consonant (U+1780 - U+17B3)
-    # followed by dependent vowels/subscripts (U+17B4 - U+17D3)
-    khmer_cluster_pattern = re.compile(r'([\u1780-\u17B3][\u17B4-\u17D3]*)')
     # Replace dictionary matches with space-delimited English equivalents
     for k, v in _KHMER_TERMS.items():
         text = text.replace(k, f" {v} ")
-    return text
+    # Segment remaining unspaced Khmer consonant clusters
+    text = re.sub(r"([\u1780-\u17B3][\u17B4-\u17D3]*)", r" \1 ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def clean_name_for_matching(raw: str | None) -> str:

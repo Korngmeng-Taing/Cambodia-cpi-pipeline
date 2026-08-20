@@ -45,7 +45,7 @@ with DAG(
     dag_id=DAG_ID,
     description="Cambodia CPI Master Medallion Pipeline: Bronze (20 Scrapers) → Silver → COICOP AI → Gold",
     start_date=pendulum.datetime(2024, 1, 1, tz=local_tz),
-    schedule="0 6 * * *",  # Daily at 06:00 Phnom Penh time
+    schedule="0 7 * * *",  # Daily at 07:00 Phnom Penh time
     catchup=False,
     default_args=DEFAULT_ARGS,
     tags=["cpi", "master", "medallion", "minio", "dbt", "geks", "production"],

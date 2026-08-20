@@ -28,7 +28,7 @@ jobs:
       - name: Install Lint Tools
         run: |
           pip install --upgrade pip
-          pip install ruff black
+          pip install ruff
 
       - name: Run Ruff Lint (Syntax & Critical Errors)
         run: |

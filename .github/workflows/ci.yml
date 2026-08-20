@@ -112,6 +112,7 @@ jobs:
           DB_USER: cpi_user
           DB_PASS: cpi_pass
         run: |
+          dbt deps --project-dir dbt --profiles-dir dbt
           dbt compile --project-dir dbt --profiles-dir dbt --target cpi_target
           dbt seed --project-dir dbt --profiles-dir dbt --target cpi_target
 

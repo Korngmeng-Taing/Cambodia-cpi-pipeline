@@ -111,8 +111,7 @@ jobs:
           DB_NAME: cpi_db
           DB_USER: cpi_user
           DB_PASS: cpi_pass
-          DBT_PROFILES_DIR: ./dbt
         run: |
-          cd dbt
-          dbt compile --target cpi_target
-          dbt seed --target cpi_target
+          dbt compile --project-dir dbt --profiles-dir dbt --target cpi_target
+          dbt seed --project-dir dbt --profiles-dir dbt --target cpi_target
+

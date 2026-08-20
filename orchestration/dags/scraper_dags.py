@@ -89,13 +89,11 @@ for _source_slug in SCRAPER_REGISTRY.keys():
     globals()[f"scrape_{_source_slug}_dag"] = _build_scraper_dag(_source_slug)
 
 # Dedicated named DAG for Khmer Samnang Shop (scrape_somnangshop_dag)
-scrape_somnangshop_dag = _build_scraper_dag("samnangshop", dag_id="scrape_somnangshop_dag")
+scrape_somnangshop_dag = _build_scraper_dag(
+    "samnangshop", dag_id="scrape_somnangshop_dag"
+)
 globals()["scrape_somnangshop_dag"] = scrape_somnangshop_dag
 
 # Dedicated named DAG for BookMeBus (scrape_bookMeBus_dag)
 scrape_bookMeBus_dag = _build_scraper_dag("bookmebus", dag_id="scrape_bookMeBus_dag")
 globals()["scrape_bookMeBus_dag"] = scrape_bookMeBus_dag
-
-
-
-

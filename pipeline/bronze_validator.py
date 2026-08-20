@@ -63,7 +63,12 @@ def _get_s3_client() -> boto3.client:
             endpoint_url=endpoint,
             aws_access_key_id=MINIO_ACCESS_KEY,
             aws_secret_access_key=MINIO_SECRET_KEY,
-            config=Config(signature_version="s3v4", connect_timeout=5, read_timeout=30, retries={"max_attempts": 3}),
+            config=Config(
+                signature_version="s3v4",
+                connect_timeout=5,
+                read_timeout=30,
+                retries={"max_attempts": 3},
+            ),
             region_name="us-east-1",
         )
         client.list_buckets()
@@ -78,7 +83,12 @@ def _get_s3_client() -> boto3.client:
             endpoint_url=alt,
             aws_access_key_id=MINIO_ACCESS_KEY,
             aws_secret_access_key=MINIO_SECRET_KEY,
-            config=Config(signature_version="s3v4", connect_timeout=5, read_timeout=30, retries={"max_attempts": 3}),
+            config=Config(
+                signature_version="s3v4",
+                connect_timeout=5,
+                read_timeout=30,
+                retries={"max_attempts": 3},
+            ),
             region_name="us-east-1",
         )
         client.list_buckets()
@@ -97,8 +107,12 @@ def list_parquet_keys(source_name: str, scrape_date: str) -> list[str]:
                 if obj["Key"].endswith(".parquet"):
                     keys.append(obj["Key"])
     except ClientError as exc:
-        raise AirflowException(f"Failed to list MinIO objects under '{prefix}': {exc}") from exc
-    log.info("Found %d parquet file(s) for %s on %s", len(keys), source_name, scrape_date)
+        raise AirflowException(
+            f"Failed to list MinIO objects under '{prefix}': {exc}"
+        ) from exc
+    log.info(
+        "Found %d parquet file(s) for %s on %s", len(keys), source_name, scrape_date
+    )
     return keys
 
 
@@ -143,7 +157,14 @@ def _read_snapshot_stats(s3_keys: list[str]) -> dict[str, Any]:
     }
 
 
-def _upsert_stats(source_name: str, scrape_date: str, stats: dict[str, Any], status: str, message: str, s3_keys: list[str]) -> None:
+def _upsert_stats(
+    source_name: str,
+    scrape_date: str,
+    stats: dict[str, Any],
+    status: str,
+    message: str,
+    s3_keys: list[str],
+) -> None:
     conn = _get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -212,11 +233,18 @@ def validate_bronze_parquet(source_name: str, scrape_date: str) -> dict[str, Any
         errors.append(f"raw_price contains {stats['price_nulls']} null value(s)")
 
     if stats["price_negatives"] > 0:
-        errors.append(f"raw_price contains {stats['price_negatives']} negative value(s)")
+        errors.append(
+            f"raw_price contains {stats['price_negatives']} negative value(s)"
+        )
 
     if errors:
         message = "; ".join(errors)
-        log.error("Bronze validation FAILED for %s on %s: %s", source_name, scrape_date, message)
+        log.error(
+            "Bronze validation FAILED for %s on %s: %s",
+            source_name,
+            scrape_date,
+            message,
+        )
         _upsert_stats(source_name, scrape_date, stats, "FAILED", message, s3_keys)
         raise AirflowException(
             f"Bronze validation FAILED for {source_name} on {scrape_date}: {message}"
@@ -224,5 +252,12 @@ def validate_bronze_parquet(source_name: str, scrape_date: str) -> dict[str, Any
 
     message = f"OK: {stats['row_count']} rows, avg_7d={avg_7d:.0f}"
     _upsert_stats(source_name, scrape_date, stats, "PASSED", message, s3_keys)
-    log.info("Bronze validation PASSED for %s on %s: %s", source_name, scrape_date, message)
-    return {"source_name": source_name, "scrape_date": scrape_date, "status": "PASSED", **stats}
+    log.info(
+        "Bronze validation PASSED for %s on %s: %s", source_name, scrape_date, message
+    )
+    return {
+        "source_name": source_name,
+        "scrape_date": scrape_date,
+        "status": "PASSED",
+        **stats,
+    }

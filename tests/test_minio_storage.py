@@ -27,7 +27,9 @@ class _FakeS3Client:
 
 @pytest.fixture
 def fake_storage():
-    storage = MinioStorage(endpoint_url="http://fake:9000", bucket_name="cpi-bronze-test")
+    storage = MinioStorage(
+        endpoint_url="http://fake:9000", bucket_name="cpi-bronze-test"
+    )
     storage._client = _FakeS3Client()
     storage._client_initialized = True
     return storage

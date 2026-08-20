@@ -306,7 +306,12 @@ def classify_names(
             for name in batch:
                 seen.setdefault(name, _unclassified_result(name))
 
-    return {"results": seen, "cache_hits": cache_hits, "api_calls": api_calls, "failed": failed}
+    return {
+        "results": seen,
+        "cache_hits": cache_hits,
+        "api_calls": api_calls,
+        "failed": failed,
+    }
 
 
 def _unclassified_result(name: str) -> dict[str, Any]:
@@ -332,7 +337,9 @@ def fetch_unclassified(engine, table_name: str | None = None) -> list[dict[str, 
                 )
             ).fetchall()
             for r in q_res:
-                items.append({"canonical_item_id": str(r[0]), "canonical_name": str(r[1])})
+                items.append(
+                    {"canonical_item_id": str(r[0]), "canonical_name": str(r[1])}
+                )
         except Exception:
             pass
 
@@ -346,7 +353,9 @@ def fetch_unclassified(engine, table_name: str | None = None) -> list[dict[str, 
                     )
                 ).fetchall()
                 for r in dim_res:
-                    items.append({"canonical_item_id": str(r[0]), "canonical_name": str(r[1])})
+                    items.append(
+                        {"canonical_item_id": str(r[0]), "canonical_name": str(r[1])}
+                    )
             except Exception:
                 pass
 
@@ -452,7 +461,9 @@ def persist_classifications(
     Writes coicop_code / classification_method='gemini_ai' / confidence_score
     back into silver.classification_queue and silver.dim_canonical_products.
     """
-    by_name = {_normalize_name(i["canonical_name"]): i["canonical_item_id"] for i in items}
+    by_name = {
+        _normalize_name(i["canonical_name"]): i["canonical_item_id"] for i in items
+    }
     updates = []
     for name, result in results.items():
         cid = by_name.get(_normalize_name(name))
@@ -526,9 +537,18 @@ def persist_classifications(
             }
             try:
                 if is_low_conf:
-                    res_q = conn.execute(update_queue_pending_sql, {"canonical_item_id": row["canonical_item_id"]})
+                    res_q = conn.execute(
+                        update_queue_pending_sql,
+                        {"canonical_item_id": row["canonical_item_id"]},
+                    )
                 else:
-                    res_q = conn.execute(update_queue_resolved_sql, {"canonical_item_id": row["canonical_item_id"], "division": division})
+                    res_q = conn.execute(
+                        update_queue_resolved_sql,
+                        {
+                            "canonical_item_id": row["canonical_item_id"],
+                            "division": division,
+                        },
+                    )
                 n_queue += res_q.rowcount or 0
             except Exception:
                 pass
@@ -539,7 +559,9 @@ def persist_classifications(
                 pass
             try:
                 if scrape_date:
-                    mapping = update_mapping_sql.text + " AND scrape_date = :scrape_date"
+                    mapping = (
+                        update_mapping_sql.text + " AND scrape_date = :scrape_date"
+                    )
                     res_m = conn.execute(
                         text(mapping),
                         {**params, "scrape_date": scrape_date},
@@ -583,7 +605,9 @@ def classify_unclassified_with_gemini(
     update_cache(engine, outcome["results"])
     n_mapping = persist_classifications(engine, outcome["results"], items, scrape_date)
 
-    classified = sum(1 for r in outcome["results"].values() if r["coicop_code"] != UNCLASSIFIED)
+    classified = sum(
+        1 for r in outcome["results"].values() if r["coicop_code"] != UNCLASSIFIED
+    )
     return {
         "status": "OK",
         "candidates": len(items),

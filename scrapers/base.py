@@ -23,7 +23,9 @@ class BaseScraper(ABC):
         self.source_type = source_type
 
     @abstractmethod
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         """
         Extracts raw product and price records for the target store.
 

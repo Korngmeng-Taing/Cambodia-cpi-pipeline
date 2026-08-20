@@ -49,5 +49,6 @@ def clear_airflow_history():
         print(f"  - XComs removed: {xc_count}")
         print(f"  - Logs removed: {log_count}")
 
+
 if __name__ == "__main__":
     clear_airflow_history()

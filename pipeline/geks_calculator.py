@@ -183,15 +183,23 @@ class GEKSCalculator:
                 rows = cur.fetchall()
 
             if not rows:
-                log.warning("No price stats found for GEKS window %s to %s", start_date, target_date)
+                log.warning(
+                    "No price stats found for GEKS window %s to %s",
+                    start_date,
+                    target_date,
+                )
                 return None
 
             df = pd.DataFrame(rows, columns=["scrape_date", "item_id", "p_khr_jevons"])
             period_dict: dict[str, pd.Series] = {}
             for d, grp in df.groupby("scrape_date"):
-                period_dict[str(d)] = grp.set_index("item_id")["p_khr_jevons"].astype(float)
+                period_dict[str(d)] = grp.set_index("item_id")["p_khr_jevons"].astype(
+                    float
+                )
 
-            geks_results = self.calculate_multilateral_geks(period_dict, base_period=effective_base)
+            geks_results = self.calculate_multilateral_geks(
+                period_dict, base_period=effective_base
+            )
             target_res = geks_results.get(target_date)
             if not target_res:
                 return None
@@ -222,10 +230,16 @@ class GEKSCalculator:
                         prev_row = cur.fetchone()
 
                     if prev_row:
-                        final_index_value = round(float(prev_row[0]) * movement_ratio, 4)
+                        final_index_value = round(
+                            float(prev_row[0]) * movement_ratio, 4
+                        )
                         log.info(
                             "Applied Movement Splice for %s: prev=%s (idx=%.4f) * ratio=%.4f -> %.4f",
-                            target_date, prev_date, float(prev_row[0]), movement_ratio, final_index_value,
+                            target_date,
+                            prev_date,
+                            float(prev_row[0]),
+                            movement_ratio,
+                            final_index_value,
                         )
 
             # Upsert into gold.cpi_geks_multilateral
@@ -298,7 +312,9 @@ class GEKSCalculator:
             df = pd.DataFrame(rows, columns=["month_str", "item_id", "p_khr_month"])
             period_dict: dict[str, pd.Series] = {}
             for m, grp in df.groupby("month_str"):
-                period_dict[str(m)] = grp.set_index("item_id")["p_khr_month"].astype(float)
+                period_dict[str(m)] = grp.set_index("item_id")["p_khr_month"].astype(
+                    float
+                )
 
             return self.calculate_multilateral_geks(period_dict, base_period=base_month)
         finally:

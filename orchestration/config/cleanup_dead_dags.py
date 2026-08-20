@@ -24,27 +24,38 @@ from airflow.utils.session import create_session
 
 DEAD_DAG_IDS = [
     "cpi_medallion_pipeline_dag",  # old monolithic master (replaced by cpi_master_dag + per-source DAGs)
-    "foodpanda_dag",          # replaced by bayonBKK_dag (Foodpanda restaurant scrape)
-    "AeonMall_dag",           # replaced by aeon3_dag
-    "eaon_misc_dag",          # typo'd / superseded aeon DAG
-    "myphsar_dag",            # scraper removed
+    "foodpanda_dag",  # replaced by bayonBKK_dag (Foodpanda restaurant scrape)
+    "AeonMall_dag",  # replaced by aeon3_dag
+    "eaon_misc_dag",  # typo'd / superseded aeon DAG
+    "myphsar_dag",  # scraper removed
     "spark_cpi_analytics_dag",  # superseded by spark_etl_dag (ran with wrong image, no pyspark)
-    "spark_etl_dag",          # superseded by silver_dag (no _SUCCESS sensors, lower retries)
+    "spark_etl_dag",  # superseded by silver_dag (no _SUCCESS sensors, lower retries)
 ]
+
 
 def cleanup_dead_dags():
     print("Connecting to Airflow metadata database...")
     with create_session() as session:
         for dag_id in DEAD_DAG_IDS:
-            dag_model = session.query(DagModel).filter(DagModel.dag_id == dag_id).first()
+            dag_model = (
+                session.query(DagModel).filter(DagModel.dag_id == dag_id).first()
+            )
             if dag_model is None:
                 print(f"  - {dag_id}: not present, skipping")
                 continue
 
-            session.query(DagRun).filter(DagRun.dag_id == dag_id).delete(synchronize_session=False)
-            session.query(TaskInstance).filter(TaskInstance.dag_id == dag_id).delete(synchronize_session=False)
-            session.query(XCom).filter(XCom.dag_id == dag_id).delete(synchronize_session=False)
-            session.query(Log).filter(Log.dag_id == dag_id).delete(synchronize_session=False)
+            session.query(DagRun).filter(DagRun.dag_id == dag_id).delete(
+                synchronize_session=False
+            )
+            session.query(TaskInstance).filter(TaskInstance.dag_id == dag_id).delete(
+                synchronize_session=False
+            )
+            session.query(XCom).filter(XCom.dag_id == dag_id).delete(
+                synchronize_session=False
+            )
+            session.query(Log).filter(Log.dag_id == dag_id).delete(
+                synchronize_session=False
+            )
 
             try:
                 session.query(SerializedDagModel).filter(
@@ -54,7 +65,9 @@ def cleanup_dead_dags():
                 pass
 
             try:
-                session.query(TaskReschedule).filter(TaskReschedule.dag_id == dag_id).delete(synchronize_session=False)
+                session.query(TaskReschedule).filter(
+                    TaskReschedule.dag_id == dag_id
+                ).delete(synchronize_session=False)
             except Exception:
                 pass
             try:

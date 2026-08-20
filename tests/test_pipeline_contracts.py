@@ -20,11 +20,17 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 SQL_DIR = PROJECT_ROOT / "sql"
 DBT_MODELS = PROJECT_ROOT / "dbt" / "models"
-DAGS = PROJECT_ROOT / "orchestration" / "dags" if (PROJECT_ROOT / "orchestration" / "dags").exists() else PROJECT_ROOT / "dags"
+DAGS = (
+    PROJECT_ROOT / "orchestration" / "dags"
+    if (PROJECT_ROOT / "orchestration" / "dags").exists()
+    else PROJECT_ROOT / "dags"
+)
 
 GOLD_PROCEDURES = (SQL_DIR / "gold_procedures.sql").read_text(encoding="utf-8")
 VIEWS_SQL = (SQL_DIR / "views.sql").read_text(encoding="utf-8")
-FCT_GEVONS_DBT = (DBT_MODELS / "silver" / "fct_jevons_daily.sql").read_text(encoding="utf-8")
+FCT_GEVONS_DBT = (DBT_MODELS / "silver" / "fct_jevons_daily.sql").read_text(
+    encoding="utf-8"
+)
 GOLD_DAG = (DAGS / "gold_dag.py").read_text(encoding="utf-8")
 
 
@@ -54,7 +60,9 @@ def test_elementary_index_is_unit_price_aware():
     for source in (GOLD_PROCEDURES, VIEWS_SQL, FCT_GEVONS_DBT):
         # Stored procedure qualifies columns with the `d.` alias; views/models do not,
         # and the dbt model uses lowercase `ln(...)`. Normalise for the checks.
-        no_alias = source.replace("d.unit_price_khr", "unit_price_khr").replace("d.price_khr", "price_khr")
+        no_alias = source.replace("d.unit_price_khr", "unit_price_khr").replace(
+            "d.price_khr", "price_khr"
+        )
         upper = no_alias.upper()
         assert "unit_price_khr > 0" in source
         assert "LN(unit_price_khr)".upper() in upper
@@ -70,9 +78,9 @@ def test_geks_is_wired_into_gold_dag():
     assert "run_rolling_geks_for_date" in GOLD_DAG
     assert "geks_multilateral_calc" in GOLD_DAG
     # Daily rolling GEKS persists into the gold table.
-    assert "run_rolling_geks_for_date" in (PROJECT_ROOT / "pipeline" / "geks_calculator.py").read_text(
-        encoding="utf-8"
-    )
+    assert "run_rolling_geks_for_date" in (
+        PROJECT_ROOT / "pipeline" / "geks_calculator.py"
+    ).read_text(encoding="utf-8")
 
 
 def test_observed_only_inflation_view_exists():

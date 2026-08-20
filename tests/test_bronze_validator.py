@@ -41,7 +41,11 @@ class _FakeS3:
 
         class _Paginator:
             def paginate(self, Bucket, Prefix):
-                match = [k for k in self.owner if k.startswith(Prefix) and k.endswith(".parquet")]
+                match = [
+                    k
+                    for k in self.owner
+                    if k.startswith(Prefix) and k.endswith(".parquet")
+                ]
                 yield {"Contents": [{"Key": k} for k in match]}
 
         p = _Paginator()

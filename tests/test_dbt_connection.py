@@ -33,11 +33,13 @@ def test_postgres_connection_and_schemas():
 
     with conn.cursor() as cur:
         # Verify required medallion schemas exist
-        cur.execute("""
+        cur.execute(
+            """
             SELECT schema_name
             FROM information_schema.schemata
             WHERE schema_name IN ('bronze', 'staging', 'silver', 'gold');
-        """)
+        """
+        )
         schemas = {row[0] for row in cur.fetchall()}
         assert "bronze" in schemas
         assert "silver" in schemas

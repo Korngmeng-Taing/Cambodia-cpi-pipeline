@@ -89,7 +89,12 @@ def _normalize_category(cat: Any) -> str:
         c = cat.strip()
         return c if c else "General"
     if isinstance(cat, dict):
-        name = cat.get("name") or cat.get("title") or cat.get("categoryName") or cat.get("slug")
+        name = (
+            cat.get("name")
+            or cat.get("title")
+            or cat.get("categoryName")
+            or cat.get("slug")
+        )
         return str(name).strip() if name else "General"
     if isinstance(cat, list):
         parts = []
@@ -97,7 +102,12 @@ def _normalize_category(cat: Any) -> str:
             if isinstance(item, str) and item.strip():
                 parts.append(item.strip())
             elif isinstance(item, dict):
-                n = item.get("name") or item.get("title") or item.get("categoryName") or item.get("slug")
+                n = (
+                    item.get("name")
+                    or item.get("title")
+                    or item.get("categoryName")
+                    or item.get("slug")
+                )
                 if n and str(n).strip():
                     parts.append(str(n).strip())
         return " > ".join(parts) if parts else "General"
@@ -131,7 +141,9 @@ def normalize_record(
     if ds is None:
         ds = datetime.now(UTC).strftime("%Y-%m-%d")
 
-    item_id = _first(raw.get("item_id"), raw.get("product_id"), raw.get("sku"), raw.get("id"))
+    item_id = _first(
+        raw.get("item_id"), raw.get("product_id"), raw.get("sku"), raw.get("id")
+    )
     if item_id is None:
         item_id = f"{slug}_{abs(hash(raw.get('name', ''))):x}"
 
@@ -144,14 +156,23 @@ def normalize_record(
     if not name:
         raise ValueError(f"Canonical record for '{slug}' missing a product name")
 
-    price = _as_float(_first(raw.get("price"), raw.get("sale_price"), raw.get("price_khr")))
+    price = _as_float(
+        _first(raw.get("price"), raw.get("sale_price"), raw.get("price_khr"))
+    )
     if price is None:
-        raise ValueError(f"Canonical record for '{slug}' ('{name}') missing a numeric price")
+        raise ValueError(
+            f"Canonical record for '{slug}' ('{name}') missing a numeric price"
+        )
     if not (MIN_PRICE <= price <= MAX_PRICE):
         raise ValueError(f"Price bound violation for '{slug}' ('{name}'): {price}")
 
     orig_price = _as_float(
-        _first(raw.get("original_price"), raw.get("original"), raw.get("msrp"), raw.get("compare_at_price"))
+        _first(
+            raw.get("original_price"),
+            raw.get("original"),
+            raw.get("msrp"),
+            raw.get("compare_at_price"),
+        )
     )
     if orig_price is None:
         orig_price = price
@@ -159,17 +180,36 @@ def normalize_record(
 
     on_promo_raw = raw.get("on_promo")
     on_promo = bool(on_promo_raw) if on_promo_raw is True else orig_price > price
-    discount_pct = round(((orig_price - price) / orig_price) * 100.0, 2) if orig_price > 0 and on_promo else 0.0
-    promo = {"type": "discount", "value": round(orig_price - price, 2)} if on_promo else None
+    discount_pct = (
+        round(((orig_price - price) / orig_price) * 100.0, 2)
+        if orig_price > 0 and on_promo
+        else 0.0
+    )
+    promo = (
+        {"type": "discount", "value": round(orig_price - price, 2)}
+        if on_promo
+        else None
+    )
 
-    barcode = _first(raw.get("barcode"), raw.get("barCode"), raw.get("mpn"), raw.get("barcode_ean"))
+    barcode = _first(
+        raw.get("barcode"), raw.get("barCode"), raw.get("mpn"), raw.get("barcode_ean")
+    )
     brand = _first(raw.get("brand"), raw.get("brand_name"))
-    category_native = _first(raw.get("category_native"), raw.get("category"), raw.get("native_category"))
-    package_size = _first(raw.get("package_size"), raw.get("quantity"), raw.get("size"), raw.get("pack_size"))
+    category_native = _first(
+        raw.get("category_native"), raw.get("category"), raw.get("native_category")
+    )
+    package_size = _first(
+        raw.get("package_size"),
+        raw.get("quantity"),
+        raw.get("size"),
+        raw.get("pack_size"),
+    )
     quantity = _first(raw.get("quantity"), package_size)
     unit = _first(raw.get("unit"), raw.get("unit_size"))
     url = _first(raw.get("url"), raw.get("source_url"), raw.get("link"))
-    image_url = _first(raw.get("image_url"), raw.get("image"), raw.get("picture"), raw.get("img"))
+    image_url = _first(
+        raw.get("image_url"), raw.get("image"), raw.get("picture"), raw.get("img")
+    )
     badges = raw.get("badges") or []
     if not isinstance(badges, list):
         badges = [badges]
@@ -233,7 +273,9 @@ def validate_record(record: dict[str, Any]) -> list[str]:
 
     price = _as_float(record.get("price"))
     if price is not None and not (MIN_PRICE <= price <= MAX_PRICE):
-        issues.append(f"price {price} outside allowed bounds [{MIN_PRICE}, {MAX_PRICE}]")
+        issues.append(
+            f"price {price} outside allowed bounds [{MIN_PRICE}, {MAX_PRICE}]"
+        )
 
     orig = _as_float(record.get("original_price"))
     if price is not None and orig is not None and orig < price:

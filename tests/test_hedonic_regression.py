@@ -22,7 +22,9 @@ def test_extract_specs_missing_features_default_zero():
 
 
 def test_fit_ols_rejects_tiny_sample():
-    small = pd.DataFrame({"RAM_GB": [1, 2], "Storage_GB": [16, 32], "raw_price": [100.0, 200.0]})
+    small = pd.DataFrame(
+        {"RAM_GB": [1, 2], "Storage_GB": [16, 32], "raw_price": [100.0, 200.0]}
+    )
     with pytest.raises(ValueError, match=">= 20"):
         hr.fit_ols(small)
 
@@ -30,12 +32,18 @@ def test_fit_ols_rejects_tiny_sample():
 def test_compute_hedonic_adjusted_neutralizes_spec_upgrade():
     # Synthetic data where ln(price) = 4.0 + 0.05*RAM + 0.002*Storage (exact log-linear model).
     import numpy as np
+
     rows = []
     for ram in (4, 6, 8, 12, 16):
         for storage in (64, 128, 256, 512):
             log_p = 4.0 + 0.05 * ram + 0.002 * storage
-            rows.append({"RAM_GB": ram, "Storage_GB": storage,
-                         "raw_price": float(np.exp(log_p))})
+            rows.append(
+                {
+                    "RAM_GB": ram,
+                    "Storage_GB": storage,
+                    "raw_price": float(np.exp(log_p)),
+                }
+            )
     df = pd.DataFrame(rows)
     fit = hr.fit_ols(df)
     assert fit["r2"] > 0.99
@@ -45,7 +53,9 @@ def test_compute_hedonic_adjusted_neutralizes_spec_upgrade():
     adjusted = hr.compute_hedonic_adjusted(current, fit, base)
 
     # Every item revalued at baseline specs should equal the baseline predicted price.
-    base_price = round(float(np.exp(4.0 + 0.05 * base["RAM_GB"] + 0.002 * base["Storage_GB"])), 2)
+    base_price = round(
+        float(np.exp(4.0 + 0.05 * base["RAM_GB"] + 0.002 * base["Storage_GB"])), 2
+    )
     for value in adjusted:
         assert value == pytest.approx(base_price, rel=1e-2)
 

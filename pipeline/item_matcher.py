@@ -47,7 +47,9 @@ class ItemMatcher:
 
     def _load_cache(self, conn):
         with conn.cursor() as cur:
-            cur.execute("SELECT item_id, canonical_name, barcode, size_norm FROM silver.canonical_items")
+            cur.execute(
+                "SELECT item_id, canonical_name, barcode, size_norm FROM silver.canonical_items"
+            )
             rows = cur.fetchall()
             self.barcode_cache.clear()
             self.exact_name_cache.clear()
@@ -59,14 +61,18 @@ class ItemMatcher:
                     self.exact_name_cache[name.strip().upper()] = item_id
                 self.items_cache.append((item_id, name, size_norm))
 
-    def process_unmatched_batch(self, limit: int = 100000, batch_size: int = 1000) -> dict:
+    def process_unmatched_batch(
+        self, limit: int = 100000, batch_size: int = 1000
+    ) -> dict:
         conn = self._get_connection()
         try:
             return self.process_batch(conn, limit=limit, batch_size=batch_size)
         finally:
             conn.close()
 
-    def match_by_barcode(self, barcode: str | None, conn: Any = None) -> tuple[uuid.UUID, float] | None:
+    def match_by_barcode(
+        self, barcode: str | None, conn: Any = None
+    ) -> tuple[uuid.UUID, float] | None:
         if not barcode:
             return None
         barcode_clean = barcode.strip()
@@ -76,7 +82,7 @@ class ItemMatcher:
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT item_id FROM silver.canonical_items WHERE barcode = %s",
-                    (barcode_clean,)
+                    (barcode_clean,),
                 )
                 res = cur.fetchone()
                 if res:
@@ -84,7 +90,9 @@ class ItemMatcher:
                     return res[0], 1.0
         return None
 
-    def match_by_sku(self, store_id: str, sku: str | None, conn: Any = None) -> tuple[uuid.UUID, float] | None:
+    def match_by_sku(
+        self, store_id: str, sku: str | None, conn: Any = None
+    ) -> tuple[uuid.UUID, float] | None:
         if not sku or not store_id:
             return None
         sku_clean = sku.strip()
@@ -107,7 +115,9 @@ class ItemMatcher:
         return None
 
     @staticmethod
-    def _is_size_compatible(size1: str | None, size2: str | None, tolerance: float = 0.10) -> bool:
+    def _is_size_compatible(
+        size1: str | None, size2: str | None, tolerance: float = 0.10
+    ) -> bool:
         """Check if two package sizes are compatible within a relative tolerance."""
         if not size1 or not size2:
             return True
@@ -125,7 +135,9 @@ class ItemMatcher:
                 return diff <= tolerance
         return False
 
-    def match_by_fuzzy_text(self, name_clean: str, size_norm: str | None, conn: Any = None) -> tuple[uuid.UUID, float, str] | None:
+    def match_by_fuzzy_text(
+        self, name_clean: str, size_norm: str | None, conn: Any = None
+    ) -> tuple[uuid.UUID, float, str] | None:
         if not name_clean:
             return None
         name_clean_upper = name_clean.strip().upper()
@@ -139,7 +151,9 @@ class ItemMatcher:
         candidates = self.items_cache
         if not candidates and conn is not None:
             with conn.cursor() as cur:
-                cur.execute("SELECT item_id, canonical_name, size_norm FROM silver.canonical_items")
+                cur.execute(
+                    "SELECT item_id, canonical_name, size_norm FROM silver.canonical_items"
+                )
                 rows = cur.fetchall()
                 candidates = []
                 for row in rows:
@@ -164,7 +178,14 @@ class ItemMatcher:
             return best_match_id, best_score, best_name
         return None
 
-    def create_canonical_item(self, name: str, brand: str | None, barcode: str | None, size_norm: str | None, conn) -> uuid.UUID:
+    def create_canonical_item(
+        self,
+        name: str,
+        brand: str | None,
+        barcode: str | None,
+        size_norm: str | None,
+        conn,
+    ) -> uuid.UUID:
         item_id = uuid.uuid4()
         with conn.cursor() as cur:
             cur.execute(
@@ -173,7 +194,7 @@ class ItemMatcher:
                 VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (item_id) DO NOTHING
                 """,
-                (item_id, name, brand, barcode, size_norm)
+                (item_id, name, brand, barcode, size_norm),
             )
         if barcode:
             self.barcode_cache[barcode.strip()] = item_id
@@ -205,13 +226,18 @@ class ItemMatcher:
             actual_conn = brand
             actual_brand = None
 
-        stats = {"matched_exact": 0, "matched_fuzzy": 0, "sent_to_review": 0, "new_items_created": 0}
+        stats = {
+            "matched_exact": 0,
+            "matched_fuzzy": 0,
+            "sent_to_review": 0,
+            "new_items_created": 0,
+        }
 
         # 1. Barcode match
         match = self.match_by_barcode(barcode, actual_conn)
         if match:
             item_id, conf = match
-            self._log_match(raw_price_id, item_id, 'barcode_exact', conf, actual_conn)
+            self._log_match(raw_price_id, item_id, "barcode_exact", conf, actual_conn)
             stats["matched_exact"] += 1
             return stats
 
@@ -219,7 +245,7 @@ class ItemMatcher:
         match = self.match_by_sku(store_id, sku, actual_conn)
         if match:
             item_id, conf = match
-            self._log_match(raw_price_id, item_id, 'sku_exact', conf, actual_conn)
+            self._log_match(raw_price_id, item_id, "sku_exact", conf, actual_conn)
             stats["matched_exact"] += 1
             return stats
 
@@ -230,21 +256,37 @@ class ItemMatcher:
         if match:
             item_id, conf, matched_name = match
             if conf >= self.auto_accept_threshold:
-                self._log_match(raw_price_id, item_id, 'fuzzy_text', conf, actual_conn)
+                self._log_match(raw_price_id, item_id, "fuzzy_text", conf, actual_conn)
                 stats["matched_fuzzy"] += 1
                 return stats
             elif conf >= self.review_threshold:
-                self._send_to_review(raw_price_id, item_description_raw, item_id, matched_name, conf, actual_conn)
+                self._send_to_review(
+                    raw_price_id,
+                    item_description_raw,
+                    item_id,
+                    matched_name,
+                    conf,
+                    actual_conn,
+                )
                 stats["sent_to_review"] += 1
                 return stats
 
         # 4. Create new canonical item
-        item_id = self.create_canonical_item(name_clean, actual_brand, barcode, size_norm, actual_conn)
-        self._log_match(raw_price_id, item_id, 'new_item', 1.0, actual_conn)
+        item_id = self.create_canonical_item(
+            name_clean, actual_brand, barcode, size_norm, actual_conn
+        )
+        self._log_match(raw_price_id, item_id, "new_item", 1.0, actual_conn)
         stats["new_items_created"] += 1
         return stats
 
-    def _log_match(self, raw_price_id: int, item_id: uuid.UUID, method: str, confidence: float, conn):
+    def _log_match(
+        self,
+        raw_price_id: int,
+        item_id: uuid.UUID,
+        method: str,
+        confidence: float,
+        conn,
+    ):
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -252,21 +294,34 @@ class ItemMatcher:
                 VALUES (%s, %s, %s, %s)
                 ON CONFLICT (raw_price_id) DO NOTHING
                 """,
-                (raw_price_id, item_id, method, confidence)
+                (raw_price_id, item_id, method, confidence),
             )
 
-    def _send_to_review(self, raw_price_id: int, raw_desc: str, item_id: uuid.UUID, best_name: str, confidence: float, conn):
+    def _send_to_review(
+        self,
+        raw_price_id: int,
+        raw_desc: str,
+        item_id: uuid.UUID,
+        best_name: str,
+        confidence: float,
+        conn,
+    ):
         with conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO silver.needs_review (raw_price_id, item_description_raw, best_match_item_id, best_match_name, confidence)
                 VALUES (%s, %s, %s, %s, %s)
                 """,
-                (raw_price_id, raw_desc, item_id, best_name, confidence)
+                (raw_price_id, raw_desc, item_id, best_name, confidence),
             )
 
     def process_batch(self, conn, limit: int = 100000, batch_size: int = 1000) -> dict:
-        totals = {"matched_exact": 0, "matched_fuzzy": 0, "sent_to_review": 0, "new_items_created": 0}
+        totals = {
+            "matched_exact": 0,
+            "matched_fuzzy": 0,
+            "sent_to_review": 0,
+            "new_items_created": 0,
+        }
         self._load_cache(conn)
 
         with conn.cursor() as cur:
@@ -284,7 +339,7 @@ class ItemMatcher:
                 ORDER BY rp.raw_price_id
                 LIMIT %s
                 """,
-                (limit,)
+                (limit,),
             )
             rows = cur.fetchall()
 
@@ -302,14 +357,14 @@ class ItemMatcher:
             # 1. Exact Barcode match
             if barcode and barcode.strip() in self.barcode_cache:
                 item_id = self.barcode_cache[barcode.strip()]
-                match_logs.append((raw_price_id, str(item_id), 'barcode_exact', 1.0))
+                match_logs.append((raw_price_id, str(item_id), "barcode_exact", 1.0))
                 totals["matched_exact"] += 1
                 continue
 
             # 2. SKU match
             if sku and (store_id, sku.strip()) in self.sku_cache:
                 item_id = self.sku_cache[(store_id, sku.strip())]
-                match_logs.append((raw_price_id, str(item_id), 'sku_exact', 1.0))
+                match_logs.append((raw_price_id, str(item_id), "sku_exact", 1.0))
                 totals["matched_exact"] += 1
                 continue
 
@@ -317,7 +372,7 @@ class ItemMatcher:
             name_upper = name_clean.strip().upper() if name_clean else ""
             if name_upper and name_upper in self.exact_name_cache:
                 item_id = self.exact_name_cache[name_upper]
-                match_logs.append((raw_price_id, str(item_id), 'fuzzy_text', 1.0))
+                match_logs.append((raw_price_id, str(item_id), "fuzzy_text", 1.0))
                 totals["matched_fuzzy"] += 1
                 continue
 
@@ -326,11 +381,13 @@ class ItemMatcher:
             if match:
                 item_id, conf, matched_name = match
                 if conf >= self.auto_accept_threshold:
-                    match_logs.append((raw_price_id, str(item_id), 'fuzzy_text', conf))
+                    match_logs.append((raw_price_id, str(item_id), "fuzzy_text", conf))
                     totals["matched_fuzzy"] += 1
                     continue
                 elif conf >= self.review_threshold:
-                    reviews.append((raw_price_id, desc, str(item_id), matched_name, conf))
+                    reviews.append(
+                        (raw_price_id, desc, str(item_id), matched_name, conf)
+                    )
                     totals["sent_to_review"] += 1
                     continue
 
@@ -345,7 +402,7 @@ class ItemMatcher:
                 self.exact_name_cache[name_upper] = new_id
             self.items_cache.append((new_id, name_clean, package_size))
 
-            match_logs.append((raw_price_id, str(new_id), 'new_item', 1.0))
+            match_logs.append((raw_price_id, str(new_id), "new_item", 1.0))
             totals["new_items_created"] += 1
 
         # Bulk write to PostgreSQL
@@ -359,7 +416,7 @@ class ItemMatcher:
                     ON CONFLICT (item_id) DO NOTHING
                     """,
                     new_items,
-                    page_size=1000
+                    page_size=1000,
                 )
             if match_logs:
                 execute_batch(
@@ -370,7 +427,7 @@ class ItemMatcher:
                     ON CONFLICT (raw_price_id) DO NOTHING
                     """,
                     match_logs,
-                    page_size=1000
+                    page_size=1000,
                 )
             if reviews:
                 execute_batch(
@@ -380,7 +437,7 @@ class ItemMatcher:
                     VALUES (%s, %s, %s, %s, %s)
                     """,
                     reviews,
-                    page_size=1000
+                    page_size=1000,
                 )
             conn.commit()
 

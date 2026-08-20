@@ -17,7 +17,9 @@ class SampleStoreScraper(BaseScraper):
     def __init__(self):
         super().__init__(store_slug="sample_market", source_type="api_mock")
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         return [
             {"name": "Jasmine Rice 5kg", "price": 25000, "currency": "KHR"},
             {"name": "Cooking Oil 1L", "price": 8500, "currency": "KHR"},

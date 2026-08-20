@@ -20,7 +20,11 @@ class _FakeResponse:
     def __init__(self, payload, status_code=200, text=None):
         self._payload = payload
         self.status_code = status_code
-        self.text = text or json.dumps(payload) if isinstance(payload, (dict, list)) else (text or "")
+        self.text = (
+            text or json.dumps(payload)
+            if isinstance(payload, (dict, list))
+            else (text or "")
+        )
         self.headers = {"content-type": "application/json"}
 
     def raise_for_status(self):
@@ -56,7 +60,9 @@ def _arystore_page(page: int) -> list[dict]:
             "categories": [{"id": 10, "name": "Smartphones"}],
             "tags": [{"id": 1, "name": "apple"}],
             "brands": [{"id": 5, "name": "Apple"}],
-            "images": [{"src": "https://arystorephone.com/wp-content/uploads/iphone.jpg"}],
+            "images": [
+                {"src": "https://arystorephone.com/wp-content/uploads/iphone.jpg"}
+            ],
             "average_rating": "4.8",
             "review_count": 12,
             "is_in_stock": True,
@@ -99,9 +105,39 @@ _CANNED = {
     "aeon": {
         "products": {
             "data": [
-                {"id": "aeon_001", "title": "Jasmine Rice 5kg", "salePrice": 17200, "originalPrice": 18000, "barcode": "8850011001", "brand": "Angkor Harvest", "categoryName": "Rice & Grains", "size": "5kg", "images": ["https://aeon.com/rice.jpg"]},
-                {"id": "aeon_002", "title": "Fresh Milk 1L", "salePrice": 8500, "originalPrice": None, "barcode": "8850011002", "brand": "Cowhead", "categoryName": "Dairy", "size": "1L", "images": []},
-                {"id": "aeon_003", "title": "Eggs Tray 10s", "salePrice": 7300, "originalPrice": None, "barcode": "8850011003", "brand": "CP Fresh", "categoryName": "Fresh Produce", "size": "10pcs", "images": []},
+                {
+                    "id": "aeon_001",
+                    "title": "Jasmine Rice 5kg",
+                    "salePrice": 17200,
+                    "originalPrice": 18000,
+                    "barcode": "8850011001",
+                    "brand": "Angkor Harvest",
+                    "categoryName": "Rice & Grains",
+                    "size": "5kg",
+                    "images": ["https://aeon.com/rice.jpg"],
+                },
+                {
+                    "id": "aeon_002",
+                    "title": "Fresh Milk 1L",
+                    "salePrice": 8500,
+                    "originalPrice": None,
+                    "barcode": "8850011002",
+                    "brand": "Cowhead",
+                    "categoryName": "Dairy",
+                    "size": "1L",
+                    "images": [],
+                },
+                {
+                    "id": "aeon_003",
+                    "title": "Eggs Tray 10s",
+                    "salePrice": 7300,
+                    "originalPrice": None,
+                    "barcode": "8850011003",
+                    "brand": "CP Fresh",
+                    "categoryName": "Fresh Produce",
+                    "size": "10pcs",
+                    "images": [],
+                },
             ],
             "lastPage": 1,
         }
@@ -109,31 +145,101 @@ _CANNED = {
     "aeon3": {
         "products": {
             "data": [
-                {"id": "aeon3_001", "title": "Men Cotton T-Shirt", "salePrice": 34300, "originalPrice": 38000, "brand": "Giordano", "categoryName": "Men Clothing", "images": ["https://aeon.com/shirt.jpg"]},
-                {"id": "aeon3_002", "title": "Women Running Shoes", "salePrice": 117000, "originalPrice": None, "brand": "Bata", "categoryName": "Footwear", "images": []},
+                {
+                    "id": "aeon3_001",
+                    "title": "Men Cotton T-Shirt",
+                    "salePrice": 34300,
+                    "originalPrice": 38000,
+                    "brand": "Giordano",
+                    "categoryName": "Men Clothing",
+                    "images": ["https://aeon.com/shirt.jpg"],
+                },
+                {
+                    "id": "aeon3_002",
+                    "title": "Women Running Shoes",
+                    "salePrice": 117000,
+                    "originalPrice": None,
+                    "brand": "Bata",
+                    "categoryName": "Footwear",
+                    "images": [],
+                },
             ],
             "lastPage": 1,
         }
     },
     "delishop": {
         "data": [
-            {"id": "deli_101", "name": "Angkor Beer Can 330ml", "price": 0.85, "original_price": 0.95, "barCode": "8850188800123", "brand": "Angkor", "categoryName": "Beers & Ciders", "package_size": "330ml", "image": "https://delishop.asia/beer.jpg"},
-            {"id": "deli_102", "name": "Avocado Hass Fresh 500g", "price": 2.90, "original_price": None, "barCode": "8850188800124", "brand": "Fresh Farm", "categoryName": "Fresh Produce", "package_size": "500g", "image": None},
+            {
+                "id": "deli_101",
+                "name": "Angkor Beer Can 330ml",
+                "price": 0.85,
+                "original_price": 0.95,
+                "barCode": "8850188800123",
+                "brand": "Angkor",
+                "categoryName": "Beers & Ciders",
+                "package_size": "330ml",
+                "image": "https://delishop.asia/beer.jpg",
+            },
+            {
+                "id": "deli_102",
+                "name": "Avocado Hass Fresh 500g",
+                "price": 2.90,
+                "original_price": None,
+                "barCode": "8850188800124",
+                "brand": "Fresh Farm",
+                "categoryName": "Fresh Produce",
+                "package_size": "500g",
+                "image": None,
+            },
         ],
     },
     "l192": {
         "data": {
             "searchProduct": {
                 "items": [
-                    {"id": "l192_501", "title": "Electric Kettle 1.8L", "price": 9.90, "discount_percentage": 17, "brand_name": "Philips", "supplier_name": "Appliances", "picture_responsive": "https://l192.com/kettle.jpg", "stock_status_label": "In Stock"},
-                    {"id": "l192_502", "title": "Non-Stick Frying Pan 28cm", "price": 6.50, "discount_percentage": 0, "brand_name": "Tefal", "supplier_name": "Cookware", "picture_responsive": None, "stock_status_label": "In Stock"},
+                    {
+                        "id": "l192_501",
+                        "title": "Electric Kettle 1.8L",
+                        "price": 9.90,
+                        "discount_percentage": 17,
+                        "brand_name": "Philips",
+                        "supplier_name": "Appliances",
+                        "picture_responsive": "https://l192.com/kettle.jpg",
+                        "stock_status_label": "In Stock",
+                    },
+                    {
+                        "id": "l192_502",
+                        "title": "Non-Stick Frying Pan 28cm",
+                        "price": 6.50,
+                        "discount_percentage": 0,
+                        "brand_name": "Tefal",
+                        "supplier_name": "Cookware",
+                        "picture_responsive": None,
+                        "stock_status_label": "In Stock",
+                    },
                 ],
             },
         },
     },
     "communitypharma": [
-        {"id": "pharma_01", "name": "Paracetamol 500mg 100 Tablets", "price_usd": 2.20, "barcode": "8850061001", "manufacturer": "Panadol", "category": "Pain Relief", "dosage_form": "Tablet"},
-        {"id": "pharma_02", "name": "Vitamin C 1000mg Effervescent 10s", "price_usd": 3.80, "barcode": "8850061002", "manufacturer": "Redoxon", "category": "Vitamins", "dosage_form": "Effervescent"},
+        {
+            "id": "pharma_01",
+            "name": "Paracetamol 500mg 100 Tablets",
+            "price_usd": 2.20,
+            "barcode": "8850061001",
+            "manufacturer": "Panadol",
+            "category": "Pain Relief",
+            "dosage_form": "Tablet",
+        },
+        {
+            "id": "pharma_02",
+            "name": "Vitamin C 1000mg Effervescent 10s",
+            "price_usd": 3.80,
+            "barcode": "8850061002",
+            "manufacturer": "Redoxon",
+            "category": "Vitamins",
+            "dosage_form": "Effervescent",
+        },
     ],
     "samnangshop": [
         {
@@ -150,7 +256,10 @@ _CANNED = {
                 "currency_code": "USD",
                 "currency_minor_unit": 0,
             },
-            "categories": [{"id": 10, "name": "Apple", "slug": "apple"}, {"id": 12, "name": "Smartphones", "slug": "smartphones"}],
+            "categories": [
+                {"id": 10, "name": "Apple", "slug": "apple"},
+                {"id": 12, "name": "Smartphones", "slug": "smartphones"},
+            ],
             "images": [{"src": "https://khmersamnang.com/phone.png"}],
         },
         {
@@ -165,7 +274,10 @@ _CANNED = {
                 "currency_code": "USD",
                 "currency_minor_unit": 0,
             },
-            "categories": [{"id": 20, "name": "Samsung", "slug": "samsung"}, {"id": 12, "name": "Smartphones", "slug": "smartphones"}],
+            "categories": [
+                {"id": 20, "name": "Samsung", "slug": "samsung"},
+                {"id": 12, "name": "Smartphones", "slug": "smartphones"},
+            ],
             "images": [{"src": "https://khmersamnang.com/s25.png"}],
         },
     ],
@@ -211,10 +323,23 @@ _CANNED = {
     """,
     "sokhahotel": {
         "hotels": [
-            {"rooms": [
-                {"name": "Deluxe Room River View", "price": 95.00, "currency": "USD", "room_type": "Deluxe", "occupancy": 2},
-                {"name": "Executive Suite", "price": 180.00, "currency": "USD", "room_type": "Suite"},
-            ]}
+            {
+                "rooms": [
+                    {
+                        "name": "Deluxe Room River View",
+                        "price": 95.00,
+                        "currency": "USD",
+                        "room_type": "Deluxe",
+                        "occupancy": 2,
+                    },
+                    {
+                        "name": "Executive Suite",
+                        "price": 180.00,
+                        "currency": "USD",
+                        "room_type": "Suite",
+                    },
+                ]
+            }
         ],
     },
     "bayonbkk_html": """
@@ -234,9 +359,13 @@ def _mock_all_http(monkeypatch):
         if "arystorephone.com" in url_str:
             page = (kwargs.get("params") or {}).get("page", 1)
             return _FakeResponse(_arystore_page(page))
-        if "aeononlineshopping.com" in url_str and ("aeon1" in url_str or "aeon-1" in url_str):
+        if "aeononlineshopping.com" in url_str and (
+            "aeon1" in url_str or "aeon-1" in url_str
+        ):
             return _FakeResponse(_CANNED["aeon"])
-        if "aeononlineshopping.com" in url_str and ("aeon3" in url_str or "aeon-3" in url_str):
+        if "aeononlineshopping.com" in url_str and (
+            "aeon3" in url_str or "aeon-3" in url_str
+        ):
             return _FakeResponse(_CANNED["aeon3"])
         if "delishop.asia" in url_str:
             return _FakeResponse(_CANNED["delishop"])
@@ -246,7 +375,12 @@ def _mock_all_http(monkeypatch):
             return _FakeResponse({}, text=_CANNED["cellcard_wifi"])
         if "cellcard.com.kh" in url_str:
             return _FakeResponse({}, text=_CANNED["cellcard"])
-        if "smart.com.kh" in url_str and ("home-internet" in url_str or "at-home" in url_str or "smart-fiber" in url_str or "5g-at-home" in url_str):
+        if "smart.com.kh" in url_str and (
+            "home-internet" in url_str
+            or "at-home" in url_str
+            or "smart-fiber" in url_str
+            or "5g-at-home" in url_str
+        ):
             return _FakeResponse({}, text=_CANNED["smart_wifi"])
         if "smart.com.kh" in url_str:
             return _FakeResponse({}, text=_CANNED["smart"])
@@ -263,9 +397,13 @@ def _mock_all_http(monkeypatch):
         if "mef.gov.kh" in url_str:
             return _FakeResponse(_CANNED["mef_fx"])
         if "communitypharma.com.kh" in url_str and "assets/" in url_str:
-            return _FakeResponse({}, text="var x='eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSJ9.test';")
+            return _FakeResponse(
+                {}, text="var x='eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSJ9.test';"
+            )
         if "communitypharma.com.kh" in url_str:
-            return _FakeResponse({}, text="<html><script src='/assets/index-abc123.js'></script></html>")
+            return _FakeResponse(
+                {}, text="<html><script src='/assets/index-abc123.js'></script></html>"
+            )
         return _FakeResponse([], status_code=404)
 
     def _post(url, **kwargs):
@@ -273,7 +411,9 @@ def _mock_all_http(monkeypatch):
         if "graph-fs.l192.com" in url_str:
             return _FakeResponse(_CANNED["l192"])
         if "graphql.moc.gov.kh" in url_str:
-            return _FakeResponse({"data": {"publicCommodityPriceLineReport": {"items": []}}})
+            return _FakeResponse(
+                {"data": {"publicCommodityPriceLineReport": {"items": []}}}
+            )
         return _FakeResponse([], status_code=404)
 
     def _requests_get(url, **kwargs):
@@ -292,6 +432,7 @@ def _mock_all_http(monkeypatch):
         return _post(url, **kwargs)
 
     import scrapers.sources as src_mod
+
     monkeypatch.setattr(src_mod, "_cffi_get", _cffi_get)
     monkeypatch.setattr(src_mod, "_cffi_post", _cffi_post)
     monkeypatch.setattr(requests, "get", _requests_get)
@@ -308,18 +449,27 @@ def _mock_all_http(monkeypatch):
     # For MOC — mock _query_line_report directly
     def fake_moc_query(self, start_date, end_date, province_id, product_ids):
         return [
-            {"data": [{"x": "17 Aug, 2026", "y": "5000"}, {"x": "18 Aug, 2026", "y": "5100"}]},
+            {
+                "data": [
+                    {"x": "17 Aug, 2026", "y": "5000"},
+                    {"x": "18 Aug, 2026", "y": "5100"},
+                ]
+            },
             {"data": [{"x": "18 Aug, 2026", "y": "4100"}]},
             {"data": [{"x": "18 Aug, 2026", "y": "4000"}]},
         ]
 
-    monkeypatch.setattr(src_mod.MocGasolineScraper, "_query_line_report", fake_moc_query)
+    monkeypatch.setattr(
+        src_mod.MocGasolineScraper, "_query_line_report", fake_moc_query
+    )
 
     # For CommunityPharma — mock _extract_dynamic_key
     def fake_extract_key(self):
         return "fake-anon-key"
 
-    monkeypatch.setattr(src_mod.CommunityPharmaScraper, "_extract_dynamic_key", fake_extract_key)
+    monkeypatch.setattr(
+        src_mod.CommunityPharmaScraper, "_extract_dynamic_key", fake_extract_key
+    )
 
 
 # ── Tests ──────────────────────────────────────────────────────────────────
@@ -327,10 +477,26 @@ def _mock_all_http(monkeypatch):
 
 def test_scraper_registry_complete():
     expected_sources = [
-        "aeon", "aeon3", "delishop", "l192", "communitypharma", "samnangshop",
-        "cellcard", "cellcard_wifi", "smart", "smart_wifi", "khmer24", "realestate",
-        "redbus", "bookmebus", "sokhahotel", "hyyathotel", "bayonbkk",
-        "mef_fx", "new_gasoline", "arystore",
+        "aeon",
+        "aeon3",
+        "delishop",
+        "l192",
+        "communitypharma",
+        "samnangshop",
+        "cellcard",
+        "cellcard_wifi",
+        "smart",
+        "smart_wifi",
+        "khmer24",
+        "realestate",
+        "redbus",
+        "bookmebus",
+        "sokhahotel",
+        "hyyathotel",
+        "bayonbkk",
+        "mef_fx",
+        "new_gasoline",
+        "arystore",
     ]
     for src in expected_sources:
         assert src in SCRAPER_REGISTRY, f"Missing scraper source in registry: {src}"
@@ -381,7 +547,12 @@ def test_moc_gasoline_picks_latest_and_flags_fallback(monkeypatch):
         assert province_id == src_mod.MOC_FUEL_PROVINCE
         assert product_ids == [107, 108, 109]
         return [
-            {"data": [{"x": "14 Aug, 2026", "y": "5000"}, {"x": "18 Aug, 2026", "y": "5100"}]},
+            {
+                "data": [
+                    {"x": "14 Aug, 2026", "y": "5000"},
+                    {"x": "18 Aug, 2026", "y": "5100"},
+                ]
+            },
             {"data": [{"x": "18 Aug, 2026", "y": "4100"}]},
             {"data": [{"x": "18 Aug, 2026", "y": "4000"}]},
         ]
@@ -450,7 +621,13 @@ def test_arystore_scraper_paginates_until_empty(monkeypatch):
             "permalink": f"https://arystorephone.com/shop/product-{pid}/",
             "sku": "",
             "on_sale": False,
-            "prices": {"price": "10", "regular_price": "10", "sale_price": "10", "price_range": None, "currency_code": "USD"},
+            "prices": {
+                "price": "10",
+                "regular_price": "10",
+                "sale_price": "10",
+                "price_range": None,
+                "currency_code": "USD",
+            },
             "description": "",
             "short_description": "",
             "categories": [],
@@ -471,7 +648,9 @@ def test_arystore_scraper_paginates_until_empty(monkeypatch):
         calls.append(page)
         if page >= 3:
             return _FakeResponse([])
-        return _FakeResponse([_full_page_product(1000 + page * 1000 + i) for i in range(100)])
+        return _FakeResponse(
+            [_full_page_product(1000 + page * 1000 + i) for i in range(100)]
+        )
 
     def _spy_session_get(self, url, **kwargs):
         return _spy_get(url, **kwargs)

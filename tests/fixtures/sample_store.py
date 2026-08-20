@@ -21,7 +21,9 @@ class SampleStoreScraper(BaseScraper):
     def __init__(self, store_slug: str = "sample_market"):
         super().__init__(store_slug=store_slug, source_type="api_mock")
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         now_ts = pendulum.now("UTC").to_iso8601_string()
         return [
             {

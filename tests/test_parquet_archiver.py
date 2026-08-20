@@ -35,7 +35,11 @@ def test_parquet_archive_streams_to_minio(monkeypatch):
     archiver = ParquetArchiver()
     sample_records = [
         {"item_description_raw": "Jasmine Rice 5kg", "price": 4.50, "currency": "USD"},
-        {"item_description_raw": "Coca Cola 330ml Can", "price": 0.65, "currency": "USD"},
+        {
+            "item_description_raw": "Coca Cola 330ml Can",
+            "price": 0.65,
+            "currency": "USD",
+        },
     ]
 
     s3_key = archiver.archive_records(
@@ -60,7 +64,9 @@ def test_parquet_archive_read_from_minio(monkeypatch):
     sample_records = [
         {"item_description_raw": "Jasmine Rice 5kg", "price": 4.50, "currency": "USD"},
     ]
-    archiver.archive_records("aeon_phnom_penh", sample_records, scrape_date="2026-08-17")
+    archiver.archive_records(
+        "aeon_phnom_penh", sample_records, scrape_date="2026-08-17"
+    )
 
     df = archiver.read_archive(store_slug="aeon_phnom_penh", date_str="2026-08-17")
     assert len(df) == 1

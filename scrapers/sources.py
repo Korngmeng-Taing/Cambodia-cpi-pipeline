@@ -77,7 +77,9 @@ def _strip_html(html_str: str | None) -> str | None:
     if not html_str:
         return None
     if HAS_BS4:
-        text = BeautifulSoup(html_str, "html.parser").get_text(separator=" ", strip=True)
+        text = BeautifulSoup(html_str, "html.parser").get_text(
+            separator=" ", strip=True
+        )
     else:
         text = re.sub(r"<[^>]+>", " ", html_str)
         text = re.sub(r"\s+", " ", text).strip()
@@ -102,14 +104,18 @@ def _session(impersonate: str | None = None) -> requests.Session:
 def _cffi_get(url: str, **kwargs: Any) -> requests.Response:
     """GET via curl_cffi with Chrome TLS impersonation, falls back to requests."""
     if HAS_CURL_CFFI:
-        resp = cffi_requests.get(url, impersonate="chrome", timeout=kwargs.pop("timeout", 30), **kwargs)
+        resp = cffi_requests.get(
+            url, impersonate="chrome", timeout=kwargs.pop("timeout", 30), **kwargs
+        )
         return resp
     return requests.get(url, timeout=kwargs.pop("timeout", 30), **kwargs)
 
 
 def _cffi_post(url: str, **kwargs: Any) -> requests.Response:
     if HAS_CURL_CFFI:
-        resp = cffi_requests.post(url, impersonate="chrome", timeout=kwargs.pop("timeout", 30), **kwargs)
+        resp = cffi_requests.post(
+            url, impersonate="chrome", timeout=kwargs.pop("timeout", 30), **kwargs
+        )
         return resp
     return requests.post(url, timeout=kwargs.pop("timeout", 30), **kwargs)
 
@@ -165,13 +171,16 @@ def build_canonical_record(
 # ═══════════════════════════════════════════════════════════════════════════
 # 1. AEON 1 Phnom Penh — Next.js Proxy REST API (Grocery)
 # ═══════════════════════════════════════════════════════════════════════════
-AEON1_API = "https://aeononlineshopping.com/api/proxy/stores/aeon1-aeon-phnom-penh/products"
+AEON1_API = (
+    "https://aeononlineshopping.com/api/proxy/stores/aeon1-aeon-phnom-penh/products"
+)
 AEON1_PAGE_SIZE = 100
 
 
 def _build_aeon_category_map(filters: dict) -> dict[int, str]:
     """Flattens the nested AEON category tree into {cat_id: 'Parent > Child > Sub'} map."""
     cat_map = {}
+
     def _traverse(node: dict, path: list[str]):
         name = node.get("name") or ""
         cur_path = path + [name] if name else path
@@ -181,6 +190,7 @@ def _build_aeon_category_map(filters: dict) -> dict[int, str]:
         for child in node.get("children") or []:
             if isinstance(child, dict):
                 _traverse(child, cur_path)
+
     for root in (filters.get("categories") if isinstance(filters, dict) else []):
         if isinstance(root, dict):
             _traverse(root, [])
@@ -194,7 +204,9 @@ class AeonSupermarketScraper(BaseScraper):
     def __init__(self):
         super().__init__(store_slug="aeon", source_type="grocery")
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         records: list[dict[str, Any]] = []
         page = 1
@@ -222,7 +234,9 @@ class AeonSupermarketScraper(BaseScraper):
             if isinstance(prod_obj, dict):
                 products = prod_obj.get("data", [])
                 meta = prod_obj.get("meta", {})
-                total_pages = meta.get("totalPages") or prod_obj.get("lastPage") or total_pages
+                total_pages = (
+                    meta.get("totalPages") or prod_obj.get("lastPage") or total_pages
+                )
             elif isinstance(prod_obj, list):
                 products = prod_obj
                 total_pages = body.get("totalPages", page)
@@ -235,10 +249,19 @@ class AeonSupermarketScraper(BaseScraper):
                 price = _to_float(p.get("salePrice") or p.get("price"))
                 if price is None:
                     continue
-                orig = _to_float(p.get("fullPriceBeforeDiscount") or p.get("originalPrice"))
+                orig = _to_float(
+                    p.get("fullPriceBeforeDiscount") or p.get("originalPrice")
+                )
                 on_sale = bool(p.get("discount") or (orig and orig > price))
-                cat_id = p.get("categoryId") or p.get("departmentId") or p.get("divisionId")
-                cat_name = cat_map.get(cat_id) or p.get("categoryName") or p.get("category") or "Grocery"
+                cat_id = (
+                    p.get("categoryId") or p.get("departmentId") or p.get("divisionId")
+                )
+                cat_name = (
+                    cat_map.get(cat_id)
+                    or p.get("categoryName")
+                    or p.get("category")
+                    or "Grocery"
+                )
                 records.append(
                     build_canonical_record(
                         source_slug="aeon",
@@ -253,8 +276,15 @@ class AeonSupermarketScraper(BaseScraper):
                         brand=p.get("brand"),
                         category_native=cat_name,
                         package_size=p.get("size") or p.get("quantity"),
-                        url=p.get("url") or f"https://aeononlineshopping.com/product/{p.get('id')}",
-                        image_url=p.get("image") or p.get("imageUrl") or ((p.get("galleries") or [{}])[0].get("url") if p.get("galleries") else None),
+                        url=p.get("url")
+                        or f"https://aeononlineshopping.com/product/{p.get('id')}",
+                        image_url=p.get("image")
+                        or p.get("imageUrl")
+                        or (
+                            (p.get("galleries") or [{}])[0].get("url")
+                            if p.get("galleries")
+                            else None
+                        ),
                         scrape_date=ds,
                         on_promo=on_sale,
                         attrs={"badges": p.get("badges") or []},
@@ -272,7 +302,9 @@ class AeonSupermarketScraper(BaseScraper):
 # ═══════════════════════════════════════════════════════════════════════════
 # 2. AEON 3 Mean Chey — Next.js Proxy REST API (Fashion & Beauty)
 # ═══════════════════════════════════════════════════════════════════════════
-AEON3_API = "https://aeononlineshopping.com/api/proxy/stores/aeon3-fashion-beauty/products"
+AEON3_API = (
+    "https://aeononlineshopping.com/api/proxy/stores/aeon3-fashion-beauty/products"
+)
 AEON3_PAGE_SIZE = 100
 
 
@@ -280,7 +312,9 @@ class AeonFashionScraper(BaseScraper):
     def __init__(self):
         super().__init__(store_slug="aeon3", source_type="fashion")
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         records: list[dict[str, Any]] = []
         page = 1
@@ -308,7 +342,9 @@ class AeonFashionScraper(BaseScraper):
             if isinstance(prod_obj, dict):
                 products = prod_obj.get("data", [])
                 meta = prod_obj.get("meta", {})
-                total_pages = meta.get("totalPages") or prod_obj.get("lastPage") or total_pages
+                total_pages = (
+                    meta.get("totalPages") or prod_obj.get("lastPage") or total_pages
+                )
             elif isinstance(prod_obj, list):
                 products = prod_obj
                 total_pages = body.get("totalPages", page)
@@ -321,10 +357,19 @@ class AeonFashionScraper(BaseScraper):
                 price = _to_float(p.get("salePrice") or p.get("price"))
                 if price is None:
                     continue
-                orig = _to_float(p.get("fullPriceBeforeDiscount") or p.get("originalPrice"))
+                orig = _to_float(
+                    p.get("fullPriceBeforeDiscount") or p.get("originalPrice")
+                )
                 on_sale = bool(p.get("discount") or (orig and orig > price))
-                cat_id = p.get("categoryId") or p.get("departmentId") or p.get("divisionId")
-                cat_name = cat_map.get(cat_id) or p.get("categoryName") or p.get("category") or "Fashion & Beauty"
+                cat_id = (
+                    p.get("categoryId") or p.get("departmentId") or p.get("divisionId")
+                )
+                cat_name = (
+                    cat_map.get(cat_id)
+                    or p.get("categoryName")
+                    or p.get("category")
+                    or "Fashion & Beauty"
+                )
                 records.append(
                     build_canonical_record(
                         source_slug="aeon3",
@@ -339,7 +384,13 @@ class AeonFashionScraper(BaseScraper):
                         brand=p.get("brand"),
                         category_native=cat_name,
                         url=f"https://aeononlineshopping.com/product/{p.get('id')}",
-                        image_url=p.get("image") or p.get("imageUrl") or ((p.get("galleries") or [{}])[0].get("url") if p.get("galleries") else None),
+                        image_url=p.get("image")
+                        or p.get("imageUrl")
+                        or (
+                            (p.get("galleries") or [{}])[0].get("url")
+                            if p.get("galleries")
+                            else None
+                        ),
                         scrape_date=ds,
                         on_promo=on_sale,
                     )
@@ -364,7 +415,9 @@ class DelishopScraper(BaseScraper):
     def __init__(self):
         super().__init__(store_slug="delishop", source_type="grocery")
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         records: list[dict[str, Any]] = []
         page = 1
@@ -396,11 +449,17 @@ class DelishopScraper(BaseScraper):
                 cat_raw = p.get("category")
                 subcat_raw = p.get("subcategory")
                 cat_name = cat_raw.get("name") if isinstance(cat_raw, dict) else cat_raw
-                subcat_name = subcat_raw.get("name") if isinstance(subcat_raw, dict) else subcat_raw
+                subcat_name = (
+                    subcat_raw.get("name")
+                    if isinstance(subcat_raw, dict)
+                    else subcat_raw
+                )
                 if cat_name and subcat_name and cat_name != subcat_name:
                     cat_full = f"{cat_name} > {subcat_name}"
                 else:
-                    cat_full = cat_name or subcat_name or p.get("categoryName") or "Grocery"
+                    cat_full = (
+                        cat_name or subcat_name or p.get("categoryName") or "Grocery"
+                    )
                 records.append(
                     build_canonical_record(
                         source_slug="delishop",
@@ -410,16 +469,30 @@ class DelishopScraper(BaseScraper):
                         name=p.get("name") or "",
                         price=price,
                         currency=p.get("currency") or "USD",
-                        original_price=_to_float(p.get("original_price") or p.get("originalPrice")),
+                        original_price=_to_float(
+                            p.get("original_price") or p.get("originalPrice")
+                        ),
                         barcode=p.get("barCode") or p.get("barcode"),
                         brand=p.get("brand"),
                         category_native=cat_full,
-                        package_size=p.get("package_size") or p.get("quantity") or p.get("weight"),
-                        url=p.get("url") or f"https://delishop.asia/product/{p.get('id')}",
-                        image_url=p.get("image") or p.get("image_url") or p.get("imageResized"),
+                        package_size=p.get("package_size")
+                        or p.get("quantity")
+                        or p.get("weight"),
+                        url=p.get("url")
+                        or f"https://delishop.asia/product/{p.get('id')}",
+                        image_url=p.get("image")
+                        or p.get("image_url")
+                        or p.get("imageResized"),
                         scrape_date=ds,
-                        on_promo=_to_float(p.get("original_price") or p.get("originalPrice")) is not None
-                        and (_to_float(p.get("original_price") or p.get("originalPrice")) or 0) > price,
+                        on_promo=_to_float(
+                            p.get("original_price") or p.get("originalPrice")
+                        )
+                        is not None
+                        and (
+                            _to_float(p.get("original_price") or p.get("originalPrice"))
+                            or 0
+                        )
+                        > price,
                     )
                 )
             if len(products) < DELI_PAGE_SIZE:
@@ -438,14 +511,70 @@ L192_GQL_URL = "https://graph-fs.l192.com/graphql"
 L192_PAGE_SIZE = 50
 
 L192_BASELINE_PRODUCTS = [
-    {"id": "l192_101", "name": "Men's Casual Cotton Polo T-Shirt", "price": 8.50, "brand": "L192 Basic", "category": "Fashion & Apparel > Men's Clothing", "size": "L"},
-    {"id": "l192_102", "name": "Women's Floral Summer Maxi Dress", "price": 12.00, "brand": "Sweet Look", "category": "Fashion & Apparel > Women's Clothing", "size": "M"},
-    {"id": "l192_103", "name": "Stainless Steel Electric Kettle 1.8L", "price": 7.50, "brand": "Camel", "category": "Home Appliances > Kitchenware", "size": "1.8L"},
-    {"id": "l192_104", "name": "Non-Stick Granite Frying Pan 28cm", "price": 9.90, "brand": "Cookmaster", "category": "Home & Living > Cookware", "size": "28cm"},
-    {"id": "l192_105", "name": "Wireless Bluetooth Earbuds Pro", "price": 11.50, "brand": "Awei", "category": "Consumer Electronics > Audio", "size": "1 unit"},
-    {"id": "l192_106", "name": "Foldable Storage Box 66L Fabric Organizer", "price": 5.20, "brand": "HomeStyle", "category": "Home & Living > Storage & Organization", "size": "66L"},
-    {"id": "l192_107", "name": "Unisex Canvas Low Top Casual Sneakers", "price": 14.00, "brand": "SportFlex", "category": "Clothing & Footwear > Shoes", "size": "EU 41"},
-    {"id": "l192_108", "name": "Rechargeable LED Desk Lamp with Eye Protection", "price": 6.80, "brand": "Baseus", "category": "Home & Living > Lighting", "size": "1 unit"},
+    {
+        "id": "l192_101",
+        "name": "Men's Casual Cotton Polo T-Shirt",
+        "price": 8.50,
+        "brand": "L192 Basic",
+        "category": "Fashion & Apparel > Men's Clothing",
+        "size": "L",
+    },
+    {
+        "id": "l192_102",
+        "name": "Women's Floral Summer Maxi Dress",
+        "price": 12.00,
+        "brand": "Sweet Look",
+        "category": "Fashion & Apparel > Women's Clothing",
+        "size": "M",
+    },
+    {
+        "id": "l192_103",
+        "name": "Stainless Steel Electric Kettle 1.8L",
+        "price": 7.50,
+        "brand": "Camel",
+        "category": "Home Appliances > Kitchenware",
+        "size": "1.8L",
+    },
+    {
+        "id": "l192_104",
+        "name": "Non-Stick Granite Frying Pan 28cm",
+        "price": 9.90,
+        "brand": "Cookmaster",
+        "category": "Home & Living > Cookware",
+        "size": "28cm",
+    },
+    {
+        "id": "l192_105",
+        "name": "Wireless Bluetooth Earbuds Pro",
+        "price": 11.50,
+        "brand": "Awei",
+        "category": "Consumer Electronics > Audio",
+        "size": "1 unit",
+    },
+    {
+        "id": "l192_106",
+        "name": "Foldable Storage Box 66L Fabric Organizer",
+        "price": 5.20,
+        "brand": "HomeStyle",
+        "category": "Home & Living > Storage & Organization",
+        "size": "66L",
+    },
+    {
+        "id": "l192_107",
+        "name": "Unisex Canvas Low Top Casual Sneakers",
+        "price": 14.00,
+        "brand": "SportFlex",
+        "category": "Clothing & Footwear > Shoes",
+        "size": "EU 41",
+    },
+    {
+        "id": "l192_108",
+        "name": "Rechargeable LED Desk Lamp with Eye Protection",
+        "price": 6.80,
+        "brand": "Baseus",
+        "category": "Home & Living > Lighting",
+        "size": "1 unit",
+    },
 ]
 
 
@@ -480,7 +609,11 @@ class L192Scraper(BaseScraper):
             offset = page_idx * 50
             payload = {
                 "query": query,
-                "variables": {"filter": {"categoryId": 0}, "offset": offset, "limit": 50},
+                "variables": {
+                    "filter": {"categoryId": 0},
+                    "offset": offset,
+                    "limit": 50,
+                },
                 "operationName": "productSearch",
             }
             try:
@@ -491,7 +624,13 @@ class L192Scraper(BaseScraper):
                     timeout=15,
                 )
                 if resp.status_code == 200:
-                    batch = resp.json().get("data", {}).get("productSearch", {}).get("items") or []
+                    batch = (
+                        resp.json()
+                        .get("data", {})
+                        .get("productSearch", {})
+                        .get("items")
+                        or []
+                    )
                     all_items.extend(batch)
                     if len(batch) < 50:
                         break
@@ -502,7 +641,9 @@ class L192Scraper(BaseScraper):
                 break
         return all_items
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         records: list[dict[str, Any]] = []
         try:
@@ -534,7 +675,9 @@ class L192Scraper(BaseScraper):
                     )
                 )
         except Exception as exc:
-            log.warning("L192 live query failed: %s, falling back to baseline catalog", exc)
+            log.warning(
+                "L192 live query failed: %s, falling back to baseline catalog", exc
+            )
 
         if not records:
             for item in L192_BASELINE_PRODUCTS:
@@ -569,11 +712,46 @@ PHARMA_SUPABASE_ANON = os.environ.get(
 
 
 COMMUNITY_PHARMA_BASELINE = [
-    {"id": "cp_paracetamol", "name": "Paracetamol 500mg Tablets (Box/100)", "price": 1.25, "brand": "Generic Pharma", "category": "Medicines > Pain & Fever Relief", "dosage": "500mg"},
-    {"id": "cp_amoxicillin", "name": "Amoxicillin 500mg Capsules (Box/20)", "price": 2.80, "brand": "Generic Pharma", "category": "Medicines > Antibiotics", "dosage": "500mg"},
-    {"id": "cp_vitc_efferv", "name": "CaVic-C Effervescent Vitamin C 1000mg (Tube/10)", "price": 2.10, "brand": "CaVic", "category": "Health & Nutrition > Vitamins & Supplements", "dosage": "Effervescent"},
-    {"id": "cp_oral_rehydration", "name": "Oral Rehydration Salts (ORS) Sachet (Pack/10)", "price": 1.50, "brand": "Hydra", "category": "Medicines > Gastrointestinal", "dosage": "Sachet"},
-    {"id": "cp_cetirizine", "name": "Cetirizine 10mg Allergy Relief (Box/30)", "price": 1.90, "brand": "Zyrtec", "category": "Medicines > Allergy & Cold", "dosage": "10mg"},
+    {
+        "id": "cp_paracetamol",
+        "name": "Paracetamol 500mg Tablets (Box/100)",
+        "price": 1.25,
+        "brand": "Generic Pharma",
+        "category": "Medicines > Pain & Fever Relief",
+        "dosage": "500mg",
+    },
+    {
+        "id": "cp_amoxicillin",
+        "name": "Amoxicillin 500mg Capsules (Box/20)",
+        "price": 2.80,
+        "brand": "Generic Pharma",
+        "category": "Medicines > Antibiotics",
+        "dosage": "500mg",
+    },
+    {
+        "id": "cp_vitc_efferv",
+        "name": "CaVic-C Effervescent Vitamin C 1000mg (Tube/10)",
+        "price": 2.10,
+        "brand": "CaVic",
+        "category": "Health & Nutrition > Vitamins & Supplements",
+        "dosage": "Effervescent",
+    },
+    {
+        "id": "cp_oral_rehydration",
+        "name": "Oral Rehydration Salts (ORS) Sachet (Pack/10)",
+        "price": 1.50,
+        "brand": "Hydra",
+        "category": "Medicines > Gastrointestinal",
+        "dosage": "Sachet",
+    },
+    {
+        "id": "cp_cetirizine",
+        "name": "Cetirizine 10mg Allergy Relief (Box/30)",
+        "price": 1.90,
+        "brand": "Zyrtec",
+        "category": "Medicines > Allergy & Cold",
+        "dosage": "10mg",
+    },
 ]
 
 
@@ -589,7 +767,11 @@ class CommunityPharmaScraper(BaseScraper):
                 for script in soup.find_all("script", src=True):
                     src = script["src"]
                     if "assets/index-" in src or "assets/" in src:
-                        bundle_url = f"https://communitypharma.com.kh{src}" if src.startswith("/") else src
+                        bundle_url = (
+                            f"https://communitypharma.com.kh{src}"
+                            if src.startswith("/")
+                            else src
+                        )
                         bundle_resp = _cffi_get(bundle_url, timeout=15)
                         if bundle_resp.status_code == 200:
                             match = re.search(
@@ -602,7 +784,9 @@ class CommunityPharmaScraper(BaseScraper):
             log.warning("CommunityPharma dynamic key extraction failed: %s", exc)
         return PHARMA_SUPABASE_ANON
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         anon_key = self._extract_dynamic_key()
         records: list[dict[str, Any]] = []
@@ -629,7 +813,12 @@ class CommunityPharmaScraper(BaseScraper):
                 price = _to_float(p.get("price_usd") or p.get("price"))
                 if price is None:
                     continue
-                cat_native = p.get("category") or p.get("indication") or p.get("dosage_form") or "Pharmaceutical Products"
+                cat_native = (
+                    p.get("category")
+                    or p.get("indication")
+                    or p.get("dosage_form")
+                    or "Pharmaceutical Products"
+                )
                 records.append(
                     build_canonical_record(
                         source_slug="communitypharma",
@@ -683,13 +872,62 @@ KHMERSAMNANG_API = "https://khmersamnang.com/wp-json/wc/store/v1/products"
 KHMERSAMNANG_PAGE_SIZE = 100
 
 SAMNANG_BASELINE_PRODUCTS = [
-    {"sku": "SAMNANG-IPHONE17PM", "name": "iPhone 17Pro Max LL/A (2eSim)", "price": 1235.00, "brand": "Apple", "category": "Apple > iPhone > Smartphones", "description": "The iPhone 17 Pro Max features a 6.9-inch Super Retina XDR OLED display with A19 Pro chip."},
-    {"sku": "SAMNANG-IPHONE16PM-256", "name": "iPhone 16 Pro Max 256GB Desert Titanium", "price": 1199.00, "brand": "Apple", "category": "Apple > iPhone > Smartphones", "description": "Apple iPhone 16 Pro Max 256GB with Titanium design, Camera Control, 48MP Fusion camera."},
-    {"sku": "SAMNANG-S25U-256", "name": "Samsung Galaxy S25 Ultra 5G 12GB/256GB", "price": 1249.00, "brand": "Samsung", "category": "Samsung > Galaxy S > Smartphones", "description": "Samsung Galaxy S25 Ultra 5G with Snapdragon 8 Elite, 200MP camera, built-in S Pen."},
-    {"sku": "SAMNANG-IPADPRO-M4", "name": "iPad Pro 11-inch M4 Wi-Fi 256GB Standard Glass", "price": 899.00, "brand": "Apple", "category": "Apple > iPad > Tablets", "description": "Apple iPad Pro 11-inch M4 Ultra Retina XDR display with ProMotion and Apple Pencil Pro support."},
-    {"sku": "SAMNANG-AW-S10", "name": "Apple Watch Series 10 GPS 46mm Aluminum Case", "price": 429.00, "brand": "Apple", "category": "Apple > Watch > Wearables", "description": "Apple Watch Series 10 with thinnest design, largest display, faster charging and depth gauge."},
-    {"sku": "SAMNANG-XIAOMI14U", "name": "Xiaomi 14 Ultra 16GB/512GB Leica Quad Camera", "price": 1099.00, "brand": "Xiaomi", "category": "Xiaomi > Flagship > Smartphones", "description": "Xiaomi 14 Ultra with Leica Summilux optical lens, 1-inch LYT-900 sensor and Snapdragon 8 Gen 3."},
-    {"sku": "SAMNANG-AIRPODS-PRO2", "name": "AirPods Pro (2nd Generation) MagSafe Case (USB-C)", "price": 229.00, "brand": "Apple", "category": "Apple > Audio > Accessories", "description": "Apple AirPods Pro 2 with Active Noise Cancellation, Transparency mode, and Adaptive Audio."},
+    {
+        "sku": "SAMNANG-IPHONE17PM",
+        "name": "iPhone 17Pro Max LL/A (2eSim)",
+        "price": 1235.00,
+        "brand": "Apple",
+        "category": "Apple > iPhone > Smartphones",
+        "description": "The iPhone 17 Pro Max features a 6.9-inch Super Retina XDR OLED display with A19 Pro chip.",
+    },
+    {
+        "sku": "SAMNANG-IPHONE16PM-256",
+        "name": "iPhone 16 Pro Max 256GB Desert Titanium",
+        "price": 1199.00,
+        "brand": "Apple",
+        "category": "Apple > iPhone > Smartphones",
+        "description": "Apple iPhone 16 Pro Max 256GB with Titanium design, Camera Control, 48MP Fusion camera.",
+    },
+    {
+        "sku": "SAMNANG-S25U-256",
+        "name": "Samsung Galaxy S25 Ultra 5G 12GB/256GB",
+        "price": 1249.00,
+        "brand": "Samsung",
+        "category": "Samsung > Galaxy S > Smartphones",
+        "description": "Samsung Galaxy S25 Ultra 5G with Snapdragon 8 Elite, 200MP camera, built-in S Pen.",
+    },
+    {
+        "sku": "SAMNANG-IPADPRO-M4",
+        "name": "iPad Pro 11-inch M4 Wi-Fi 256GB Standard Glass",
+        "price": 899.00,
+        "brand": "Apple",
+        "category": "Apple > iPad > Tablets",
+        "description": "Apple iPad Pro 11-inch M4 Ultra Retina XDR display with ProMotion and Apple Pencil Pro support.",
+    },
+    {
+        "sku": "SAMNANG-AW-S10",
+        "name": "Apple Watch Series 10 GPS 46mm Aluminum Case",
+        "price": 429.00,
+        "brand": "Apple",
+        "category": "Apple > Watch > Wearables",
+        "description": "Apple Watch Series 10 with thinnest design, largest display, faster charging and depth gauge.",
+    },
+    {
+        "sku": "SAMNANG-XIAOMI14U",
+        "name": "Xiaomi 14 Ultra 16GB/512GB Leica Quad Camera",
+        "price": 1099.00,
+        "brand": "Xiaomi",
+        "category": "Xiaomi > Flagship > Smartphones",
+        "description": "Xiaomi 14 Ultra with Leica Summilux optical lens, 1-inch LYT-900 sensor and Snapdragon 8 Gen 3.",
+    },
+    {
+        "sku": "SAMNANG-AIRPODS-PRO2",
+        "name": "AirPods Pro (2nd Generation) MagSafe Case (USB-C)",
+        "price": 229.00,
+        "brand": "Apple",
+        "category": "Apple > Audio > Accessories",
+        "description": "Apple AirPods Pro 2 with Active Noise Cancellation, Transparency mode, and Adaptive Audio.",
+    },
 ]
 
 
@@ -720,17 +958,38 @@ class SamnangShopScraper(BaseScraper):
         raw_desc = item.get("description") or item.get("short_description") or ""
         clean_desc = _strip_html(raw_desc)
 
-        cats = [c.get("name") for c in item.get("categories", []) if isinstance(c, dict) and c.get("name")]
+        cats = [
+            c.get("name")
+            for c in item.get("categories", [])
+            if isinstance(c, dict) and c.get("name")
+        ]
         cat_name = " > ".join(cats) if cats else "Smartphones & Electronics"
 
         brand = None
-        for candidate in ["Apple", "Samsung", "Xiaomi", "Oppo", "Vivo", "Realme", "Huawei", "Sony", "Asus", "Poco", "Tecno"]:
-            if any(candidate.lower() == c.lower() for c in cats) or candidate.lower() in name.lower():
+        for candidate in [
+            "Apple",
+            "Samsung",
+            "Xiaomi",
+            "Oppo",
+            "Vivo",
+            "Realme",
+            "Huawei",
+            "Sony",
+            "Asus",
+            "Poco",
+            "Tecno",
+        ]:
+            if (
+                any(candidate.lower() == c.lower() for c in cats)
+                or candidate.lower() in name.lower()
+            ):
                 brand = candidate
                 break
 
         images = item.get("images") or []
-        img_url = images[0].get("src") if images and isinstance(images[0], dict) else None
+        img_url = (
+            images[0].get("src") if images and isinstance(images[0], dict) else None
+        )
         item_id = str(item.get("id") or item.get("sku") or "")
 
         return build_canonical_record(
@@ -750,7 +1009,9 @@ class SamnangShopScraper(BaseScraper):
             attrs={"description": clean_desc} if clean_desc else {},
         )
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         records: list[dict[str, Any]] = []
         page = 1
@@ -772,13 +1033,17 @@ class SamnangShopScraper(BaseScraper):
                 if len(products) < KHMERSAMNANG_PAGE_SIZE:
                     break
             except Exception as exc:
-                log.warning("SamnangShop page %d failed (%s), stopping pagination", page, exc)
+                log.warning(
+                    "SamnangShop page %d failed (%s), stopping pagination", page, exc
+                )
                 break
             page += 1
             time.sleep(THROTTLE_DELAY)
 
         if not records:
-            log.warning("SamnangShop live fetch returned 0 records, using baseline fallback")
+            log.warning(
+                "SamnangShop live fetch returned 0 records, using baseline fallback"
+            )
             for item in SAMNANG_BASELINE_PRODUCTS:
                 records.append(
                     build_canonical_record(
@@ -806,11 +1071,41 @@ class SamnangShopScraper(BaseScraper):
 CELLCARD_MOBILE_URL = "https://www.cellcard.com.kh/en/mobile"
 
 CELLCARD_MOBILE_PLANS = [
-    {"id": "cell_biglove_150", "name": "Cellcard Big Love $1.50 (20GB / 7 Days)", "price": 1.50, "type": "Mobile Prepaid > Weekly Data", "data": "20GB"},
-    {"id": "cell_biglove_300", "name": "Cellcard Big Love $3.00 (50GB / 14 Days)", "price": 3.00, "type": "Mobile Prepaid > Bi-Weekly Data", "data": "50GB"},
-    {"id": "cell_biglove_600", "name": "Cellcard Big Love $6.00 (120GB / 30 Days)", "price": 6.00, "type": "Mobile Prepaid > Monthly Data", "data": "120GB"},
-    {"id": "cell_serey_100", "name": "Cellcard Serey Unlimited Calls + 10GB", "price": 1.00, "type": "Mobile Prepaid > Voice & Data", "data": "10GB"},
-    {"id": "cell_tourist_5g", "name": "Cellcard 5G Tourist SIM 30-Day Pass", "price": 10.00, "type": "Mobile Prepaid > Tourist SIM", "data": "80GB"},
+    {
+        "id": "cell_biglove_150",
+        "name": "Cellcard Big Love $1.50 (20GB / 7 Days)",
+        "price": 1.50,
+        "type": "Mobile Prepaid > Weekly Data",
+        "data": "20GB",
+    },
+    {
+        "id": "cell_biglove_300",
+        "name": "Cellcard Big Love $3.00 (50GB / 14 Days)",
+        "price": 3.00,
+        "type": "Mobile Prepaid > Bi-Weekly Data",
+        "data": "50GB",
+    },
+    {
+        "id": "cell_biglove_600",
+        "name": "Cellcard Big Love $6.00 (120GB / 30 Days)",
+        "price": 6.00,
+        "type": "Mobile Prepaid > Monthly Data",
+        "data": "120GB",
+    },
+    {
+        "id": "cell_serey_100",
+        "name": "Cellcard Serey Unlimited Calls + 10GB",
+        "price": 1.00,
+        "type": "Mobile Prepaid > Voice & Data",
+        "data": "10GB",
+    },
+    {
+        "id": "cell_tourist_5g",
+        "name": "Cellcard 5G Tourist SIM 30-Day Pass",
+        "price": 10.00,
+        "type": "Mobile Prepaid > Tourist SIM",
+        "data": "80GB",
+    },
 ]
 
 
@@ -818,7 +1113,9 @@ class CellcardMobileScraper(BaseScraper):
     def __init__(self):
         super().__init__(store_slug="cellcard", source_type="telecom")
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         records: list[dict[str, Any]] = []
         try:
@@ -834,18 +1131,23 @@ class CellcardMobileScraper(BaseScraper):
                         if isinstance(plans, list) and plans:
                             for idx, plan in enumerate(plans):
                                 name = plan.get("name") or plan.get("title") or ""
-                                price = _to_float(plan.get("price") or plan.get("monthly_price"))
+                                price = _to_float(
+                                    plan.get("price") or plan.get("monthly_price")
+                                )
                                 if price and name:
                                     records.append(
                                         build_canonical_record(
                                             source_slug="cellcard",
                                             source_type="telecom",
                                             store_name="Cellcard Cambodia Mobile",
-                                            item_id=str(plan.get("id", f"cell_mob_{idx}")),
+                                            item_id=str(
+                                                plan.get("id", f"cell_mob_{idx}")
+                                            ),
                                             name=name,
                                             price=price,
                                             currency="USD",
-                                            category_native=plan.get("type") or "Mobile Prepaid",
+                                            category_native=plan.get("type")
+                                            or "Mobile Prepaid",
                                             package_size=plan.get("data"),
                                             url=CELLCARD_MOBILE_URL,
                                             scrape_date=ds,
@@ -881,9 +1183,27 @@ class CellcardMobileScraper(BaseScraper):
 CELLCARD_WIFI_URL = "https://www.cellcard.com.kh/en/home-internet/"
 
 CELLCARD_WIFI_PLANS = [
-    {"id": "cell_wifi_20m", "name": "Cellcard Home Wi-Fi Basic 20 Mbps", "price": 12.00, "type": "Broadband Internet > Home Wi-Fi", "speed": "20 Mbps"},
-    {"id": "cell_wifi_50m", "name": "Cellcard Fiber Internet Standard 50 Mbps", "price": 18.00, "type": "Broadband Internet > Fiber Internet", "speed": "50 Mbps"},
-    {"id": "cell_wifi_100m", "name": "Cellcard Fiber Ultra High-Speed 100 Mbps", "price": 25.00, "type": "Broadband Internet > Fiber Internet", "speed": "100 Mbps"},
+    {
+        "id": "cell_wifi_20m",
+        "name": "Cellcard Home Wi-Fi Basic 20 Mbps",
+        "price": 12.00,
+        "type": "Broadband Internet > Home Wi-Fi",
+        "speed": "20 Mbps",
+    },
+    {
+        "id": "cell_wifi_50m",
+        "name": "Cellcard Fiber Internet Standard 50 Mbps",
+        "price": 18.00,
+        "type": "Broadband Internet > Fiber Internet",
+        "speed": "50 Mbps",
+    },
+    {
+        "id": "cell_wifi_100m",
+        "name": "Cellcard Fiber Ultra High-Speed 100 Mbps",
+        "price": 25.00,
+        "type": "Broadband Internet > Fiber Internet",
+        "speed": "100 Mbps",
+    },
 ]
 
 
@@ -891,7 +1211,9 @@ class CellcardWifiScraper(BaseScraper):
     def __init__(self):
         super().__init__(store_slug="cellcard_wifi", source_type="telecom")
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         records: list[dict[str, Any]] = []
         for plan in CELLCARD_WIFI_PLANS:
@@ -920,11 +1242,41 @@ class CellcardWifiScraper(BaseScraper):
 SMART_MOBILE_URLS = ["https://www.smart.com.kh/plans"]
 
 SMART_MOBILE_PLANS = [
-    {"id": "smart_laor_150", "name": "Smart Laor! $1.50 (15GB / 7 Days)", "price": 1.50, "type": "Mobile Prepaid > Weekly Data", "data": "15GB"},
-    {"id": "smart_laor_300", "name": "Smart Laor! $3.00 (35GB / 14 Days)", "price": 3.00, "type": "Mobile Prepaid > Bi-Weekly Data", "data": "35GB"},
-    {"id": "smart_laor_600", "name": "Smart Laor! $6.00 (80GB / 30 Days)", "price": 6.00, "type": "Mobile Prepaid > Monthly Data", "data": "80GB"},
-    {"id": "smart_flexi_250", "name": "Smart Flexi250 Data & Voice Bundle", "price": 2.50, "type": "Mobile Prepaid > Flexi Combo", "data": "25GB"},
-    {"id": "smart_tourist_sim", "name": "Smart Traveller SIM 30-Day Unlimited", "price": 12.00, "type": "Mobile Prepaid > Tourist SIM", "data": "100GB"},
+    {
+        "id": "smart_laor_150",
+        "name": "Smart Laor! $1.50 (15GB / 7 Days)",
+        "price": 1.50,
+        "type": "Mobile Prepaid > Weekly Data",
+        "data": "15GB",
+    },
+    {
+        "id": "smart_laor_300",
+        "name": "Smart Laor! $3.00 (35GB / 14 Days)",
+        "price": 3.00,
+        "type": "Mobile Prepaid > Bi-Weekly Data",
+        "data": "35GB",
+    },
+    {
+        "id": "smart_laor_600",
+        "name": "Smart Laor! $6.00 (80GB / 30 Days)",
+        "price": 6.00,
+        "type": "Mobile Prepaid > Monthly Data",
+        "data": "80GB",
+    },
+    {
+        "id": "smart_flexi_250",
+        "name": "Smart Flexi250 Data & Voice Bundle",
+        "price": 2.50,
+        "type": "Mobile Prepaid > Flexi Combo",
+        "data": "25GB",
+    },
+    {
+        "id": "smart_tourist_sim",
+        "name": "Smart Traveller SIM 30-Day Unlimited",
+        "price": 12.00,
+        "type": "Mobile Prepaid > Tourist SIM",
+        "data": "100GB",
+    },
 ]
 
 
@@ -932,7 +1284,9 @@ class SmartMobileScraper(BaseScraper):
     def __init__(self):
         super().__init__(store_slug="smart", source_type="telecom")
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         records: list[dict[str, Any]] = []
         for plan in SMART_MOBILE_PLANS:
@@ -959,9 +1313,27 @@ class SmartMobileScraper(BaseScraper):
 # 10. Smart Home Internet & WiFi (Telecom)
 # ═══════════════════════════════════════════════════════════════════════════
 SMART_WIFI_PLANS = [
-    {"id": "smart_athome_40m", "name": "Smart @Home Wi-Fi Router 40 Mbps", "price": 15.00, "type": "Broadband Internet > Wireless Home Internet", "speed": "40 Mbps"},
-    {"id": "smart_fiber_60m", "name": "Smart Fiber+ Standard 60 Mbps", "price": 20.00, "type": "Broadband Internet > Fiber Internet", "speed": "60 Mbps"},
-    {"id": "smart_fiber_120m", "name": "Smart Fiber+ Ultra 120 Mbps", "price": 30.00, "type": "Broadband Internet > Fiber Internet", "speed": "120 Mbps"},
+    {
+        "id": "smart_athome_40m",
+        "name": "Smart @Home Wi-Fi Router 40 Mbps",
+        "price": 15.00,
+        "type": "Broadband Internet > Wireless Home Internet",
+        "speed": "40 Mbps",
+    },
+    {
+        "id": "smart_fiber_60m",
+        "name": "Smart Fiber+ Standard 60 Mbps",
+        "price": 20.00,
+        "type": "Broadband Internet > Fiber Internet",
+        "speed": "60 Mbps",
+    },
+    {
+        "id": "smart_fiber_120m",
+        "name": "Smart Fiber+ Ultra 120 Mbps",
+        "price": 30.00,
+        "type": "Broadband Internet > Fiber Internet",
+        "speed": "120 Mbps",
+    },
 ]
 
 
@@ -969,7 +1341,9 @@ class SmartWifiScraper(BaseScraper):
     def __init__(self):
         super().__init__(store_slug="smart_wifi", source_type="telecom")
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         records: list[dict[str, Any]] = []
         for plan in SMART_WIFI_PLANS:
@@ -1004,14 +1378,70 @@ KHMER24_CATEGORIES = [
 ]
 
 KHMER24_BASELINE_RENTALS = [
-    {"id": "k24_condo_bkk1", "name": "1-Bedroom Modern Serviced Condo for Rent in BKK1", "price": 550.00, "category": "Residential Rental > Condo For Rent", "bedrooms": 1, "area_m2": 55},
-    {"id": "k24_apt_toulkork", "name": "2-Bedroom Fully Furnished Apartment in Toul Kork", "price": 450.00, "category": "Residential Rental > Apartment For Rent", "bedrooms": 2, "area_m2": 80},
-    {"id": "k24_house_chamkarmon", "name": "3-Bedroom Townhouse for Rent in Chamkarmon", "price": 800.00, "category": "Residential Rental > House For Rent", "bedrooms": 3, "area_m2": 120},
-    {"id": "k24_villa_sen_sok", "name": "4-Bedroom Twin Villa for Rent in Borey Peng Huoth Sen Sok", "price": 1200.00, "category": "Residential Rental > Villa For Rent", "bedrooms": 4, "area_m2": 240},
-    {"id": "k24_studio_daunpenh", "name": "Modern Studio Apartment near Riverside Daun Penh", "price": 350.00, "category": "Residential Rental > Apartment For Rent", "bedrooms": 1, "area_m2": 42},
-    {"id": "k24_condo_tonle", "name": "2-Bedroom High Floor Condo at Tonle Bassac", "price": 750.00, "category": "Residential Rental > Condo For Rent", "bedrooms": 2, "area_m2": 90},
-    {"id": "k24_house_chbarampov", "name": "4-Bedroom Link House in Chbar Ampov", "price": 600.00, "category": "Residential Rental > House For Rent", "bedrooms": 4, "area_m2": 180},
-    {"id": "k24_room_russeykeo", "name": "Single Room with Private Bathroom in Russey Keo", "price": 120.00, "category": "Residential Rental > Room For Rent", "bedrooms": 1, "area_m2": 25},
+    {
+        "id": "k24_condo_bkk1",
+        "name": "1-Bedroom Modern Serviced Condo for Rent in BKK1",
+        "price": 550.00,
+        "category": "Residential Rental > Condo For Rent",
+        "bedrooms": 1,
+        "area_m2": 55,
+    },
+    {
+        "id": "k24_apt_toulkork",
+        "name": "2-Bedroom Fully Furnished Apartment in Toul Kork",
+        "price": 450.00,
+        "category": "Residential Rental > Apartment For Rent",
+        "bedrooms": 2,
+        "area_m2": 80,
+    },
+    {
+        "id": "k24_house_chamkarmon",
+        "name": "3-Bedroom Townhouse for Rent in Chamkarmon",
+        "price": 800.00,
+        "category": "Residential Rental > House For Rent",
+        "bedrooms": 3,
+        "area_m2": 120,
+    },
+    {
+        "id": "k24_villa_sen_sok",
+        "name": "4-Bedroom Twin Villa for Rent in Borey Peng Huoth Sen Sok",
+        "price": 1200.00,
+        "category": "Residential Rental > Villa For Rent",
+        "bedrooms": 4,
+        "area_m2": 240,
+    },
+    {
+        "id": "k24_studio_daunpenh",
+        "name": "Modern Studio Apartment near Riverside Daun Penh",
+        "price": 350.00,
+        "category": "Residential Rental > Apartment For Rent",
+        "bedrooms": 1,
+        "area_m2": 42,
+    },
+    {
+        "id": "k24_condo_tonle",
+        "name": "2-Bedroom High Floor Condo at Tonle Bassac",
+        "price": 750.00,
+        "category": "Residential Rental > Condo For Rent",
+        "bedrooms": 2,
+        "area_m2": 90,
+    },
+    {
+        "id": "k24_house_chbarampov",
+        "name": "4-Bedroom Link House in Chbar Ampov",
+        "price": 600.00,
+        "category": "Residential Rental > House For Rent",
+        "bedrooms": 4,
+        "area_m2": 180,
+    },
+    {
+        "id": "k24_room_russeykeo",
+        "name": "Single Room with Private Bathroom in Russey Keo",
+        "price": 120.00,
+        "category": "Residential Rental > Room For Rent",
+        "bedrooms": 1,
+        "area_m2": 25,
+    },
 ]
 
 
@@ -1019,7 +1449,9 @@ class Khmer24Scraper(BaseScraper):
     def __init__(self):
         super().__init__(store_slug="khmer24", source_type="realestate")
 
-    def _fetch_category_live(self, cat_name: str, cat_url: str, ds: str) -> list[dict[str, Any]]:
+    def _fetch_category_live(
+        self, cat_name: str, cat_url: str, ds: str
+    ) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
         if not HAS_BS4:
             return records
@@ -1037,11 +1469,19 @@ class Khmer24Scraper(BaseScraper):
                     if m:
                         price = _to_float(m.group(1).replace(",", ""))
                         if price and price > 0:
-                            clean_title = re.sub(r"\$\s*[\d,]+(\.\d+)?", "", txt).strip()
+                            clean_title = re.sub(
+                                r"\$\s*[\d,]+(\.\d+)?", "", txt
+                            ).strip()
                             if len(clean_title) >= 3:
                                 seen_urls.add(href)
-                                item_id_match = re.search(r"adid-(\d+)|-([a-zA-Z0-9]+)\.html", href)
-                                item_id = item_id_match.group(1) or item_id_match.group(2) if item_id_match else str(len(seen_urls))
+                                item_id_match = re.search(
+                                    r"adid-(\d+)|-([a-zA-Z0-9]+)\.html", href
+                                )
+                                item_id = (
+                                    item_id_match.group(1) or item_id_match.group(2)
+                                    if item_id_match
+                                    else str(len(seen_urls))
+                                )
                                 records.append(
                                     build_canonical_record(
                                         source_slug="khmer24",
@@ -1052,7 +1492,11 @@ class Khmer24Scraper(BaseScraper):
                                         price=price,
                                         currency="USD",
                                         category_native=f"Residential Rental > {cat_name}",
-                                        url=href if href.startswith("http") else f"https://www.khmer24.com{href}",
+                                        url=(
+                                            href
+                                            if href.startswith("http")
+                                            else f"https://www.khmer24.com{href}"
+                                        ),
                                         scrape_date=ds,
                                     )
                                 )
@@ -1060,7 +1504,9 @@ class Khmer24Scraper(BaseScraper):
             log.warning("Khmer24 live scrape failed for %s: %s", cat_name, exc)
         return records
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         records: list[dict[str, Any]] = []
 
@@ -1082,7 +1528,10 @@ class Khmer24Scraper(BaseScraper):
                         price=rental["price"],
                         currency="USD",
                         category_native=rental["category"],
-                        attrs={"bedrooms": rental.get("bedrooms"), "area_m2": rental.get("area_m2")},
+                        attrs={
+                            "bedrooms": rental.get("bedrooms"),
+                            "area_m2": rental.get("area_m2"),
+                        },
                         url="https://www.khmer24.com/c-house-for-rent",
                         scrape_date=ds,
                         is_fallback=True,
@@ -1103,14 +1552,70 @@ REALESTATE_CATEGORIES = [
 ]
 
 REALESTATE_BASELINE = [
-    {"id": "re_condo_tonle", "name": "Studio Condo for Rent at The Bridge, Tonle Bassac", "price": 380.00, "category": "Residential Rental > Condo", "bedrooms": 1, "area_m2": 38},
-    {"id": "re_apt_daunpenh", "name": "1-Bedroom Colonial Style Apartment near Riverside Daun Penh", "price": 420.00, "category": "Residential Rental > Apartment", "bedrooms": 1, "area_m2": 65},
-    {"id": "re_condo_chroy", "name": "2-Bedroom Riverfront Condo for Rent in Chroy Changvar", "price": 650.00, "category": "Residential Rental > Condo", "bedrooms": 2, "area_m2": 95},
-    {"id": "re_villa_chbarampov", "name": "4-Bedroom Modern Link Villa for Rent in Chbar Ampov", "price": 950.00, "category": "Residential Rental > Villa", "bedrooms": 4, "area_m2": 210},
-    {"id": "re_apt_bkk1", "name": "2-Bedroom Serviced Apartment in BKK1", "price": 850.00, "category": "Residential Rental > Apartment", "bedrooms": 2, "area_m2": 90},
-    {"id": "re_condo_sensok", "name": "1-Bedroom Modern Condo near AEON 2 Sen Sok", "price": 400.00, "category": "Residential Rental > Condo", "bedrooms": 1, "area_m2": 45},
-    {"id": "re_house_toulkork", "name": "3-Bedroom Townhouse for Rent in Toul Kork", "price": 700.00, "category": "Residential Rental > House", "bedrooms": 3, "area_m2": 150},
-    {"id": "re_villa_chamkarmon", "name": "5-Bedroom Luxury Villa in Chamkarmon", "price": 2500.00, "category": "Residential Rental > Villa", "bedrooms": 5, "area_m2": 350},
+    {
+        "id": "re_condo_tonle",
+        "name": "Studio Condo for Rent at The Bridge, Tonle Bassac",
+        "price": 380.00,
+        "category": "Residential Rental > Condo",
+        "bedrooms": 1,
+        "area_m2": 38,
+    },
+    {
+        "id": "re_apt_daunpenh",
+        "name": "1-Bedroom Colonial Style Apartment near Riverside Daun Penh",
+        "price": 420.00,
+        "category": "Residential Rental > Apartment",
+        "bedrooms": 1,
+        "area_m2": 65,
+    },
+    {
+        "id": "re_condo_chroy",
+        "name": "2-Bedroom Riverfront Condo for Rent in Chroy Changvar",
+        "price": 650.00,
+        "category": "Residential Rental > Condo",
+        "bedrooms": 2,
+        "area_m2": 95,
+    },
+    {
+        "id": "re_villa_chbarampov",
+        "name": "4-Bedroom Modern Link Villa for Rent in Chbar Ampov",
+        "price": 950.00,
+        "category": "Residential Rental > Villa",
+        "bedrooms": 4,
+        "area_m2": 210,
+    },
+    {
+        "id": "re_apt_bkk1",
+        "name": "2-Bedroom Serviced Apartment in BKK1",
+        "price": 850.00,
+        "category": "Residential Rental > Apartment",
+        "bedrooms": 2,
+        "area_m2": 90,
+    },
+    {
+        "id": "re_condo_sensok",
+        "name": "1-Bedroom Modern Condo near AEON 2 Sen Sok",
+        "price": 400.00,
+        "category": "Residential Rental > Condo",
+        "bedrooms": 1,
+        "area_m2": 45,
+    },
+    {
+        "id": "re_house_toulkork",
+        "name": "3-Bedroom Townhouse for Rent in Toul Kork",
+        "price": 700.00,
+        "category": "Residential Rental > House",
+        "bedrooms": 3,
+        "area_m2": 150,
+    },
+    {
+        "id": "re_villa_chamkarmon",
+        "name": "5-Bedroom Luxury Villa in Chamkarmon",
+        "price": 2500.00,
+        "category": "Residential Rental > Villa",
+        "bedrooms": 5,
+        "area_m2": 350,
+    },
 ]
 
 
@@ -1118,7 +1623,9 @@ class RealestateKhScraper(BaseScraper):
     def __init__(self):
         super().__init__(store_slug="realestate", source_type="realestate")
 
-    def _fetch_category_live(self, cat_name: str, cat_url: str, ds: str) -> list[dict[str, Any]]:
+    def _fetch_category_live(
+        self, cat_name: str, cat_url: str, ds: str
+    ) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
         if not HAS_BS4:
             return records
@@ -1141,9 +1648,17 @@ class RealestateKhScraper(BaseScraper):
                     price = float(m.group(1).replace(",", "")) if m else None
                     if not price or price <= 0:
                         continue
-                    headline = p.get("headline") or p.get("titleImgAlt") or f"{p.get('categoryName', 'Property')} in Phnom Penh"
+                    headline = (
+                        p.get("headline")
+                        or p.get("titleImgAlt")
+                        or f"{p.get('categoryName', 'Property')} in Phnom Penh"
+                    )
                     addr = p.get("address") or "Phnom Penh"
-                    p_url = f"https://www.realestate.com.kh{p.get('url')}" if p.get("url") else f"https://www.realestate.com.kh/rent/{pid}/"
+                    p_url = (
+                        f"https://www.realestate.com.kh{p.get('url')}"
+                        if p.get("url")
+                        else f"https://www.realestate.com.kh/rent/{pid}/"
+                    )
                     specs = p.get("specifications") or {}
                     records.append(
                         build_canonical_record(
@@ -1170,7 +1685,9 @@ class RealestateKhScraper(BaseScraper):
             log.warning("Realestate live scrape failed for %s: %s", cat_name, exc)
         return records
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         records: list[dict[str, Any]] = []
         seen_ids = set()
@@ -1196,7 +1713,10 @@ class RealestateKhScraper(BaseScraper):
                         price=rental["price"],
                         currency="USD",
                         category_native=rental["category"],
-                        attrs={"bedrooms": rental.get("bedrooms"), "area_m2": rental.get("area_m2")},
+                        attrs={
+                            "bedrooms": rental.get("bedrooms"),
+                            "area_m2": rental.get("area_m2"),
+                        },
                         url="https://www.realestate.com.kh/rent/",
                         scrape_date=ds,
                         is_fallback=True,
@@ -1213,75 +1733,650 @@ REDBUS_OPERATOR_BASE_URL = "https://www.redbus.com.kh/bus-tickets/operators"
 
 REDBUS_OPERATOR_TRIPS = [
     # Phnom Penh to Siem Reap
-    {"id": "rb_pnh_rep_saly_sleep", "dest": "Siem Reap", "slug": "phnom-penh-to-siem-reap", "operator": "Saly VIP", "bus_type": "Sleeping Bus 34", "dep": "11:30 PM", "arr": "05:00 AM", "dur": "5 hrs 30 mins", "price": 14.00, "op_slug": "saly-vip"},
-    {"id": "rb_pnh_rep_virak_hotel", "dest": "Siem Reap", "slug": "phnom-penh-to-siem-reap", "operator": "Virak Buntham Express", "bus_type": "Hotel Bus", "dep": "10:30 PM", "arr": "05:00 AM", "dur": "6 hrs 30 mins", "price": 15.00, "op_slug": "virak-buntham"},
-    {"id": "rb_pnh_rep_larryta_van", "dest": "Siem Reap", "slug": "phnom-penh-to-siem-reap", "operator": "Larryta Express", "bus_type": "VIP Van", "dep": "07:30 AM", "arr": "01:30 PM", "dur": "6 hrs 00 mins", "price": 14.50, "op_slug": "larryta-express"},
-    {"id": "rb_pnh_rep_cambolink_van", "dest": "Siem Reap", "slug": "phnom-penh-to-siem-reap", "operator": "Cambolink21 Express", "bus_type": "VIP Van", "dep": "08:30 AM", "arr": "02:30 PM", "dur": "6 hrs 00 mins", "price": 13.00, "op_slug": "cambolink21-express"},
-    {"id": "rb_pnh_rep_giant_coach", "dest": "Siem Reap", "slug": "phnom-penh-to-siem-reap", "operator": "Giant Ibis Transport", "bus_type": "Luxury Coach", "dep": "08:45 AM", "arr": "02:45 PM", "dur": "6 hrs 00 mins", "price": 16.00, "op_slug": "giant-ibis"},
-    {"id": "rb_pnh_rep_seila_vip", "dest": "Siem Reap", "slug": "phnom-penh-to-siem-reap", "operator": "Seila Angkor Khmer Express", "bus_type": "VIP Van", "dep": "07:00 AM", "arr": "01:00 PM", "dur": "6 hrs 00 mins", "price": 11.00, "op_slug": "seila-angkor-khmer-express"},
-    {"id": "rb_pnh_rep_capitol_bus", "dest": "Siem Reap", "slug": "phnom-penh-to-siem-reap", "operator": "Capitol Tour and Transport", "bus_type": "Standard Coach", "dep": "07:00 AM", "arr": "01:00 PM", "dur": "6 hrs 00 mins", "price": 9.00, "op_slug": "capitol-tour-and-transport"},
-    {"id": "rb_pnh_rep_evgo_van", "dest": "Siem Reap", "slug": "phnom-penh-to-siem-reap", "operator": "EVGO Express", "bus_type": "Electric VIP Van", "dep": "08:00 AM", "arr": "02:00 PM", "dur": "6 hrs 00 mins", "price": 8.00, "op_slug": "evgo-express"},
-    {"id": "rb_pnh_rep_vet_airbus", "dest": "Siem Reap", "slug": "phnom-penh-to-siem-reap", "operator": "VET Airbus Express", "bus_type": "Airbus 45 Seats", "dep": "08:00 AM", "arr": "02:00 PM", "dur": "6 hrs 00 mins", "price": 13.00, "op_slug": "vet-airbus-express"},
-    {"id": "rb_pnh_rep_rithmony_bus", "dest": "Siem Reap", "slug": "phnom-penh-to-siem-reap", "operator": "Rith Mony Transport", "bus_type": "Standard Bus", "dep": "07:00 AM", "arr": "01:30 PM", "dur": "6 hrs 30 mins", "price": 8.50, "op_slug": "rith-mony-transport"},
-
+    {
+        "id": "rb_pnh_rep_saly_sleep",
+        "dest": "Siem Reap",
+        "slug": "phnom-penh-to-siem-reap",
+        "operator": "Saly VIP",
+        "bus_type": "Sleeping Bus 34",
+        "dep": "11:30 PM",
+        "arr": "05:00 AM",
+        "dur": "5 hrs 30 mins",
+        "price": 14.00,
+        "op_slug": "saly-vip",
+    },
+    {
+        "id": "rb_pnh_rep_virak_hotel",
+        "dest": "Siem Reap",
+        "slug": "phnom-penh-to-siem-reap",
+        "operator": "Virak Buntham Express",
+        "bus_type": "Hotel Bus",
+        "dep": "10:30 PM",
+        "arr": "05:00 AM",
+        "dur": "6 hrs 30 mins",
+        "price": 15.00,
+        "op_slug": "virak-buntham",
+    },
+    {
+        "id": "rb_pnh_rep_larryta_van",
+        "dest": "Siem Reap",
+        "slug": "phnom-penh-to-siem-reap",
+        "operator": "Larryta Express",
+        "bus_type": "VIP Van",
+        "dep": "07:30 AM",
+        "arr": "01:30 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 14.50,
+        "op_slug": "larryta-express",
+    },
+    {
+        "id": "rb_pnh_rep_cambolink_van",
+        "dest": "Siem Reap",
+        "slug": "phnom-penh-to-siem-reap",
+        "operator": "Cambolink21 Express",
+        "bus_type": "VIP Van",
+        "dep": "08:30 AM",
+        "arr": "02:30 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 13.00,
+        "op_slug": "cambolink21-express",
+    },
+    {
+        "id": "rb_pnh_rep_giant_coach",
+        "dest": "Siem Reap",
+        "slug": "phnom-penh-to-siem-reap",
+        "operator": "Giant Ibis Transport",
+        "bus_type": "Luxury Coach",
+        "dep": "08:45 AM",
+        "arr": "02:45 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 16.00,
+        "op_slug": "giant-ibis",
+    },
+    {
+        "id": "rb_pnh_rep_seila_vip",
+        "dest": "Siem Reap",
+        "slug": "phnom-penh-to-siem-reap",
+        "operator": "Seila Angkor Khmer Express",
+        "bus_type": "VIP Van",
+        "dep": "07:00 AM",
+        "arr": "01:00 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 11.00,
+        "op_slug": "seila-angkor-khmer-express",
+    },
+    {
+        "id": "rb_pnh_rep_capitol_bus",
+        "dest": "Siem Reap",
+        "slug": "phnom-penh-to-siem-reap",
+        "operator": "Capitol Tour and Transport",
+        "bus_type": "Standard Coach",
+        "dep": "07:00 AM",
+        "arr": "01:00 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 9.00,
+        "op_slug": "capitol-tour-and-transport",
+    },
+    {
+        "id": "rb_pnh_rep_evgo_van",
+        "dest": "Siem Reap",
+        "slug": "phnom-penh-to-siem-reap",
+        "operator": "EVGO Express",
+        "bus_type": "Electric VIP Van",
+        "dep": "08:00 AM",
+        "arr": "02:00 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 8.00,
+        "op_slug": "evgo-express",
+    },
+    {
+        "id": "rb_pnh_rep_vet_airbus",
+        "dest": "Siem Reap",
+        "slug": "phnom-penh-to-siem-reap",
+        "operator": "VET Airbus Express",
+        "bus_type": "Airbus 45 Seats",
+        "dep": "08:00 AM",
+        "arr": "02:00 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 13.00,
+        "op_slug": "vet-airbus-express",
+    },
+    {
+        "id": "rb_pnh_rep_rithmony_bus",
+        "dest": "Siem Reap",
+        "slug": "phnom-penh-to-siem-reap",
+        "operator": "Rith Mony Transport",
+        "bus_type": "Standard Bus",
+        "dep": "07:00 AM",
+        "arr": "01:30 PM",
+        "dur": "6 hrs 30 mins",
+        "price": 8.50,
+        "op_slug": "rith-mony-transport",
+    },
     # Phnom Penh to Sihanoukville
-    {"id": "rb_pnh_kos_larryta_exp", "dest": "Sihanoukville", "slug": "phnom-penh-to-sihanoukville", "operator": "Larryta Express", "bus_type": "VIP Van Expressway", "dep": "08:00 AM", "arr": "11:00 AM", "dur": "3 hrs 00 mins", "price": 13.00, "op_slug": "larryta-express"},
-    {"id": "rb_pnh_kos_virak_sleep", "dest": "Sihanoukville", "slug": "phnom-penh-to-sihanoukville", "operator": "Virak Buntham Express", "bus_type": "Luxury Sleeper", "dep": "11:30 PM", "arr": "03:00 AM", "dur": "3 hrs 30 mins", "price": 15.00, "op_slug": "virak-buntham"},
-    {"id": "rb_pnh_kos_giant_van", "dest": "Sihanoukville", "slug": "phnom-penh-to-sihanoukville", "operator": "Giant Ibis Transport", "bus_type": "VIP Minibus Expressway", "dep": "08:30 AM", "arr": "11:30 AM", "dur": "3 hrs 00 mins", "price": 14.00, "op_slug": "giant-ibis"},
-    {"id": "rb_pnh_kos_cambolink_van", "dest": "Sihanoukville", "slug": "phnom-penh-to-sihanoukville", "operator": "Cambolink21 Express", "bus_type": "VIP Van Expressway", "dep": "09:00 AM", "arr": "12:00 PM", "dur": "3 hrs 00 mins", "price": 12.00, "op_slug": "cambolink21-express"},
-    {"id": "rb_pnh_kos_capitol_bus", "dest": "Sihanoukville", "slug": "phnom-penh-to-sihanoukville", "operator": "Capitol Tour and Transport", "bus_type": "Express Bus", "dep": "07:30 AM", "arr": "11:30 AM", "dur": "4 hrs 00 mins", "price": 10.00, "op_slug": "capitol-tour-and-transport"},
-    {"id": "rb_pnh_kos_vet_coach", "dest": "Sihanoukville", "slug": "phnom-penh-to-sihanoukville", "operator": "VET Airbus Express", "bus_type": "Expressway Coach", "dep": "08:30 AM", "arr": "11:30 AM", "dur": "3 hrs 00 mins", "price": 12.50, "op_slug": "vet-airbus-express"},
-
+    {
+        "id": "rb_pnh_kos_larryta_exp",
+        "dest": "Sihanoukville",
+        "slug": "phnom-penh-to-sihanoukville",
+        "operator": "Larryta Express",
+        "bus_type": "VIP Van Expressway",
+        "dep": "08:00 AM",
+        "arr": "11:00 AM",
+        "dur": "3 hrs 00 mins",
+        "price": 13.00,
+        "op_slug": "larryta-express",
+    },
+    {
+        "id": "rb_pnh_kos_virak_sleep",
+        "dest": "Sihanoukville",
+        "slug": "phnom-penh-to-sihanoukville",
+        "operator": "Virak Buntham Express",
+        "bus_type": "Luxury Sleeper",
+        "dep": "11:30 PM",
+        "arr": "03:00 AM",
+        "dur": "3 hrs 30 mins",
+        "price": 15.00,
+        "op_slug": "virak-buntham",
+    },
+    {
+        "id": "rb_pnh_kos_giant_van",
+        "dest": "Sihanoukville",
+        "slug": "phnom-penh-to-sihanoukville",
+        "operator": "Giant Ibis Transport",
+        "bus_type": "VIP Minibus Expressway",
+        "dep": "08:30 AM",
+        "arr": "11:30 AM",
+        "dur": "3 hrs 00 mins",
+        "price": 14.00,
+        "op_slug": "giant-ibis",
+    },
+    {
+        "id": "rb_pnh_kos_cambolink_van",
+        "dest": "Sihanoukville",
+        "slug": "phnom-penh-to-sihanoukville",
+        "operator": "Cambolink21 Express",
+        "bus_type": "VIP Van Expressway",
+        "dep": "09:00 AM",
+        "arr": "12:00 PM",
+        "dur": "3 hrs 00 mins",
+        "price": 12.00,
+        "op_slug": "cambolink21-express",
+    },
+    {
+        "id": "rb_pnh_kos_capitol_bus",
+        "dest": "Sihanoukville",
+        "slug": "phnom-penh-to-sihanoukville",
+        "operator": "Capitol Tour and Transport",
+        "bus_type": "Express Bus",
+        "dep": "07:30 AM",
+        "arr": "11:30 AM",
+        "dur": "4 hrs 00 mins",
+        "price": 10.00,
+        "op_slug": "capitol-tour-and-transport",
+    },
+    {
+        "id": "rb_pnh_kos_vet_coach",
+        "dest": "Sihanoukville",
+        "slug": "phnom-penh-to-sihanoukville",
+        "operator": "VET Airbus Express",
+        "bus_type": "Expressway Coach",
+        "dep": "08:30 AM",
+        "arr": "11:30 AM",
+        "dur": "3 hrs 00 mins",
+        "price": 12.50,
+        "op_slug": "vet-airbus-express",
+    },
     # Phnom Penh to Battambang
-    {"id": "rb_pnh_bbg_capitol_bus", "dest": "Battambang", "slug": "phnom-penh-to-battambang", "operator": "Capitol Tour and Transport", "bus_type": "Express Bus", "dep": "08:00 AM", "arr": "01:30 PM", "dur": "5 hrs 30 mins", "price": 9.00, "op_slug": "capitol-tour-and-transport"},
-    {"id": "rb_pnh_bbg_seila_vip", "dest": "Battambang", "slug": "phnom-penh-to-battambang", "operator": "Seila Angkor Khmer Express", "bus_type": "VIP Van", "dep": "07:30 AM", "arr": "12:30 PM", "dur": "5 hrs 00 mins", "price": 12.00, "op_slug": "seila-angkor-khmer-express"},
-    {"id": "rb_pnh_bbg_cambolink_van", "dest": "Battambang", "slug": "phnom-penh-to-battambang", "operator": "Cambolink21 Express", "bus_type": "VIP Van", "dep": "08:30 AM", "arr": "01:30 PM", "dur": "5 hrs 00 mins", "price": 12.50, "op_slug": "cambolink21-express"},
-    {"id": "rb_pnh_bbg_virak_night", "dest": "Battambang", "slug": "phnom-penh-to-battambang", "operator": "Virak Buntham Express", "bus_type": "Night Sleeper", "dep": "11:00 PM", "arr": "04:30 AM", "dur": "5 hrs 30 mins", "price": 13.00, "op_slug": "virak-buntham"},
-    {"id": "rb_pnh_bbg_saly_vip", "dest": "Battambang", "slug": "phnom-penh-to-battambang", "operator": "Saly VIP", "bus_type": "VIP Van", "dep": "08:00 AM", "arr": "01:00 PM", "dur": "5 hrs 00 mins", "price": 11.00, "op_slug": "saly-vip"},
-
+    {
+        "id": "rb_pnh_bbg_capitol_bus",
+        "dest": "Battambang",
+        "slug": "phnom-penh-to-battambang",
+        "operator": "Capitol Tour and Transport",
+        "bus_type": "Express Bus",
+        "dep": "08:00 AM",
+        "arr": "01:30 PM",
+        "dur": "5 hrs 30 mins",
+        "price": 9.00,
+        "op_slug": "capitol-tour-and-transport",
+    },
+    {
+        "id": "rb_pnh_bbg_seila_vip",
+        "dest": "Battambang",
+        "slug": "phnom-penh-to-battambang",
+        "operator": "Seila Angkor Khmer Express",
+        "bus_type": "VIP Van",
+        "dep": "07:30 AM",
+        "arr": "12:30 PM",
+        "dur": "5 hrs 00 mins",
+        "price": 12.00,
+        "op_slug": "seila-angkor-khmer-express",
+    },
+    {
+        "id": "rb_pnh_bbg_cambolink_van",
+        "dest": "Battambang",
+        "slug": "phnom-penh-to-battambang",
+        "operator": "Cambolink21 Express",
+        "bus_type": "VIP Van",
+        "dep": "08:30 AM",
+        "arr": "01:30 PM",
+        "dur": "5 hrs 00 mins",
+        "price": 12.50,
+        "op_slug": "cambolink21-express",
+    },
+    {
+        "id": "rb_pnh_bbg_virak_night",
+        "dest": "Battambang",
+        "slug": "phnom-penh-to-battambang",
+        "operator": "Virak Buntham Express",
+        "bus_type": "Night Sleeper",
+        "dep": "11:00 PM",
+        "arr": "04:30 AM",
+        "dur": "5 hrs 30 mins",
+        "price": 13.00,
+        "op_slug": "virak-buntham",
+    },
+    {
+        "id": "rb_pnh_bbg_saly_vip",
+        "dest": "Battambang",
+        "slug": "phnom-penh-to-battambang",
+        "operator": "Saly VIP",
+        "bus_type": "VIP Van",
+        "dep": "08:00 AM",
+        "arr": "01:00 PM",
+        "dur": "5 hrs 00 mins",
+        "price": 11.00,
+        "op_slug": "saly-vip",
+    },
     # Phnom Penh to Kampot & Kep
-    {"id": "rb_pnh_kpt_giant_van", "dest": "Kampot", "slug": "phnom-penh-to-kampot", "operator": "Giant Ibis Transport", "bus_type": "VIP Minibus", "dep": "08:00 AM", "arr": "11:30 AM", "dur": "3 hrs 30 mins", "price": 12.00, "op_slug": "giant-ibis"},
-    {"id": "rb_pnh_kpt_ekareach_van", "dest": "Kampot", "slug": "phnom-penh-to-kampot", "operator": "Ekareach Express", "bus_type": "VIP Van", "dep": "07:30 AM", "arr": "11:00 AM", "dur": "3 hrs 30 mins", "price": 10.00, "op_slug": "ekareach-express"},
-    {"id": "rb_pnh_kpt_champa_van", "dest": "Kampot", "slug": "phnom-penh-to-kampot", "operator": "Champa Tourist Bus", "bus_type": "VIP Van", "dep": "08:00 AM", "arr": "11:30 AM", "dur": "3 hrs 30 mins", "price": 9.50, "op_slug": "champa-tourist-bus"},
-    {"id": "rb_pnh_kpt_capitol_bus", "dest": "Kampot", "slug": "phnom-penh-to-kampot", "operator": "Capitol Tour and Transport", "bus_type": "Standard Bus", "dep": "07:00 AM", "arr": "11:00 AM", "dur": "4 hrs 00 mins", "price": 7.00, "op_slug": "capitol-tour-and-transport"},
-    {"id": "rb_pnh_kep_ekareach_van", "dest": "Kep", "slug": "phnom-penh-to-kep", "operator": "Ekareach Express", "bus_type": "VIP Van", "dep": "08:00 AM", "arr": "12:00 PM", "dur": "4 hrs 00 mins", "price": 10.00, "op_slug": "ekareach-express"},
-    {"id": "rb_pnh_kep_virak_van", "dest": "Kep", "slug": "phnom-penh-to-kep", "operator": "Virak Buntham Express", "bus_type": "VIP Minivan", "dep": "07:30 AM", "arr": "11:30 AM", "dur": "4 hrs 00 mins", "price": 11.50, "op_slug": "virak-buntham"},
-
+    {
+        "id": "rb_pnh_kpt_giant_van",
+        "dest": "Kampot",
+        "slug": "phnom-penh-to-kampot",
+        "operator": "Giant Ibis Transport",
+        "bus_type": "VIP Minibus",
+        "dep": "08:00 AM",
+        "arr": "11:30 AM",
+        "dur": "3 hrs 30 mins",
+        "price": 12.00,
+        "op_slug": "giant-ibis",
+    },
+    {
+        "id": "rb_pnh_kpt_ekareach_van",
+        "dest": "Kampot",
+        "slug": "phnom-penh-to-kampot",
+        "operator": "Ekareach Express",
+        "bus_type": "VIP Van",
+        "dep": "07:30 AM",
+        "arr": "11:00 AM",
+        "dur": "3 hrs 30 mins",
+        "price": 10.00,
+        "op_slug": "ekareach-express",
+    },
+    {
+        "id": "rb_pnh_kpt_champa_van",
+        "dest": "Kampot",
+        "slug": "phnom-penh-to-kampot",
+        "operator": "Champa Tourist Bus",
+        "bus_type": "VIP Van",
+        "dep": "08:00 AM",
+        "arr": "11:30 AM",
+        "dur": "3 hrs 30 mins",
+        "price": 9.50,
+        "op_slug": "champa-tourist-bus",
+    },
+    {
+        "id": "rb_pnh_kpt_capitol_bus",
+        "dest": "Kampot",
+        "slug": "phnom-penh-to-kampot",
+        "operator": "Capitol Tour and Transport",
+        "bus_type": "Standard Bus",
+        "dep": "07:00 AM",
+        "arr": "11:00 AM",
+        "dur": "4 hrs 00 mins",
+        "price": 7.00,
+        "op_slug": "capitol-tour-and-transport",
+    },
+    {
+        "id": "rb_pnh_kep_ekareach_van",
+        "dest": "Kep",
+        "slug": "phnom-penh-to-kep",
+        "operator": "Ekareach Express",
+        "bus_type": "VIP Van",
+        "dep": "08:00 AM",
+        "arr": "12:00 PM",
+        "dur": "4 hrs 00 mins",
+        "price": 10.00,
+        "op_slug": "ekareach-express",
+    },
+    {
+        "id": "rb_pnh_kep_virak_van",
+        "dest": "Kep",
+        "slug": "phnom-penh-to-kep",
+        "operator": "Virak Buntham Express",
+        "bus_type": "VIP Minivan",
+        "dep": "07:30 AM",
+        "arr": "11:30 AM",
+        "dur": "4 hrs 00 mins",
+        "price": 11.50,
+        "op_slug": "virak-buntham",
+    },
     # Phnom Penh to Poipet & Banteay Meanchey
-    {"id": "rb_pnh_poi_capitol_bus", "dest": "Poi Pet", "slug": "phnom-penh-to-poipet", "operator": "Capitol Tour and Transport", "bus_type": "Express Bus", "dep": "07:30 AM", "arr": "03:30 PM", "dur": "8 hrs 00 mins", "price": 12.00, "op_slug": "capitol-tour-and-transport"},
-    {"id": "rb_pnh_poi_virak_hotel", "dest": "Poi Pet", "slug": "phnom-penh-to-poipet", "operator": "Virak Buntham Express", "bus_type": "Hotel Bus", "dep": "10:30 PM", "arr": "05:30 AM", "dur": "7 hrs 00 mins", "price": 16.50, "op_slug": "virak-buntham"},
-    {"id": "rb_pnh_bmc_seila_vip", "dest": "Banteay Meanchey", "slug": "phnom-penh-to-banteay-meanchey", "operator": "Seila Angkor Khmer Express", "bus_type": "VIP Van", "dep": "08:00 AM", "arr": "02:30 PM", "dur": "6 hrs 30 mins", "price": 13.00, "op_slug": "seila-angkor-khmer-express"},
-
+    {
+        "id": "rb_pnh_poi_capitol_bus",
+        "dest": "Poi Pet",
+        "slug": "phnom-penh-to-poipet",
+        "operator": "Capitol Tour and Transport",
+        "bus_type": "Express Bus",
+        "dep": "07:30 AM",
+        "arr": "03:30 PM",
+        "dur": "8 hrs 00 mins",
+        "price": 12.00,
+        "op_slug": "capitol-tour-and-transport",
+    },
+    {
+        "id": "rb_pnh_poi_virak_hotel",
+        "dest": "Poi Pet",
+        "slug": "phnom-penh-to-poipet",
+        "operator": "Virak Buntham Express",
+        "bus_type": "Hotel Bus",
+        "dep": "10:30 PM",
+        "arr": "05:30 AM",
+        "dur": "7 hrs 00 mins",
+        "price": 16.50,
+        "op_slug": "virak-buntham",
+    },
+    {
+        "id": "rb_pnh_bmc_seila_vip",
+        "dest": "Banteay Meanchey",
+        "slug": "phnom-penh-to-banteay-meanchey",
+        "operator": "Seila Angkor Khmer Express",
+        "bus_type": "VIP Van",
+        "dep": "08:00 AM",
+        "arr": "02:30 PM",
+        "dur": "6 hrs 30 mins",
+        "price": 13.00,
+        "op_slug": "seila-angkor-khmer-express",
+    },
     # Phnom Penh to Mondulkiri & Ratanakiri
-    {"id": "rb_pnh_mon_rithya_van", "dest": "Mondulkiri", "slug": "phnom-penh-to-mondulkiri", "operator": "Rithya Mondulkiri Express", "bus_type": "VIP Van", "dep": "07:00 AM", "arr": "01:00 PM", "dur": "6 hrs 00 mins", "price": 15.00, "op_slug": "rithya-express"},
-    {"id": "rb_pnh_mon_virak_van", "dest": "Mondulkiri", "slug": "phnom-penh-to-mondulkiri", "operator": "Virak Buntham Express", "bus_type": "VIP Minivan", "dep": "07:30 AM", "arr": "01:30 PM", "dur": "6 hrs 00 mins", "price": 16.00, "op_slug": "virak-buntham"},
-    {"id": "rb_pnh_rat_virak_sleep", "dest": "Ratanakiri", "slug": "phnom-penh-to-ratanakiri", "operator": "Virak Buntham Express", "bus_type": "Luxury Sleeper", "dep": "07:30 PM", "arr": "05:30 AM", "dur": "10 hrs 00 mins", "price": 20.00, "op_slug": "virak-buntham"},
-
+    {
+        "id": "rb_pnh_mon_rithya_van",
+        "dest": "Mondulkiri",
+        "slug": "phnom-penh-to-mondulkiri",
+        "operator": "Rithya Mondulkiri Express",
+        "bus_type": "VIP Van",
+        "dep": "07:00 AM",
+        "arr": "01:00 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 15.00,
+        "op_slug": "rithya-express",
+    },
+    {
+        "id": "rb_pnh_mon_virak_van",
+        "dest": "Mondulkiri",
+        "slug": "phnom-penh-to-mondulkiri",
+        "operator": "Virak Buntham Express",
+        "bus_type": "VIP Minivan",
+        "dep": "07:30 AM",
+        "arr": "01:30 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 16.00,
+        "op_slug": "virak-buntham",
+    },
+    {
+        "id": "rb_pnh_rat_virak_sleep",
+        "dest": "Ratanakiri",
+        "slug": "phnom-penh-to-ratanakiri",
+        "operator": "Virak Buntham Express",
+        "bus_type": "Luxury Sleeper",
+        "dep": "07:30 PM",
+        "arr": "05:30 AM",
+        "dur": "10 hrs 00 mins",
+        "price": 20.00,
+        "op_slug": "virak-buntham",
+    },
     # Phnom Penh to Koh Kong & Islands
-    {"id": "rb_pnh_kkg_virak_van", "dest": "Koh Kong", "slug": "phnom-penh-to-koh-kong", "operator": "Virak Buntham Express", "bus_type": "VIP Van", "dep": "07:45 AM", "arr": "01:45 PM", "dur": "6 hrs 00 mins", "price": 14.00, "op_slug": "virak-buntham"},
-    {"id": "rb_pnh_khr_ferry", "dest": "Koh Rong", "slug": "phnom-penh-to-koh-rong", "operator": "Speed Ferry Cambodia", "bus_type": "Bus + Speed Ferry", "dep": "07:30 AM", "arr": "01:00 PM", "dur": "5 hrs 30 mins", "price": 25.00, "op_slug": "speed-ferry"},
-    {"id": "rb_pnh_krs_ferry", "dest": "Koh Rong Sanloem", "slug": "phnom-penh-to-koh-rong-samloem", "operator": "Buva Sea Cambodia", "bus_type": "Bus + Speed Ferry", "dep": "07:30 AM", "arr": "01:30 PM", "dur": "6 hrs 00 mins", "price": 25.00, "op_slug": "buva-sea"},
-
+    {
+        "id": "rb_pnh_kkg_virak_van",
+        "dest": "Koh Kong",
+        "slug": "phnom-penh-to-koh-kong",
+        "operator": "Virak Buntham Express",
+        "bus_type": "VIP Van",
+        "dep": "07:45 AM",
+        "arr": "01:45 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 14.00,
+        "op_slug": "virak-buntham",
+    },
+    {
+        "id": "rb_pnh_khr_ferry",
+        "dest": "Koh Rong",
+        "slug": "phnom-penh-to-koh-rong",
+        "operator": "Speed Ferry Cambodia",
+        "bus_type": "Bus + Speed Ferry",
+        "dep": "07:30 AM",
+        "arr": "01:00 PM",
+        "dur": "5 hrs 30 mins",
+        "price": 25.00,
+        "op_slug": "speed-ferry",
+    },
+    {
+        "id": "rb_pnh_krs_ferry",
+        "dest": "Koh Rong Sanloem",
+        "slug": "phnom-penh-to-koh-rong-samloem",
+        "operator": "Buva Sea Cambodia",
+        "bus_type": "Bus + Speed Ferry",
+        "dep": "07:30 AM",
+        "arr": "01:30 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 25.00,
+        "op_slug": "buva-sea",
+    },
     # Other Cambodian Provinces
-    {"id": "rb_pnh_kcm_sorya_bus", "dest": "Kampong Cham", "slug": "phnom-penh-to-kampong-cham", "operator": "Phnom Penh Sorya Transport", "bus_type": "Express Bus", "dep": "07:30 AM", "arr": "10:30 AM", "dur": "3 hrs 00 mins", "price": 6.50, "op_slug": "sorya-transport"},
-    {"id": "rb_pnh_kth_capitol_bus", "dest": "Kampong Thom", "slug": "phnom-penh-to-kampong-thom", "operator": "Capitol Tour and Transport", "bus_type": "Express Bus", "dep": "08:00 AM", "arr": "11:30 AM", "dur": "3 hrs 30 mins", "price": 7.50, "op_slug": "capitol-tour-and-transport"},
-    {"id": "rb_pnh_kch_sorya_bus", "dest": "Kampong Chhnang", "slug": "phnom-penh-to-kampong-chhnang", "operator": "Phnom Penh Sorya Transport", "bus_type": "Standard Bus", "dep": "08:30 AM", "arr": "10:45 AM", "dur": "2 hrs 15 mins", "price": 5.00, "op_slug": "sorya-transport"},
-    {"id": "rb_pnh_pst_capitol_bus", "dest": "Pursat", "slug": "phnom-penh-to-pursat", "operator": "Capitol Tour and Transport", "bus_type": "Express Bus", "dep": "08:00 AM", "arr": "11:45 AM", "dur": "3 hrs 45 mins", "price": 7.00, "op_slug": "capitol-tour-and-transport"},
-    {"id": "rb_pnh_pvh_virak_van", "dest": "Preah Vihear", "slug": "phnom-penh-to-preah-vihear", "operator": "Virak Buntham Express", "bus_type": "VIP Van", "dep": "07:30 AM", "arr": "02:30 PM", "dur": "7 hrs 00 mins", "price": 16.00, "op_slug": "virak-buntham"},
-    {"id": "rb_pnh_kra_sorya_bus", "dest": "Kratie", "slug": "phnom-penh-to-kratie", "operator": "Phnom Penh Sorya Transport", "bus_type": "Express Bus", "dep": "07:30 AM", "arr": "01:30 PM", "dur": "6 hrs 00 mins", "price": 11.00, "op_slug": "sorya-transport"},
-    {"id": "rb_pnh_stg_virak_hotel", "dest": "Stung Treng", "slug": "phnom-penh-to-stung-treng", "operator": "Virak Buntham Express", "bus_type": "Hotel Bus", "dep": "08:00 PM", "arr": "04:30 AM", "dur": "8 hrs 30 mins", "price": 18.00, "op_slug": "virak-buntham"},
-    {"id": "rb_pnh_tko_sorya_bus", "dest": "Takeo", "slug": "phnom-penh-to-takeo", "operator": "Phnom Penh Sorya Transport", "bus_type": "Standard Bus", "dep": "09:00 AM", "arr": "11:00 AM", "dur": "2 hrs 00 mins", "price": 4.50, "op_slug": "sorya-transport"},
-    {"id": "rb_pnh_svr_virak_van", "dest": "Svay Rieng (Bavet)", "slug": "phnom-penh-to-bavet", "operator": "Virak Buntham Express", "bus_type": "VIP Van", "dep": "08:00 AM", "arr": "12:00 PM", "dur": "4 hrs 00 mins", "price": 9.00, "op_slug": "virak-buntham"},
-    {"id": "rb_pnh_pvn_sorya_bus", "dest": "Prey Veng", "slug": "phnom-penh-to-prey-veng", "operator": "Phnom Penh Sorya Transport", "bus_type": "Standard Bus", "dep": "08:30 AM", "arr": "11:00 AM", "dur": "2 hrs 30 mins", "price": 5.50, "op_slug": "sorya-transport"},
-    {"id": "rb_pnh_pln_virak_van", "dest": "Pailin", "slug": "phnom-penh-to-pailin", "operator": "Virak Buntham Express", "bus_type": "VIP Van", "dep": "08:00 AM", "arr": "03:00 PM", "dur": "7 hrs 00 mins", "price": 15.00, "op_slug": "virak-buntham"},
-
+    {
+        "id": "rb_pnh_kcm_sorya_bus",
+        "dest": "Kampong Cham",
+        "slug": "phnom-penh-to-kampong-cham",
+        "operator": "Phnom Penh Sorya Transport",
+        "bus_type": "Express Bus",
+        "dep": "07:30 AM",
+        "arr": "10:30 AM",
+        "dur": "3 hrs 00 mins",
+        "price": 6.50,
+        "op_slug": "sorya-transport",
+    },
+    {
+        "id": "rb_pnh_kth_capitol_bus",
+        "dest": "Kampong Thom",
+        "slug": "phnom-penh-to-kampong-thom",
+        "operator": "Capitol Tour and Transport",
+        "bus_type": "Express Bus",
+        "dep": "08:00 AM",
+        "arr": "11:30 AM",
+        "dur": "3 hrs 30 mins",
+        "price": 7.50,
+        "op_slug": "capitol-tour-and-transport",
+    },
+    {
+        "id": "rb_pnh_kch_sorya_bus",
+        "dest": "Kampong Chhnang",
+        "slug": "phnom-penh-to-kampong-chhnang",
+        "operator": "Phnom Penh Sorya Transport",
+        "bus_type": "Standard Bus",
+        "dep": "08:30 AM",
+        "arr": "10:45 AM",
+        "dur": "2 hrs 15 mins",
+        "price": 5.00,
+        "op_slug": "sorya-transport",
+    },
+    {
+        "id": "rb_pnh_pst_capitol_bus",
+        "dest": "Pursat",
+        "slug": "phnom-penh-to-pursat",
+        "operator": "Capitol Tour and Transport",
+        "bus_type": "Express Bus",
+        "dep": "08:00 AM",
+        "arr": "11:45 AM",
+        "dur": "3 hrs 45 mins",
+        "price": 7.00,
+        "op_slug": "capitol-tour-and-transport",
+    },
+    {
+        "id": "rb_pnh_pvh_virak_van",
+        "dest": "Preah Vihear",
+        "slug": "phnom-penh-to-preah-vihear",
+        "operator": "Virak Buntham Express",
+        "bus_type": "VIP Van",
+        "dep": "07:30 AM",
+        "arr": "02:30 PM",
+        "dur": "7 hrs 00 mins",
+        "price": 16.00,
+        "op_slug": "virak-buntham",
+    },
+    {
+        "id": "rb_pnh_kra_sorya_bus",
+        "dest": "Kratie",
+        "slug": "phnom-penh-to-kratie",
+        "operator": "Phnom Penh Sorya Transport",
+        "bus_type": "Express Bus",
+        "dep": "07:30 AM",
+        "arr": "01:30 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 11.00,
+        "op_slug": "sorya-transport",
+    },
+    {
+        "id": "rb_pnh_stg_virak_hotel",
+        "dest": "Stung Treng",
+        "slug": "phnom-penh-to-stung-treng",
+        "operator": "Virak Buntham Express",
+        "bus_type": "Hotel Bus",
+        "dep": "08:00 PM",
+        "arr": "04:30 AM",
+        "dur": "8 hrs 30 mins",
+        "price": 18.00,
+        "op_slug": "virak-buntham",
+    },
+    {
+        "id": "rb_pnh_tko_sorya_bus",
+        "dest": "Takeo",
+        "slug": "phnom-penh-to-takeo",
+        "operator": "Phnom Penh Sorya Transport",
+        "bus_type": "Standard Bus",
+        "dep": "09:00 AM",
+        "arr": "11:00 AM",
+        "dur": "2 hrs 00 mins",
+        "price": 4.50,
+        "op_slug": "sorya-transport",
+    },
+    {
+        "id": "rb_pnh_svr_virak_van",
+        "dest": "Svay Rieng (Bavet)",
+        "slug": "phnom-penh-to-bavet",
+        "operator": "Virak Buntham Express",
+        "bus_type": "VIP Van",
+        "dep": "08:00 AM",
+        "arr": "12:00 PM",
+        "dur": "4 hrs 00 mins",
+        "price": 9.00,
+        "op_slug": "virak-buntham",
+    },
+    {
+        "id": "rb_pnh_pvn_sorya_bus",
+        "dest": "Prey Veng",
+        "slug": "phnom-penh-to-prey-veng",
+        "operator": "Phnom Penh Sorya Transport",
+        "bus_type": "Standard Bus",
+        "dep": "08:30 AM",
+        "arr": "11:00 AM",
+        "dur": "2 hrs 30 mins",
+        "price": 5.50,
+        "op_slug": "sorya-transport",
+    },
+    {
+        "id": "rb_pnh_pln_virak_van",
+        "dest": "Pailin",
+        "slug": "phnom-penh-to-pailin",
+        "operator": "Virak Buntham Express",
+        "bus_type": "VIP Van",
+        "dep": "08:00 AM",
+        "arr": "03:00 PM",
+        "dur": "7 hrs 00 mins",
+        "price": 15.00,
+        "op_slug": "virak-buntham",
+    },
     # International Connections
-    {"id": "rb_pnh_bkk_virak_coach", "dest": "Bangkok", "slug": "phnom-penh-to-bangkok", "operator": "Virak Buntham Express", "bus_type": "International Coach", "dep": "07:30 AM", "arr": "06:00 PM", "dur": "10 hrs 30 mins", "price": 20.00, "op_slug": "virak-buntham"},
-    {"id": "rb_pnh_bkk_giant_coach", "dest": "Bangkok", "slug": "phnom-penh-to-bangkok", "operator": "Giant Ibis Transport", "bus_type": "Luxury International Bus", "dep": "08:00 AM", "arr": "06:00 PM", "dur": "10 hrs 00 mins", "price": 35.00, "op_slug": "giant-ibis"},
-    {"id": "rb_pnh_sgn_kumho_coach", "dest": "Ho Chi Minh", "slug": "phnom-penh-to-ho-chi-minh", "operator": "Kumho Samco Express", "bus_type": "VIP Sleeper Coach", "dep": "06:30 AM", "arr": "01:30 PM", "dur": "7 hrs 00 mins", "price": 20.00, "op_slug": "kumho-samco"},
-    {"id": "rb_pnh_sgn_giant_coach", "dest": "Ho Chi Minh", "slug": "phnom-penh-to-ho-chi-minh", "operator": "Giant Ibis Transport", "bus_type": "Luxury International Bus", "dep": "08:00 AM", "arr": "02:30 PM", "dur": "6 hrs 30 mins", "price": 27.00, "op_slug": "giant-ibis"},
-    {"id": "rb_pnh_htn_virak_van", "dest": "Ha Tien", "slug": "phnom-penh-to-ha-tien", "operator": "Virak Buntham Express", "bus_type": "Border Express Van", "dep": "07:30 AM", "arr": "01:30 PM", "dur": "6 hrs 00 mins", "price": 21.00, "op_slug": "virak-buntham"},
-    {"id": "rb_pnh_pks_chanthou_bus", "dest": "Pakse", "slug": "phnom-penh-to-pakse", "operator": "Seng Chanthou Transport", "bus_type": "International Bus", "dep": "07:00 AM", "arr": "04:30 PM", "dur": "9 hrs 30 mins", "price": 37.00, "op_slug": "seng-chanthou"},
+    {
+        "id": "rb_pnh_bkk_virak_coach",
+        "dest": "Bangkok",
+        "slug": "phnom-penh-to-bangkok",
+        "operator": "Virak Buntham Express",
+        "bus_type": "International Coach",
+        "dep": "07:30 AM",
+        "arr": "06:00 PM",
+        "dur": "10 hrs 30 mins",
+        "price": 20.00,
+        "op_slug": "virak-buntham",
+    },
+    {
+        "id": "rb_pnh_bkk_giant_coach",
+        "dest": "Bangkok",
+        "slug": "phnom-penh-to-bangkok",
+        "operator": "Giant Ibis Transport",
+        "bus_type": "Luxury International Bus",
+        "dep": "08:00 AM",
+        "arr": "06:00 PM",
+        "dur": "10 hrs 00 mins",
+        "price": 35.00,
+        "op_slug": "giant-ibis",
+    },
+    {
+        "id": "rb_pnh_sgn_kumho_coach",
+        "dest": "Ho Chi Minh",
+        "slug": "phnom-penh-to-ho-chi-minh",
+        "operator": "Kumho Samco Express",
+        "bus_type": "VIP Sleeper Coach",
+        "dep": "06:30 AM",
+        "arr": "01:30 PM",
+        "dur": "7 hrs 00 mins",
+        "price": 20.00,
+        "op_slug": "kumho-samco",
+    },
+    {
+        "id": "rb_pnh_sgn_giant_coach",
+        "dest": "Ho Chi Minh",
+        "slug": "phnom-penh-to-ho-chi-minh",
+        "operator": "Giant Ibis Transport",
+        "bus_type": "Luxury International Bus",
+        "dep": "08:00 AM",
+        "arr": "02:30 PM",
+        "dur": "6 hrs 30 mins",
+        "price": 27.00,
+        "op_slug": "giant-ibis",
+    },
+    {
+        "id": "rb_pnh_htn_virak_van",
+        "dest": "Ha Tien",
+        "slug": "phnom-penh-to-ha-tien",
+        "operator": "Virak Buntham Express",
+        "bus_type": "Border Express Van",
+        "dep": "07:30 AM",
+        "arr": "01:30 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 21.00,
+        "op_slug": "virak-buntham",
+    },
+    {
+        "id": "rb_pnh_pks_chanthou_bus",
+        "dest": "Pakse",
+        "slug": "phnom-penh-to-pakse",
+        "operator": "Seng Chanthou Transport",
+        "bus_type": "International Bus",
+        "dep": "07:00 AM",
+        "arr": "04:30 PM",
+        "dur": "9 hrs 30 mins",
+        "price": 37.00,
+        "op_slug": "seng-chanthou",
+    },
 ]
 
 
@@ -1314,7 +2409,9 @@ class RedBusKhScraper(BaseScraper):
                 pass
         return info
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         records: list[dict[str, Any]] = []
 
@@ -1384,86 +2481,680 @@ class RedBusKhScraper(BaseScraper):
 # 15. BookMeBus Cambodia — Intercity Bus & Transport (Phnom Penh Base)
 # ═══════════════════════════════════════════════════════════════════════════
 BOOKMEBUS_BASE_URL = "https://bookmebus.com/en"
-BOOKMEBUS_DESTINATIONS_API = "https://bookmebus.com/en/locations/get_destinations?origin_id=1"
+BOOKMEBUS_DESTINATIONS_API = (
+    "https://bookmebus.com/en/locations/get_destinations?origin_id=1"
+)
 
 BOOKMEBUS_BASELINE_ROUTES = [
     # Siem Reap
-    {"id": "bmb_pnh_rep_evgo_van", "dest": "Siem Reap", "slug": "siem-reap", "operator": "EVGo Express Cambodia", "bus_type": "Electric VIP Van", "dep": "08:00 AM", "arr": "02:00 PM", "dur": "6 hrs 00 mins", "price": 8.00},
-    {"id": "bmb_pnh_rep_rithmony_bus", "dest": "Siem Reap", "slug": "siem-reap", "operator": "Rith Mony Transport", "bus_type": "Standard Bus", "dep": "07:00 AM", "arr": "01:30 PM", "dur": "6 hrs 30 mins", "price": 8.50},
-    {"id": "bmb_pnh_rep_capitol_bus", "dest": "Siem Reap", "slug": "siem-reap", "operator": "Capitol Tours", "bus_type": "Standard Bus", "dep": "07:00 AM", "arr": "01:00 PM", "dur": "6 hrs 00 mins", "price": 9.50},
-    {"id": "bmb_pnh_rep_seila_vip", "dest": "Siem Reap", "slug": "siem-reap", "operator": "Seila Angkor Khmer Express", "bus_type": "VIP Express", "dep": "04:30 PM", "arr": "10:30 PM", "dur": "6 hrs 00 mins", "price": 10.50},
-    {"id": "bmb_pnh_rep_ebooking_van", "dest": "Siem Reap", "slug": "siem-reap", "operator": "E-Booking Express", "bus_type": "VIP Van", "dep": "04:30 PM", "arr": "09:45 PM", "dur": "5 hrs 15 mins", "price": 11.00},
-    {"id": "bmb_pnh_rep_cambolink_van", "dest": "Siem Reap", "slug": "siem-reap", "operator": "Cambolink21 Express", "bus_type": "VIP Van", "dep": "04:05 PM", "arr": "10:05 PM", "dur": "6 hrs 00 mins", "price": 13.25},
-    {"id": "bmb_pnh_rep_vet_airbus", "dest": "Siem Reap", "slug": "siem-reap", "operator": "VET Airbus Express", "bus_type": "Airbus 45 Seats", "dep": "08:00 AM", "arr": "02:00 PM", "dur": "6 hrs 00 mins", "price": 13.00},
-    {"id": "bmb_pnh_rep_saly_sleep", "dest": "Siem Reap", "slug": "siem-reap", "operator": "Saly VIP", "bus_type": "Sleeping Bus 34", "dep": "11:30 PM", "arr": "05:00 AM", "dur": "5 hrs 30 mins", "price": 14.45},
-    {"id": "bmb_pnh_rep_larryta_van", "dest": "Siem Reap", "slug": "siem-reap", "operator": "Larryta Express", "bus_type": "Luxury VIP Van", "dep": "07:30 AM", "arr": "01:30 PM", "dur": "6 hrs 00 mins", "price": 14.50},
-    {"id": "bmb_pnh_rep_virak_hotel", "dest": "Siem Reap", "slug": "siem-reap", "operator": "Virak Buntham Express", "bus_type": "Hotel Bus", "dep": "10:30 PM", "arr": "05:00 AM", "dur": "6 hrs 30 mins", "price": 15.00},
-    {"id": "bmb_pnh_rep_giant_coach", "dest": "Siem Reap", "slug": "siem-reap", "operator": "Giant Ibis Transport", "bus_type": "Luxury Coach", "dep": "08:45 AM", "arr": "02:45 PM", "dur": "6 hrs 00 mins", "price": 16.00},
-
+    {
+        "id": "bmb_pnh_rep_evgo_van",
+        "dest": "Siem Reap",
+        "slug": "siem-reap",
+        "operator": "EVGo Express Cambodia",
+        "bus_type": "Electric VIP Van",
+        "dep": "08:00 AM",
+        "arr": "02:00 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 8.00,
+    },
+    {
+        "id": "bmb_pnh_rep_rithmony_bus",
+        "dest": "Siem Reap",
+        "slug": "siem-reap",
+        "operator": "Rith Mony Transport",
+        "bus_type": "Standard Bus",
+        "dep": "07:00 AM",
+        "arr": "01:30 PM",
+        "dur": "6 hrs 30 mins",
+        "price": 8.50,
+    },
+    {
+        "id": "bmb_pnh_rep_capitol_bus",
+        "dest": "Siem Reap",
+        "slug": "siem-reap",
+        "operator": "Capitol Tours",
+        "bus_type": "Standard Bus",
+        "dep": "07:00 AM",
+        "arr": "01:00 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 9.50,
+    },
+    {
+        "id": "bmb_pnh_rep_seila_vip",
+        "dest": "Siem Reap",
+        "slug": "siem-reap",
+        "operator": "Seila Angkor Khmer Express",
+        "bus_type": "VIP Express",
+        "dep": "04:30 PM",
+        "arr": "10:30 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 10.50,
+    },
+    {
+        "id": "bmb_pnh_rep_ebooking_van",
+        "dest": "Siem Reap",
+        "slug": "siem-reap",
+        "operator": "E-Booking Express",
+        "bus_type": "VIP Van",
+        "dep": "04:30 PM",
+        "arr": "09:45 PM",
+        "dur": "5 hrs 15 mins",
+        "price": 11.00,
+    },
+    {
+        "id": "bmb_pnh_rep_cambolink_van",
+        "dest": "Siem Reap",
+        "slug": "siem-reap",
+        "operator": "Cambolink21 Express",
+        "bus_type": "VIP Van",
+        "dep": "04:05 PM",
+        "arr": "10:05 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 13.25,
+    },
+    {
+        "id": "bmb_pnh_rep_vet_airbus",
+        "dest": "Siem Reap",
+        "slug": "siem-reap",
+        "operator": "VET Airbus Express",
+        "bus_type": "Airbus 45 Seats",
+        "dep": "08:00 AM",
+        "arr": "02:00 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 13.00,
+    },
+    {
+        "id": "bmb_pnh_rep_saly_sleep",
+        "dest": "Siem Reap",
+        "slug": "siem-reap",
+        "operator": "Saly VIP",
+        "bus_type": "Sleeping Bus 34",
+        "dep": "11:30 PM",
+        "arr": "05:00 AM",
+        "dur": "5 hrs 30 mins",
+        "price": 14.45,
+    },
+    {
+        "id": "bmb_pnh_rep_larryta_van",
+        "dest": "Siem Reap",
+        "slug": "siem-reap",
+        "operator": "Larryta Express",
+        "bus_type": "Luxury VIP Van",
+        "dep": "07:30 AM",
+        "arr": "01:30 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 14.50,
+    },
+    {
+        "id": "bmb_pnh_rep_virak_hotel",
+        "dest": "Siem Reap",
+        "slug": "siem-reap",
+        "operator": "Virak Buntham Express",
+        "bus_type": "Hotel Bus",
+        "dep": "10:30 PM",
+        "arr": "05:00 AM",
+        "dur": "6 hrs 30 mins",
+        "price": 15.00,
+    },
+    {
+        "id": "bmb_pnh_rep_giant_coach",
+        "dest": "Siem Reap",
+        "slug": "siem-reap",
+        "operator": "Giant Ibis Transport",
+        "bus_type": "Luxury Coach",
+        "dep": "08:45 AM",
+        "arr": "02:45 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 16.00,
+    },
     # Sihanoukville
-    {"id": "bmb_pnh_kos_capitol_bus", "dest": "Sihanoukville", "slug": "sihanoukville", "operator": "Capitol Tours", "bus_type": "Express Bus", "dep": "07:30 AM", "arr": "11:30 AM", "dur": "4 hrs 00 mins", "price": 10.00},
-    {"id": "bmb_pnh_kos_bayon_van", "dest": "Sihanoukville", "slug": "sihanoukville", "operator": "Bayon VIP Express", "bus_type": "Express Van", "dep": "09:30 AM", "arr": "12:30 PM", "dur": "3 hrs 00 mins", "price": 11.50},
-    {"id": "bmb_pnh_kos_cambolink_van", "dest": "Sihanoukville", "slug": "sihanoukville", "operator": "Cambolink21 Express", "bus_type": "VIP Van Expressway", "dep": "09:00 AM", "arr": "12:00 PM", "dur": "3 hrs 00 mins", "price": 12.00},
-    {"id": "bmb_pnh_kos_vet_coach", "dest": "Sihanoukville", "slug": "sihanoukville", "operator": "VET Airbus Express", "bus_type": "Expressway Coach", "dep": "08:30 AM", "arr": "11:30 AM", "dur": "3 hrs 00 mins", "price": 12.50},
-    {"id": "bmb_pnh_kos_larryta", "dest": "Sihanoukville", "slug": "sihanoukville", "operator": "Larryta Express", "bus_type": "VIP Van Expressway", "dep": "08:00 AM", "arr": "11:00 AM", "dur": "3 hrs 00 mins", "price": 13.00},
-    {"id": "bmb_pnh_kos_giant_van", "dest": "Sihanoukville", "slug": "sihanoukville", "operator": "Giant Ibis Transport", "bus_type": "VIP Minibus Expressway", "dep": "08:30 AM", "arr": "11:30 AM", "dur": "3 hrs 00 mins", "price": 14.00},
-    {"id": "bmb_pnh_kos_virak_bus", "dest": "Sihanoukville", "slug": "sihanoukville", "operator": "Virak Buntham Express", "bus_type": "Luxury Sleeper Bus", "dep": "11:30 PM", "arr": "03:00 AM", "dur": "3 hrs 30 mins", "price": 15.00},
-
+    {
+        "id": "bmb_pnh_kos_capitol_bus",
+        "dest": "Sihanoukville",
+        "slug": "sihanoukville",
+        "operator": "Capitol Tours",
+        "bus_type": "Express Bus",
+        "dep": "07:30 AM",
+        "arr": "11:30 AM",
+        "dur": "4 hrs 00 mins",
+        "price": 10.00,
+    },
+    {
+        "id": "bmb_pnh_kos_bayon_van",
+        "dest": "Sihanoukville",
+        "slug": "sihanoukville",
+        "operator": "Bayon VIP Express",
+        "bus_type": "Express Van",
+        "dep": "09:30 AM",
+        "arr": "12:30 PM",
+        "dur": "3 hrs 00 mins",
+        "price": 11.50,
+    },
+    {
+        "id": "bmb_pnh_kos_cambolink_van",
+        "dest": "Sihanoukville",
+        "slug": "sihanoukville",
+        "operator": "Cambolink21 Express",
+        "bus_type": "VIP Van Expressway",
+        "dep": "09:00 AM",
+        "arr": "12:00 PM",
+        "dur": "3 hrs 00 mins",
+        "price": 12.00,
+    },
+    {
+        "id": "bmb_pnh_kos_vet_coach",
+        "dest": "Sihanoukville",
+        "slug": "sihanoukville",
+        "operator": "VET Airbus Express",
+        "bus_type": "Expressway Coach",
+        "dep": "08:30 AM",
+        "arr": "11:30 AM",
+        "dur": "3 hrs 00 mins",
+        "price": 12.50,
+    },
+    {
+        "id": "bmb_pnh_kos_larryta",
+        "dest": "Sihanoukville",
+        "slug": "sihanoukville",
+        "operator": "Larryta Express",
+        "bus_type": "VIP Van Expressway",
+        "dep": "08:00 AM",
+        "arr": "11:00 AM",
+        "dur": "3 hrs 00 mins",
+        "price": 13.00,
+    },
+    {
+        "id": "bmb_pnh_kos_giant_van",
+        "dest": "Sihanoukville",
+        "slug": "sihanoukville",
+        "operator": "Giant Ibis Transport",
+        "bus_type": "VIP Minibus Expressway",
+        "dep": "08:30 AM",
+        "arr": "11:30 AM",
+        "dur": "3 hrs 00 mins",
+        "price": 14.00,
+    },
+    {
+        "id": "bmb_pnh_kos_virak_bus",
+        "dest": "Sihanoukville",
+        "slug": "sihanoukville",
+        "operator": "Virak Buntham Express",
+        "bus_type": "Luxury Sleeper Bus",
+        "dep": "11:30 PM",
+        "arr": "03:00 AM",
+        "dur": "3 hrs 30 mins",
+        "price": 15.00,
+    },
     # Battambang
-    {"id": "bmb_pnh_bbg_rithmony", "dest": "Battambang", "slug": "battambang", "operator": "Rith Mony Transport", "bus_type": "Standard Bus", "dep": "07:00 AM", "arr": "01:00 PM", "dur": "6 hrs 00 mins", "price": 7.50},
-    {"id": "bmb_pnh_bbg_capitol", "dest": "Battambang", "slug": "battambang", "operator": "Capitol Tours", "bus_type": "Express Bus", "dep": "08:00 AM", "arr": "01:30 PM", "dur": "5 hrs 30 mins", "price": 9.00},
-    {"id": "bmb_pnh_bbg_saly_vip", "dest": "Battambang", "slug": "battambang", "operator": "Saly VIP", "bus_type": "VIP Van", "dep": "08:00 AM", "arr": "01:00 PM", "dur": "5 hrs 00 mins", "price": 11.00},
-    {"id": "bmb_pnh_bbg_seila", "dest": "Battambang", "slug": "battambang", "operator": "Seila Angkor Express", "bus_type": "VIP Van", "dep": "07:30 AM", "arr": "12:30 PM", "dur": "5 hrs 00 mins", "price": 12.00},
-    {"id": "bmb_pnh_bbg_cambolink", "dest": "Battambang", "slug": "battambang", "operator": "Cambolink21 Express", "bus_type": "VIP Van", "dep": "08:30 AM", "arr": "01:30 PM", "dur": "5 hrs 00 mins", "price": 12.50},
-    {"id": "bmb_pnh_bbg_virak_night", "dest": "Battambang", "slug": "battambang", "operator": "Virak Buntham Express", "bus_type": "Night Sleeper", "dep": "11:00 PM", "arr": "04:30 AM", "dur": "5 hrs 30 mins", "price": 13.00},
-
+    {
+        "id": "bmb_pnh_bbg_rithmony",
+        "dest": "Battambang",
+        "slug": "battambang",
+        "operator": "Rith Mony Transport",
+        "bus_type": "Standard Bus",
+        "dep": "07:00 AM",
+        "arr": "01:00 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 7.50,
+    },
+    {
+        "id": "bmb_pnh_bbg_capitol",
+        "dest": "Battambang",
+        "slug": "battambang",
+        "operator": "Capitol Tours",
+        "bus_type": "Express Bus",
+        "dep": "08:00 AM",
+        "arr": "01:30 PM",
+        "dur": "5 hrs 30 mins",
+        "price": 9.00,
+    },
+    {
+        "id": "bmb_pnh_bbg_saly_vip",
+        "dest": "Battambang",
+        "slug": "battambang",
+        "operator": "Saly VIP",
+        "bus_type": "VIP Van",
+        "dep": "08:00 AM",
+        "arr": "01:00 PM",
+        "dur": "5 hrs 00 mins",
+        "price": 11.00,
+    },
+    {
+        "id": "bmb_pnh_bbg_seila",
+        "dest": "Battambang",
+        "slug": "battambang",
+        "operator": "Seila Angkor Express",
+        "bus_type": "VIP Van",
+        "dep": "07:30 AM",
+        "arr": "12:30 PM",
+        "dur": "5 hrs 00 mins",
+        "price": 12.00,
+    },
+    {
+        "id": "bmb_pnh_bbg_cambolink",
+        "dest": "Battambang",
+        "slug": "battambang",
+        "operator": "Cambolink21 Express",
+        "bus_type": "VIP Van",
+        "dep": "08:30 AM",
+        "arr": "01:30 PM",
+        "dur": "5 hrs 00 mins",
+        "price": 12.50,
+    },
+    {
+        "id": "bmb_pnh_bbg_virak_night",
+        "dest": "Battambang",
+        "slug": "battambang",
+        "operator": "Virak Buntham Express",
+        "bus_type": "Night Sleeper",
+        "dep": "11:00 PM",
+        "arr": "04:30 AM",
+        "dur": "5 hrs 30 mins",
+        "price": 13.00,
+    },
     # Kampot & Kep
-    {"id": "bmb_pnh_kpt_capitol_bus", "dest": "Kampot", "slug": "kampot", "operator": "Capitol Tours", "bus_type": "Standard Bus", "dep": "07:00 AM", "arr": "11:00 AM", "dur": "4 hrs 00 mins", "price": 7.00},
-    {"id": "bmb_pnh_kpt_champa_van", "dest": "Kampot", "slug": "kampot", "operator": "Champa Tourist Bus", "bus_type": "VIP Van", "dep": "07:30 AM", "arr": "11:00 AM", "dur": "3 hrs 30 mins", "price": 9.50},
-    {"id": "bmb_pnh_kpt_ekareach", "dest": "Kampot", "slug": "kampot", "operator": "Ekareach Express", "bus_type": "VIP Van", "dep": "07:30 AM", "arr": "11:00 AM", "dur": "3 hrs 30 mins", "price": 10.00},
-    {"id": "bmb_pnh_kpt_virak_van", "dest": "Kampot", "slug": "kampot", "operator": "Virak Buntham Express", "bus_type": "VIP Van", "dep": "08:00 AM", "arr": "11:30 AM", "dur": "3 hrs 30 mins", "price": 11.00},
-    {"id": "bmb_pnh_kpt_giant_ibis", "dest": "Kampot", "slug": "kampot", "operator": "Giant Ibis Transport", "bus_type": "VIP Minibus", "dep": "08:00 AM", "arr": "11:30 AM", "dur": "3 hrs 30 mins", "price": 12.00},
-    {"id": "bmb_pnh_kep_ekareach", "dest": "Kep", "slug": "kep", "operator": "Ekareach Express", "bus_type": "VIP Van", "dep": "08:00 AM", "arr": "12:00 PM", "dur": "4 hrs 00 mins", "price": 10.00},
-    {"id": "bmb_pnh_kep_virak_van", "dest": "Kep", "slug": "kep", "operator": "Virak Buntham Express", "bus_type": "VIP Minivan", "dep": "07:30 AM", "arr": "11:30 AM", "dur": "4 hrs 00 mins", "price": 11.50},
-
+    {
+        "id": "bmb_pnh_kpt_capitol_bus",
+        "dest": "Kampot",
+        "slug": "kampot",
+        "operator": "Capitol Tours",
+        "bus_type": "Standard Bus",
+        "dep": "07:00 AM",
+        "arr": "11:00 AM",
+        "dur": "4 hrs 00 mins",
+        "price": 7.00,
+    },
+    {
+        "id": "bmb_pnh_kpt_champa_van",
+        "dest": "Kampot",
+        "slug": "kampot",
+        "operator": "Champa Tourist Bus",
+        "bus_type": "VIP Van",
+        "dep": "07:30 AM",
+        "arr": "11:00 AM",
+        "dur": "3 hrs 30 mins",
+        "price": 9.50,
+    },
+    {
+        "id": "bmb_pnh_kpt_ekareach",
+        "dest": "Kampot",
+        "slug": "kampot",
+        "operator": "Ekareach Express",
+        "bus_type": "VIP Van",
+        "dep": "07:30 AM",
+        "arr": "11:00 AM",
+        "dur": "3 hrs 30 mins",
+        "price": 10.00,
+    },
+    {
+        "id": "bmb_pnh_kpt_virak_van",
+        "dest": "Kampot",
+        "slug": "kampot",
+        "operator": "Virak Buntham Express",
+        "bus_type": "VIP Van",
+        "dep": "08:00 AM",
+        "arr": "11:30 AM",
+        "dur": "3 hrs 30 mins",
+        "price": 11.00,
+    },
+    {
+        "id": "bmb_pnh_kpt_giant_ibis",
+        "dest": "Kampot",
+        "slug": "kampot",
+        "operator": "Giant Ibis Transport",
+        "bus_type": "VIP Minibus",
+        "dep": "08:00 AM",
+        "arr": "11:30 AM",
+        "dur": "3 hrs 30 mins",
+        "price": 12.00,
+    },
+    {
+        "id": "bmb_pnh_kep_ekareach",
+        "dest": "Kep",
+        "slug": "kep",
+        "operator": "Ekareach Express",
+        "bus_type": "VIP Van",
+        "dep": "08:00 AM",
+        "arr": "12:00 PM",
+        "dur": "4 hrs 00 mins",
+        "price": 10.00,
+    },
+    {
+        "id": "bmb_pnh_kep_virak_van",
+        "dest": "Kep",
+        "slug": "kep",
+        "operator": "Virak Buntham Express",
+        "bus_type": "VIP Minivan",
+        "dep": "07:30 AM",
+        "arr": "11:30 AM",
+        "dur": "4 hrs 00 mins",
+        "price": 11.50,
+    },
     # Poipet & Banteay Meanchey
-    {"id": "bmb_pnh_poi_capitol", "dest": "Poi Pet", "slug": "poipet", "operator": "Capitol Tours", "bus_type": "Express Bus", "dep": "07:30 AM", "arr": "03:30 PM", "dur": "8 hrs 00 mins", "price": 12.00},
-    {"id": "bmb_pnh_poi_virak", "dest": "Poi Pet", "slug": "poipet", "operator": "Virak Buntham Express", "bus_type": "Hotel Bus", "dep": "10:30 PM", "arr": "05:30 AM", "dur": "7 hrs 00 mins", "price": 16.50},
-    {"id": "bmb_pnh_bmc_seila", "dest": "Banteay Meanchey", "slug": "banteay-meanchey", "operator": "Seila Angkor Express", "bus_type": "VIP Van", "dep": "08:00 AM", "arr": "02:30 PM", "dur": "6 hrs 30 mins", "price": 13.00},
-    {"id": "bmb_pnh_bmc_cambolink", "dest": "Banteay Meanchey", "slug": "banteay-meanchey", "operator": "Cambolink21 Express", "bus_type": "VIP Van", "dep": "07:30 AM", "arr": "02:30 PM", "dur": "7 hrs 00 mins", "price": 14.00},
-
+    {
+        "id": "bmb_pnh_poi_capitol",
+        "dest": "Poi Pet",
+        "slug": "poipet",
+        "operator": "Capitol Tours",
+        "bus_type": "Express Bus",
+        "dep": "07:30 AM",
+        "arr": "03:30 PM",
+        "dur": "8 hrs 00 mins",
+        "price": 12.00,
+    },
+    {
+        "id": "bmb_pnh_poi_virak",
+        "dest": "Poi Pet",
+        "slug": "poipet",
+        "operator": "Virak Buntham Express",
+        "bus_type": "Hotel Bus",
+        "dep": "10:30 PM",
+        "arr": "05:30 AM",
+        "dur": "7 hrs 00 mins",
+        "price": 16.50,
+    },
+    {
+        "id": "bmb_pnh_bmc_seila",
+        "dest": "Banteay Meanchey",
+        "slug": "banteay-meanchey",
+        "operator": "Seila Angkor Express",
+        "bus_type": "VIP Van",
+        "dep": "08:00 AM",
+        "arr": "02:30 PM",
+        "dur": "6 hrs 30 mins",
+        "price": 13.00,
+    },
+    {
+        "id": "bmb_pnh_bmc_cambolink",
+        "dest": "Banteay Meanchey",
+        "slug": "banteay-meanchey",
+        "operator": "Cambolink21 Express",
+        "bus_type": "VIP Van",
+        "dep": "07:30 AM",
+        "arr": "02:30 PM",
+        "dur": "7 hrs 00 mins",
+        "price": 14.00,
+    },
     # Mondulkiri & Ratanakiri
-    {"id": "bmb_pnh_mon_rithya", "dest": "Mondulkiri", "slug": "senmonorom-mondulkiri", "operator": "Rithya Mondulkiri Express", "bus_type": "VIP Van", "dep": "07:00 AM", "arr": "01:00 PM", "dur": "6 hrs 00 mins", "price": 15.00},
-    {"id": "bmb_pnh_mon_virak", "dest": "Mondulkiri", "slug": "senmonorom-mondulkiri", "operator": "Virak Buntham Express", "bus_type": "VIP Minivan", "dep": "07:30 AM", "arr": "01:30 PM", "dur": "6 hrs 00 mins", "price": 16.00},
-    {"id": "bmb_pnh_rat_kimseng", "dest": "Ratanakiri", "slug": "ratanakiri", "operator": "Kim Seng Express", "bus_type": "VIP Van", "dep": "07:00 AM", "arr": "05:00 PM", "dur": "10 hrs 00 mins", "price": 18.00},
-    {"id": "bmb_pnh_rat_virak", "dest": "Ratanakiri", "slug": "ratanakiri", "operator": "Virak Buntham Express", "bus_type": "Luxury Sleeper", "dep": "07:30 PM", "arr": "05:30 AM", "dur": "10 hrs 00 mins", "price": 20.00},
-
+    {
+        "id": "bmb_pnh_mon_rithya",
+        "dest": "Mondulkiri",
+        "slug": "senmonorom-mondulkiri",
+        "operator": "Rithya Mondulkiri Express",
+        "bus_type": "VIP Van",
+        "dep": "07:00 AM",
+        "arr": "01:00 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 15.00,
+    },
+    {
+        "id": "bmb_pnh_mon_virak",
+        "dest": "Mondulkiri",
+        "slug": "senmonorom-mondulkiri",
+        "operator": "Virak Buntham Express",
+        "bus_type": "VIP Minivan",
+        "dep": "07:30 AM",
+        "arr": "01:30 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 16.00,
+    },
+    {
+        "id": "bmb_pnh_rat_kimseng",
+        "dest": "Ratanakiri",
+        "slug": "ratanakiri",
+        "operator": "Kim Seng Express",
+        "bus_type": "VIP Van",
+        "dep": "07:00 AM",
+        "arr": "05:00 PM",
+        "dur": "10 hrs 00 mins",
+        "price": 18.00,
+    },
+    {
+        "id": "bmb_pnh_rat_virak",
+        "dest": "Ratanakiri",
+        "slug": "ratanakiri",
+        "operator": "Virak Buntham Express",
+        "bus_type": "Luxury Sleeper",
+        "dep": "07:30 PM",
+        "arr": "05:30 AM",
+        "dur": "10 hrs 00 mins",
+        "price": 20.00,
+    },
     # Koh Kong & Islands
-    {"id": "bmb_pnh_kkg_capitol", "dest": "Koh Kong", "slug": "koh-kong", "operator": "Capitol Tours", "bus_type": "Express Bus", "dep": "07:00 AM", "arr": "02:00 PM", "dur": "7 hrs 00 mins", "price": 11.00},
-    {"id": "bmb_pnh_kkg_virak", "dest": "Koh Kong", "slug": "koh-kong", "operator": "Virak Buntham Express", "bus_type": "VIP Van", "dep": "07:45 AM", "arr": "01:45 PM", "dur": "6 hrs 00 mins", "price": 14.00},
-    {"id": "bmb_pnh_khr_ferry", "dest": "Koh Rong", "slug": "koh-rong-via-ferry", "operator": "Speed Ferry Cambodia", "bus_type": "Bus + Speed Ferry", "dep": "07:30 AM", "arr": "01:00 PM", "dur": "5 hrs 30 mins", "price": 25.00},
-    {"id": "bmb_pnh_krs_ferry", "dest": "Koh Rong Sanloem", "slug": "koh-rong-samloem-via-ferry", "operator": "Buva Sea Cambodia", "bus_type": "Bus + Speed Ferry", "dep": "07:30 AM", "arr": "01:30 PM", "dur": "6 hrs 00 mins", "price": 25.00},
-
+    {
+        "id": "bmb_pnh_kkg_capitol",
+        "dest": "Koh Kong",
+        "slug": "koh-kong",
+        "operator": "Capitol Tours",
+        "bus_type": "Express Bus",
+        "dep": "07:00 AM",
+        "arr": "02:00 PM",
+        "dur": "7 hrs 00 mins",
+        "price": 11.00,
+    },
+    {
+        "id": "bmb_pnh_kkg_virak",
+        "dest": "Koh Kong",
+        "slug": "koh-kong",
+        "operator": "Virak Buntham Express",
+        "bus_type": "VIP Van",
+        "dep": "07:45 AM",
+        "arr": "01:45 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 14.00,
+    },
+    {
+        "id": "bmb_pnh_khr_ferry",
+        "dest": "Koh Rong",
+        "slug": "koh-rong-via-ferry",
+        "operator": "Speed Ferry Cambodia",
+        "bus_type": "Bus + Speed Ferry",
+        "dep": "07:30 AM",
+        "arr": "01:00 PM",
+        "dur": "5 hrs 30 mins",
+        "price": 25.00,
+    },
+    {
+        "id": "bmb_pnh_krs_ferry",
+        "dest": "Koh Rong Sanloem",
+        "slug": "koh-rong-samloem-via-ferry",
+        "operator": "Buva Sea Cambodia",
+        "bus_type": "Bus + Speed Ferry",
+        "dep": "07:30 AM",
+        "arr": "01:30 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 25.00,
+    },
     # Central & Eastern Provinces
-    {"id": "bmb_pnh_kcm_sorya", "dest": "Kampong Cham", "slug": "kampong-cham", "operator": "Phnom Penh Sorya Transport", "bus_type": "Express Bus", "dep": "07:30 AM", "arr": "10:30 AM", "dur": "3 hrs 00 mins", "price": 6.50},
-    {"id": "bmb_pnh_kth_capitol", "dest": "Kampong Thom", "slug": "kampong-thom", "operator": "Capitol Tours", "bus_type": "Express Bus", "dep": "08:00 AM", "arr": "11:30 AM", "dur": "3 hrs 30 mins", "price": 7.50},
-    {"id": "bmb_pnh_kch_sorya", "dest": "Kampong Chhnang", "slug": "kampong-chhnang", "operator": "Phnom Penh Sorya Transport", "bus_type": "Standard Bus", "dep": "08:30 AM", "arr": "10:45 AM", "dur": "2 hrs 15 mins", "price": 5.00},
-    {"id": "bmb_pnh_pst_capitol", "dest": "Pursat", "slug": "pursat", "operator": "Capitol Tours", "bus_type": "Express Bus", "dep": "08:00 AM", "arr": "11:45 AM", "dur": "3 hrs 45 mins", "price": 7.00},
-    {"id": "bmb_pnh_pvh_virak", "dest": "Preah Vihear", "slug": "preah-vihear-tbeng-meanchey", "operator": "Virak Buntham Express", "bus_type": "VIP Van", "dep": "07:30 AM", "arr": "02:30 PM", "dur": "7 hrs 00 mins", "price": 16.00},
-    {"id": "bmb_pnh_kra_sorya", "dest": "Kratie", "slug": "kratie", "operator": "Phnom Penh Sorya Transport", "bus_type": "Express Bus", "dep": "07:30 AM", "arr": "01:30 PM", "dur": "6 hrs 00 mins", "price": 11.00},
-    {"id": "bmb_pnh_stg_virak", "dest": "Stung Treng", "slug": "stung-treng", "operator": "Virak Buntham Express", "bus_type": "Hotel Bus", "dep": "08:00 PM", "arr": "04:30 AM", "dur": "8 hrs 30 mins", "price": 18.00},
-    {"id": "bmb_pnh_tko_sorya", "dest": "Takeo", "slug": "takeo", "operator": "Phnom Penh Sorya Transport", "bus_type": "Standard Bus", "dep": "09:00 AM", "arr": "11:00 AM", "dur": "2 hrs 00 mins", "price": 4.50},
-    {"id": "bmb_pnh_svr_virak", "dest": "Svay Rieng (Bavet)", "slug": "svay-rieng-bavet", "operator": "Virak Buntham Express", "bus_type": "VIP Van", "dep": "08:00 AM", "arr": "12:00 PM", "dur": "4 hrs 00 mins", "price": 9.00},
-    {"id": "bmb_pnh_pvn_sorya", "dest": "Prey Veng", "slug": "prey-veng", "operator": "Phnom Penh Sorya Transport", "bus_type": "Standard Bus", "dep": "08:30 AM", "arr": "11:00 AM", "dur": "2 hrs 30 mins", "price": 5.50},
-    {"id": "bmb_pnh_pln_virak", "dest": "Pailin", "slug": "pailin", "operator": "Virak Buntham Express", "bus_type": "VIP Van", "dep": "08:00 AM", "arr": "03:00 PM", "dur": "7 hrs 00 mins", "price": 15.00},
-
+    {
+        "id": "bmb_pnh_kcm_sorya",
+        "dest": "Kampong Cham",
+        "slug": "kampong-cham",
+        "operator": "Phnom Penh Sorya Transport",
+        "bus_type": "Express Bus",
+        "dep": "07:30 AM",
+        "arr": "10:30 AM",
+        "dur": "3 hrs 00 mins",
+        "price": 6.50,
+    },
+    {
+        "id": "bmb_pnh_kth_capitol",
+        "dest": "Kampong Thom",
+        "slug": "kampong-thom",
+        "operator": "Capitol Tours",
+        "bus_type": "Express Bus",
+        "dep": "08:00 AM",
+        "arr": "11:30 AM",
+        "dur": "3 hrs 30 mins",
+        "price": 7.50,
+    },
+    {
+        "id": "bmb_pnh_kch_sorya",
+        "dest": "Kampong Chhnang",
+        "slug": "kampong-chhnang",
+        "operator": "Phnom Penh Sorya Transport",
+        "bus_type": "Standard Bus",
+        "dep": "08:30 AM",
+        "arr": "10:45 AM",
+        "dur": "2 hrs 15 mins",
+        "price": 5.00,
+    },
+    {
+        "id": "bmb_pnh_pst_capitol",
+        "dest": "Pursat",
+        "slug": "pursat",
+        "operator": "Capitol Tours",
+        "bus_type": "Express Bus",
+        "dep": "08:00 AM",
+        "arr": "11:45 AM",
+        "dur": "3 hrs 45 mins",
+        "price": 7.00,
+    },
+    {
+        "id": "bmb_pnh_pvh_virak",
+        "dest": "Preah Vihear",
+        "slug": "preah-vihear-tbeng-meanchey",
+        "operator": "Virak Buntham Express",
+        "bus_type": "VIP Van",
+        "dep": "07:30 AM",
+        "arr": "02:30 PM",
+        "dur": "7 hrs 00 mins",
+        "price": 16.00,
+    },
+    {
+        "id": "bmb_pnh_kra_sorya",
+        "dest": "Kratie",
+        "slug": "kratie",
+        "operator": "Phnom Penh Sorya Transport",
+        "bus_type": "Express Bus",
+        "dep": "07:30 AM",
+        "arr": "01:30 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 11.00,
+    },
+    {
+        "id": "bmb_pnh_stg_virak",
+        "dest": "Stung Treng",
+        "slug": "stung-treng",
+        "operator": "Virak Buntham Express",
+        "bus_type": "Hotel Bus",
+        "dep": "08:00 PM",
+        "arr": "04:30 AM",
+        "dur": "8 hrs 30 mins",
+        "price": 18.00,
+    },
+    {
+        "id": "bmb_pnh_tko_sorya",
+        "dest": "Takeo",
+        "slug": "takeo",
+        "operator": "Phnom Penh Sorya Transport",
+        "bus_type": "Standard Bus",
+        "dep": "09:00 AM",
+        "arr": "11:00 AM",
+        "dur": "2 hrs 00 mins",
+        "price": 4.50,
+    },
+    {
+        "id": "bmb_pnh_svr_virak",
+        "dest": "Svay Rieng (Bavet)",
+        "slug": "svay-rieng-bavet",
+        "operator": "Virak Buntham Express",
+        "bus_type": "VIP Van",
+        "dep": "08:00 AM",
+        "arr": "12:00 PM",
+        "dur": "4 hrs 00 mins",
+        "price": 9.00,
+    },
+    {
+        "id": "bmb_pnh_pvn_sorya",
+        "dest": "Prey Veng",
+        "slug": "prey-veng",
+        "operator": "Phnom Penh Sorya Transport",
+        "bus_type": "Standard Bus",
+        "dep": "08:30 AM",
+        "arr": "11:00 AM",
+        "dur": "2 hrs 30 mins",
+        "price": 5.50,
+    },
+    {
+        "id": "bmb_pnh_pln_virak",
+        "dest": "Pailin",
+        "slug": "pailin",
+        "operator": "Virak Buntham Express",
+        "bus_type": "VIP Van",
+        "dep": "08:00 AM",
+        "arr": "03:00 PM",
+        "dur": "7 hrs 00 mins",
+        "price": 15.00,
+    },
     # International Connections
-    {"id": "bmb_pnh_bkk_virak_coach", "dest": "Bangkok", "slug": "bangkok", "operator": "Virak Buntham Express", "bus_type": "International Coach", "dep": "07:30 AM", "arr": "06:00 PM", "dur": "10 hrs 30 mins", "price": 20.00},
-    {"id": "bmb_pnh_bkk_giant_coach", "dest": "Bangkok", "slug": "bangkok", "operator": "Giant Ibis Transport", "bus_type": "Luxury International Bus", "dep": "08:00 AM", "arr": "06:00 PM", "dur": "10 hrs 00 mins", "price": 35.00},
-    {"id": "bmb_pnh_sgn_kumho_coach", "dest": "Ho Chi Minh", "slug": "ho-chi-minh", "operator": "Kumho Samco Express", "bus_type": "VIP Sleeper Coach", "dep": "06:30 AM", "arr": "01:30 PM", "dur": "7 hrs 00 mins", "price": 20.00},
-    {"id": "bmb_pnh_sgn_giant_coach", "dest": "Ho Chi Minh", "slug": "ho-chi-minh", "operator": "Giant Ibis Transport", "bus_type": "Luxury International Bus", "dep": "08:00 AM", "arr": "02:30 PM", "dur": "6 hrs 30 mins", "price": 27.00},
-    {"id": "bmb_pnh_htn_virak_van", "dest": "Ha Tien", "slug": "ha-tien", "operator": "Virak Buntham Express", "bus_type": "Border Express Van", "dep": "07:30 AM", "arr": "01:30 PM", "dur": "6 hrs 00 mins", "price": 21.00},
-    {"id": "bmb_pnh_pks_chanthou_bus", "dest": "Pakse", "slug": "pakse", "operator": "Seng Chanthou Transport", "bus_type": "International Bus", "dep": "07:00 AM", "arr": "04:30 PM", "dur": "9 hrs 30 mins", "price": 37.00},
+    {
+        "id": "bmb_pnh_bkk_virak_coach",
+        "dest": "Bangkok",
+        "slug": "bangkok",
+        "operator": "Virak Buntham Express",
+        "bus_type": "International Coach",
+        "dep": "07:30 AM",
+        "arr": "06:00 PM",
+        "dur": "10 hrs 30 mins",
+        "price": 20.00,
+    },
+    {
+        "id": "bmb_pnh_bkk_giant_coach",
+        "dest": "Bangkok",
+        "slug": "bangkok",
+        "operator": "Giant Ibis Transport",
+        "bus_type": "Luxury International Bus",
+        "dep": "08:00 AM",
+        "arr": "06:00 PM",
+        "dur": "10 hrs 00 mins",
+        "price": 35.00,
+    },
+    {
+        "id": "bmb_pnh_sgn_kumho_coach",
+        "dest": "Ho Chi Minh",
+        "slug": "ho-chi-minh",
+        "operator": "Kumho Samco Express",
+        "bus_type": "VIP Sleeper Coach",
+        "dep": "06:30 AM",
+        "arr": "01:30 PM",
+        "dur": "7 hrs 00 mins",
+        "price": 20.00,
+    },
+    {
+        "id": "bmb_pnh_sgn_giant_coach",
+        "dest": "Ho Chi Minh",
+        "slug": "ho-chi-minh",
+        "operator": "Giant Ibis Transport",
+        "bus_type": "Luxury International Bus",
+        "dep": "08:00 AM",
+        "arr": "02:30 PM",
+        "dur": "6 hrs 30 mins",
+        "price": 27.00,
+    },
+    {
+        "id": "bmb_pnh_htn_virak_van",
+        "dest": "Ha Tien",
+        "slug": "ha-tien",
+        "operator": "Virak Buntham Express",
+        "bus_type": "Border Express Van",
+        "dep": "07:30 AM",
+        "arr": "01:30 PM",
+        "dur": "6 hrs 00 mins",
+        "price": 21.00,
+    },
+    {
+        "id": "bmb_pnh_pks_chanthou_bus",
+        "dest": "Pakse",
+        "slug": "pakse",
+        "operator": "Seng Chanthou Transport",
+        "bus_type": "International Bus",
+        "dep": "07:00 AM",
+        "arr": "04:30 PM",
+        "dur": "9 hrs 30 mins",
+        "price": 37.00,
+    },
 ]
 
 
@@ -1494,16 +3185,24 @@ class BookMeBusScraper(BaseScraper):
                 for d in data:
                     attrs = d.get("attributes", {})
                     dest = attrs.get("destination", {})
-                    if dest.get("country_code") == "KH" and dest.get("slug") != "phnom-penh":
-                        cambodia_dests.append({
-                            "name": dest.get("name"),
-                            "slug": dest.get("slug"),
-                            "duration_sec": attrs.get("duration"),
-                        })
+                    if (
+                        dest.get("country_code") == "KH"
+                        and dest.get("slug") != "phnom-penh"
+                    ):
+                        cambodia_dests.append(
+                            {
+                                "name": dest.get("name"),
+                                "slug": dest.get("slug"),
+                                "duration_sec": attrs.get("duration"),
+                            }
+                        )
                 if cambodia_dests:
                     return cambodia_dests
         except Exception as exc:
-            log.warning("Failed to fetch BookMeBus destinations API (%s), using default route list", exc)
+            log.warning(
+                "Failed to fetch BookMeBus destinations API (%s), using default route list",
+                exc,
+            )
 
         # Comprehensive fallback destination list
         return [
@@ -1536,7 +3235,9 @@ class BookMeBusScraper(BaseScraper):
             {"name": "Pakse", "slug": "pakse"},
         ]
 
-    def _parse_search_html(self, html_text: str, origin_name: str, dest_name: str) -> list[dict[str, Any]]:
+    def _parse_search_html(
+        self, html_text: str, origin_name: str, dest_name: str
+    ) -> list[dict[str, Any]]:
         """Parse live schedule cards from BookMeBus search HTML."""
         if not HAS_BS4:
             return []
@@ -1555,7 +3256,9 @@ class BookMeBusScraper(BaseScraper):
             txt = div.get_text(" ", strip=True)
             times = re.findall(r"(\d{1,2}:\d{2}\s*(?:AM|PM))", txt)
             prices = re.findall(r"USD\s*([\d\.]+)", txt)
-            duration_m = re.search(r"(\d+H\s*\d*|\d+h\s*\d*m?|\d+\s*hours?)", txt, re.IGNORECASE)
+            duration_m = re.search(
+                r"(\d+H\s*\d*|\d+h\s*\d*m?|\d+\s*hours?)", txt, re.IGNORECASE
+            )
 
             if len(times) >= 2 and prices:
                 dep_time = times[0]
@@ -1568,7 +3271,9 @@ class BookMeBusScraper(BaseScraper):
                 if dep_time == "11:59 AM" and arr_time == "5:59 PM":
                     continue
 
-                duration = duration_m.group(1).strip() if duration_m else "6 hrs 00 mins"
+                duration = (
+                    duration_m.group(1).strip() if duration_m else "6 hrs 00 mins"
+                )
 
                 img = div.find("img", alt=True)
                 operator = img.get("alt").strip() if img and img.get("alt") else ""
@@ -1580,11 +3285,24 @@ class BookMeBusScraper(BaseScraper):
                 )
                 bus_type = type_m.group(1).strip() if type_m else "VIP Express"
 
-                if not operator or operator.lower() in ["home", "loader", "logo", "thumbnail"]:
-                    lines = [item_line.strip() for item_line in div.get_text("\n").split("\n") if item_line.strip()]
+                if not operator or operator.lower() in [
+                    "home",
+                    "loader",
+                    "logo",
+                    "thumbnail",
+                ]:
+                    lines = [
+                        item_line.strip()
+                        for item_line in div.get_text("\n").split("\n")
+                        if item_line.strip()
+                    ]
                     for line_text in lines:
                         if (
-                            not re.search(r"\d{1,2}:\d{2}|Departure|Arrival|USD|Reviews|Info|Left|Seat|Boarding|Drop-off", line_text, re.IGNORECASE)
+                            not re.search(
+                                r"\d{1,2}:\d{2}|Departure|Arrival|USD|Reviews|Info|Left|Seat|Boarding|Drop-off",
+                                line_text,
+                                re.IGNORECASE,
+                            )
                             and len(line_text) < 40
                             and not line_text.isdigit()
                         ):
@@ -1596,20 +3314,26 @@ class BookMeBusScraper(BaseScraper):
                 key = (operator, dep_time, arr_time, price)
                 if key not in seen:
                     seen.add(key)
-                    trips.append({
-                        "operator": operator,
-                        "bus_type": bus_type,
-                        "departure_time": dep_time,
-                        "arrival_time": arr_time,
-                        "expected_hours": duration,
-                        "price_usd": price,
-                    })
+                    trips.append(
+                        {
+                            "operator": operator,
+                            "bus_type": bus_type,
+                            "departure_time": dep_time,
+                            "arrival_time": arr_time,
+                            "expected_hours": duration,
+                            "price_usd": price,
+                        }
+                    )
 
         return trips
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
-        target_date = (pendulum.today("Asia/Phnom_Penh") + pendulum.duration(days=2)).format("DD-MM-YYYY")
+        target_date = (
+            pendulum.today("Asia/Phnom_Penh") + pendulum.duration(days=2)
+        ).format("DD-MM-YYYY")
 
         html_headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -1700,22 +3424,134 @@ class BookMeBusScraper(BaseScraper):
 
 # ═══════════════════════════════════════════════════════════════════════════
 SOKHA_ROOMS = [
-    {"id": "sokha_deluxe_city", "name": "Deluxe City View Room (1 Night)", "price": 105.00, "category": "Accommodation > Hotel Room", "room_type": "Deluxe City View", "area_sqm": 52},
-    {"id": "sokha_deluxe_river", "name": "Deluxe River View King Room (1 Night)", "price": 115.00, "category": "Accommodation > Hotel Room", "room_type": "Deluxe River View", "area_sqm": 52},
-    {"id": "sokha_premier_twin", "name": "Premier River View Twin Room (1 Night)", "price": 135.00, "category": "Accommodation > Hotel Room", "room_type": "Premier Twin", "area_sqm": 52},
-    {"id": "sokha_premier_king", "name": "Premier River View King Room (1 Night)", "price": 140.00, "category": "Accommodation > Hotel Room", "room_type": "Premier King", "area_sqm": 52},
-    {"id": "sokha_club_room", "name": "Club King Room with Lounge Access (1 Night)", "price": 165.00, "category": "Accommodation > Club Floor", "room_type": "Club King", "area_sqm": 52},
-    {"id": "sokha_club_suite", "name": "Club Suite with Executive Lounge (1 Night)", "price": 195.00, "category": "Accommodation > Suite", "room_type": "Club Suite", "area_sqm": 85},
-    {"id": "sokha_junior_suite", "name": "Junior Suite Riverfront View (1 Night)", "price": 220.00, "category": "Accommodation > Suite", "room_type": "Junior Suite", "area_sqm": 75},
-    {"id": "sokha_exec_suite", "name": "Executive Riverfront Suite (1 Night)", "price": 280.00, "category": "Accommodation > Suite", "room_type": "Executive Suite", "area_sqm": 110},
-    {"id": "sokha_mekong_suite", "name": "Mekong Royal Suite 2-Bedroom (1 Night)", "price": 450.00, "category": "Accommodation > Luxury Suite", "room_type": "Royal Suite", "area_sqm": 170},
-    {"id": "sokha_presidential_suite", "name": "Presidential Penthouse Suite (1 Night)", "price": 850.00, "category": "Accommodation > Presidential Suite", "room_type": "Presidential", "area_sqm": 290},
-    {"id": "sokha_villa_2bed", "name": "2-Bedroom Riverside Luxury Villa (1 Night)", "price": 520.00, "category": "Accommodation > Villa", "room_type": "Villa", "area_sqm": 220},
-    {"id": "sokha_lotus_buffet", "name": "Lotus Restaurant International Dinner Buffet", "price": 28.00, "category": "Food Services > Hotel Dining & Buffet", "room_type": "Dining Buffet", "area_sqm": 0},
-    {"id": "sokha_breakfast_buffet", "name": "Tonle Sap International Breakfast Buffet", "price": 16.00, "category": "Food Services > Hotel Dining & Buffet", "room_type": "Breakfast Buffet", "area_sqm": 0},
-    {"id": "sokha_high_tea", "name": "Champa Lounge Afternoon High Tea Set for Two", "price": 22.00, "category": "Food Services > Afternoon Tea", "room_type": "High Tea", "area_sqm": 0},
-    {"id": "sokha_spa_aroma", "name": "Jasmine Spa 60-Minute Aromatherapy Body Massage", "price": 45.00, "category": "Personal Care > Spa & Wellness", "room_type": "Spa Service", "area_sqm": 0},
-    {"id": "sokha_fitness_daypass", "name": "Sokha Health Club & Swimming Pool Day Pass", "price": 15.00, "category": "Recreation & Culture > Sports & Fitness", "room_type": "Day Pass", "area_sqm": 0},
+    {
+        "id": "sokha_deluxe_city",
+        "name": "Deluxe City View Room (1 Night)",
+        "price": 105.00,
+        "category": "Accommodation > Hotel Room",
+        "room_type": "Deluxe City View",
+        "area_sqm": 52,
+    },
+    {
+        "id": "sokha_deluxe_river",
+        "name": "Deluxe River View King Room (1 Night)",
+        "price": 115.00,
+        "category": "Accommodation > Hotel Room",
+        "room_type": "Deluxe River View",
+        "area_sqm": 52,
+    },
+    {
+        "id": "sokha_premier_twin",
+        "name": "Premier River View Twin Room (1 Night)",
+        "price": 135.00,
+        "category": "Accommodation > Hotel Room",
+        "room_type": "Premier Twin",
+        "area_sqm": 52,
+    },
+    {
+        "id": "sokha_premier_king",
+        "name": "Premier River View King Room (1 Night)",
+        "price": 140.00,
+        "category": "Accommodation > Hotel Room",
+        "room_type": "Premier King",
+        "area_sqm": 52,
+    },
+    {
+        "id": "sokha_club_room",
+        "name": "Club King Room with Lounge Access (1 Night)",
+        "price": 165.00,
+        "category": "Accommodation > Club Floor",
+        "room_type": "Club King",
+        "area_sqm": 52,
+    },
+    {
+        "id": "sokha_club_suite",
+        "name": "Club Suite with Executive Lounge (1 Night)",
+        "price": 195.00,
+        "category": "Accommodation > Suite",
+        "room_type": "Club Suite",
+        "area_sqm": 85,
+    },
+    {
+        "id": "sokha_junior_suite",
+        "name": "Junior Suite Riverfront View (1 Night)",
+        "price": 220.00,
+        "category": "Accommodation > Suite",
+        "room_type": "Junior Suite",
+        "area_sqm": 75,
+    },
+    {
+        "id": "sokha_exec_suite",
+        "name": "Executive Riverfront Suite (1 Night)",
+        "price": 280.00,
+        "category": "Accommodation > Suite",
+        "room_type": "Executive Suite",
+        "area_sqm": 110,
+    },
+    {
+        "id": "sokha_mekong_suite",
+        "name": "Mekong Royal Suite 2-Bedroom (1 Night)",
+        "price": 450.00,
+        "category": "Accommodation > Luxury Suite",
+        "room_type": "Royal Suite",
+        "area_sqm": 170,
+    },
+    {
+        "id": "sokha_presidential_suite",
+        "name": "Presidential Penthouse Suite (1 Night)",
+        "price": 850.00,
+        "category": "Accommodation > Presidential Suite",
+        "room_type": "Presidential",
+        "area_sqm": 290,
+    },
+    {
+        "id": "sokha_villa_2bed",
+        "name": "2-Bedroom Riverside Luxury Villa (1 Night)",
+        "price": 520.00,
+        "category": "Accommodation > Villa",
+        "room_type": "Villa",
+        "area_sqm": 220,
+    },
+    {
+        "id": "sokha_lotus_buffet",
+        "name": "Lotus Restaurant International Dinner Buffet",
+        "price": 28.00,
+        "category": "Food Services > Hotel Dining & Buffet",
+        "room_type": "Dining Buffet",
+        "area_sqm": 0,
+    },
+    {
+        "id": "sokha_breakfast_buffet",
+        "name": "Tonle Sap International Breakfast Buffet",
+        "price": 16.00,
+        "category": "Food Services > Hotel Dining & Buffet",
+        "room_type": "Breakfast Buffet",
+        "area_sqm": 0,
+    },
+    {
+        "id": "sokha_high_tea",
+        "name": "Champa Lounge Afternoon High Tea Set for Two",
+        "price": 22.00,
+        "category": "Food Services > Afternoon Tea",
+        "room_type": "High Tea",
+        "area_sqm": 0,
+    },
+    {
+        "id": "sokha_spa_aroma",
+        "name": "Jasmine Spa 60-Minute Aromatherapy Body Massage",
+        "price": 45.00,
+        "category": "Personal Care > Spa & Wellness",
+        "room_type": "Spa Service",
+        "area_sqm": 0,
+    },
+    {
+        "id": "sokha_fitness_daypass",
+        "name": "Sokha Health Club & Swimming Pool Day Pass",
+        "price": 15.00,
+        "category": "Recreation & Culture > Sports & Fitness",
+        "room_type": "Day Pass",
+        "area_sqm": 0,
+    },
 ]
 
 
@@ -1723,7 +3559,9 @@ class SokhaHotelScraper(BaseScraper):
     def __init__(self):
         super().__init__(store_slug="sokhahotel", source_type="hotel")
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         records: list[dict[str, Any]] = []
         for room in SOKHA_ROOMS:
@@ -1737,7 +3575,10 @@ class SokhaHotelScraper(BaseScraper):
                     price=room["price"],
                     currency="USD",
                     category_native=room["category"],
-                    attrs={"room_type": room["room_type"], "area_sqm": room["area_sqm"]},
+                    attrs={
+                        "room_type": room["room_type"],
+                        "area_sqm": room["area_sqm"],
+                    },
                     url="https://www.sokhahotels.com.kh/phnompenh/",
                     scrape_date=ds,
                     is_fallback=True,
@@ -1750,22 +3591,102 @@ class SokhaHotelScraper(BaseScraper):
 # 16. Hyatt Regency Phnom Penh (Hotel)
 # ═══════════════════════════════════════════════════════════════════════════
 HYATT_ROOMS = [
-    {"name": "Standard King Room", "room_type": "King Bed", "area_sqm": 38, "base_rate_usd": 185.0},
-    {"name": "Standard Twin Room", "room_type": "Twin Beds", "area_sqm": 38, "base_rate_usd": 185.0},
-    {"name": "King Bed High Floor City View", "room_type": "King Bed View", "area_sqm": 38, "base_rate_usd": 210.0},
-    {"name": "Twin Beds High Floor City View", "room_type": "Twin Beds View", "area_sqm": 38, "base_rate_usd": 210.0},
-    {"name": "1 King Bed with Balcony Courtyard View", "room_type": "King Balcony", "area_sqm": 42, "base_rate_usd": 235.0},
-    {"name": "Regency Club 1 King Bed with Lounge Access", "room_type": "Club King", "area_sqm": 45, "base_rate_usd": 265.0},
-    {"name": "Regency Club 2 Twin Beds with Lounge Access", "room_type": "Club Twin", "area_sqm": 45, "base_rate_usd": 265.0},
-    {"name": "Regency Suite King (Living Room & Dining Area)", "room_type": "Suite", "area_sqm": 72, "base_rate_usd": 420.0},
-    {"name": "Executive Suite River View", "room_type": "Suite", "area_sqm": 95, "base_rate_usd": 580.0},
-    {"name": "Diplomatic Suite with Private Terrace", "room_type": "Suite", "area_sqm": 125, "base_rate_usd": 780.0},
-    {"name": "Presidential Suite Phnom Penh View", "room_type": "Suite", "area_sqm": 180, "base_rate_usd": 1200.0},
-    {"name": "Market Café International Seafood Buffet Dinner", "room_type": "Buffet", "area_sqm": 0, "base_rate_usd": 42.0},
-    {"name": "Market Café Full American & Asian Breakfast Buffet", "room_type": "Breakfast", "area_sqm": 0, "base_rate_usd": 24.0},
-    {"name": "FiveFive Rooftop Restaurant 4-Course Dinner Set", "room_type": "Dining Set", "area_sqm": 0, "base_rate_usd": 55.0},
-    {"name": "The Lounge Royal Afternoon High Tea for Two", "room_type": "High Tea", "area_sqm": 0, "base_rate_usd": 28.0},
-    {"name": "Metropole Spa 60-Minute Signature Herbal Massage", "room_type": "Spa Service", "area_sqm": 0, "base_rate_usd": 65.0},
+    {
+        "name": "Standard King Room",
+        "room_type": "King Bed",
+        "area_sqm": 38,
+        "base_rate_usd": 185.0,
+    },
+    {
+        "name": "Standard Twin Room",
+        "room_type": "Twin Beds",
+        "area_sqm": 38,
+        "base_rate_usd": 185.0,
+    },
+    {
+        "name": "King Bed High Floor City View",
+        "room_type": "King Bed View",
+        "area_sqm": 38,
+        "base_rate_usd": 210.0,
+    },
+    {
+        "name": "Twin Beds High Floor City View",
+        "room_type": "Twin Beds View",
+        "area_sqm": 38,
+        "base_rate_usd": 210.0,
+    },
+    {
+        "name": "1 King Bed with Balcony Courtyard View",
+        "room_type": "King Balcony",
+        "area_sqm": 42,
+        "base_rate_usd": 235.0,
+    },
+    {
+        "name": "Regency Club 1 King Bed with Lounge Access",
+        "room_type": "Club King",
+        "area_sqm": 45,
+        "base_rate_usd": 265.0,
+    },
+    {
+        "name": "Regency Club 2 Twin Beds with Lounge Access",
+        "room_type": "Club Twin",
+        "area_sqm": 45,
+        "base_rate_usd": 265.0,
+    },
+    {
+        "name": "Regency Suite King (Living Room & Dining Area)",
+        "room_type": "Suite",
+        "area_sqm": 72,
+        "base_rate_usd": 420.0,
+    },
+    {
+        "name": "Executive Suite River View",
+        "room_type": "Suite",
+        "area_sqm": 95,
+        "base_rate_usd": 580.0,
+    },
+    {
+        "name": "Diplomatic Suite with Private Terrace",
+        "room_type": "Suite",
+        "area_sqm": 125,
+        "base_rate_usd": 780.0,
+    },
+    {
+        "name": "Presidential Suite Phnom Penh View",
+        "room_type": "Suite",
+        "area_sqm": 180,
+        "base_rate_usd": 1200.0,
+    },
+    {
+        "name": "Market Café International Seafood Buffet Dinner",
+        "room_type": "Buffet",
+        "area_sqm": 0,
+        "base_rate_usd": 42.0,
+    },
+    {
+        "name": "Market Café Full American & Asian Breakfast Buffet",
+        "room_type": "Breakfast",
+        "area_sqm": 0,
+        "base_rate_usd": 24.0,
+    },
+    {
+        "name": "FiveFive Rooftop Restaurant 4-Course Dinner Set",
+        "room_type": "Dining Set",
+        "area_sqm": 0,
+        "base_rate_usd": 55.0,
+    },
+    {
+        "name": "The Lounge Royal Afternoon High Tea for Two",
+        "room_type": "High Tea",
+        "area_sqm": 0,
+        "base_rate_usd": 28.0,
+    },
+    {
+        "name": "Metropole Spa 60-Minute Signature Herbal Massage",
+        "room_type": "Spa Service",
+        "area_sqm": 0,
+        "base_rate_usd": 65.0,
+    },
 ]
 
 
@@ -1773,7 +3694,9 @@ class HyattHotelScraper(BaseScraper):
     def __init__(self):
         super().__init__(store_slug="hyyathotel", source_type="hotel")
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         records: list[dict[str, Any]] = []
         for idx, room in enumerate(HYATT_ROOMS):
@@ -1786,7 +3709,11 @@ class HyattHotelScraper(BaseScraper):
                     name=f"{room['name']}",
                     price=room["base_rate_usd"],
                     currency="USD",
-                    category_native="Accommodation > Hotel Room" if room.get("area_sqm", 0) > 0 else "Food Services > Hotel Dining & Buffet",
+                    category_native=(
+                        "Accommodation > Hotel Room"
+                        if room.get("area_sqm", 0) > 0
+                        else "Food Services > Hotel Dining & Buffet"
+                    ),
                     attrs={
                         "room_type": room["room_type"],
                         "area_sqm": room["area_sqm"],
@@ -1803,35 +3730,162 @@ class HyattHotelScraper(BaseScraper):
 # 17. Bayon Restaurant BKK I (Restaurant)
 # ═══════════════════════════════════════════════════════════════════════════
 BAYON_MENU_BASELINE = [
-    {"id": "bayon_loklak_beef", "name": "Traditional Beef Lok Lak with Fried Egg & Rice", "price": 4.75, "category": "Khmer Cuisine > Beef Dishes"},
-    {"id": "bayon_curry_chicken", "name": "Khmer Red Curry Chicken with Crispy Baguette", "price": 4.25, "category": "Khmer Cuisine > Curry Dishes"},
-    {"id": "bayon_baisachchrouk", "name": "Grilled Pork with Broken Rice (Bai Sach Chrouk)", "price": 2.50, "category": "Khmer Cuisine > Breakfast & Rice"},
-    {"id": "bayon_kuyteav_pork", "name": "Phnom Penh Noodle Soup with Sliced Pork (Kuy Teav)", "price": 3.25, "category": "Khmer Cuisine > Noodle Soup"},
-    {"id": "bayon_kuyteav_beef", "name": "Phnom Penh Beef Ball Noodle Soup (Kuy Teav Sach Ko)", "price": 3.75, "category": "Khmer Cuisine > Noodle Soup"},
-    {"id": "bayon_amok_fish", "name": "Authentic Fish Amok Steamed in Banana Leaves", "price": 5.25, "category": "Khmer Cuisine > Traditional Specialities"},
-    {"id": "bayon_somlor_machou", "name": "Sweet & Sour Fish Soup with Morning Glory (Somlor Machou)", "price": 4.50, "category": "Khmer Cuisine > Traditional Soups"},
-    {"id": "bayon_fried_rice_seafood", "name": "Yangzhou Seafood Fried Rice with Prawns & Squid", "price": 4.00, "category": "Asian Cuisine > Fried Rice"},
-    {"id": "bayon_fried_rice_chicken", "name": "Stir-Fried Rice with Minced Chicken & Basil", "price": 3.50, "category": "Asian Cuisine > Fried Rice"},
-    {"id": "bayon_fried_rice_saltedfish", "name": "Khmer Fried Rice with Salted Fish & Pork", "price": 3.75, "category": "Asian Cuisine > Fried Rice"},
-    {"id": "bayon_stirfry_morningglory", "name": "Stir-Fried Morning Glory with Oyster Sauce & Garlic", "price": 2.75, "category": "Khmer Cuisine > Vegetable Dishes"},
-    {"id": "bayon_stirfry_beef_ginger", "name": "Stir-Fried Sliced Beef with Fresh Ginger & Spring Onion", "price": 4.50, "category": "Khmer Cuisine > Beef Dishes"},
-    {"id": "bayon_springrolls_crispy", "name": "Deep-Fried Crispy Spring Rolls (Chai Yor) (5 pcs)", "price": 3.00, "category": "Appetizers > Spring Rolls"},
-    {"id": "bayon_springrolls_fresh", "name": "Fresh Summer Rolls with Prawns & Peanut Dip (4 pcs)", "price": 3.25, "category": "Appetizers > Spring Rolls"},
-    {"id": "bayon_lemongrass_chicken", "name": "Stir-Fried Chicken with Spicy Lemongrass Paste (Kroeung)", "price": 4.25, "category": "Khmer Cuisine > Chicken Dishes"},
-    {"id": "bayon_tomyum_seafood", "name": "Spicy Tom Yum Soup with Mixed Seafood", "price": 5.00, "category": "Asian Cuisine > Soups"},
-    {"id": "bayon_fried_noodles_pork", "name": "Stir-Fried Flat Rice Noodles with Pork & Chinese Kale (Mi Katang)", "price": 3.50, "category": "Asian Cuisine > Noodle Dishes"},
-    {"id": "bayon_green_mango_salad", "name": "Khmer Green Mango Salad with Dried Shrimp", "price": 3.50, "category": "Appetizers > Khmer Salads"},
-    {"id": "bayon_iced_coffee_milk", "name": "Cambodian Iced Coffee with Sweet Condensed Milk (Cafe Teuk Doh Ko)", "price": 1.75, "category": "Beverages > Coffee & Tea"},
-    {"id": "bayon_iced_black_coffee", "name": "Traditional Cambodian Iced Black Coffee (Cafe Khmao)", "price": 1.50, "category": "Beverages > Coffee & Tea"},
-    {"id": "bayon_fresh_coconut", "name": "Whole Fresh Young Coconut Juice", "price": 1.75, "category": "Beverages > Fresh Juices"},
-    {"id": "bayon_mango_smoothie", "name": "Fresh Tropical Mango Fruit Smoothie", "price": 2.25, "category": "Beverages > Fruit Smoothies"},
-    {"id": "bayon_passion_soda", "name": "Fresh Passion Fruit Soda with Mint & Lime", "price": 2.00, "category": "Beverages > Refreshers"},
-    {"id": "bayon_lime_iced_tea", "name": "Khmer Fresh Lime Iced Tea", "price": 1.50, "category": "Beverages > Coffee & Tea"},
-    {"id": "bayon_dessert_chek_ktis", "name": "Traditional Sweet Banana in Coconut Milk Tapioca (Chek Ktis)", "price": 1.75, "category": "Desserts > Traditional Khmer Desserts"},
+    {
+        "id": "bayon_loklak_beef",
+        "name": "Traditional Beef Lok Lak with Fried Egg & Rice",
+        "price": 4.75,
+        "category": "Khmer Cuisine > Beef Dishes",
+    },
+    {
+        "id": "bayon_curry_chicken",
+        "name": "Khmer Red Curry Chicken with Crispy Baguette",
+        "price": 4.25,
+        "category": "Khmer Cuisine > Curry Dishes",
+    },
+    {
+        "id": "bayon_baisachchrouk",
+        "name": "Grilled Pork with Broken Rice (Bai Sach Chrouk)",
+        "price": 2.50,
+        "category": "Khmer Cuisine > Breakfast & Rice",
+    },
+    {
+        "id": "bayon_kuyteav_pork",
+        "name": "Phnom Penh Noodle Soup with Sliced Pork (Kuy Teav)",
+        "price": 3.25,
+        "category": "Khmer Cuisine > Noodle Soup",
+    },
+    {
+        "id": "bayon_kuyteav_beef",
+        "name": "Phnom Penh Beef Ball Noodle Soup (Kuy Teav Sach Ko)",
+        "price": 3.75,
+        "category": "Khmer Cuisine > Noodle Soup",
+    },
+    {
+        "id": "bayon_amok_fish",
+        "name": "Authentic Fish Amok Steamed in Banana Leaves",
+        "price": 5.25,
+        "category": "Khmer Cuisine > Traditional Specialities",
+    },
+    {
+        "id": "bayon_somlor_machou",
+        "name": "Sweet & Sour Fish Soup with Morning Glory (Somlor Machou)",
+        "price": 4.50,
+        "category": "Khmer Cuisine > Traditional Soups",
+    },
+    {
+        "id": "bayon_fried_rice_seafood",
+        "name": "Yangzhou Seafood Fried Rice with Prawns & Squid",
+        "price": 4.00,
+        "category": "Asian Cuisine > Fried Rice",
+    },
+    {
+        "id": "bayon_fried_rice_chicken",
+        "name": "Stir-Fried Rice with Minced Chicken & Basil",
+        "price": 3.50,
+        "category": "Asian Cuisine > Fried Rice",
+    },
+    {
+        "id": "bayon_fried_rice_saltedfish",
+        "name": "Khmer Fried Rice with Salted Fish & Pork",
+        "price": 3.75,
+        "category": "Asian Cuisine > Fried Rice",
+    },
+    {
+        "id": "bayon_stirfry_morningglory",
+        "name": "Stir-Fried Morning Glory with Oyster Sauce & Garlic",
+        "price": 2.75,
+        "category": "Khmer Cuisine > Vegetable Dishes",
+    },
+    {
+        "id": "bayon_stirfry_beef_ginger",
+        "name": "Stir-Fried Sliced Beef with Fresh Ginger & Spring Onion",
+        "price": 4.50,
+        "category": "Khmer Cuisine > Beef Dishes",
+    },
+    {
+        "id": "bayon_springrolls_crispy",
+        "name": "Deep-Fried Crispy Spring Rolls (Chai Yor) (5 pcs)",
+        "price": 3.00,
+        "category": "Appetizers > Spring Rolls",
+    },
+    {
+        "id": "bayon_springrolls_fresh",
+        "name": "Fresh Summer Rolls with Prawns & Peanut Dip (4 pcs)",
+        "price": 3.25,
+        "category": "Appetizers > Spring Rolls",
+    },
+    {
+        "id": "bayon_lemongrass_chicken",
+        "name": "Stir-Fried Chicken with Spicy Lemongrass Paste (Kroeung)",
+        "price": 4.25,
+        "category": "Khmer Cuisine > Chicken Dishes",
+    },
+    {
+        "id": "bayon_tomyum_seafood",
+        "name": "Spicy Tom Yum Soup with Mixed Seafood",
+        "price": 5.00,
+        "category": "Asian Cuisine > Soups",
+    },
+    {
+        "id": "bayon_fried_noodles_pork",
+        "name": "Stir-Fried Flat Rice Noodles with Pork & Chinese Kale (Mi Katang)",
+        "price": 3.50,
+        "category": "Asian Cuisine > Noodle Dishes",
+    },
+    {
+        "id": "bayon_green_mango_salad",
+        "name": "Khmer Green Mango Salad with Dried Shrimp",
+        "price": 3.50,
+        "category": "Appetizers > Khmer Salads",
+    },
+    {
+        "id": "bayon_iced_coffee_milk",
+        "name": "Cambodian Iced Coffee with Sweet Condensed Milk (Cafe Teuk Doh Ko)",
+        "price": 1.75,
+        "category": "Beverages > Coffee & Tea",
+    },
+    {
+        "id": "bayon_iced_black_coffee",
+        "name": "Traditional Cambodian Iced Black Coffee (Cafe Khmao)",
+        "price": 1.50,
+        "category": "Beverages > Coffee & Tea",
+    },
+    {
+        "id": "bayon_fresh_coconut",
+        "name": "Whole Fresh Young Coconut Juice",
+        "price": 1.75,
+        "category": "Beverages > Fresh Juices",
+    },
+    {
+        "id": "bayon_mango_smoothie",
+        "name": "Fresh Tropical Mango Fruit Smoothie",
+        "price": 2.25,
+        "category": "Beverages > Fruit Smoothies",
+    },
+    {
+        "id": "bayon_passion_soda",
+        "name": "Fresh Passion Fruit Soda with Mint & Lime",
+        "price": 2.00,
+        "category": "Beverages > Refreshers",
+    },
+    {
+        "id": "bayon_lime_iced_tea",
+        "name": "Khmer Fresh Lime Iced Tea",
+        "price": 1.50,
+        "category": "Beverages > Coffee & Tea",
+    },
+    {
+        "id": "bayon_dessert_chek_ktis",
+        "name": "Traditional Sweet Banana in Coconut Milk Tapioca (Chek Ktis)",
+        "price": 1.75,
+        "category": "Desserts > Traditional Khmer Desserts",
+    },
 ]
 
 
-BAYON_FOODPANDA_URL = "https://www.foodpanda.com.kh/en/restaurant/lb0z/bayon-restaurant-bkk-i"
+BAYON_FOODPANDA_URL = (
+    "https://www.foodpanda.com.kh/en/restaurant/lb0z/bayon-restaurant-bkk-i"
+)
 
 
 class BayonRestaurantScraper(BaseScraper):
@@ -1845,7 +3899,9 @@ class BayonRestaurantScraper(BaseScraper):
         for script in soup.find_all("script"):
             text = script.string or ""
             if "window.__PROVIDER_PROPS__" in text or "Apollo" in text:
-                match = re.search(r"window\.__PROVIDER_PROPS__\s*=\s*({.+?});?\s*$", text, re.DOTALL)
+                match = re.search(
+                    r"window\.__PROVIDER_PROPS__\s*=\s*({.+?});?\s*$", text, re.DOTALL
+                )
                 if match:
                     try:
                         return json.loads(match.group(1))
@@ -1867,22 +3923,34 @@ class BayonRestaurantScraper(BaseScraper):
             if not isinstance(val, dict):
                 continue
             if "RestaurantProduct" in key or "menu_item" in key.lower():
-                name = val.get("name") or val.get("title") or val.get("productName") or ""
-                price = _to_float(val.get("price") or val.get("variantPrice") or val.get("basePrice"))
+                name = (
+                    val.get("name") or val.get("title") or val.get("productName") or ""
+                )
+                price = _to_float(
+                    val.get("price") or val.get("variantPrice") or val.get("basePrice")
+                )
                 if name and price is not None:
                     items.append(
                         {
                             "name": name,
                             "price": price,
                             "description": val.get("description") or "",
-                            "category": val.get("category") or val.get("categoryName") or "",
+                            "category": val.get("category")
+                            or val.get("categoryName")
+                            or "",
                         }
                     )
             elif isinstance(val, dict):
                 for inner_key, inner_val in val.items():
-                    if "RestaurantProduct" in str(inner_key) and isinstance(inner_val, dict):
-                        name = inner_val.get("name") or inner_val.get("productName") or ""
-                        price = _to_float(inner_val.get("price") or inner_val.get("variantPrice"))
+                    if "RestaurantProduct" in str(inner_key) and isinstance(
+                        inner_val, dict
+                    ):
+                        name = (
+                            inner_val.get("name") or inner_val.get("productName") or ""
+                        )
+                        price = _to_float(
+                            inner_val.get("price") or inner_val.get("variantPrice")
+                        )
                         if name and price is not None:
                             items.append(
                                 {
@@ -1894,7 +3962,9 @@ class BayonRestaurantScraper(BaseScraper):
                             )
         return items
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         records: list[dict[str, Any]] = []
         try:
@@ -1954,7 +4024,9 @@ class MefExchangeRateScraper(BaseScraper):
     def __init__(self):
         super().__init__(store_slug="mef_fx", source_type="fx")
 
-    def fetch_records(self, scrape_date: pendulum.Date | None = None) -> list[dict[str, Any]]:
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         rate = DEFAULT_USD_KHR
         try:
@@ -1963,7 +4035,10 @@ class MefExchangeRateScraper(BaseScraper):
             body = resp.json()
             if isinstance(body, list) and body:
                 body = body[0]
-            rate = _to_float(body.get("rate") or body.get("usd_khr") or body.get("value")) or DEFAULT_USD_KHR
+            rate = (
+                _to_float(body.get("rate") or body.get("usd_khr") or body.get("value"))
+                or DEFAULT_USD_KHR
+            )
         except Exception as exc:
             log.warning("MEF FX API failed, using default %s: %s", DEFAULT_USD_KHR, exc)
         return [
@@ -2023,22 +4098,34 @@ class MocGasolineScraper(BaseScraper):
         resp = requests.post(
             MOC_GRAPHQL_URL,
             json={"query": query, "variables": variables},
-            headers={"content-type": "application/json", "apollo-require-preflight": "true"},
+            headers={
+                "content-type": "application/json",
+                "apollo-require-preflight": "true",
+            },
             timeout=30,
         )
         resp.raise_for_status()
         body = resp.json()
         errors = body.get("errors")
         if errors:
-            raise RuntimeError(f"MOC GraphQL error: {errors[0].get('message', errors[0])}")
-        return body.get("data", {}).get("publicCommodityPriceLineReport", {}).get("items") or []
+            raise RuntimeError(
+                f"MOC GraphQL error: {errors[0].get('message', errors[0])}"
+            )
+        return (
+            body.get("data", {}).get("publicCommodityPriceLineReport", {}).get("items")
+            or []
+        )
 
     def fetch_records(self, scrape_date=None) -> list[dict[str, Any]]:
         ds = scrape_date or pendulum.today("Asia/Phnom_Penh").date()
         product_ids = [pid for pid, _ in MOC_FUEL_PRODUCTS]
-        items = self._query_line_report(ds.subtract(days=14), ds, MOC_FUEL_PROVINCE, product_ids)
+        items = self._query_line_report(
+            ds.subtract(days=14), ds, MOC_FUEL_PROVINCE, product_ids
+        )
         if len(items) < len(MOC_FUEL_PRODUCTS):
-            raise RuntimeError(f"MOC: expected {len(MOC_FUEL_PRODUCTS)} series, got {len(items)}")
+            raise RuntimeError(
+                f"MOC: expected {len(MOC_FUEL_PRODUCTS)} series, got {len(items)}"
+            )
         target = ds.date() if isinstance(ds, datetime) else ds
         records: list[dict[str, Any]] = []
         for idx, (product_id, product_name) in enumerate(MOC_FUEL_PRODUCTS):
@@ -2070,7 +4157,10 @@ class MocGasolineScraper(BaseScraper):
                     url=MOC_COMMODITY_URL,
                     scrape_date=str(ds),
                     is_fallback=price_date.date() != target,
-                    attrs={"price_date": price_date.strftime("%Y-%m-%d"), "source_api": "moc-graphql"},
+                    attrs={
+                        "price_date": price_date.strftime("%Y-%m-%d"),
+                        "source_api": "moc-graphql",
+                    },
                 )
             )
         if not records:
@@ -2093,7 +4183,8 @@ class AryStorePhoneScraper(BaseScraper):
         super().__init__(store_slug="arystore", source_type="electronics")
         self.session = session or requests.Session()
         self.session.headers.setdefault(
-            "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) CPI-Cambodia-Pipeline/1.0"
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) CPI-Cambodia-Pipeline/1.0",
         )
 
     def _to_canonical(self, product: dict, scrape_date: str) -> dict[str, Any] | None:
@@ -2124,7 +4215,10 @@ class AryStorePhoneScraper(BaseScraper):
             currency=prices.get("currency_code") or "USD",
             original_price=max(_to_float(regular) or price, price),
             brand=brands[0].get("name") if brands else None,
-            category_native=" / ".join(c.get("name") for c in categories if c.get("name")) or "General",
+            category_native=" / ".join(
+                c.get("name") for c in categories if c.get("name")
+            )
+            or "General",
             unit="UNIT",
             url=product.get("permalink"),
             image_url=images[0].get("src") if images else None,

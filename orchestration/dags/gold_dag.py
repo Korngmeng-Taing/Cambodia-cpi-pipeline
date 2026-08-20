@@ -72,14 +72,21 @@ def _run_geks_multilateral(**context) -> dict:
     calc = GEKSCalculator()
     daily = calc.run_rolling_geks_for_date(ds, window_size=13)
     if daily is None:
-        log.warning("Daily rolling GEKS returned no result for %s (insufficient matched items)", ds)
+        log.warning(
+            "Daily rolling GEKS returned no result for %s (insufficient matched items)",
+            ds,
+        )
 
     monthly = None
     try:
-        month_results = calc.calculate_monthly_geks(ds[:7], window_months=13, base_month=base_period)
+        month_results = calc.calculate_monthly_geks(
+            ds[:7], window_months=13, base_month=base_period
+        )
         monthly = (month_results or {}).get(ds[:7])
         if monthly is None:
-            log.info("Monthly GEKS not yet available for %s (needs 13-month window)", ds[:7])
+            log.info(
+                "Monthly GEKS not yet available for %s (needs 13-month window)", ds[:7]
+            )
     except Exception as exc:  # noqa: BLE001 - monthly GEKS is diagnostic only
         log.warning("Monthly GEKS computation failed for %s: %s", ds[:7], exc)
 
@@ -139,5 +146,10 @@ with DAG(
         execution_timeout=timedelta(minutes=15),
     )
 
-    t_ensure_base_prices >> t_calculate_cpi >> [t_geks_multilateral, t_fisher_superlative] >> t_dbt_gold_run >> t_dbt_gold_test
-
+    (
+        t_ensure_base_prices
+        >> t_calculate_cpi
+        >> [t_geks_multilateral, t_fisher_superlative]
+        >> t_dbt_gold_run
+        >> t_dbt_gold_test
+    )

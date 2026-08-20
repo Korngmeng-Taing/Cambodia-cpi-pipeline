@@ -48,8 +48,14 @@ def test_build_bronze_frame_injects_metadata():
     )
     assert len(df) == 2
     assert set(df.columns) >= {
-        "scrape_batch_id", "scrape_timestamp", "scrape_date", "source_name",
-        "raw_item_id", "raw_price", "raw_currency", "is_promotional",
+        "scrape_batch_id",
+        "scrape_timestamp",
+        "scrape_date",
+        "source_name",
+        "raw_item_id",
+        "raw_price",
+        "raw_currency",
+        "is_promotional",
     }
     assert df["scrape_batch_id"].iloc[0] == str(batch_id)
     assert df["scrape_date"].iloc[0] == "2026-08-18"
@@ -98,6 +104,7 @@ class _FakeS3Client:
     def head_bucket(self, Bucket):
         if not self._exists:
             from botocore.exceptions import ClientError
+
             raise ClientError({"Error": {"Code": "404"}}, "HeadBucket")
 
     def create_bucket(self, Bucket):
@@ -116,7 +123,10 @@ def test_upload_to_minio_uses_expected_key(monkeypatch, tmp_path):
     batch_id = uuid.UUID("12345678-1234-5678-1234-567812345678")
     key = p2m.upload_to_minio(local, "supermarket_a", "2026-08-18", batch_id)
 
-    assert key == "source=supermarket_a/scrape_date=2026-08-18/12345678-1234-5678-1234-567812345678.parquet"
+    assert (
+        key
+        == "source=supermarket_a/scrape_date=2026-08-18/12345678-1234-5678-1234-567812345678.parquet"
+    )
     assert client.uploads[0][1] == p2m.MINIO_BUCKET
     assert client.uploads[0][2] == key
 

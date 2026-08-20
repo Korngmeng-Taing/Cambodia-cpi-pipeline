@@ -212,7 +212,9 @@ def test_classify_unclassified_with_gemini_end_to_end():
 
     with engine.connect() as conn:
         dims = conn.execute(
-            text("SELECT canonical_name, coicop_code FROM silver.dim_canonical_products")
+            text(
+                "SELECT canonical_name, coicop_code FROM silver.dim_canonical_products"
+            )
         ).fetchall()
         mappings = conn.execute(
             text(

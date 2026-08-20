@@ -142,7 +142,9 @@ def build_bronze_frame(
         source_name       – e.g. 'supermarket_a'
     """
     if not records:
-        raise ValueError(f"Scraper for '{source_name}' returned 0 products (full-state gate).")
+        raise ValueError(
+            f"Scraper for '{source_name}' returned 0 products (full-state gate)."
+        )
 
     batch_id = batch_id or uuid.uuid4()
     timestamp = scrape_timestamp or datetime.now(UTC)
@@ -156,7 +158,11 @@ def build_bronze_frame(
         try:
             rec["raw_price"] = float(rec["raw_price"])
         except (TypeError, ValueError):
-            log.warning("Dropping item %r: raw_price not numeric: %r", rec.get("raw_item_id"), rec.get("raw_price"))
+            log.warning(
+                "Dropping item %r: raw_price not numeric: %r",
+                rec.get("raw_item_id"),
+                rec.get("raw_price"),
+            )
             continue
         rec["is_promotional"] = bool(rec["is_promotional"])
         rec["scrape_batch_id"] = str(batch_id)
@@ -166,9 +172,20 @@ def build_bronze_frame(
         normalized.append(rec)
 
     if not normalized:
-        raise ValueError(f"Scraper for '{source_name}' produced 0 valid records after normalization.")
+        raise ValueError(
+            f"Scraper for '{source_name}' produced 0 valid records after normalization."
+        )
 
-    df = pd.DataFrame(normalized, columns=[*REQUIRED_FIELDS, "scrape_batch_id", "scrape_timestamp", "scrape_date", "source_name"])
+    df = pd.DataFrame(
+        normalized,
+        columns=[
+            *REQUIRED_FIELDS,
+            "scrape_batch_id",
+            "scrape_timestamp",
+            "scrape_date",
+            "source_name",
+        ],
+    )
     df["is_promotional"] = df["is_promotional"].astype(bool)
     df["scrape_batch_id"] = df["scrape_batch_id"].astype(str)
     df["source_name"] = df["source_name"].astype(str)
@@ -198,7 +215,12 @@ def get_s3_client() -> boto3.client:
             endpoint_url=endpoint,
             aws_access_key_id=MINIO_ACCESS_KEY,
             aws_secret_access_key=MINIO_SECRET_KEY,
-            config=Config(signature_version="s3v4", connect_timeout=5, read_timeout=30, retries={"max_attempts": 3}),
+            config=Config(
+                signature_version="s3v4",
+                connect_timeout=5,
+                read_timeout=30,
+                retries={"max_attempts": 3},
+            ),
             region_name="us-east-1",
         )
         client.list_buckets()
@@ -213,7 +235,12 @@ def get_s3_client() -> boto3.client:
             endpoint_url=alt,
             aws_access_key_id=MINIO_ACCESS_KEY,
             aws_secret_access_key=MINIO_SECRET_KEY,
-            config=Config(signature_version="s3v4", connect_timeout=5, read_timeout=30, retries={"max_attempts": 3}),
+            config=Config(
+                signature_version="s3v4",
+                connect_timeout=5,
+                read_timeout=30,
+                retries={"max_attempts": 3},
+            ),
             region_name="us-east-1",
         )
         client.list_buckets()
@@ -274,12 +301,16 @@ def run(
 
     Returns a summary dict (source_name, batch_id, record_count, s3_key, ...).
     """
-    scraper = scraper_factory() if scraper_factory else GenericPlaywrightScraper(
-        source_name=source_name,
-        start_url=start_url,
-        item_selector=os.getenv("PLAYWRIGHT_ITEM_SELECTOR", "body"),
-        wait_for_selector=os.getenv("PLAYWRIGHT_WAIT_SELECTOR"),
-        headless=os.getenv("PLAYWRIGHT_HEADLESS", "1") != "0",
+    scraper = (
+        scraper_factory()
+        if scraper_factory
+        else GenericPlaywrightScraper(
+            source_name=source_name,
+            start_url=start_url,
+            item_selector=os.getenv("PLAYWRIGHT_ITEM_SELECTOR", "body"),
+            wait_for_selector=os.getenv("PLAYWRIGHT_WAIT_SELECTOR"),
+            headless=os.getenv("PLAYWRIGHT_HEADLESS", "1") != "0",
+        )
     )
 
     batch_id = uuid.uuid4()
@@ -287,7 +318,9 @@ def run(
     date_str = scrape_date or timestamp.date().isoformat()
 
     records = scrape_full_state(scraper)
-    df = build_bronze_frame(records, source_name, batch_id=batch_id, scrape_timestamp=timestamp)
+    df = build_bronze_frame(
+        records, source_name, batch_id=batch_id, scrape_timestamp=timestamp
+    )
     local_file = write_snappy_parquet(df, out_dir)
     s3_key = upload_to_minio(local_file, source_name, date_str, batch_id)
 
@@ -325,10 +358,21 @@ class SupermarketAScraper(GenericPlaywrightScraper):
     def _extract_item(self, item) -> dict[str, Any]:
         record = {
             "raw_item_id": item.get_attribute("data-item-id") or "",
-            "raw_product_name": item.query_selector(".product-name").inner_text().strip(),
-            "raw_price": (item.query_selector(".product-price").inner_text().replace(",", "") or "0"),
-            "raw_currency": (item.query_selector(".product-currency").inner_text().strip() or "USD"),
-            "raw_unit_size": (item.query_selector(".product-unit").inner_text().strip() if item.query_selector(".product-unit") else ""),
+            "raw_product_name": item.query_selector(".product-name")
+            .inner_text()
+            .strip(),
+            "raw_price": (
+                item.query_selector(".product-price").inner_text().replace(",", "")
+                or "0"
+            ),
+            "raw_currency": (
+                item.query_selector(".product-currency").inner_text().strip() or "USD"
+            ),
+            "raw_unit_size": (
+                item.query_selector(".product-unit").inner_text().strip()
+                if item.query_selector(".product-unit")
+                else ""
+            ),
             "is_promotional": bool(item.query_selector(".product-badge-promo")),
             "source_url": self.start_url,
         }
@@ -338,7 +382,9 @@ class SupermarketAScraper(GenericPlaywrightScraper):
 if __name__ == "__main__":
     import sys
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(levelname)s %(name)s: %(message)s"
+    )
     source = sys.argv[1] if len(sys.argv) > 1 else "supermarket_a"
     url = sys.argv[2] if len(sys.argv) > 2 else "http://localhost:8000"
     factory = (lambda: SupermarketAScraper(url)) if source == "supermarket_a" else None

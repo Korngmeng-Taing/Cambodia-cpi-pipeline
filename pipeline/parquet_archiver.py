@@ -59,10 +59,7 @@ class ParquetArchiver:
 
         month_str = dt.strftime("%Y-%m")
 
-        s3_key = (
-            f"parquet/month={month_str}"
-            f"/date={date_str}/{store_slug}.parquet"
-        )
+        s3_key = f"parquet/month={month_str}" f"/date={date_str}/{store_slug}.parquet"
 
         df = pd.DataFrame(records)
         df["store_slug"] = store_slug
@@ -114,10 +111,7 @@ class ParquetArchiver:
         """
         dt = datetime.strptime(date_str, "%Y-%m-%d")
         month_str = dt.strftime("%Y-%m")
-        s3_key = (
-            f"parquet/month={month_str}"
-            f"/date={date_str}/{store_slug}.parquet"
-        )
+        s3_key = f"parquet/month={month_str}" f"/date={date_str}/{store_slug}.parquet"
         try:
             raw = MinioStorage().get_bytes(s3_key)
         except RuntimeError:

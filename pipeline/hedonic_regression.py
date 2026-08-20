@@ -74,7 +74,9 @@ def extract_specs(name: str) -> dict[str, int]:
     }
 
 
-def fetch_hedonic_items(engine, coicop_prefix: str = COICOP_ELECTRONICS_PREFIX) -> pd.DataFrame:
+def fetch_hedonic_items(
+    engine, coicop_prefix: str = COICOP_ELECTRONICS_PREFIX
+) -> pd.DataFrame:
     """Returns 09* mapped items from the last HISTORY_MONTHS months (training + current)."""
     cutoff = (date.today() - timedelta(days=30 * HISTORY_MONTHS)).isoformat()
     query = text(
@@ -95,7 +97,9 @@ def fetch_hedonic_items(engine, coicop_prefix: str = COICOP_ELECTRONICS_PREFIX) 
         """
     )
     with engine.connect() as conn:
-        df = pd.read_sql(query, conn, params={"prefix": f"{coicop_prefix}%", "cutoff": cutoff})
+        df = pd.read_sql(
+            query, conn, params={"prefix": f"{coicop_prefix}%", "cutoff": cutoff}
+        )
     if df.empty:
         return df
 
@@ -111,7 +115,9 @@ def fit_ols(df: pd.DataFrame) -> dict[str, Any]:
     Standard econometric semi-log specification for quality adjustment.
     """
     if sm is None:
-        raise ImportError("statsmodels is required for hedonic regression (pip install statsmodels)")
+        raise ImportError(
+            "statsmodels is required for hedonic regression (pip install statsmodels)"
+        )
 
     train = df.dropna(subset=["raw_price"]).copy()
     train = train[train["raw_price"] > 0]
@@ -120,14 +126,19 @@ def fit_ols(df: pd.DataFrame) -> dict[str, Any]:
             f"Hedonic model needs >= {MIN_SAMPLE_SIZE} positive-price rows; got {len(train)}"
         )
 
-    X = sm.add_constant(train[["RAM_GB", "Storage_GB"]].astype(float), has_constant="add")
+    X = sm.add_constant(
+        train[["RAM_GB", "Storage_GB"]].astype(float), has_constant="add"
+    )
     y_log = np.log(train["raw_price"].astype(float))
     model = sm.OLS(y_log, X).fit()
 
     log.info(
         "Hedonic Log-Linear OLS fit: n=%d R2=%.4f RAM=%.6f Storage=%.6f const=%.4f",
-        int(model.nobs), model.rsquared, model.params.get("RAM_GB", 0),
-        model.params.get("Storage_GB", 0), model.params.get("const", 0),
+        int(model.nobs),
+        model.rsquared,
+        model.params.get("RAM_GB", 0),
+        model.params.get("Storage_GB", 0),
+        model.params.get("const", 0),
     )
     return {
         "model": model,
@@ -174,7 +185,9 @@ def compute_hedonic_adjusted(
     return pd.Series(np.round(adjusted, 2), index=df.index)
 
 
-def persist_adjusted_prices(engine, scrape_date: str, adjusted: pd.Series, raw_item_ids: pd.Series) -> int:
+def persist_adjusted_prices(
+    engine, scrape_date: str, adjusted: pd.Series, raw_item_ids: pd.Series
+) -> int:
     """Writes hedonic_adjusted_price back into staging.stg_item_mapping."""
     rows = pd.DataFrame({"rid": raw_item_ids.astype(str), "adj": adjusted})
     rows = rows.dropna(subset=["adj"]).drop_duplicates(subset=["rid"])
@@ -212,18 +225,33 @@ def run_hedonic_regression(scrape_date: str) -> dict[str, Any]:
     engine = get_engine()
     df = fetch_hedonic_items(engine)
     if df.empty:
-        log.warning("No COICOP 09 items in history; skipping hedonic regression for %s", scrape_date)
-        return {"scrape_date": scrape_date, "status": "SKIPPED_NO_DATA", "items_adjusted": 0}
+        log.warning(
+            "No COICOP 09 items in history; skipping hedonic regression for %s",
+            scrape_date,
+        )
+        return {
+            "scrape_date": scrape_date,
+            "status": "SKIPPED_NO_DATA",
+            "items_adjusted": 0,
+        }
 
     fit = fit_ols(df)
     base = baseline_specs(df, scrape_date)
-    current = df[pd.to_datetime(df["scrape_date"]).dt.date == pd.to_datetime(scrape_date).date()]
+    current = df[
+        pd.to_datetime(df["scrape_date"]).dt.date == pd.to_datetime(scrape_date).date()
+    ]
     if current.empty:
         log.warning("No current-day items (%s) to adjust; skipping.", scrape_date)
-        return {"scrape_date": scrape_date, "status": "SKIPPED_NO_CURRENT", "items_adjusted": 0}
+        return {
+            "scrape_date": scrape_date,
+            "status": "SKIPPED_NO_CURRENT",
+            "items_adjusted": 0,
+        }
 
     adjusted = compute_hedonic_adjusted(current, fit, base)
-    n_updated = persist_adjusted_prices(engine, scrape_date, adjusted, current["raw_item_id"])
+    n_updated = persist_adjusted_prices(
+        engine, scrape_date, adjusted, current["raw_item_id"]
+    )
 
     return {
         "scrape_date": scrape_date,

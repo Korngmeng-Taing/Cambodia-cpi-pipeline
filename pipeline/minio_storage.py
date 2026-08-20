@@ -72,7 +72,12 @@ class MinioStorage:
                 endpoint_url=endpoint,
                 aws_access_key_id=self.access_key,
                 aws_secret_access_key=self.secret_key,
-                config=Config(signature_version="s3v4", connect_timeout=5, read_timeout=5, retries={"max_attempts": 1}),
+                config=Config(
+                    signature_version="s3v4",
+                    connect_timeout=5,
+                    read_timeout=5,
+                    retries={"max_attempts": 1},
+                ),
                 region_name="us-east-1",
             )
             # Test connectivity
@@ -87,14 +92,23 @@ class MinioStorage:
                         endpoint_url=alt_endpoint,
                         aws_access_key_id=self.access_key,
                         aws_secret_access_key=self.secret_key,
-                        config=Config(signature_version="s3v4", connect_timeout=5, read_timeout=5, retries={"max_attempts": 1}),
+                        config=Config(
+                            signature_version="s3v4",
+                            connect_timeout=5,
+                            read_timeout=5,
+                            retries={"max_attempts": 1},
+                        ),
                         region_name="us-east-1",
                     )
                     client.list_buckets()
                     self._client = client
                     self.endpoint_url = alt_endpoint
                 except Exception as e:
-                    log.warning("MinIO unavailable at %s: %s (no local fallback)", alt_endpoint, e)
+                    log.warning(
+                        "MinIO unavailable at %s: %s (no local fallback)",
+                        alt_endpoint,
+                        e,
+                    )
                     self._client = None
             else:
                 self._client = None
@@ -145,9 +159,7 @@ class MinioStorage:
             log.info("Stored raw JSON scrape in MinIO: %s", uri)
             return uri
         except Exception as exc:
-            raise RuntimeError(
-                f"MinIO put_object failed for {s3_key}: {exc}"
-            ) from exc
+            raise RuntimeError(f"MinIO put_object failed for {s3_key}: {exc}") from exc
 
     def put_bytes(
         self,
@@ -175,9 +187,7 @@ class MinioStorage:
             log.info("Uploaded bytes to MinIO -> %s", uri)
             return uri
         except Exception as exc:
-            raise RuntimeError(
-                f"MinIO put_bytes failed for {s3_key}: {exc}"
-            ) from exc
+            raise RuntimeError(f"MinIO put_bytes failed for {s3_key}: {exc}") from exc
 
     def put_file(
         self,
@@ -209,9 +219,7 @@ class MinioStorage:
             log.info("Uploaded %s to MinIO -> %s", path.name, uri)
             return uri
         except Exception as exc:
-            raise RuntimeError(
-                f"MinIO upload_file failed for {s3_key}: {exc}"
-            ) from exc
+            raise RuntimeError(f"MinIO upload_file failed for {s3_key}: {exc}") from exc
 
     def get_bytes(self, s3_key: str) -> bytes:
         """
@@ -226,9 +234,7 @@ class MinioStorage:
             resp = self._client.get_object(Bucket=self.bucket_name, Key=s3_key)
             return resp["Body"].read()
         except Exception as exc:
-            raise RuntimeError(
-                f"MinIO get_object failed for {s3_key}: {exc}"
-            ) from exc
+            raise RuntimeError(f"MinIO get_object failed for {s3_key}: {exc}") from exc
 
     def get_json(self, s3_key: str) -> dict[str, Any] | list[dict[str, Any]]:
         """

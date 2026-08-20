@@ -33,7 +33,9 @@ class BronzeScraper:
         self.minio = MinioStorage()
         self.archiver = ParquetArchiver()
 
-    def parse_records(self, raw_data: Any, source_name: str, store_id: str) -> list[dict[str, Any]]:
+    def parse_records(
+        self, raw_data: Any, source_name: str, store_id: str
+    ) -> list[dict[str, Any]]:
         """Parses raw HTML/JSON into record dicts."""
         records = []
         parsed_data = raw_data
@@ -51,18 +53,24 @@ class BronzeScraper:
             if not isinstance(item, dict):
                 continue
 
-            desc = item.get("item_description") or item.get("name") or item.get("item_description_raw")
+            desc = (
+                item.get("item_description")
+                or item.get("name")
+                or item.get("item_description_raw")
+            )
             price = item.get("price")
             if desc and price is not None:
                 try:
                     p_val = float(price)
-                    records.append({
-                        "item_description_raw": str(desc),
-                        "price": p_val,
-                        "currency": item.get("currency", "USD"),
-                        "source_url": item.get("url") or item.get("source_url", ""),
-                        "raw_payload": json.dumps(item),
-                    })
+                    records.append(
+                        {
+                            "item_description_raw": str(desc),
+                            "price": p_val,
+                            "currency": item.get("currency", "USD"),
+                            "source_url": item.get("url") or item.get("source_url", ""),
+                            "raw_payload": json.dumps(item),
+                        }
+                    )
                 except (ValueError, TypeError):
                     continue
         return records
@@ -104,8 +112,13 @@ class BronzeScraper:
         # Deduplicate against already-ingested rows for this store/date.
         existing = self._existing_keys(conn, store_id, source_name, scrape_date)
         records = [
-            r for r in records
-            if (r.get("source_url", "") or "", r.get("item_description_raw", ""), float(r.get("price") or 0))
+            r
+            for r in records
+            if (
+                r.get("source_url", "") or "",
+                r.get("item_description_raw", ""),
+                float(r.get("price") or 0),
+            )
             not in existing
         ]
         if not records:
@@ -191,8 +204,13 @@ class BronzeScraper:
         parsed = self.parse_records(records, source_name, store_id)
         existing = self._existing_keys(conn, store_id, source_name, scrape_date)
         parsed = [
-            r for r in parsed
-            if (r.get("source_url", "") or "", r.get("item_description_raw", ""), float(r.get("price") or 0))
+            r
+            for r in parsed
+            if (
+                r.get("source_url", "") or "",
+                r.get("item_description_raw", ""),
+                float(r.get("price") or 0),
+            )
             not in existing
         ]
         insert_query = """
@@ -263,7 +281,13 @@ class BronzeScraper:
                     raw_payload = EXCLUDED.raw_payload,
                     fetched_at = NOW();
                 """,
-                (execution_date, rate, source, is_stale, json.dumps(raw_payload) if raw_payload is not None else None),
+                (
+                    execution_date,
+                    rate,
+                    source,
+                    is_stale,
+                    json.dumps(raw_payload) if raw_payload is not None else None,
+                ),
             )
 
     def log_error(
@@ -319,7 +343,15 @@ class BronzeScraper:
                 raw_data = response.text
             except Exception as exc:
                 if attempt == max_retries - 1:
-                    self.log_error(batch_id, store_id, source_name, "", "ScrapeNetworkError", str(exc), conn)
+                    self.log_error(
+                        batch_id,
+                        store_id,
+                        source_name,
+                        "",
+                        "ScrapeNetworkError",
+                        str(exc),
+                        conn,
+                    )
                     conn.commit()
                     return
                 time.sleep(0.1)
@@ -335,7 +367,9 @@ class BronzeScraper:
                     if not isinstance(parsed_json, list):
                         parsed_json = [parsed_json]
                     for item in parsed_json:
-                        if isinstance(item, dict) and ("item_description" not in item or "price" not in item):
+                        if isinstance(item, dict) and (
+                            "item_description" not in item or "price" not in item
+                        ):
                             self.log_error(
                                 batch_id,
                                 store_id,
@@ -355,6 +389,14 @@ class BronzeScraper:
 
             except Exception as e:
                 conn.rollback()
-                self.log_error(batch_id, store_id, source_name, "", "ScrapeIngestionError", str(e), conn)
+                self.log_error(
+                    batch_id,
+                    store_id,
+                    source_name,
+                    "",
+                    "ScrapeIngestionError",
+                    str(e),
+                    conn,
+                )
                 conn.commit()
                 return

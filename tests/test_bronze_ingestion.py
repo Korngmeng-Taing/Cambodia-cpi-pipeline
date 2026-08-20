@@ -23,8 +23,20 @@ def test_ingest_source_bronze_product_path(mock_conn, mock_engine_cls):
     engine.write_canonical_batch.return_value = 2
 
     canned_records = [
-        {"source_slug": "delishop", "name": "Angkor Beer Can 330ml", "price": 0.85, "currency": "USD", "scrape_date": "2026-08-17"},
-        {"source_slug": "delishop", "name": "Avocado Hass Fresh 500g", "price": 2.90, "currency": "USD", "scrape_date": "2026-08-17"},
+        {
+            "source_slug": "delishop",
+            "name": "Angkor Beer Can 330ml",
+            "price": 0.85,
+            "currency": "USD",
+            "scrape_date": "2026-08-17",
+        },
+        {
+            "source_slug": "delishop",
+            "name": "Avocado Hass Fresh 500g",
+            "price": 2.90,
+            "currency": "USD",
+            "scrape_date": "2026-08-17",
+        },
     ]
 
     from scrapers.sources import DelishopScraper
@@ -84,7 +96,14 @@ def test_ingest_fx_path(mock_conn, mock_engine_cls):
 
     from scrapers.sources import MefExchangeRateScraper
 
-    canned_fx = [{"rate": 4050.0, "scrape_date": "2026-08-17", "source_slug": "mef_fx", "source_type": "fx"}]
+    canned_fx = [
+        {
+            "rate": 4050.0,
+            "scrape_date": "2026-08-17",
+            "source_slug": "mef_fx",
+            "source_type": "fx",
+        }
+    ]
     with patch.object(MefExchangeRateScraper, "fetch_records", return_value=canned_fx):
         result = ingest_source_bronze("mef_fx", "2026-08-17")
 

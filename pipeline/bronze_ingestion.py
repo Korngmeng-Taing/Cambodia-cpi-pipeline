@@ -104,7 +104,9 @@ def ingest_source_bronze(source_slug: str, scrape_date: str) -> dict[str, Any]:
         raise ValueError(f"Unknown scraper source: {source_slug}")
 
     date_str = str(scrape_date)
-    parsed_date = pendulum.parse(date_str).date() if isinstance(scrape_date, str) else scrape_date
+    parsed_date = (
+        pendulum.parse(date_str).date() if isinstance(scrape_date, str) else scrape_date
+    )
     raw_records = scraper_cls().fetch_records(scrape_date=parsed_date)
     if not raw_records:
         # Zero-Product Quality Gate (guide §1.5): raise before any DB write.

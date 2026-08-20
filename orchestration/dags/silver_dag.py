@@ -114,4 +114,11 @@ with DAG(
         execution_timeout=timedelta(minutes=15),
     )
 
-    t_item_matching >> t_coicop_ai >> t_hedonic >> t_dbt_seed >> t_dbt_silver_run >> t_dbt_silver_test
+    (
+        t_item_matching
+        >> t_coicop_ai
+        >> t_hedonic
+        >> t_dbt_seed
+        >> t_dbt_silver_run
+        >> t_dbt_silver_test
+    )

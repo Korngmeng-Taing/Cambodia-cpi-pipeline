@@ -15,8 +15,12 @@ from pipeline.config import COICOP_WEIGHTS, get_db_connection
 def test_coicop_weights_sum_to_100():
     """Verify that the official 12 COICOP division weights sum to exactly 100.000%."""
     total_weight = sum(item["weight"] for item in COICOP_WEIGHTS.values()) * 100.0
-    assert math.isclose(total_weight, 100.0, rel_tol=1e-5), f"Total weight {total_weight} != 100.0"
-    assert len(COICOP_WEIGHTS) == 12, f"Expected 12 divisions, found {len(COICOP_WEIGHTS)}"
+    assert math.isclose(
+        total_weight, 100.0, rel_tol=1e-5
+    ), f"Total weight {total_weight} != 100.0"
+    assert (
+        len(COICOP_WEIGHTS) == 12
+    ), f"Expected 12 divisions, found {len(COICOP_WEIGHTS)}"
 
 
 def test_jevons_math_properties():
@@ -45,18 +49,24 @@ def test_silver_fct_jevons_daily_structure():
     """Verify that silver.fct_jevons_daily table/view contains valid Jevons calculations."""
     conn = get_db_connection()
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT scrape_date, count(*), avg(p_khr_jevons), avg(jevons_index_base)
             FROM silver.fct_jevons_daily
             WHERE scrape_date = '2026-08-20'
             GROUP BY scrape_date;
-        """)
+        """
+        )
         row = cur.fetchone()
-        assert row is not None, "No rows found in silver.fct_jevons_daily for 2026-08-20"
+        assert (
+            row is not None
+        ), "No rows found in silver.fct_jevons_daily for 2026-08-20"
         n_items, avg_price, avg_base_idx = row[1], float(row[2]), float(row[3])
         assert n_items > 25000, f"Expected >25,000 items, got {n_items}"
         assert avg_price > 0, "Average Jevons price should be positive"
-        assert 50.0 <= avg_base_idx <= 200.0, f"Base index out of reasonable bounds: {avg_base_idx}"
+        assert (
+            50.0 <= avg_base_idx <= 200.0
+        ), f"Base index out of reasonable bounds: {avg_base_idx}"
     conn.close()
 
 
@@ -64,16 +74,20 @@ def test_silver_fct_laspeyres_daily_divisions():
     """Verify that silver.fct_laspeyres_daily computes indices for all 12 COICOP divisions."""
     conn = get_db_connection()
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT coicop_division, category_index_value, weight_pct
             FROM silver.fct_laspeyres_daily
             WHERE scrape_date = '2026-08-20'
             ORDER BY coicop_division;
-        """)
+        """
+        )
         rows = cur.fetchall()
         assert len(rows) == 12, f"Expected 12 COICOP divisions, got {len(rows)}"
         for div, idx_val, w_pct in rows:
-            assert float(idx_val) > 0, f"Division {div} has non-positive index value: {idx_val}"
+            assert (
+                float(idx_val) > 0
+            ), f"Division {div} has non-positive index value: {idx_val}"
             assert float(w_pct) > 0, f"Division {div} has zero weight"
     conn.close()
 
@@ -97,7 +111,11 @@ def test_gold_12_coicop_views_exist():
     conn = get_db_connection()
     with conn.cursor() as cur:
         for _div_code, view_name in divisions:
-            cur.execute(f"SELECT count(*) FROM {view_name} WHERE scrape_date = '2026-08-20';")
+            cur.execute(
+                f"SELECT count(*) FROM {view_name} WHERE scrape_date = '2026-08-20';"
+            )
             count = cur.fetchone()[0]
-            assert count > 0, f"Division view {view_name} returned 0 rows for 2026-08-20"
+            assert (
+                count > 0
+            ), f"Division view {view_name} returned 0 rows for 2026-08-20"
     conn.close()

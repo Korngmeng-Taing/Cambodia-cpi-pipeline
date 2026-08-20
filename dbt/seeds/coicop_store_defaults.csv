@@ -1,0 +1,28 @@
+store_slug,store_name,source_type,channel,default_currency,default_coicop_division,confidence,is_active
+aeon,AEON 1 Phnom Penh,grocery,supermarket,KHR,01,0.800,true
+aeon3,AEON 3 Mean Chey,fashion,department_store,KHR,03,0.800,true
+delishop,Delishop Cambodia,grocery,online_grocery,USD,01,0.800,true
+l192,L192 Marketplace,retail,e_commerce,USD,05,0.800,true
+communitypharma,Community Pharmacy,pharmacy,health,USD,06,0.800,true
+pharmacy,Pharmacy Retail,pharmacy,health,USD,06,0.800,true
+u-care,U-Care Pharmacy,pharmacy,health,USD,06,0.800,true
+ucare,U-Care Pharmacy,pharmacy,health,USD,06,0.800,true
+samnangshop,Khmer Samnang Phone Shop,electronics,retail_phone,USD,08,0.800,true
+arystore,Ary Store Phone,electronics,retail_phone,USD,08,0.800,true
+cellcard,Cellcard Mobile,telecom,telecom_operator,USD,08,0.800,true
+cellcard_wifi,Cellcard Home Wifi,telecom,isp,USD,08,0.800,true
+smart,Smart Axiata Mobile,telecom,telecom_operator,USD,08,0.800,true
+smart_wifi,Smart @Home Wifi,telecom,isp,USD,08,0.800,true
+khmer24,Khmer24 Real Estate,housing,classifieds,USD,04,0.800,true
+realestate,Realestate.com.kh,housing,real_estate_portal,USD,04,0.800,true
+redbus,redBus Cambodia,transport,bus_booking_portal,USD,07,0.800,true
+bookmebus,BookMeBus Cambodia,transport,bus_booking_portal,USD,07,0.800,true
+sokhahotel,Sokha Hotel & Resort,hotel,hospitality,USD,11,0.800,true
+hyyathotel,Hyatt Regency Phnom Penh,hotel,hospitality,USD,11,0.800,true
+bayonbkk,Bayon Restaurant BKK,restaurant,food_service,USD,11,0.800,true
+new_gasoline,MOC Petroleum Gasoline,fuel,gas_station,KHR,07,0.800,true
+tela,Tela Petroleum,fuel,gas_station,KHR,07,0.800,true
+ptt,PTT Station Cambodia,fuel,gas_station,KHR,07,0.800,true
+caltex,Caltex Cambodia,fuel,gas_station,KHR,07,0.800,true
+total,TotalEnergies Cambodia,fuel,gas_station,KHR,07,0.800,true
+mef_fx,Ministry of Economy & Finance FX,fx,official_authority,KHR,00,0.800,true

@@ -1,0 +1,104 @@
+name: cpi
+version: "1.0.0"
+config-version: 2
+
+profile: cpi
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+log-path: "logs"
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+  - "logs"
+
+require-dbt-version: [">=1.8.0", "<2.0.0"]
+
+vars:
+  base_period: "{{ env_var('BASE_PERIOD', '2026-08') }}"
+  ds: ""
+
+models:
+  cpi:
+    bronze:
+      +schema: bronze
+      +materialized: view
+    staging:
+      +schema: staging
+      +materialized: view
+    silver:
+      +schema: silver
+      +materialized: view
+      intermediate:
+        +schema: staging
+        +materialized: view
+
+seeds:
+  cpi:
+    +schema: silver
+    +quote_columns: false
+    category_weights:
+      +schema: gold
+      +column_types:
+        coicop_division: varchar(16)
+        division_name: text
+        weight_pct: numeric(6, 3)
+        source: text
+        effective_date: date
+    coicop_class_weights:
+      +schema: gold
+      +column_types:
+        coicop_class: varchar(16)
+        coicop_division: varchar(16)
+        class_name: text
+        weight_pct: numeric(6, 3)
+        source: text
+    coicop_store_defaults:
+      +schema: silver
+      +column_types:
+        store_slug: varchar(64)
+        store_name: text
+        source_type: varchar(32)
+        channel: varchar(32)
+        default_currency: varchar(8)
+        default_coicop_division: varchar(16)
+        confidence: numeric(5, 4)
+        is_active: boolean
+    coicop_text_rules:
+      +schema: silver
+      +column_types:
+        rule_id: varchar(32)
+        coicop_division: varchar(16)
+        pattern: text
+        negative_pattern: text
+        requires_context_pattern: text
+        priority: int
+        confidence: numeric(5, 4)
+        is_active: boolean
+        notes: text
+    cpi_basket_v1:
+      +schema: silver
+      +column_types:
+        coicop_class: varchar(16)
+        coicop_division: varchar(16)
+        class_name: text
+        sample_items: text
+        expected_source: text
+        weight_within_division_pct: numeric(6, 3)
+    coicop_override:
+      +schema: silver
+      +column_types:
+        match_type: varchar(32)
+        match_value: varchar(255)
+        store_slug: varchar(50)
+        coicop_division: varchar(10)
+        reason: varchar(255)
+    utility_tariffs:
+      +schema: silver
+
+tests:
+  cpi:
+    +store_failures: false

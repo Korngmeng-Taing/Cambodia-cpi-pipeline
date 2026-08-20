@@ -1,0 +1,13 @@
+cpi:
+  target: cpi_target
+  outputs:
+    cpi_target:
+      type: postgres
+      host: "{{ env_var('DB_HOST', 'postgres') }}"
+      port: 5432
+      user: "{{ env_var('DB_USER', 'cpi_user') }}"
+      password: "{{ env_var('DB_PASS', 'cpi_pass') }}"
+      dbname: "{{ env_var('DB_NAME', 'cpi_db') }}"
+      schema: "{{ env_var('DB_NAME', 'cpi_db') }}"
+      threads: 4
+      keepalives_idle: 0

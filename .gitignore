@@ -1,0 +1,56 @@
+# ── Environment / Secrets ──────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ── dbt ─────────────────────────────────────────────────────────────────────
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/.user.yml
+dbt/.dbt_packages/
+
+# ── Airflow ─────────────────────────────────────────────────────────────────
+orchestration/logs/
+orchestration/plugins/*.pyc
+airflow.cfg
+unittests.cfg
+
+# ── Metabase / MinIO / Postgres local state ─────────────────────────────────
+metabase/*.mv.db
+metabase/*.trace.db
+
+# ── Playwright / Scrapers ───────────────────────────────────────────────────
+data/parquet_snapshots/
+playwright-report/
+test-results/
+
+# ── IDE / Editor ────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Large transient artifacts ──────────────────────────────────────────────
+*.log
+*.tmp
+*.bak

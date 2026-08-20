@@ -1,0 +1,417 @@
+-- ============================================================================
+-- CAMBODIA CPI PIPELINE — POSTGRESQL 16 RELATIONAL SCHEMA DDL
+-- Schemas: staging (Bronze), silver (Clean observations & dims), gold (Index & stats)
+-- ============================================================================
+
+CREATE SCHEMA IF NOT EXISTS staging;
+CREATE SCHEMA IF NOT EXISTS silver;
+CREATE SCHEMA IF NOT EXISTS gold;
+
+-- ============================================================================
+-- 1. STAGING (Bronze Ingestion)
+-- ============================================================================
+
+-- Raw scrapes table: Append-only with UUID run_id per batch
+CREATE TABLE IF NOT EXISTS staging.raw_scrapes (
+    id BIGSERIAL PRIMARY KEY,
+    run_id UUID NOT NULL,
+    scrape_date DATE NOT NULL,
+    store_slug VARCHAR(64) NOT NULL,
+    source_type VARCHAR(32) NOT NULL,
+    record_count INT NOT NULL DEFAULT 0,
+    payload JSONB NOT NULL,
+    is_processed BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_raw_scrapes_day_store ON staging.raw_scrapes(scrape_date, store_slug);
+CREATE INDEX IF NOT EXISTS idx_raw_scrapes_date_store ON staging.raw_scrapes(scrape_date, store_slug);
+CREATE INDEX IF NOT EXISTS idx_raw_scrapes_run_id ON staging.raw_scrapes(run_id);
+CREATE INDEX IF NOT EXISTS idx_raw_scrapes_unprocessed ON staging.raw_scrapes(is_processed) WHERE is_processed = FALSE;
+
+-- Exchange rates table: MEF USD/KHR official daily rate + fallback audit
+CREATE TABLE IF NOT EXISTS staging.exchange_rates (
+    execution_date DATE PRIMARY KEY,
+    rate NUMERIC(10, 4) NOT NULL,
+    source VARCHAR(32) NOT NULL, -- 'official', 'approx', 'constant'
+    is_stale BOOLEAN NOT NULL DEFAULT FALSE,
+    raw_payload JSONB,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Bronze validation stats (parquet snapshots uploaded by Playwright scrapers)
+CREATE TABLE IF NOT EXISTS staging.bronze_ingestion_stats (
+    id BIGSERIAL PRIMARY KEY,
+    source_name VARCHAR(64) NOT NULL,
+    scrape_date DATE NOT NULL,
+    object_key TEXT,
+    row_count INT NOT NULL,
+    avg_row_count_7d NUMERIC(12, 2),
+    price_nulls INT NOT NULL DEFAULT 0,
+    price_negatives INT NOT NULL DEFAULT 0,
+    status VARCHAR(16) NOT NULL, -- 'PASSED', 'FAILED'
+    validation_message TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_bronze_stats_source_date UNIQUE (source_name, scrape_date)
+);
+CREATE INDEX IF NOT EXISTS idx_bronze_stats_status_date
+    ON staging.bronze_ingestion_stats(status, scrape_date);
+
+-- Raw-item -> canonical-item mapping written by the canonicalization engine
+-- (pipeline/canonicalizer.py). One row per raw item per scrape date.
+CREATE TABLE IF NOT EXISTS staging.stg_item_mapping (
+    id BIGSERIAL PRIMARY KEY,
+    source_name VARCHAR(64) NOT NULL,
+    scrape_date DATE NOT NULL,
+    raw_item_id VARCHAR(128) NOT NULL,
+    raw_product_name TEXT NOT NULL,
+    canonical_item_id UUID NOT NULL,
+    match_score NUMERIC(6, 4) NOT NULL,
+    is_new BOOLEAN NOT NULL DEFAULT FALSE,
+    hedonic_adjusted_price NUMERIC(14, 2),
+    -- COICOP classification outputs written by the rule-based dbt model and the
+    -- Gemini AI classifier (pipeline/gemini_coicop_classifier.py).
+    coicop_code VARCHAR(16),
+    classification_method VARCHAR(32), -- 'rule_keyword', 'rule_regex', 'gemini_ai'
+    confidence_score NUMERIC(5, 4),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_stg_item_mapping UNIQUE (source_name, raw_item_id, scrape_date)
+);
+CREATE INDEX IF NOT EXISTS idx_stg_mapping_coicop
+    ON staging.stg_item_mapping(coicop_code);
+CREATE INDEX IF NOT EXISTS idx_stg_mapping_canonical_date
+    ON staging.stg_item_mapping(canonical_item_id, scrape_date);
+
+-- ============================================================================
+-- 2. SILVER (Fact & Dimensions)
+-- ============================================================================
+
+-- Canonical product dimension created by the canonicalization engine
+-- (pipeline/canonicalizer.py). raw_item_id is the source-specific key that
+-- enables exact-match reuse; fuzzy name matches reuse canonical_item_id.
+CREATE TABLE IF NOT EXISTS silver.dim_canonical_products (
+    canonical_item_id UUID PRIMARY KEY,
+    canonical_name TEXT NOT NULL,
+    coicop_code VARCHAR(16),
+    source_name VARCHAR(64),
+    raw_item_id VARCHAR(128),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_dim_canonical_raw_item
+    ON silver.dim_canonical_products(source_name, raw_item_id);
+
+-- Store Product Link Mapping
+-- (removed: silver.store_products was a legacy table; link data now lives in dbt silver.item_match_log / dim_products)
+
+-- Manual Overrides Table
+CREATE TABLE IF NOT EXISTS silver.coicop_override (
+    id SERIAL PRIMARY KEY,
+    match_type VARCHAR(32) NOT NULL, -- 'product_key', 'barcode', 'sku', 'name'
+    match_value TEXT NOT NULL,
+    store_slug VARCHAR(64), -- NULL applies to all stores
+    coicop_division VARCHAR(16) NOT NULL,
+    reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_override_match ON silver.coicop_override(match_type, match_value);
+
+-- Store Native Category Mapping Table
+CREATE TABLE IF NOT EXISTS silver.coicop_category_map (
+    store_slug VARCHAR(64) NOT NULL,
+    category_native TEXT NOT NULL,
+    coicop_division VARCHAR(16) NOT NULL,
+    PRIMARY KEY (store_slug, category_native)
+);
+
+-- Review Queue for Unclassified / Low-Confidence Rows
+CREATE TABLE IF NOT EXISTS silver.classification_queue (
+    id BIGSERIAL PRIMARY KEY,
+    product_key VARCHAR(128) NOT NULL,
+    store_slug VARCHAR(64) NOT NULL,
+    name_clean TEXT NOT NULL,
+    category_native TEXT,
+    price_khr NUMERIC(14, 2),
+    reason TEXT NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'PENDING', -- 'PENDING', 'RESOLVED', 'IGNORED'
+    resolved_division VARCHAR(16),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    resolved_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_class_queue_pending ON silver.classification_queue(status) WHERE status = 'PENDING';
+
+-- Golden Ground Truth Dataset (Active Learning & Human Validation)
+CREATE TABLE IF NOT EXISTS silver.classification_ground_truth (
+    id BIGSERIAL PRIMARY KEY,
+    product_name TEXT NOT NULL,
+    coicop_code VARCHAR(16) NOT NULL,
+    coicop_division VARCHAR(16) NOT NULL,
+    verified_by VARCHAR(64) NOT NULL DEFAULT 'analyst',
+    confidence_score NUMERIC(5, 4) NOT NULL DEFAULT 1.000,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_ground_truth_product UNIQUE (product_name)
+);
+CREATE INDEX IF NOT EXISTS idx_ground_truth_division ON silver.classification_ground_truth(coicop_division);
+CREATE INDEX IF NOT EXISTS idx_ground_truth_code ON silver.classification_ground_truth(coicop_code);
+
+-- ============================================================================
+-- 3. GOLD (Aggregates, Base Prices, Indices, Anomalies, Forecasts)
+-- ============================================================================
+
+-- Official COICOP Division Weights
+CREATE TABLE IF NOT EXISTS gold.coicop_weights (
+    coicop_division VARCHAR(16) PRIMARY KEY,
+    division_name TEXT NOT NULL,
+    weight_pct NUMERIC(6, 3) NOT NULL, -- Exact weights summing to 100.000
+    source TEXT NOT NULL,
+    effective_date DATE NOT NULL DEFAULT '2026-08-01'
+);
+
+-- Base Period Prices (Base Period = '2026-08')
+CREATE TABLE IF NOT EXISTS gold.base_prices (
+    product_key VARCHAR(128) NOT NULL,
+    base_period VARCHAR(7) NOT NULL, -- 'YYYY-MM' e.g. '2026-08'
+    base_price_khr NUMERIC(14, 2) NOT NULL,
+    n_obs INT NOT NULL,
+    std_dev NUMERIC(14, 2),
+    coicop_division VARCHAR(16) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (product_key, base_period)
+);
+CREATE INDEX IF NOT EXISTS idx_base_prices_period ON gold.base_prices(base_period);
+
+-- Daily COICOP Category Indices (Division level relative to Base Period = 100.0)
+CREATE TABLE IF NOT EXISTS gold.cpi_category_daily (
+    scrape_date DATE NOT NULL,
+    coicop_division VARCHAR(16) NOT NULL REFERENCES gold.coicop_weights(coicop_division),
+    index_value NUMERIC(10, 4) NOT NULL,
+    base_period VARCHAR(7) NOT NULL,
+    n_items INT NOT NULL,
+    weight_pct NUMERIC(6, 3) NOT NULL,
+    PRIMARY KEY (scrape_date, coicop_division)
+);
+
+-- Daily Headline CPI Index (Laspeyres / GEKS-Törnqvist)
+CREATE TABLE IF NOT EXISTS gold.cpi_headline_daily (
+    scrape_date DATE NOT NULL,
+    base_period VARCHAR(7) NOT NULL,
+    index_value NUMERIC(10, 4) NOT NULL,
+    formula VARCHAR(32) NOT NULL DEFAULT 'Laspeyres',
+    divisions_present INT NOT NULL,
+    total_weight_present NUMERIC(6, 3) NOT NULL,
+    PRIMARY KEY (scrape_date, formula)
+);
+
+-- Daily Elementary Aggregations (Jevons Geometric Mean per item)
+CREATE TABLE IF NOT EXISTS gold.fct_daily_price_stats (
+    scrape_date DATE NOT NULL,
+    item_id VARCHAR(128) NOT NULL,
+    coicop_division VARCHAR(16),
+    p_khr_jevons NUMERIC(14, 2) NOT NULL,
+    p_khr_unit NUMERIC(14, 2),
+    n_quotes INT NOT NULL DEFAULT 1,
+    n_stores INT NOT NULL DEFAULT 1,
+    is_imputed BOOLEAN NOT NULL DEFAULT FALSE,
+    gap_days INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (scrape_date, item_id)
+);
+CREATE INDEX IF NOT EXISTS idx_fct_stats_date ON gold.fct_daily_price_stats(scrape_date);
+CREATE INDEX IF NOT EXISTS idx_fct_stats_coicop ON gold.fct_daily_price_stats(coicop_division);
+
+-- Daily Price Anomaly Detection (> 15% day-on-day shift)
+CREATE TABLE IF NOT EXISTS gold.price_anomalies (
+    id BIGSERIAL PRIMARY KEY,
+    scrape_date DATE NOT NULL,
+    item_id VARCHAR(128),
+    product_key VARCHAR(128) NOT NULL,
+    store_slug VARCHAR(64) NOT NULL,
+    price_khr NUMERIC(14, 2) NOT NULL,
+    expected_price_khr NUMERIC(14, 2) NOT NULL,
+    pct_change NUMERIC(6, 2) NOT NULL,
+    anomaly_type VARCHAR(16) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_anomalies_date ON gold.price_anomalies(scrape_date);
+CREATE INDEX IF NOT EXISTS idx_anomalies_item ON gold.price_anomalies(item_id);
+
+-- Multilateral GEKS-Törnqvist Price Index Storage
+CREATE TABLE IF NOT EXISTS gold.cpi_geks_multilateral (
+    id SERIAL PRIMARY KEY,
+    scrape_date DATE NOT NULL,
+    base_period VARCHAR(16) NOT NULL DEFAULT '2026-08',
+    window_size INT NOT NULL DEFAULT 13,
+    formula VARCHAR(32) NOT NULL DEFAULT 'GEKS-Törnqvist',
+    index_value NUMERIC(10, 4) NOT NULL,
+    matched_items_count INT NOT NULL DEFAULT 0,
+    calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_geks_date_window UNIQUE (scrape_date, base_period, window_size)
+);
+CREATE INDEX IF NOT EXISTS idx_gold_geks_date ON gold.cpi_geks_multilateral (scrape_date);
+
+-- Unified National Headline & Core CPI Mart (Reporting & Metabase Ready)
+CREATE TABLE IF NOT EXISTS gold.mart_cpi_daily (
+    scrape_date DATE PRIMARY KEY,
+    base_period VARCHAR(7) NOT NULL DEFAULT '2026-08',
+    cpi_headline_khr NUMERIC(10, 4) NOT NULL,
+    cpi_headline_usd NUMERIC(10, 4) NOT NULL,
+    cpi_geks_multilateral NUMERIC(10, 4),
+    cpi_core_khr NUMERIC(10, 4) NOT NULL,
+    inflation_dod_pct NUMERIC(6, 3),
+    inflation_mom_pct NUMERIC(6, 3),
+    divisions_present INT NOT NULL,
+    total_weight_covered NUMERIC(6, 3) NOT NULL,
+    active_quotes_count INT NOT NULL DEFAULT 0,
+    imputed_quote_pct NUMERIC(5, 2) NOT NULL DEFAULT 0.00,
+    calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mart_cpi_date ON gold.mart_cpi_daily(scrape_date DESC);
+
+-- Unified 12 COICOP Division Mart (One table for all 12 divisions with dropdown filter)
+CREATE TABLE IF NOT EXISTS gold.mart_cpi_division_daily (
+    scrape_date DATE NOT NULL,
+    coicop_division VARCHAR(16) NOT NULL REFERENCES gold.coicop_weights(coicop_division),
+    division_name TEXT NOT NULL,
+    weight_pct NUMERIC(6, 3) NOT NULL,
+    division_index_khr NUMERIC(10, 4) NOT NULL,
+    division_index_usd NUMERIC(10, 4) NOT NULL,
+    dod_change_pct NUMERIC(6, 3),
+    mom_change_pct NUMERIC(6, 3),
+    active_items_count INT NOT NULL DEFAULT 0,
+    stores_count INT NOT NULL DEFAULT 0,
+    promo_share_pct NUMERIC(5, 2) DEFAULT 0.00,
+    calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (scrape_date, coicop_division)
+);
+CREATE INDEX IF NOT EXISTS idx_mart_division_date ON gold.mart_cpi_division_daily(scrape_date DESC, coicop_division);
+
+-- Operational Price Anomalies Mart
+CREATE TABLE IF NOT EXISTS gold.mart_price_anomalies (
+    id BIGSERIAL PRIMARY KEY,
+    scrape_date DATE NOT NULL,
+    item_id VARCHAR(128),
+    product_key VARCHAR(128) NOT NULL,
+    store_slug VARCHAR(64) NOT NULL,
+    canonical_name TEXT,
+    coicop_division VARCHAR(16),
+    price_khr NUMERIC(14, 2) NOT NULL,
+    expected_price_khr NUMERIC(14, 2) NOT NULL,
+    pct_change NUMERIC(6, 2) NOT NULL,
+    anomaly_type VARCHAR(16) NOT NULL,
+    root_cause_flag VARCHAR(32) NOT NULL DEFAULT 'UNSPECIFIED',
+    is_reviewed BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mart_anomalies_unreviewed ON gold.mart_price_anomalies(is_reviewed, scrape_date DESC);
+
+-- Performance Indexes for Silver Fact Table
+CREATE INDEX IF NOT EXISTS idx_fct_daily_prices_date_item ON silver.fct_daily_prices(scrape_date, item_id);
+CREATE INDEX IF NOT EXISTS idx_fct_daily_prices_item_store_date ON silver.fct_daily_prices(item_id, store_slug, scrape_date);
+CREATE INDEX IF NOT EXISTS idx_silver_dim_items_id ON silver.dim_items(item_id);
+
+-- ============================================================================
+-- SEED DATA: OFFICIAL CAMBODIA NIS COICOP WEIGHTS & AEON CATEGORY MAP
+-- ============================================================================
+
+INSERT INTO gold.coicop_weights (coicop_division, division_name, weight_pct, source, effective_date)
+VALUES
+    ('01', 'Food and non-alcoholic beverages', 44.800, 'NIS Cambodia Official Basket', '2026-08-01'),
+    ('02', 'Alcoholic beverages, tobacco and narcotics', 1.500, 'NIS Cambodia Official Basket', '2026-08-01'),
+    ('03', 'Clothing and footwear', 2.900, 'NIS Cambodia Official Basket', '2026-08-01'),
+    ('04', 'Housing, water, electricity, gas and other fuels', 17.100, 'NIS Cambodia Official Basket', '2026-08-01'),
+    ('05', 'Furnishings, household equipment and routine household maintenance', 3.300, 'NIS Cambodia Official Basket', '2026-08-01'),
+    ('06', 'Health', 5.600, 'NIS Cambodia Official Basket', '2026-08-01'),
+    ('07', 'Transport', 12.200, 'NIS Cambodia Official Basket', '2026-08-01'),
+    ('08', 'Communication', 3.900, 'NIS Cambodia Official Basket', '2026-08-01'),
+    ('09', 'Recreation and culture', 1.900, 'NIS Cambodia Official Basket', '2026-08-01'),
+    ('10', 'Education', 1.500, 'NIS Cambodia Official Basket', '2026-08-01'),
+    ('11', 'Restaurants and hotels', 3.100, 'NIS Cambodia Official Basket', '2026-08-01'),
+    ('12', 'Miscellaneous goods and services', 2.200, 'NIS Cambodia Official Basket', '2026-08-01')
+ON CONFLICT (coicop_division) DO UPDATE 
+SET weight_pct = EXCLUDED.weight_pct,
+    division_name = EXCLUDED.division_name;
+
+-- Seed AEON Starter Category Map (30 Food categories)
+INSERT INTO silver.coicop_category_map (store_slug, category_native, coicop_division)
+VALUES
+    ('aeon', '125', '01'), ('aeon', '20', '01'), ('aeon', '29', '01'), ('aeon', '47', '01'),
+    ('aeon', '23', '01'), ('aeon', '28', '01'), ('aeon', '55', '01'), ('aeon', '27', '01'),
+    ('aeon', '32', '01'), ('aeon', '42', '01'), ('aeon', '50', '01'), ('aeon', '52', '01'),
+    ('aeon', '41', '01'), ('aeon', '40', '01'), ('aeon', '33', '01'), ('aeon', '14', '01'),
+    ('aeon', '6', '01'),  ('aeon', '107', '01'), ('aeon', '111', '01'), ('aeon', '185', '01'),
+    ('aeon', '187', '01'), ('aeon', '188', '01'), ('aeon', '190', '01'), ('aeon', '196', '01'),
+    ('aeon', '209', '01'), ('aeon', '218', '01'), ('aeon', '219', '01'), ('aeon', '404', '01'),
+    ('aeon', '503', '01'), ('aeon', '533', '01')
+ON CONFLICT (store_slug, category_native) DO UPDATE
+SET coicop_division = EXCLUDED.coicop_division;
+
+-- Helpful Indexes for high performance dbt execution
+CREATE INDEX IF NOT EXISTS idx_coicop_cat_map_lookup ON silver.coicop_category_map (store_slug, lower(category_native));
+CREATE INDEX IF NOT EXISTS idx_dim_coicop_ai_cache_lower_name ON silver.dim_coicop_ai_cache (lower(product_name));
+
+-- Seed AEON Stationery categories -> Recreation & Culture / Stationery (Division 09, UN COICOP 09.5.4)
+INSERT INTO silver.coicop_category_map (store_slug, category_native, coicop_division)
+VALUES
+    ('aeon', 'Stationery', '09'), ('aeon', 'School Supplies', '09'), ('aeon', 'Books', '09'),
+    ('aeon', 'Notebooks', '09'), ('aeon', 'Pens & Pencils', '09'), ('aeon', 'Art & Craft', '09')
+ON CONFLICT (store_slug, category_native) DO UPDATE
+SET coicop_division = EXCLUDED.coicop_division;
+
+-- Seed Khmer Samnang Phone Shop category mappings
+INSERT INTO silver.coicop_category_map (store_slug, category_native, coicop_division)
+VALUES
+    ('samnangshop', 'Smartphones', '08'),
+    ('samnangshop', 'Apple > iPhone > Smartphones', '08'),
+    ('samnangshop', 'Samsung > Galaxy S > Smartphones', '08'),
+    ('samnangshop', 'Xiaomi > Flagship > Smartphones', '08'),
+    ('samnangshop', 'Apple > iPad > Tablets', '08'),
+    ('samnangshop', 'Apple > Watch > Wearables', '12'),
+    ('samnangshop', 'Apple > Audio > Accessories', '09'),
+    ('samnangshop', 'Accessories', '08')
+ON CONFLICT (store_slug, category_native) DO UPDATE
+SET coicop_division = EXCLUDED.coicop_division;
+
+-- Seed redBus Cambodia category mappings -> Transport (Division 07)
+INSERT INTO silver.coicop_category_map (store_slug, category_native, coicop_division)
+VALUES
+    ('redbus', 'Intercity Bus > Passenger Transport by Road', '07'),
+    ('redbus', 'Intercity Bus', '07'),
+    ('redbus', 'Passenger Transport by Road', '07')
+ON CONFLICT (store_slug, category_native) DO UPDATE
+SET coicop_division = EXCLUDED.coicop_division;
+
+-- Seed BookMeBus Cambodia category mappings -> Transport (Division 07)
+INSERT INTO silver.coicop_category_map (store_slug, category_native, coicop_division)
+VALUES
+    ('bookmebus', 'Intercity Bus > Passenger Transport by Road', '07'),
+    ('bookmebus', 'Intercity Bus', '07'),
+    ('bookmebus', 'Passenger Transport by Road', '07')
+ON CONFLICT (store_slug, category_native) DO UPDATE
+SET coicop_division = EXCLUDED.coicop_division;
+
+-- Seed Delishop and Aeon Pet category mappings -> Recreation and culture (Division 09, COICOP 09.3.4)
+INSERT INTO silver.coicop_category_map (store_slug, category_native, coicop_division)
+VALUES
+    ('delishop', 'Pets > Cat & Dog Baby Milk', '09'),
+    ('delishop', 'Pets > Cat Food', '09'),
+    ('delishop', 'Pets > Cat Toys', '09'),
+    ('delishop', 'Pets > Dog Food', '09'),
+    ('delishop', 'Pets > Dog Toys', '09'),
+    ('delishop', 'Pets > Kitten', '09'),
+    ('delishop', 'Pets > Litter', '09'),
+    ('delishop', 'Pets > Medications', '09'),
+    ('delishop', 'Pets > Other Pets', '09'),
+    ('delishop', 'Pets > Pet toileteries', '09'),
+    ('delishop', 'Pets > Pets Accessories', '09'),
+    ('delishop', 'Pets > Puppy', '09'),
+    ('delishop', 'Pets > Travel Crate', '09'),
+    ('delishop', 'Pets > Treats', '09'),
+    ('delishop', 'Pets', '09'),
+    ('aeon', 'Pet Food', '09'),
+    ('aeon', 'Pet Care', '09'),
+    ('aeon', 'Pet Accessories', '09'),
+    ('aeon', 'Dog Food', '09'),
+    ('aeon', 'Cat Food', '09')
+ON CONFLICT (store_slug, category_native) DO UPDATE
+SET coicop_division = EXCLUDED.coicop_division;
+
+
+

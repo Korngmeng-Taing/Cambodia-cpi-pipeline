@@ -1,0 +1,7 @@
+(^|/)tests/
+(^|/)pipeline/
+(^|/)dbt/
+(^|/)apps/
+(^|/)scrapers/
+(^|/)__pycache__/
+(^|/)\.

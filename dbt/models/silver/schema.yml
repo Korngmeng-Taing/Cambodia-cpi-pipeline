@@ -1,0 +1,131 @@
+version: 2
+
+models:
+  - name: int_prices_cleaned
+    description: Intermediate price cleaning model (stored in staging schema). Cleans prices, converts USD to KHR, clamps promos, calculates unit prices.
+    columns:
+      - name: raw_price_id
+        description: FK to bronze.raw_prices
+        tests:
+          - not_null
+          - unique
+      - name: item_id
+        description: Matched canonical item ID from item_matcher
+      - name: price_khr
+        tests:
+          - not_null
+      - name: cpi_eligible
+
+  - name: int_coicop_classified
+    description: Intermediate COICOP classification ladder (stored in staging schema) resolving division per (item_id, store_slug).
+    columns:
+      - name: coicop_division
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - "01"
+                - "02"
+                - "03"
+                - "04"
+                - "05"
+                - "06"
+                - "07"
+                - "08"
+                - "09"
+                - "10"
+                - "11"
+                - "12"
+                - "UNCLASSIFIED"
+                - "REVIEW"
+      - name: coicop_method
+        tests:
+          - not_null
+
+  - name: dim_items
+    description: Curated canonical item master dimension — one row per unique product across all stores.
+    columns:
+      - name: item_id
+        tests:
+          - not_null
+          - unique
+      - name: canonical_name
+        tests:
+          - not_null
+
+  - name: dim_stores
+    description: Curated store & source dimension — one row per retailer/service provider in Cambodia.
+    columns:
+      - name: store_slug
+        tests:
+          - not_null
+          - unique
+      - name: store_name
+        tests:
+          - not_null
+
+  - name: fct_daily_prices
+    description: Curated primary Silver daily price fact table — one row per (scrape_date, store_slug, item_id).
+    columns:
+      - name: item_id
+        tests:
+          - not_null
+      - name: store_slug
+        tests:
+          - not_null
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: price_khr
+        tests:
+          - not_null
+
+  - name: fct_daily_prices_imputed
+    description: Curated daily fact view with <= 7-day forward price carry for temporarily missing items.
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: store_slug
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+
+  - name: classification_queue
+    description: Operational triage queue capturing unclassified items for Gemini AI batch processing or manual tagging.
+    columns:
+      - name: product_key
+        tests:
+          - not_null
+      - name: status
+        tests:
+          - accepted_values:
+              values: ["PENDING", "RESOLVED", "IGNORED"]
+
+  - name: fct_jevons_daily
+    description: Elementary Jevons unweighted geometric mean price aggregation and daily relatives at canonical item level.
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+      - name: p_khr_jevons
+        tests:
+          - not_null
+
+  - name: fct_laspeyres_daily
+    description: Higher-level Laspeyres category aggregation across 12 COICOP divisions in the Silver layer using official NIS weights.
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: coicop_division
+        tests:
+          - not_null
+      - name: category_index_value
+        tests:
+          - not_null

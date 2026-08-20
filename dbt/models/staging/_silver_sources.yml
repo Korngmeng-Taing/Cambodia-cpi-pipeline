@@ -1,0 +1,24 @@
+version: 2
+
+sources:
+  - name: silver
+    schema: silver
+    description: |
+      Silver layer tables. Canonical identity + classification lookup tables are
+      Python-managed (pipeline/item_matcher.py, pipeline/canonicalizer.py,
+      pipeline/migrations/006_coicop_classification.sql).
+    tables:
+      - name: canonical_items
+        description: Canonical product identity (ItemMatcher path).
+      - name: item_match_log
+        description: Full audit trail of raw-price -> canonical item matches.
+      - name: needs_review
+        description: Low-confidence matches awaiting human triage.
+      - name: dim_canonical_products
+        description: Canonical products created by the canonicalizer (dim_canonical_products).
+      - name: dim_coicop_ai_cache
+        description: Gemini AI classification result cache.
+      - name: coicop_category_map
+        description: Store native category -> COICOP division mapping.
+      - name: classification_queue
+        description: REVIEW/UNCLASSIFIED rows awaiting human triage.

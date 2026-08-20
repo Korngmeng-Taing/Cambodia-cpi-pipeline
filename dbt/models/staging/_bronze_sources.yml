@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: bronze
+    schema: bronze
+    description: |
+      Bronze raw price rows written by pipeline/bronze_ingestion.py
+      (write_canonical_batch) and consumed by pipeline/item_matcher.py.
+    tables:
+      - name: raw_prices
+        description: One row per raw observation (price, currency, raw_payload JSONB).
+      - name: scrape_errors
+        description: Recorded per-record scrape failures.

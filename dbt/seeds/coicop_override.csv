@@ -1,0 +1,261 @@
+match_type,match_value,store_slug,coicop_division,reason
+name,COOKING WINE 750ML,,01,Food - cooking wine trap
+name,SOMERSBY CIDER 4X330ML,,02,Alcohol - cider trap
+name,WOLF BLASS SHIRAZ 750ML,,02,Alcohol - wine trap
+name,TVHC SLIPPER UNISEX,,03,Clothing - slipper trap
+name,LIX FLOOR CLEANER 3.8L,,05,Household - cleaner trap
+name,TV COFFEE FILTER 40,,05,Household - coffee filter trap
+name,GREEN ONION SLICER,,05,Household - kitchen tool trap
+name,LITTLE TREES BLACK ICE,,05,Household - air freshener
+name,LITTLE TREES WASH&WAX,,05,Household - cleaner
+name,MY-RING NOTES A5,,09,Recreation - notebook
+name,WAKAME MIXED RICE WITH SALMON,,01,Food - rice bento
+name,SPICY BEEF HOT POT 270G,,01,Food - hot pot trap
+name,SUNPLAY SKIN AQUA SPF50,,12,Miscellaneous - cosmetics
+name,LIPICE,,12,Miscellaneous - cosmetics
+name,PENCIL HB 2B,,09,Recreation - stationery pencil
+name,BIC BALL PEN,,09,Recreation - stationery pen
+name,CRAYOLA CRAYON 24 COLORS,,09,Recreation - stationery crayons
+name,PENCIL CASE,,09,Recreation - pencil case
+name,EXERCISE BOOK A4,,09,Recreation - exercise book
+name,SCHOOL BACKPACK,,12,Miscellaneous - school bag
+name,ANGKOR BEER CAN,,02,Alcohol - beer
+name,ANGKOR BEER,,02,Alcohol - beer
+name,CAMBODIA BEER,,02,Alcohol - beer
+name,GABRIEL BEER,,02,Alcohol - beer
+name,TRIBECA BEER,,02,Alcohol - beer
+name,KING DOMMER,,02,Alcohol - beer
+name,THAI CHILI SAUCE,,01,Food - condiment
+name,SRIRACHA SAUCE,,01,Food - condiment
+name,FISH SAUCE 750ML,,01,Food - condiment
+name,OYSTER SAUCE 250ML,,01,Food - condiment
+name,SOY SAUCE 500ML,,01,Food - condiment
+name,CURRY PASTE RED,,01,Food - condiment
+name,INSTANT NOODLE CUP,,01,Food - instant noodles
+name,INSTANT COFFEE 3IN1,,01,Food - instant coffee
+name,COCONUT MILK 400ML,,01,Food - cooking ingredient
+name,COCONUT CREAM 400ML,,01,Food - cooking ingredient
+name,RICE NOODLE DRIED,,01,Food - noodle
+name,GLASS NOODLE 250G,,01,Food - noodle
+name,TOFU FIRM 300G,,01,Food - soy product
+name,TEMPEH 200G,,01,Food - fermented soy
+name,BABY FORMULA 900G,,01,Food - infant formula
+name,CONDENSED MILK 380G,,01,Food - dairy
+name,EVAPORATED MILK 250ML,,01,Food - dairy
+name,POWDERED MILK 400G,,01,Food - dairy
+name,YOGURT PLAIN 500G,,01,Food - dairy
+name,CHEESE CHEDDAR 200G,,01,Food - dairy
+name,PEANUT BUTTER 450G,,01,Food - spread
+name,CHOCOLATE SYRUP 500ML,,01,Food - syrup
+name,MAPLE SYRUP 250ML,,01,Food - syrup
+name,HONEY RAW 500G,,01,Food - sweetener
+name,VINEGAR WHITE 500ML,,01,Food - condiment
+name,SEASONING POWDER 200G,,01,Food - seasoning
+name,SPICE MIX CURRY,,01,Food - spice
+name,DRIED SHRIMP 100G,,01,Food - dried seafood
+name,DRIED FISH 200G,,01,Food - dried fish
+name,KIMCHI JAR 500G,,01,Food - fermented
+name,PICKLED VEGETABLE 350G,,01,Food - pickled
+name,CANNED TUNA 185G,,01,Food - canned
+name,CANNED SARDINE 155G,,01,Food - canned
+name,CANNED BEAN 400G,,01,Food - canned
+name,CANNED CORN 340G,,01,Food - canned
+name,SAUSAGE CHICKEN 300G,,01,Food - processed meat
+name,BACON SMOKED 200G,,01,Food - processed meat
+name,HAM SLICED 200G,,01,Food - processed meat
+name,JERKY BEEF 100G,,01,Food - dried meat
+name,FROZEN DUMPLING 500G,,01,Food - frozen
+name,FROZEN SPRING ROLL 400G,,01,Food - frozen
+name,FROZEN CHICKEN NUGGET 500G,,01,Food - frozen
+name,ICE CREAM VANILLA 1L,,01,Food - frozen dessert
+name,POPCORN SWEET 100G,,01,Food - snack
+name,CHIPS POTATO 100G,,01,Food - snack
+name,BISCUIT BUTTER 200G,,01,Food - snack
+name,COOKIE CHOCOLATE CHIP 200G,,01,Food - snack
+name,CANDY ASSORTED 200G,,01,Food - confectionery
+name,CHOCOLATE BAR 100G,,01,Food - confectionery
+name,CHOCOLATE MILK 1L,,01,Food - dairy beverage
+name,ENERGY BAR 40G,,01,Food - snack bar
+name,PROTEIN POWDER 1KG,,06,Health - supplement
+name,WHEY PROTEIN 2KG,,06,Health - supplement
+name,MULTIVITAMIN 60S,,06,Health - supplement
+name,VITAMIN C 1000MG,,06,Health - supplement
+name,FISH OIL 120S,,06,Health - supplement
+name,COLLAGEN 60S,,06,Health - supplement
+name,PROBIOTIC 30S,,06,Health - supplement
+name,BABY FOOD 120G,,01,Food - infant food
+name,INSTANT RICE 250G,,01,Food - instant rice
+name,READY MEAL CURRY 400G,,01,Food - ready meal
+name,COOKING OIL 1L,,01,Food - cooking oil
+name,VEGETABLE OIL 1L,,01,Food - cooking oil
+name,OLIVE OIL 500ML,,01,Food - cooking oil
+name,SESAME OIL 250ML,,01,Food - cooking oil
+name,BABY DIAPER M,,12,Miscellaneous - baby care
+name,BABY WIPES 80S,,12,Miscellaneous - baby care
+name,BABY POWDER 200G,,12,Miscellaneous - baby care
+name,COTTON BUD 200S,,12,Miscellaneous - personal care
+name,DEODORANT SPRAY 150ML,,12,Miscellaneous - personal care
+name,SHAMPOO 400ML,,12,Miscellaneous - personal care
+name,CONDITIONER 400ML,,12,Miscellaneous - personal care
+name,BODY WASH 500ML,,12,Miscellaneous - personal care
+name,TOOTHPASTE 100G,,12,Miscellaneous - personal care
+name,TOOTHBRUSH 3S,,12,Miscellaneous - personal care
+name,MOISTURIZER 100ML,,12,Miscellaneous - personal care
+name,SUNSCREEN SPF50 100ML,,12,Miscellaneous - personal care
+name,PERFUME 50ML,,12,Miscellaneous - personal care
+name,FACE WASH 150ML,,12,Miscellaneous - personal care
+name,HAND SOAP 500ML,,12,Miscellaneous - personal care
+name,NECKLACE GOLD,,12,Miscellaneous - jewelry
+name,EARRING SILVER,,12,Miscellaneous - jewelry
+name,RING DIAMOND,,12,Miscellaneous - jewelry
+name,BRACELET GOLD,,12,Miscellaneous - jewelry
+name,WATCH ROLEX,,12,Miscellaneous - watch
+name,HANDBAG LEATHER,,12,Miscellaneous - accessory
+name,SUITCASE 28INCH,,12,Miscellaneous - luggage
+name,WALLET LEATHER,,12,Miscellaneous - accessory
+name,SUNGLASSES UV400,,12,Miscellaneous - accessory
+name,TOOL KIT 100S,,05,Household - tools
+name,DRILL CORDLESS 20V,,05,Household - tools
+name,PAPER TOWEL 6ROLLS,,05,Household - paper
+name,TOILET PAPER 12ROLLS,,05,Household - paper
+name,TRASH BAG 50S,,05,Household - cleaning
+name,TRASH BIN 30L,,05,Household - furniture
+name,STORAGE BOX 3PACK,,05,Household - organizer
+name,WARDROBE 2DOOR,,05,Household - furniture
+name,OFFICE CHAIR ERGONOMIC,,05,Household - furniture
+name,AIR CONDITIONER SPLIT 1HP,,05,Household - appliance
+name,REFRIGERATOR 2DOOR,,05,Household - appliance
+name,WASHING MACHINE 8KG,,05,Household - appliance
+name,WATER HEATER 50L,,05,Household - appliance
+name,GAS STOVE 3BURNER,,05,Household - appliance
+name,RICE COOKER 1.8L,,05,Household - small appliance
+name,AIR FRYER 5L,,05,Household - small appliance
+name,HOSPITAL VISIT,,06,Health - medical
+name,CLINIC CONSULTATION,,06,Health - medical
+name,DENTAL CLEANING,,06,Health - dental
+name,EYE TEST,,06,Health - optical
+name,HAIRCUT MEN,,12,Miscellaneous - personal service
+name,SPA FULL DAY,,12,Miscellaneous - wellness
+name,MASSAGE 60MIN,,12,Miscellaneous - wellness
+name,GYM MEMBERSHIP 1MONTH,,09,Recreation - fitness
+name,CINEMA TICKET,,09,Recreation - entertainment
+name,TOUR GUIDE 1DAY,,09,Recreation - tourism
+name,VISA FEE,,12,Miscellaneous - travel
+name,TRAVEL INSURANCE,,12,Miscellaneous - insurance
+name,LAUNDRY SERVICE 5KG,,03,Clothing - personal service
+name,REPAIR PHONE,,08,Communication - repair
+name,GASOLINE REGULAR 1L,,07,Transport - fuel
+name,DIESEL 1L,,07,Transport - fuel
+name,ENGINE OIL 4L,,07,Transport - lubricant
+name,BRAKE PADS FRONT,,07,Transport - car part
+name,TIRE 205 55R16,,07,Transport - tire
+name,CAR WASH SHAMPOO,,05,Household - cleaner
+name,CAR WAX POLISH,,05,Household - cleaner
+name,WHEEL ALIGNMENT,,07,Transport - car service
+name,DASHCAM 4K,,09,Recreation - camera
+name,POWER BANK 20000MAH,arystore,08,Communication - accessory
+name,CHARGER FAST 65W,arystore,08,Communication - accessory
+name,LAPTOP ASUS 15,,09,Recreation - computer
+name,KEYBOARD MECHANICAL,,09,Recreation - accessory
+name,PRINTER HP,,09,Recreation - accessory
+name,WIFI ROUTER TPLINK,,08,Communication - network
+name,DATA PLAN 30GB,smart,08,Communication - telecom
+name,AIRTIME TOP UP 5USD,smart,08,Communication - telecom
+name,SIM CARD SMART,smart,08,Communication - telecom
+name,SAMSUNG GALAXY A15 128GB,arystore,08,Communication - phone
+name,SMARTWATCH APPLE,arystore,08,Communication - wearable
+name,SMARTWATCH SAMSUNG,arystore,08,Communication - wearable
+name,EARBUDS WIRELESS,,09,Recreation - audio
+name,BLUETOOTH SPEAKER JBL,,09,Recreation - audio
+name,GOLD BANGLE 24K,,12,Miscellaneous - jewelry
+name,GOLD RING 24K,,12,Miscellaneous - jewelry
+name,GOLD CHAIN 24K,,12,Miscellaneous - jewelry
+name,DOG FOOD 3KG,,09,Recreation - pet
+name,CAT FOOD 3KG,,09,Recreation - pet
+name,FAN CEILING 42INCH,,05,Household - appliance
+name,FAN STANDING,,05,Household - appliance
+name,DEHUMIDIFIER 20L,,05,Household - appliance
+name,AIR PURIFIER HEPA,,05,Household - appliance
+name,ROBOT VACUUM,,05,Household - appliance
+name,COFFEE MAKER DRIP,,05,Household - small appliance
+name,WEIGHING SCALE DIGITAL,,06,Health - medical device
+name,BLOOD PRESSURE MONITOR,,06,Health - medical device
+name,THERMOMETER DIGITAL,,06,Health - medical device
+name,PROTEIN BAR 60G,,06,Health - supplement
+name,FIRST AID KIT,,06,Health - pharmaceutical
+name,HAND SANITIZER 500ML,,06,Health - pharmaceutical
+name,BANDAGE ELASTIC,,06,Health - pharmaceutical
+name,PLASTER ASSORTED 20S,,06,Health - pharmaceutical
+name,EYE DROPS 15ML,,06,Health - pharmaceutical
+name,MULTIMETER DIGITAL,,07,Transport - car tool
+name,OBD2 SCANNER,,07,Transport - car tool
+name,LED LIGHT BAR 20INCH,,07,Transport - car accessory
+name,HEADLIGHT BULB LED 2S,,07,Transport - car accessory
+name,FIRE EXTINGUISHER CAR,,07,Transport - car safety
+name,BACKUP CAMERA WIRELESS,,08,Communication - electronics
+name,HEAD UNIT ANDROID,,08,Communication - electronics
+name,SUBWOOFER CAR,,08,Communication - electronics
+name,USB DRIVE 32GB,,09,Recreation - storage
+name,SD CARD 128GB,,09,Recreation - storage
+name,DRONE DJI MINI,,09,Recreation - camera
+name,GOPRO HERO 12,,09,Recreation - camera
+name,GAMING CHAIR,,09,Recreation - gaming
+name,VR HEADSET META,,09,Recreation - gaming
+name,BOARD GAME MONOPOLY,,09,Recreation - game
+name,WALL CLOCK DIGITAL,,09,Recreation - decor
+name,CANDLE AROMATHERAPY,,09,Recreation - decor
+name,VASE CERAMIC,,09,Recreation - decor
+name,BUILDING BLOCKS LEGO,,09,Recreation - toy
+name,TRAMPOLINE 12FT,,09,Recreation - outdoor
+name,KITE DIAMOND,,09,Recreation - outdoor
+name,SHOES LEATHER MEN,,03,Clothing - shoes
+name,SNEAKERS SPORT,,03,Clothing - shoes
+name,SANDALS MEN,,03,Clothing - shoes
+name,FLIP FLOPS,,03,Clothing - shoes
+name,FORMAL SHIRT MEN,,03,Clothing - top
+name,JEANS MEN,,03,Clothing - bottom
+name,DRESS WOMEN,,03,Clothing - dress
+name,COAT WINTER,,03,Clothing - outerwear
+name,JACKET LEATHER,,03,Clothing - outerwear
+name,HOODIE UNISEX,,03,Clothing - top
+name,SOCKS COTTON 3S,,03,Clothing - socks
+name,UNDERWEAR MEN 3S,,03,Clothing - underwear
+name,TIE SILK,,03,Clothing - accessory
+name,BELT LEATHER,,03,Clothing - accessory
+name,UNIFORM WORK,,03,Clothing - uniform
+name,LAWNMOWER ELECTRIC,,05,Household - garden
+name,GARDEN HOSE 30M,,05,Household - garden
+name,PRESSURE WASHER,,05,Household - garden
+name,WEIGHTED BLANKET,,05,Household - bedding
+name,DOOR MAT RUBBER,,05,Household - home
+name,SHOE RACK 3TIER,,05,Household - organizer
+name,CERTIFICATION EXAM,,10,Education - exam
+name,MEMBERSHIP GYM 1YEAR,,09,Recreation - membership
+name,MOVING SERVICE 1TRIP,,12,Miscellaneous - service
+name,CLEANING SERVICE 1HOUR,,12,Miscellaneous - service
+name,SECURITY GUARD 1MONTH,,12,Miscellaneous - service
+name,BANK FEE 1MONTH,,12,Miscellaneous - financial
+name,INSURANCE PREMIUM 1MONTH,,12,Miscellaneous - financial
+name,ACCOUNTING SERVICE 1MONTH,,12,Miscellaneous - financial
+name,LEGAL CONSULTATION 1HOUR,,12,Miscellaneous - legal
+name,NAIL SCISSOR,,12,Miscellaneous - grooming tool
+name,NAIL SCISSORS,,12,Miscellaneous - grooming tool
+name,CUTICLE SCISSOR,,12,Miscellaneous - grooming tool
+name,MANICURE SET,,12,Miscellaneous - grooming tool
+name,TV SALTED MIXED NUTS,,01,Food - TopValu mixed nuts
+name,SALTED MIXED NUTS,,01,Food - mixed nuts
+name,MIXED NUTS,,01,Food - mixed nuts
+name,FOEYCAI NAIL FILE BUFFER,,12,Miscellaneous - grooming tool
+name,NAIL FILE BUFFER,,12,Miscellaneous - grooming tool
+name,NAIL FILE,,12,Miscellaneous - grooming tool
+name,NAIL BUFFER,,12,Miscellaneous - grooming tool
+name,RITEX GEL+ ADDITIONAL CARE AND MOISTURE,,12,Miscellaneous - personal care
+name,RITEX,,12,Miscellaneous - personal care
+name,DUREX,,12,Miscellaneous - personal care
+name,CHROY CHANGVAR,khmer24,04,Housing - residential location
+name,BOREY PENG HUOTH,khmer24,04,Housing - residential property
+name,GREEK DRESSING,,01,Food - salad dressing
+name,SALAD DRESSING,,01,Food - condiment
+name,SURGICAL GLOVES,communitypharma,06,Health - medical consumables
+name,BABY PANTS,,12,Miscellaneous - baby care
+name,HOT WHEELS TRACK,,09,Recreation - toy

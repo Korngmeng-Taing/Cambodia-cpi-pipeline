@@ -1,0 +1,91 @@
+-- fct_daily_prices
+-- Final silver daily fact — one row per (scrape_date, store_slug, item_id)
+-- with COICOP classification + KHR prices + quality flags.
+{{ config(
+    materialized='incremental',
+    unique_key=['scrape_date', 'store_slug', 'item_id'],
+    on_schema_change='append_new_columns'
+) }}
+
+with grouped as (
+    select
+        p.scrape_date,
+        p.store_slug,
+        p.item_id::text as item_id,
+        p.item_id::text as product_key,
+        min(p.name_clean) as name_clean,
+        min(p.category_native) as category_native,
+        coalesce(c.coicop_division, 'UNCLASSIFIED') as coicop_division,
+        coalesce(c.coicop_method, 'unclassified') as coicop_method,
+        coalesce(c.coicop_confidence, 0.000) as coicop_confidence,
+        min(p.currency) as currency,
+        min(p.price_original_curr) as price_original_curr,
+        min(p.original_price_curr) as original_price_curr,
+        min(p.original_price_khr) as original_price_khr,
+        min(p.discount_pct) as discount_pct,
+        bool_or(p.on_promo) as on_promo,
+        round(exp(avg(ln(p.price_khr)) filter (where p.price_khr > 0)), 2) as price_khr,
+        min(p.size_value) as size_value,
+        min(p.size_unit) as size_unit,
+        max(p.pack_qty) as pack_qty,
+        bool_or(p.is_outlier) as is_outlier,
+        bool_and(p.cpi_eligible) as cpi_eligible,
+        bool_or(p.is_fallback) as is_fallback,
+        max(p.scraped_at) as scraped_at
+    from {{ ref('int_prices_cleaned') }} p
+    left join {{ ref('int_coicop_classified') }} c
+        on c.item_id = p.item_id::text
+       and c.store_slug = p.store_slug
+    where p.item_id is not null
+      and p.price_khr > 0
+    {% if is_incremental() %}
+        {% if var('ds', '') != '' %}
+            and p.scrape_date = '{{ var("ds") }}'::date
+        {% else %}
+            and p.scrape_date >= (select coalesce(max(scrape_date) - interval '2 days', '2020-01-01'::date) from {{ this }})
+        {% endif %}
+    {% endif %}
+    group by
+        p.scrape_date,
+        p.store_slug,
+        p.item_id,
+        c.coicop_division,
+        c.coicop_method,
+        c.coicop_confidence
+)
+select
+    scrape_date,
+    store_slug,
+    item_id,
+    product_key,
+    name_clean,
+    category_native,
+    coicop_division,
+    coicop_method,
+    coicop_confidence,
+    currency,
+    price_original_curr,
+    original_price_curr,
+    original_price_khr,
+    discount_pct,
+    on_promo,
+    price_khr,
+    case
+        when lower(size_unit) in ('kg', 'kilo', 'kilos', 'kilogram', 'kilograms') and size_value > 0
+            then round(price_khr / size_value, 2)
+        when lower(size_unit) in ('g', 'gm', 'gram', 'grams') and size_value > 0
+            then round(price_khr / (size_value / 1000.0), 2)
+        when lower(size_unit) in ('l', 'ltr', 'litre', 'liter', 'litres', 'liters') and size_value > 0
+            then round(price_khr / size_value, 2)
+        when lower(size_unit) in ('ml', 'millilitre', 'milliliter', 'millilitres', 'milliliters') and size_value > 0
+            then round(price_khr / (size_value / 1000.0), 2)
+        else null
+    end as unit_price_khr,
+    size_value,
+    size_unit,
+    pack_qty,
+    is_outlier,
+    cpi_eligible,
+    is_fallback,
+    scraped_at
+from grouped

@@ -1,0 +1,11 @@
+source_name,service_type,rate_khr,unit,is_representative,effective_from
+edc,electricity,380,kWh,FALSE,2020-01-01
+edc,electricity,480,kWh,FALSE,2020-01-01
+edc,electricity,610,kWh,TRUE,2020-01-01
+edc,electricity,730,kWh,FALSE,2020-01-01
+ppwsa,water,400,m3,FALSE,2020-01-01
+ppwsa,water,720,m3,FALSE,2020-01-01
+ppwsa,water,960,m3,TRUE,2020-01-01
+ppwsa,water,1250,m3,FALSE,2020-01-01
+ppwsa,water,1900,m3,FALSE,2020-01-01
+ppwsa,water,2200,m3,FALSE,2020-01-01

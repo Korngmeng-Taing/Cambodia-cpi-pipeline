@@ -1,0 +1,18 @@
+version: 2
+
+sources:
+  - name: staging
+    schema: staging
+    description: |
+      Bronze ingestion layer (PostgreSQL). Populated by pipeline/bronze_ingestion.py:
+      raw JSONB payload batches, the MEF USD/KHR exchange rate and the canonicalization
+      engine mapping (pipeline/canonicalizer.py).
+    tables:
+      - name: raw_scrapes
+        description: Append-only per-source batches (payload JSONB array of canonical records).
+      - name: exchange_rates
+        description: MEF USD/KHR official daily rate (+ fallback audit).
+      - name: bronze_ingestion_stats
+        description: Per-source parquet snapshot validation stats.
+      - name: stg_item_mapping
+        description: Raw-item -> canonical-item mapping written by the canonicalizer.

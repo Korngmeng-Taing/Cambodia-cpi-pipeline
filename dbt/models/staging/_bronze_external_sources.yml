@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: bronze_external
+    schema: bronze
+    description: |
+      Bronze parquet snapshots. The pipeline archives every scrape to
+      s3://cpi-bronze/parquet/month=.../{store}.parquet (MinIO-only, no local FS).
+      Postgres `bronze.raw_prices` is the relational mirror of those snapshots,
+      so this source maps to the same tables for the dbt staging layer.
+    tables:
+      - name: raw_prices
+        description: Relational mirror of the MinIO parquet snapshots.
+      - name: scrape_errors
+        description: Recorded per-record scrape failures.

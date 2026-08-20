@@ -1,0 +1,147 @@
+version: 2
+
+models:
+  - name: div01_food
+    description: "Gold layer analytical dataset for COICOP Division 01: Food and non-alcoholic beverages"
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+      - name: current_price_khr
+        tests:
+          - not_null
+  - name: div02_alcohol_tobacco
+    description: "Gold layer analytical dataset for COICOP Division 02: Alcoholic beverages, tobacco and narcotics"
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+      - name: current_price_khr
+        tests:
+          - not_null
+  - name: div03_clothing_footwear
+    description: "Gold layer analytical dataset for COICOP Division 03: Clothing and footwear"
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+      - name: current_price_khr
+        tests:
+          - not_null
+  - name: div04_housing_utilities
+    description: "Gold layer analytical dataset for COICOP Division 04: Housing, water, electricity, gas and other fuels"
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+      - name: current_price_khr
+        tests:
+          - not_null
+  - name: div05_furnishings
+    description: "Gold layer analytical dataset for COICOP Division 05: Furnishings, household equipment and routine household maintenance"
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+      - name: current_price_khr
+        tests:
+          - not_null
+  - name: div06_health
+    description: "Gold layer analytical dataset for COICOP Division 06: Health"
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+      - name: current_price_khr
+        tests:
+          - not_null
+  - name: div07_transport
+    description: "Gold layer analytical dataset for COICOP Division 07: Transport"
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+      - name: current_price_khr
+        tests:
+          - not_null
+  - name: div08_communication
+    description: "Gold layer analytical dataset for COICOP Division 08: Communication"
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+      - name: current_price_khr
+        tests:
+          - not_null
+  - name: div09_recreation
+    description: "Gold layer analytical dataset for COICOP Division 09: Recreation and culture"
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+      - name: current_price_khr
+        tests:
+          - not_null
+  - name: div10_education
+    description: "Gold layer analytical dataset for COICOP Division 10: Education"
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+      - name: current_price_khr
+        tests:
+          - not_null
+  - name: div11_restaurants_hotels
+    description: "Gold layer analytical dataset for COICOP Division 11: Restaurants and hotels"
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+      - name: current_price_khr
+        tests:
+          - not_null
+  - name: div12_misc
+    description: "Gold layer analytical dataset for COICOP Division 12: Miscellaneous goods and services"
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+      - name: current_price_khr
+        tests:
+          - not_null

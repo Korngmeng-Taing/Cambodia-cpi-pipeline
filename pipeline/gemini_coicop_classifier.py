@@ -7,16 +7,28 @@ Classifies the products that the rule-based dbt rules and the local ML model
 left at the '99.9.9' placeholder. Runs as an Airflow PythonOperator.
 
 Pipeline:
-    1. Read still-unclassified product names from silver.dim_canonical_products.
+    1. Read still-unclassified product names from silver.classification_queue
+       (the triage queue populated by int_coicop_classified.sql whenever a row
+       falls through every rule tier), with an AI-first fallback that joins
+       staging.int_prices_cleaned against silver.canonical_items to surface any
+       cached-miss product name from the current scrape.
     2. Consult silver.dim_coicop_ai_cache first — a cached product name never
        triggers an API call (memoization saves API cost on re-scrapes).
     3. Batch the uncached names in chunks of ``BATCH_SIZE`` (50) and send each
        batch to Google Gemini in JSON mode (``response_mime_type='application/json'``)
        so the model is forced to return a machine-parseable JSON array.
-    4. Persist the fresh results into the cache and write ``coicop_code``,
-       ``classification_method = 'gemini_ai'`` and ``confidence_score`` back into
-       staging.stg_item_mapping (and keep silver.dim_canonical_products in sync,
-       which is what the dbt fact models join on).
+    4. Persist the fresh results into silver.dim_coicop_ai_cache (the single
+       source of truth read by dbt/models/silver/intermediate/int_coicop_classified.sql
+       tier 3) and mark the originating silver.classification_queue rows as
+       RESOLVED.
+
+NOTE — single source of truth:
+    silver.dim_coicop_ai_cache is the ONLY Gemini write target. Earlier versions
+    of this module also wrote back to silver.dim_canonical_products, but that
+    table is not joined by any dbt model that propagates COICOP into the
+    Silver/Gold facts, so those writes were silently lost. The dbt ladder
+    (int_coicop_classified.sql) is the only authoritative classifier — Gemini
+    only populates the cache, which the ladder consults as tier 3.
 
 The system prompt is intentionally detailed: it pins the model to the UN COICOP
 2018 taxonomy, the 5-digit dotted notation, the '99.9.9' fallback, and a strict
@@ -32,6 +44,7 @@ import json
 import logging
 import os
 import re
+import time
 from typing import Any
 
 from sqlalchemy import create_engine, text
@@ -48,6 +61,11 @@ DEFAULT_MODEL = "gemini-3.1-flash-lite"
 UNCLASSIFIED = "99.9.9"
 CLASSIFICATION_METHOD = "gemini_ai"
 
+# Rate-limit safety: pause between API batches, and back off + retry once
+# when Google answers 429 / ResourceExhausted.
+BATCH_DELAY_SECONDS = float(os.getenv("GEMINI_BATCH_DELAY_SECONDS", "2"))
+RATE_LIMIT_BACKOFF_SECONDS = float(os.getenv("GEMINI_429_BACKOFF_SECONDS", "30"))
+
 SYSTEM_PROMPT = """You are an expert statistical classifier for the UN COICOP 2018 taxonomy (Classification of Individual Consumption According to Purpose). I will give you a list of e-commerce product names from Cambodia. You must return a JSON array mapping each product to its most specific 5-digit COICOP code. If unsure, return '99.9.9'. Include a 'confidence_score' (0.0 to 1.0) and a brief 'reasoning' string.
 
 Classification rules:
@@ -58,6 +76,18 @@ Classification rules:
 - 'product_name' in the response MUST exactly match the input name so results can be joined back.
 - 'confidence_score' must be a float from 0.0 to 1.0.
 - 'reasoning' must be a short (max 15 words) English explanation.
+
+CRITICAL store-context rules:
+- This data comes from RETAIL GROCERY STORES. Packaged/retail food products —
+  sandwiches, burgers, pizza, instant noodles, canned soup, ready meals,
+  frozen dishes, pastries, sushi packs — are FOOD (division 01), even when
+  named after restaurant dishes. Division 11 is ONLY for actual restaurant
+  meals, cafe orders, or hotel accommodation services sold as a service
+  (e.g. 'Dinner buffet for 2', 'Deluxe room 1 night').
+- Phone/electronics ACCESSORIES (chargers, cases, FM transmitters, cables)
+  bought at general retailers are NOT division 08. Classify by product type:
+  car gadgets -> 07.2.1, audio/electronics -> 09.1.x. Division 08 equipment
+  applies to phones/tablets themselves or telecom-store context.
 
 Common COICOP 2018 codes you will need:
 - 01.1.1 Bread and cereals (rice, flour, pasta, cereal, noodles, bread, buns, rolls, croissants)
@@ -130,7 +160,6 @@ Common COICOP 2018 codes you will need:
 - 12.1.2 Appliances and products for personal hygiene (hair dryer, electric shaver, razor, dental floss, mouthwash)
 - 12.1.3 Articles and products for personal care (shampoo, conditioner, soap, body wash, lotion, moisturizer, sunscreen, skincare, face cream, makeup, lipstick, perfume, cologne, baby lotion, baby powder)
 - 12.2.0 Jewellery, watches and luggage (necklace, earring, ring, bracelet, analog watch, quartz watch, handbag, suitcase, wallet, purse, sunglasses, umbrella)
-- 12.2.1 Postal and courier services (same as 08.1.1)
 - 12.2.2 Financial services (bank fee, insurance premium, investment, loan, mortgage, interest)
 - 12.3.1 Housing maintenance and repair services (plumber, electrician, renovation, painting, pest control, gardening, landscaping)
 - 12.4.0 Other services not elsewhere classified (legal service, accounting, consulting, photography, printing, laundry, dry cleaning, tailoring, repair, storage)
@@ -149,14 +178,14 @@ Cambodian market examples:
 - "Pork Fried Rice (Bai Cha)" -> 11.1.1 (Restaurants and cafes)
 - "Bus Ticket Phnom Penh - Siem Reap" -> 07.1.2 (Passenger transport by road)
 - "1 Bedroom Condo BKK1 Rent" -> 04.1.1 (Actual rentals for housing)
-- "Exercise Book A4 120 Pages" -> 09.1.2 (Stationery)
+- "Exercise Book A4 120 Pages" -> 09.5.4 (Stationery)
 - "Electric Kettle 1.8L" -> 05.4.1 (Small electric household appliances)
 - "Regular Gasoline" -> 07.2.2 (Fuels and lubricants)
 - "USD/KHR Exchange Rate" -> 99.9.9 (Not a consumer good)
 - "Smart Laor! 8GB Weekly" -> 08.4.0 (Other communication services)
 - "Smart Fiber+ 80 Mbps" -> 08.3.0 (Internet services)
-- "BIC Ball Pen Blue" -> 09.1.2 (Stationery)
-- "Crayola Crayons 24 Colors" -> 09.1.2 (Stationery)
+- "BIC Ball Pen Blue" -> 09.5.4 (Stationery)
+- "Crayola Crayons 24 Colors" -> 09.5.4 (Stationery)
 - "Fresh Milk 1L Pasteurised" -> 01.1.4 (Milk, cheese and eggs)
 - "Eggs Tray 10s" -> 01.1.4 (Milk, cheese and eggs)
 - "Avocado Hass Fresh 500g" -> 01.1.6 (Fruit)
@@ -225,13 +254,33 @@ def _parse_json_array(raw_text: str) -> list[dict[str, Any]]:
     return parsed
 
 
+def _is_rate_limit_error(exc: Exception) -> bool:
+    """True when the exception looks like a Google API quota/429 rejection."""
+    msg = str(exc)
+    return "429" in msg or "ResourceExhausted" in msg or "quota" in msg.lower()
+
+
 def classify_batch(model, names: list[str]) -> list[dict[str, Any]]:
     """
     Sends one batch of product names to Gemini in JSON mode and parses the
-    returned array. Raises on an unparseable or incomplete response so the
-    caller can mark the batch as failed.
+    returned array. On a rate-limit (429/ResourceExhausted) response, backs
+    off once and retries; any other error raises so the caller can mark the
+    batch as failed.
     """
-    response = model.generate_content(names, system_instruction=SYSTEM_PROMPT)
+    for attempt in (1, 2):
+        try:
+            response = model.generate_content([SYSTEM_PROMPT] + [str(n) for n in names])
+            break
+        except Exception as exc:  # noqa: BLE001
+            if attempt == 1 and _is_rate_limit_error(exc):
+                log.warning(
+                    "Gemini rate limit hit; backing off %.0fs then retrying batch of %d",
+                    RATE_LIMIT_BACKOFF_SECONDS,
+                    len(names),
+                )
+                time.sleep(RATE_LIMIT_BACKOFF_SECONDS)
+                continue
+            raise
     results = _parse_json_array(response.text)
 
     normalized = []
@@ -287,7 +336,9 @@ def classify_names(
     cache_hits = len(seen)
     api_calls = 0
     failed = 0
-    for batch in api_batches:
+    for idx, batch in enumerate(api_batches):
+        if idx > 0:
+            time.sleep(BATCH_DELAY_SECONDS)
         api_calls += 1
         try:
             for item in classify_batch(model, batch):
@@ -323,12 +374,22 @@ def _unclassified_result(name: str) -> dict[str, Any]:
     }
 
 
-def fetch_unclassified(engine, table_name: str | None = None) -> list[dict[str, Any]]:
-    """Returns active unclassified products from classification_queue or dim_canonical_products."""
+def fetch_unclassified(engine, scrape_date: str | None = None) -> list[dict[str, Any]]:
+    """Returns unclassified products present in the current scrape_date run ready for Gemini.
+
+    Two-tier source order:
+      1. silver.classification_queue (PENDING rows) — products the dbt ladder
+         routed to human review because no rule tier matched.
+      2. AI sweep over staging.int_prices_cleaned ⋈ silver.canonical_items for the
+         specified scrape_date where the canonical name has no entry in
+         silver.dim_coicop_ai_cache.
+         Pure single-division stores are skipped (store purity outranks AI in
+         the dbt resolution order, so spending API calls on them is unnecessary).
+    """
     items: list[dict[str, Any]] = []
     with engine.connect() as conn:
+        # Tier 1: PENDING rows in the classification triage queue.
         try:
-            # First check silver.classification_queue
             q_res = conn.execute(
                 text(
                     "SELECT product_key as canonical_item_id, name_clean as canonical_name "
@@ -343,21 +404,42 @@ def fetch_unclassified(engine, table_name: str | None = None) -> list[dict[str, 
         except Exception:
             pass
 
+        # Tier 2: Sweep every uncached product scraped on this specific scrape_date
         if not items:
             try:
-                # Check silver.dim_canonical_products
-                dim_res = conn.execute(
-                    text(
-                        "SELECT canonical_item_id, canonical_name FROM silver.dim_canonical_products "
-                        "WHERE (coicop_code = '99.9.9' OR coicop_code IS NULL)"
-                    )
-                ).fetchall()
-                for r in dim_res:
+                date_filter = "p.scrape_date = CAST(:ds AS DATE)" if scrape_date else "p.scrape_date = (SELECT max(scrape_date) FROM staging.int_prices_cleaned)"
+                query_sql = f"""
+                    SELECT DISTINCT p.item_id::text AS item_id, ci.canonical_name
+                    FROM (
+                        SELECT DISTINCT item_id, store_slug, scrape_date
+                        FROM staging.int_prices_cleaned p
+                        WHERE {date_filter}
+                          AND p.item_id IS NOT NULL
+                          AND p.store_slug NOT IN (
+                              'communitypharma', 'khmer24', 'realestate',
+                              'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk',
+                              'bookmebus', 'redbus', 'redmebus', 'new_gasoline',
+                              'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi',
+                              'smart', 'smart_wifi'
+                          )
+                    ) p
+                    JOIN silver.canonical_items ci
+                      ON ci.item_id::text = p.item_id::text
+                    LEFT JOIN silver.dim_coicop_ai_cache ai
+                      ON lower(regexp_replace(trim(ai.product_name), '\\s+', ' ', 'g')) = lower(regexp_replace(trim(ci.canonical_name), '\\s+', ' ', 'g'))
+                    WHERE (ai.coicop_code IS NULL OR ai.coicop_code = '99.9.9')
+                      AND ci.canonical_name IS NOT NULL
+                      AND length(trim(ci.canonical_name)) > 1
+                    ORDER BY ci.canonical_name
+                """
+                params = {"ds": scrape_date} if scrape_date else {}
+                ci_res = conn.execute(text(query_sql), params).fetchall()
+                for r in ci_res:
                     items.append(
                         {"canonical_item_id": str(r[0]), "canonical_name": str(r[1])}
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning("Could not fetch unclassified items: %s", e)
 
     return items
 
@@ -457,14 +539,23 @@ def persist_classifications(
     items: list[dict[str, Any]],
     scrape_date: str | None = None,
 ) -> int:
-    """
-    Writes coicop_code / classification_method='gemini_ai' / confidence_score
-    back into silver.classification_queue and silver.dim_canonical_products.
+    """Resolve silver.classification_queue rows whose product name received a
+    fresh Gemini classification.
+
+    High-confidence matches (>= 0.50) flip the queue row to RESOLVED with the
+    derived 2-digit division; low-confidence matches (< 0.50) stay PENDING with
+    a 'low confidence AI classification' reason so they keep surfacing in the
+    Streamlit labeling app for human triage.
+
+    Note: the COICOP code itself is NOT written here — it lives in
+    silver.dim_coicop_ai_cache (see update_cache), which is what
+    int_coicop_classified.sql tier 3 consults. This function only maintains the
+    operational triage state.
     """
     by_name = {
         _normalize_name(i["canonical_name"]): i["canonical_item_id"] for i in items
     }
-    updates = []
+    updates: list[dict[str, Any]] = []
     for name, result in results.items():
         cid = by_name.get(_normalize_name(name))
         if cid is None or result["coicop_code"] == UNCLASSIFIED:
@@ -496,88 +587,38 @@ def persist_classifications(
         WHERE product_key = :canonical_item_id
         """
     )
-    update_dim_sql = text(
-        """
-        UPDATE silver.dim_canonical_products
-        SET coicop_code = :coicop_code,
-            classification_method = :method,
-            confidence_score = :confidence_score,
-            needs_review = :needs_review
-        WHERE canonical_item_id = :canonical_item_id
-        """
-    )
-
-    update_mapping_sql = text(
-        """
-        UPDATE staging.stg_item_mapping
-        SET coicop_code = :coicop_code,
-            classification_method = :method,
-            confidence_score = :confidence_score
-        WHERE canonical_item_id = :canonical_item_id
-          AND (coicop_code IS NULL OR coicop_code = '99.9.9')
-        """
-    )
 
     n_queue = 0
-    n_dim = 0
-    n_mapping = 0
-    with engine.begin() as conn:
-        for row in updates:
-            conf = row["confidence_score"]
-            is_low_conf = conf < 0.50
-            method = "gemini_ai_low_conf" if is_low_conf else "gemini_ai"
-            division = row["coicop_code"].split(".")[0].zfill(2)
-            params = {
-                "canonical_item_id": row["canonical_item_id"],
-                "coicop_code": row["coicop_code"],
-                "confidence_score": conf,
-                "method": method,
-                "division": division,
-                "needs_review": is_low_conf,
-            }
-            try:
+    for row in updates:
+        is_low_conf = row["confidence_score"] < 0.50
+        division = row["coicop_code"].split(".")[0].zfill(2)
+        try:
+            with engine.begin() as conn:
                 if is_low_conf:
                     res_q = conn.execute(
                         update_queue_pending_sql,
-                        {"canonical_item_id": row["canonical_item_id"]},
+                        {"canonical_item_id": str(row["canonical_item_id"])},
                     )
                 else:
                     res_q = conn.execute(
                         update_queue_resolved_sql,
                         {
-                            "canonical_item_id": row["canonical_item_id"],
+                            "canonical_item_id": str(row["canonical_item_id"]),
                             "division": division,
                         },
                     )
                 n_queue += res_q.rowcount or 0
-            except Exception:
-                pass
-            try:
-                res_d = conn.execute(update_dim_sql, params)
-                n_dim += res_d.rowcount or 0
-            except Exception:
-                pass
-            try:
-                if scrape_date:
-                    mapping = (
-                        update_mapping_sql.text + " AND scrape_date = :scrape_date"
-                    )
-                    res_m = conn.execute(
-                        text(mapping),
-                        {**params, "scrape_date": scrape_date},
-                    )
-                else:
-                    res_m = conn.execute(update_mapping_sql, params)
-                n_mapping += res_m.rowcount or 0
-            except Exception:
-                pass
+        except Exception as exc:  # noqa: BLE001 - one bad row must not kill the run
+            log.warning(
+                "classification_queue update failed for %s: %s",
+                row["canonical_item_id"],
+                exc,
+            )
     log.info(
-        "Persisted Gemini COICOP codes: %d queue item(s) resolved, %d dimension row(s), %d mapping row(s)",
+        "Persisted Gemini COICOP queue state: %d row(s) updated (cache writes happen via update_cache)",
         n_queue,
-        n_dim,
-        n_mapping,
     )
-    return n_mapping or n_queue or n_dim
+    return n_queue
 
 
 def classify_unclassified_with_gemini(
@@ -593,7 +634,7 @@ def classify_unclassified_with_gemini(
     Gemini JSON mode in batches of 50, and persists the results.
     """
     engine = engine or get_engine()
-    items = fetch_unclassified(engine)
+    items = fetch_unclassified(engine, scrape_date=scrape_date)
     if not items:
         log.info("No unclassified products to classify with Gemini")
         return {"status": "SKIPPED_NO_UNCLASSIFIED", "candidates": 0, "classified": 0}

@@ -8,6 +8,6 @@ cpi:
       user: "{{ env_var('DB_USER', 'cpi_user') }}"
       password: "{{ env_var('DB_PASS', 'cpi_pass') }}"
       dbname: "{{ env_var('DB_NAME', 'cpi_db') }}"
-      schema: "{{ env_var('DB_NAME', 'cpi_db') }}"
+      schema: "{{ env_var('DB_SCHEMA', 'public') }}"
       threads: 4
       keepalives_idle: 0

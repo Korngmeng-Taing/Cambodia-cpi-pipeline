@@ -7,5 +7,5 @@ select
     coicop_division,
     coicop_method
 from {{ ref('int_coicop_classified') }}
-where store_slug in ('communitypharma', 'pharmacy', 'u-care', 'ucare')
+where store_slug in ('communitypharma')
   and coicop_division <> '06'

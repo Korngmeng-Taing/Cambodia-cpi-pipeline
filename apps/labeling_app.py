@@ -54,9 +54,11 @@ def save_override(match_type: str, match_value: str, division: str, store_slug: 
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            # 1. Insert into silver.coicop_override
+            # 1. Insert into silver.coicop_override_manual (NOT silver.coicop_override:
+            #    that table is owned by the dbt seed and is recreated on every `dbt seed`,
+            #    which would wipe rows inserted directly).
             cur.execute("""
-                INSERT INTO silver.coicop_override (match_type, match_value, store_slug, coicop_division, reason, created_at)
+                INSERT INTO silver.coicop_override_manual (match_type, match_value, store_slug, coicop_division, reason, created_at)
                 VALUES (%s, %s, %s, %s, %s, NOW());
             """, (match_type, match_value, store_slug or None, division, reason))
 

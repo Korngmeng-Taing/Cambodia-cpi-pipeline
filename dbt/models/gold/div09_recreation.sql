@@ -18,8 +18,15 @@ select
     j.n_quotes,
     j.n_stores,
     j.dod_price_change_pct,
-    j.jevons_rel_dod
+    j.jevons_rel_dod,
+    h.hedonic_adjusted_price_khr,
+    h.adjustment_ratio as hedonic_adjustment_ratio
 from {{ ref('fct_jevons_daily') }} j
 left join {{ ref('dim_items') }} m
     on m.item_id = j.item_id
+left join (
+    select scrape_date, item_id, avg(hedonic_adjusted_price_khr) as hedonic_adjusted_price_khr, avg(adjustment_ratio) as adjustment_ratio
+    from {{ source('silver', 'hedonic_adjusted_prices') }}
+    group by scrape_date, item_id
+) h on h.scrape_date = j.scrape_date and h.item_id = j.item_id
 where j.coicop_division = '09'

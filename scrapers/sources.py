@@ -138,8 +138,14 @@ def build_canonical_record(
     image_url: str | None = None,
     scrape_date: str | None = None,
     is_fallback: bool = False,
+    # Operator-visible reason a row is flagged fallback (e.g. 'live_fetch_error',
+    # 'baseline_catalog'). normalize_record auto-defaults to 'baseline_catalog'
+    # when is_fallback=True and no reason is given; None when is_fallback=False.
+    fallback_reason: str | None = None,
     attrs: dict[str, Any] | None = None,
-    on_promo: bool = False,
+    # None (= not stated) lets normalize_record infer promo status from the
+    # original>price gap; pass an explicit bool to force a decision.
+    on_promo: bool | None = None,
     discount_pct: float | None = None,
 ) -> dict[str, Any]:
     return normalize_record(
@@ -161,6 +167,7 @@ def build_canonical_record(
             "image_url": image_url,
             "scrape_date": scrape_date,
             "is_fallback": is_fallback,
+            "fallback_reason": fallback_reason,
             "on_promo": on_promo,
             "discount_pct": discount_pct,
             "attrs": attrs,
@@ -197,7 +204,18 @@ def _build_aeon_category_map(filters: dict) -> dict[int, str]:
     return cat_map
 
 
-AEON_MAX_PAGES = int(os.environ.get("AEON_MAX_PAGES", "5"))
+AEON_MAX_PAGES = int(os.environ.get("AEON_MAX_PAGES", "0"))
+
+
+AEON_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-GB,en;q=0.9",
+    "Origin": "https://aeononlineshopping.com",
+    "Referer": "https://aeononlineshopping.com/",
+    "x-language": "en-gb",
+    "x-currency": "KHR",
+}
 
 
 class AeonSupermarketScraper(BaseScraper):
@@ -212,21 +230,36 @@ class AeonSupermarketScraper(BaseScraper):
         page = 1
         total_pages = 999
         cat_map: dict[int, str] = {}
+        consecutive_page_errors = 0
         while page <= total_pages:
             if AEON_MAX_PAGES > 0 and page > AEON_MAX_PAGES:
                 break
-            try:
-                resp = _cffi_get(
-                    AEON1_API,
-                    params={"page": page, "limit": AEON1_PAGE_SIZE},
-                    headers={"x-language": "en-gb", "x-currency": "KHR"},
-                    timeout=30,
-                )
-                resp.raise_for_status()
-                body = resp.json()
-            except Exception as exc:
-                log.warning("AEON1 page %d error: %s", page, exc)
-                break
+            body = None
+            for attempt in range(5):
+                try:
+                    resp = _cffi_get(
+                        AEON1_API,
+                        params={"page": page, "limit": AEON1_PAGE_SIZE},
+                        headers=AEON_HEADERS,
+                        timeout=30,
+                    )
+                    resp.raise_for_status()
+                    body = resp.json()
+                    break
+                except Exception as exc:
+                    if attempt < 4:
+                        time.sleep(1.5 * (attempt + 1))
+                    else:
+                        log.warning("AEON1 page %d error after 5 retries: %s", page, exc)
+            if not body:
+                consecutive_page_errors += 1
+                if consecutive_page_errors >= 3:
+                    log.error("AEON1: 3 consecutive page failures, stopping at page %d", page)
+                    break
+                page += 1
+                time.sleep(2.0)
+                continue
+            consecutive_page_errors = 0
             if not cat_map and isinstance(body.get("filters"), dict):
                 cat_map = _build_aeon_category_map(body["filters"])
 
@@ -242,6 +275,9 @@ class AeonSupermarketScraper(BaseScraper):
                 total_pages = body.get("totalPages", page)
             else:
                 products = body.get("data", [])
+
+            if not products:
+                break
 
             for p in products:
                 if not isinstance(p, dict):
@@ -320,21 +356,36 @@ class AeonFashionScraper(BaseScraper):
         page = 1
         total_pages = 999
         cat_map: dict[int, str] = {}
+        consecutive_page_errors = 0
         while page <= total_pages:
             if AEON_MAX_PAGES > 0 and page > AEON_MAX_PAGES:
                 break
-            try:
-                resp = _cffi_get(
-                    AEON3_API,
-                    params={"page": page, "limit": AEON3_PAGE_SIZE},
-                    headers={"x-language": "en-gb", "x-currency": "KHR"},
-                    timeout=30,
-                )
-                resp.raise_for_status()
-                body = resp.json()
-            except Exception as exc:
-                log.warning("AEON3 page %d error: %s", page, exc)
-                break
+            body = None
+            for attempt in range(5):
+                try:
+                    resp = _cffi_get(
+                        AEON3_API,
+                        params={"page": page, "limit": AEON3_PAGE_SIZE},
+                        headers=AEON_HEADERS,
+                        timeout=30,
+                    )
+                    resp.raise_for_status()
+                    body = resp.json()
+                    break
+                except Exception as exc:
+                    if attempt < 4:
+                        time.sleep(1.5 * (attempt + 1))
+                    else:
+                        log.warning("AEON3 page %d error after 5 retries: %s", page, exc)
+            if not body:
+                consecutive_page_errors += 1
+                if consecutive_page_errors >= 3:
+                    log.error("AEON3: 3 consecutive page failures, stopping at page %d", page)
+                    break
+                page += 1
+                time.sleep(2.0)
+                continue
+            consecutive_page_errors = 0
             if not cat_map and isinstance(body.get("filters"), dict):
                 cat_map = _build_aeon_category_map(body["filters"])
 
@@ -681,12 +732,17 @@ class L192Scraper(BaseScraper):
 
         if not records:
             for item in L192_BASELINE_PRODUCTS:
+                # Fallback rows carry a distinct l192_fb_ id prefix: baseline
+                # ids share the live item_id shape, so without the prefix they
+                # merge into the same canonical items downstream and a long
+                # live outage silently masquerades as real observations.
+                raw_id = str(item["id"]).removeprefix("l192_")
                 records.append(
                     build_canonical_record(
                         source_slug="l192",
                         source_type="retail",
                         store_name="L192 Cambodia",
-                        item_id=item["id"],
+                        item_id=f"l192_fb_{raw_id}",
                         name=item["name"],
                         price=item["price"],
                         currency="USD",
@@ -696,6 +752,7 @@ class L192Scraper(BaseScraper):
                         url=f"https://www.l192.com/product/{item['id']}",
                         scrape_date=ds,
                         is_fallback=True,
+                        fallback_reason="live_fetch_failed_baseline_catalog",
                     )
                 )
         return records
@@ -3330,10 +3387,17 @@ class BookMeBusScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
-        target_date = (
-            pendulum.today("Asia/Phnom_Penh") + pendulum.duration(days=2)
-        ).format("DD-MM-YYYY")
+        # Anchor BOTH the record date and the queried travel date to
+        # scrape_date (+2 days so schedules are bookable). Previously the
+        # travel date came from wall-clock today(), so backfilled runs fetched
+        # current prices while labelling them with the historical scrape_date.
+        ds_date = (
+            pendulum.parse(str(scrape_date)).date()
+            if scrape_date
+            else pendulum.today("Asia/Phnom_Penh").date()
+        )
+        ds = ds_date.format("YYYY-MM-DD")
+        target_date = ds_date.add(days=2).format("DD-MM-YYYY")
 
         html_headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",

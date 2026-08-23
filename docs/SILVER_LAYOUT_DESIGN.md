@@ -24,7 +24,7 @@ The Silver layer is structured into three clean tiers to prevent table clutter i
 ├───────────────────────────────┴─────────────────────────────────────────────┤
 │ 3. INTERMEDIATE TRANSFORMATIONS (Built in staging schema)                    │
 │ • staging.int_prices_cleaned (USD->KHR, promo clamping, unit standardization)│
-│ • staging.int_coicop_classified (7-stage COICOP ladder & regex trap engine)  │
+|  - staging.int_coicop_classified (9-tier daily-scoped COICOP ladder: purity + rules-as-data + gated AI cache)  |
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -89,12 +89,12 @@ Active triage queue capturing unclassified items for automated Gemini AI batch p
 
 To keep the `silver` schema clean for BI tools:
 - **`int_prices_cleaned`**: Performs USD $\to$ KHR currency conversion, promo clamping ($[0\%, 95\%]$), unit pricing math (per kg / per L), and $\pm 3\sigma$ outlier detection.
-- **`int_coicop_classified`**: Runs the 7-stage division classification ladder (override $\to$ AI cache $\to$ traps $\to$ keyword ladder $\to$ category map $\to$ store default $\to$ unclassified). The keyword ladder is checked before the generic category map so broad store categories (aeon `Grocery` → 01) never swallow phones/toys/towels/cosmetics; confidence ranks keyword_ladder 0.950 above category_map 0.900.
+- **`int_coicop_classified`**: Runs the 9-tier daily-scoped classification ladder (exact/per-store overrides $\to$ store purity $\to$ gated AI cache $\to$ global overrides $\to$ traps $\to$ keyword STRONG rules from `coicop_keywords.csv` priority <300 $\to$ category map $\to$ keyword WEAK rules + store defaults $\to$ unclassified). STRONG keywords outrank the generic category map so broad store categories (aeon `Grocery` → 01) never swallow phones/toys/towels/cosmetics; WEAK food rules sit *below* the map. Only the current run's `scrape_date` is classified each day; historical rows are preserved for index stability.
 
 ---
 
 ## 5. Daily Data Management & Quality Policy
 
-- **Idempotency**: Incremental models use `unique_key` + `on_schema_change='append_new_columns'` so re-runs are safe.
-- **Strict Grain Enforcement**: Primary keys tested via dbt (`unique`, `not_null`, and `unique_combination_of_columns`).
-- **Immutability of Bronze**: `bronze.raw_prices` and `staging.raw_scrapes` are append-only; corrections occur downstream in Silver.
+- **Idempotency**: Incremental models declare `unique_key` and use the `delete+insert` strategy (`on_schema_change='append_new_columns'`), along with defensive classification CTE deduplication (`DISTINCT ON (item_id, store_slug)`), so re-runs are strictly idempotent. dbt-postgres defaults to `append`, which silently ignores `unique_key` - every incremental model must set the strategy explicitly.
+- **Strict Grain Enforcement**: Primary keys tested via dbt (`unique`, `not_null`, `test_idempotency`).
+- **Immutability of Bronze**: `bronze.raw_prices` is append-only per observation, backed since migration 011 by a DB-level unique index (`uq_raw_prices_observation`) matching the scraper's re-scrape dedup key; `staging.raw_scrapes` keeps one upserted batch record per store per day. Corrections occur downstream in Silver.

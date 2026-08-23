@@ -29,13 +29,16 @@ flowchart TD
     end
 
     subgraph S4["Stage 4: COICOP Classification Ladder (int_coicop_classified.sql)"]
-        E & F & G --> H{"Deterministic 7-Tier Ladder\n(First Match Wins)"}
-        H -- "Priority 1" --> I["coicop_override.csv (Manual Overrides)"]
-        H -- "Priority 2" --> J["silver.dim_coicop_ai_cache (Gemini Cache)"]
-        H -- "Priority 3" --> K["Deterministic Traps (e.g. Medical Masks -> 06)"]
-        H -- "Priority 4" --> L["Regex Keyword Ladder (12 -> 02 -> 05 -> ... -> 01)"]
-        H -- "Priority 5" --> M["silver.coicop_category_map (Store Category)"]
-        H -- "Priority 6" --> N["coicop_store_defaults.csv (Store Defaults)"]
+        E & F & G --> H{"Daily-Scoped 9-Tier Ladder\n(Only current scrape_date; First Match Wins)"}
+        H -- "Tier 1" --> I["Exact/Per-Store Human Overrides\n(coicop_override.csv + silver.coicop_override_manual)"]
+        H -- "Tier 2" --> I2["Store Purity\n(pharmacy->06, real estate->04, hotels->11,\ntransit/fuel->07, telecom->08)"]
+        H -- "Tier 3" --> J["silver.dim_coicop_ai_cache (Gemini Cache)\n+ store-context gate (08/11 validation)"]
+        H -- "Tier 4" --> J2["Global Name Overrides"]
+        H -- "Tier 5" --> K["Deterministic Traps\n(personal-care guard first:\nshampoo/soap never food traps)"]
+        H -- "Tier 6" --> L1["Keyword STRONG rules\n(silver.coicop_keywords priority < 300)"]
+        H -- "Tier 7" --> M["silver.coicop_category_map (Store Category)"]
+        H -- "Tier 8" --> L2["Keyword WEAK rules\n(silver.coicop_keywords priority >= 300)"]
+        H -- "Tier 8b" --> N["coicop_store_defaults.csv (Store Defaults)"]
         H -- "No Match" --> O["Tag as 'UNCLASSIFIED' / 'REVIEW'"]
     end
 
@@ -71,7 +74,7 @@ flowchart TD
 - Database Table: `bronze.raw_prices`
 
 ### Process:
-1. **Multi-Source Fetching**: 20 distinct scrapers run daily covering retail supermarkets (`aeon`, `delishop`), fashion marketplaces (`aeon3`), e-commerce (`l192`), pharmacies (`communitypharma`), electronics (`samnangshop`, `arystore`), telecoms (`cellcard`, `smart`), real estate (`khmer24`, `realestate`), intercity transit (`redbus`, `bookmebus`), petroleum stations (`tela`, `ptt`, `caltex`, `total`, `new_gasoline`), and official exchange rates (`mef_fx`).
+1. **Multi-Source Fetching**: 19 active scrapers run daily covering retail supermarkets (`aeon`, `delishop`), fashion marketplaces (`aeon3`), e-commerce (`l192`), pharmacies (`communitypharma`), electronics (`samnangshop`, `arystore`), telecoms (`cellcard`, `smart`, `cellcard_wifi`, `smart_wifi`), real estate (`khmer24`, `realestate`), intercity transit (`redbus`, `bookmebus`), restaurants (`bayonbkk`), hospitality (`sokhahotel`, `hyyathotel`), petroleum stations (`new_gasoline`), and official exchange rates (`mef_fx`).
 2. **Raw Storage**: Observations are stored without mutation into `bronze.raw_prices`:
    - `raw_price_id` (BIGSERIAL)
    - `store_id` / `source_name` (e.g. `aeon`, `Delishop Cambodia`)
@@ -147,65 +150,97 @@ flowchart TD
 
 ---
 
-## 5. Stage 4: Deterministic 7-Tier COICOP Classification Ladder
+## 5. Stage 4: Daily-Scoped 9-Tier COICOP Classification Ladder
 
 ### Implementation Files:
 - [`dbt/models/silver/intermediate/int_coicop_classified.sql`](file:///D:/CPI%20PIPELINE/dbt/models/silver/intermediate/int_coicop_classified.sql)
-- Seed: [`dbt/seeds/coicop_override.csv`](file:///D:/CPI%20PIPELINE/dbt/seeds/coicop_override.csv)
+- Seed: [`dbt/seeds/coicop_override.csv`](file:///D:/CPI%20PIPELINE/dbt/seeds/coicop_override.csv) (259 curated rows)
+- Seed: [`dbt/seeds/coicop_keywords.csv`](file:///D:/CPI%20PIPELINE/dbt/seeds/coicop_keywords.csv) (30 data-driven keyword/trap rules)
 - Seed: [`dbt/seeds/coicop_store_defaults.csv`](file:///D:/CPI%20PIPELINE/dbt/seeds/coicop_store_defaults.csv)
 
-The SQL model runs an ordered, priority-based evaluation where the **first non-null match wins**:
+### Daily scoping:
+Each run classifies **only the products present in that day's scrape** (Airflow passes
+`--vars '{"ds": "YYYY-MM-DD"}'`; manual runs fall back to `max(scrape_date)`).
+Historical classification rows are preserved, so price-fact joins and index
+history stay stable. To re-classify all history after a major rule change,
+remove the date filter and run `--full-refresh` for this model.
 
-| Priority | Tier Name | Source / Mechanism | Confidence | Example / Purpose |
+### Resolution order (first match wins):
+
+| Tier | Tier Name | Source / Mechanism | Confidence | Purpose |
 | :--- | :--- | :--- | :--- | :--- |
-| **1** | **Manual Override** | `dbt/seeds/coicop_override.csv` | `1.000` | Human curator rules for edge cases (`SUNPLAY SKIN AQUA` $\to$ `12`) |
-| **2** | **Gemini AI Cache** | `silver.dim_coicop_ai_cache` | `0.900`–`0.990` | Normalized key lookup of past Gemini AI classifications |
-| **3** | **Deterministic Traps** | Pre-ladder SQL regex exceptions | `0.990` | Disambiguations: Medical masks $\to$ `06`, Cooking wine $\to$ `01`, Pet food $\to$ `09` |
-| **4** | **Keyword Ladder** | Regex hierarchy (`12` $\to$ `02` $\to$ ... $\to$ `01`) | `0.950` | Word-bounded keyword ladder covering all 12 COICOP divisions |
-| **5** | **Category Map** | `silver.coicop_category_map` | `0.900` | Retailer native category string mapping |
-| **6** | **Store Default** | `dbt/seeds/coicop_store_defaults.csv` | `0.800` | Fallback store specialization (e.g. `tela` $\to$ `07`, `pharmacy` $\to$ `06`) |
-| **7** | **Unclassified Fallback** | Unmatched rows | `0.000` | Tagged as `'UNCLASSIFIED'` / `'REVIEW'`, routed to AI queue |
+| **1** | **Exact / per-store override** | barcode & product_key matches (any tag) + name rules tagged to *this* store (`coicop_override.csv` + `silver.coicop_override_manual`) | `1.000` | Human authority; also overrides the AI's code column |
+| **2** | **Store purity** | hard invariant in SQL | `0.850` | pharmacies→06, khmer24/realestate→04, hotels→11, transit/fuel→07, telecom→08 — no automatic signal may break these |
+| **3** | **Gemini AI cache (+ gate)** | `silver.dim_coicop_ai_cache`, exact normalized-name match, conf ≥ 0.5. A store-context **gate** invalidates AI answers of division 08 outside telecom stores and 11 outside hotels | AI score | Primary automatic engine (AI-first mode); ~2,000 products cached |
+| **4** | **Global name override** | untagged name rules from both override tables | `1.000` | Curated cross-store corrections |
+| **5** | **Deterministic traps** | regex CASE in SQL; rule #0 is a personal-care guard (shampoo/soap/body-wash names never fire food traps); AEON masks→12 carve-out | `0.990` | Deterministic disambiguations (medical masks→06, pet food→09…) |
+| **6** | **Keyword STRONG** | `silver.coicop_keywords` rows with `priority < 300`, ordered ascending | `0.950` | High-precision blocks (cosmetics 200, alcohol 210, furnishings 230, clothing 240, health 250, recreation 260, transport 270, telecom/hotel fallbacks, education 290) + exception rows (seasoning→01 @100, bbq-sauce→01 @103, measuring-cup→05 @104, hot-pot-base→01 @105, phones→09 @108, food guards @110, dermo-brands→12 @120) |
+| **7** | **Category map** | `silver.coicop_category_map` (store native category → division) | `0.900` | Retailer taxonomy beats fuzzy text; ranked above weak keywords because scrapers often collapse unrelated shelves into generic categories |
+| **8** | **Keyword WEAK + store defaults** | seed rows `priority ≥ 300` (trimmed food vocabulary — bare `milk/egg/bun/roll/sugar/salt/sauce/snack/chips` tokens removed so true unknowns surface), then `coicop_store_defaults.csv` | `0.950` / `0.800` | Last automatic resort |
+| **9** | **Unclassified fallback** | unmatched rows | `0.000` | `'UNCLASSIFIED'` / `'REVIEW'` → routed to Gemini task & labeling queue |
 
-### Keyword Ladder Priority Ordering:
-The keyword ladder is ordered deliberately to prevent material and ingredient names from stealing products:
-1. **Division 12 (Personal Care & Miscellaneous)**: Evaluated first so shampoo, soaps, and lotions with oil/herb ingredients are not stolen by food rules.
-2. **Division 02 (Alcohol & Tobacco)**: Matches beers, spirits, wines, cigarettes, vapes.
-3. **Division 05 (Furnishings & Household Maintenance)**: Matches appliances, detergents, cookware, furniture (cup noodles explicitly protected $\to$ `01`).
-4. **Division 03 (Clothing & Footwear)**: Matches apparel, shoes, fabrics, laundry services.
-5. **Division 06 (Health)**: Matches pharmaceuticals, vitamins, medical consultations, surgical masks.
-6. **Division 09 (Recreation, Culture & Pets)**: Matches pet food (`09.3.4`), tech gadgets, fitness, sports, toys.
-7. **Division 07 (Transport)**: Matches fuels, lubricants, automotive parts, bus tickets.
-8. **Division 08 (Communication)**: Matches mobile phones, SIM cards, data plans, Wi-Fi packages.
-9. **Division 11 (Restaurants & Hotels)**: Matches prepared dining meals, accommodation rooms.
-10. **Division 10 (Education)**: Matches school exercise books, textbooks, stationery kits.
-11. **Division 04 (Housing & Utilities)**: Matches electricity, water tariffs, LPG gas, rent.
-12. **Division 01 (Food & Non-Alcoholic Beverages)**: Last resort for groceries, fresh produce, meats, cooking oils.
+### Rules-as-data maintenance:
+Keyword rules live in `dbt/seeds/coicop_keywords.csv`
+(`division, match_column, match_regex, and_regex, negate_regex, exclude_stores,
+include_stores, priority, note`). Ascending priority = evaluated first;
+blank columns are no-ops. Edit a row → `dbt seed --select coicop_keywords` →
+next daily run self-heals affected items. The model joins this table generically
+(NULL-safe on every optional column).
 
 ---
 
-## 6. Stage 5: Asynchronous AI Resolution (Gemini)
+## 6. Stage 5: AI-First Gemini Resolution
 
 ### Implementation Files:
 - [`pipeline/gemini_coicop_classifier.py`](file:///D:/CPI%20PIPELINE/pipeline/gemini_coicop_classifier.py)
+- [`scripts/warm_coicop_ai_cache.py`](file:///D:/CPI%20PIPELINE/scripts/warm_coicop_ai_cache.py) (Bulk offline cache warmer)
+- Airflow task: `gemini_coicop_classification` (in `silver_dag`)
 - Model: `silver.classification_queue`
-- Cache: `silver.dim_coicop_ai_cache`
+- Cache: `silver.dim_coicop_ai_cache` (unique on `product_name`, stores `model_version`)
+
+### Daily-Scoped Candidate Selection:
+Each run classifies **only products active on today's `scrape_date`** that have no cache entry yet:
+1. Filters `staging.int_prices_cleaned` where `scrape_date = CAST(:ds AS DATE)` and joins `silver.canonical_items`.
+2. Pure single-division stores are excluded (store purity outranks AI, saving API budget).
+3. Items already cached in `silver.dim_coicop_ai_cache` (8,500+ products) are resolved instantly in SQL without API calls.
+4. Newly observed products for the day are sent to Gemini in high-density batches of **50 items/call** (~5.75 items/sec).
+
+### High-Performance Functional Indexing:
+To guarantee sub-second classification lookups across tens of thousands of products:
+```sql
+CREATE INDEX IF NOT EXISTS idx_coicop_ai_norm 
+ON silver.dim_coicop_ai_cache (lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')));
+```
+
+### Rate-Limit Armor & Batching:
+| Parameter | Setting | Description |
+| :--- | :--- | :--- |
+| `batch_size` | `50` | Structured JSON array payload per API call |
+| `GEMINI_BATCH_DELAY_SECONDS` | `1.0` - `2.0` | Pause between API calls |
+| `GEMINI_429_BACKOFF_SECONDS` | `25.0` | Exponential backoff and retry on quota limits |
+
+Failed batches are isolated and retried on subsequent runs. Free-tier `gemini-3.1-flash-lite` or `gemini-2.5-flash` in JSON mode provides fast, predictable classifications (~$0.12 total cost for the entire catalog).
+
+### Prompt Store-Context Rules:
+The system prompt explicitly enforces statistical CPI standards:
+1. **Retail groceries ≠ restaurants**: Packaged items, canned goods, and frozen meals sold in supermarkets are **01** (Food), never 11 (Restaurants & Accommodation).
+2. **Medicines & Balms**: Medicated drops, balms, and plasters (`Rohto`, `Tiger Balm`) are **06** (Health).
+3. **Alcohol & Spirits**: Spirits and beer (`Chivas`, `Johnnie Walker`, `Sapporo`) are **02** (Alcohol).
+4. **Cosmetics & Skincare**: Dermo-skincare, hair serums, and lotions (`Bio-Oil`, `Cetaphil`) are **12** (Personal Care).
 
 ```mermaid
 sequenceDiagram
-    participant DB as Postgres (silver.classification_queue)
+    participant DB as Postgres (today's scrape)
     participant Worker as gemini_coicop_classifier.py
     participant GenAI as Google Gemini API
     participant Cache as silver.dim_coicop_ai_cache
 
-    DB->>Worker: Fetch batch of PENDING items (limit=50)
-    Worker->>GenAI: Send prompt with Cambodia CPI COICOP 2018 taxonomy
-    GenAI-->>Worker: Return structured JSON {code, confidence, reasoning}
-    alt Confidence >= 0.50
-        Worker->>Cache: Save {product_name, coicop_code, confidence, reasoning}
-        Worker->>DB: Update queue status = 'RESOLVED'
-    else Confidence < 0.50 or Ambiguous
-        Worker->>DB: Update queue status = 'PENDING' (reason='low confidence')
-    end
+    DB->>Worker: Fetch uncached names from today's scrape (scrape_date = ds, skip pure stores)
+    Worker->>Cache: Functional index lookup (cached items resolved in <1ms)
+    Worker->>GenAI: Batched JSON-mode calls (50/batch, 1s delay, 429 retry)
+    GenAI-->>Worker: [{product_name, coicop_code, confidence_score, reasoning}]
+    Worker->>Cache: Upsert results (ON CONFLICT DO UPDATE)
+    Note over Cache: dbt silver models adopt these immediately as method='gemini_ai'
 ```
 
 ### Structured Output Schema:
@@ -232,7 +267,11 @@ Gemini responds with strict JSON adherence:
 3. **Action**:
    - **One-Click Accept**: Confirms Gemini's recommendation.
    - **Manual Reclassification**: Selects the true COICOP division (01–12) from a dropdown.
-4. **Persistence**: Saves the decision into [`dbt/seeds/coicop_override.csv`](file:///D:/CPI%20PIPELINE/dbt/seeds/coicop_override.csv). All future scrapes of this SKU are classified at Priority 1.
+4. **Persistence**: Saves the decision into `silver.coicop_override_manual`
+   (migration `010_manual_override_table.sql`). This table is *not* wiped by
+   `dbt seed` — unlike the CSV-owned `silver.coicop_override` — so analyst
+   decisions survive every re-seed. In the dbt ladder these rows act as
+   Tier-1 exact/per-store overrides (or Tier-4 when untagged).
 
 ---
 

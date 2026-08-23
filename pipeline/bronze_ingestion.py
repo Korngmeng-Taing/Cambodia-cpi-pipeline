@@ -6,8 +6,7 @@ Bronze ingestion entrypoint used by the per-source Airflow scraper DAGs.
 Flow (adheres to SCRAPER_METHODOLOGY_GUIDE.md §1 & §3):
     fetch_records ─► canonical.normalize_records (Schema v1.0)
       ─► zero-product quality gate ─► DQ validate
-      ─► MinIO raw snapshot (s3://cpi-bronze/{store}/dt={date}/raw.json)
-      ─► Parquet cold archive ─► PostgreSQL staging.raw_scrapes + bronze.raw_prices
+      ─► PostgreSQL staging.raw_scrapes + bronze.raw_prices
 
 The MEF USD/KHR exchange rate is routed separately to staging.exchange_rates.
 """
@@ -66,9 +65,6 @@ def _ingest_fx(
 
     batch_id = uuid.uuid4()
 
-    # Raw snapshot to MinIO (fail loud: no local fallback)
-    engine.minio.put_json(source_slug, raw_records, scrape_date=scrape_date)
-
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -91,6 +87,37 @@ def _ingest_fx(
             is_stale=False,
         )
     return {"source_slug": source_slug, "records": 1, "fx_rate": rate}
+
+
+def _record_fallback_stats(
+    conn, source_slug: str, scrape_date: str, records: list[dict[str, Any]]
+) -> None:
+    """Persists per-batch fallback counts to staging.fallback_alerts so
+    baseline-only scrapes are observable and alertable (Risk 3). Never raises:
+    observability must not break ingestion."""
+    total = len(records)
+    fallback = sum(1 for r in records if r.get("is_fallback"))
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO staging.fallback_alerts
+                    (scrape_date, store_slug, fallback_rows, total_rows)
+                VALUES (%s::DATE, %s, %s, %s)
+                ON CONFLICT (scrape_date, store_slug) DO UPDATE
+                SET fallback_rows = EXCLUDED.fallback_rows,
+                    total_rows = EXCLUDED.total_rows,
+                    created_at = NOW();
+                """,
+                (scrape_date, source_slug, fallback, total),
+            )
+    except Exception as exc:
+        logger.warning(
+            "Could not record fallback stats for %s on %s: %s",
+            source_slug,
+            scrape_date,
+            exc,
+        )
 
 
 def ingest_source_bronze(source_slug: str, scrape_date: str) -> dict[str, Any]:
@@ -146,8 +173,14 @@ def ingest_source_bronze(source_slug: str, scrape_date: str) -> dict[str, Any]:
             source_type=str(records[0].get("source_type", "web")),
             scrape_date=date_str,
         )
+        _record_fallback_stats(conn, source_slug, date_str, records)
         conn.commit()
-        return {"source_slug": source_slug, "records": count, "batch_id": str(batch_id)}
+        return {
+            "source_slug": source_slug,
+            "records": len(records),
+            "new_records": count,
+            "batch_id": str(batch_id),
+        }
     finally:
         conn.close()
 

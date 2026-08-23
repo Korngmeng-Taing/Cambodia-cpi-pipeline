@@ -5,7 +5,7 @@ Canonical Bronze Contract — Schema v1.0.
 
 Every scraper normalizes its output via ``pipeline.canonical.normalize_record()``
 so that raw observations strictly conform to the Bronze schema documented in
-SCRAPER_METHODOLOGY_GUIDE.md before MinIO storage and PostgreSQL staging writes.
+SCRAPER_METHODOLOGY_GUIDE.md before PostgreSQL bronze and staging writes.
 
 Schema v1.0 contract (extract):
     {
@@ -29,6 +29,7 @@ Schema v1.0 contract (extract):
       "image_url":    "...",
       "url":          "...",
       "is_fallback":  false,
+      "fallback_reason": null,
       "source":       "scrape",
       "scraped_at":   "2026-08-17T03:00:15Z",
       "attrs":        {"volume_ml": 330},
@@ -42,6 +43,7 @@ Schema v1.0 contract (extract):
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -64,6 +66,10 @@ REQUIRED_FIELDS = (
 )
 
 BOOLEAN_FIELDS = ("cpi_eligible", "is_fallback", "on_promo", "is_out_of_stock")
+
+# Reason recorded on fallback rows so operators can distinguish a live outage
+# from a static baseline catalog in Metabase (staging.fallback_alerts trend).
+DEFAULT_FALLBACK_REASON = "baseline_catalog"
 
 
 def _first(*values: Any) -> Any:
@@ -141,12 +147,6 @@ def normalize_record(
     if ds is None:
         ds = datetime.now(UTC).strftime("%Y-%m-%d")
 
-    item_id = _first(
-        raw.get("item_id"), raw.get("product_id"), raw.get("sku"), raw.get("id")
-    )
-    if item_id is None:
-        item_id = f"{slug}_{abs(hash(raw.get('name', ''))):x}"
-
     name = _first(
         raw.get("name"),
         raw.get("title"),
@@ -155,6 +155,15 @@ def normalize_record(
     )
     if not name:
         raise ValueError(f"Canonical record for '{slug}' missing a product name")
+
+    item_id = _first(
+        raw.get("item_id"), raw.get("product_id"), raw.get("sku"), raw.get("id")
+    )
+    if item_id is None:
+        # Stable content-derived ID. Python's hash() is salted per process
+        # (PYTHONHASHSEED), which made IDs differ between runs and collide
+        # unnamed items onto one value; sha1 of the resolved name is stable.
+        item_id = f"{slug}_{hashlib.sha1(name.encode('utf-8')).hexdigest()[:12]}"
 
     price = _as_float(
         _first(raw.get("price"), raw.get("sale_price"), raw.get("price_khr"))
@@ -179,7 +188,13 @@ def normalize_record(
     orig_price = max(orig_price, price)
 
     on_promo_raw = raw.get("on_promo")
-    on_promo = bool(on_promo_raw) if on_promo_raw is True else orig_price > price
+    if on_promo_raw is None:
+        # Source didn't state promo status: infer from the price gap.
+        on_promo = orig_price > price
+    else:
+        # Honor the source's explicit flag (previously an explicit False was
+        # discarded and a promo/discount fabricated whenever orig > price).
+        on_promo = bool(on_promo_raw)
     discount_pct = (
         round(((orig_price - price) / orig_price) * 100.0, 2)
         if orig_price > 0 and on_promo
@@ -216,6 +231,15 @@ def normalize_record(
     rating = _as_float(raw.get("rating")) or 0.0
     attrs = raw.get("attrs") if isinstance(raw.get("attrs"), dict) else {}
 
+    is_fallback = bool(_first(raw.get("is_fallback"), is_fallback))
+    fallback_reason = raw.get("fallback_reason")
+    if not is_fallback:
+        fallback_reason = None
+    elif fallback_reason is None or not str(fallback_reason).strip():
+        # Every fallback row must carry an operator-visible reason; scrapers
+        # that don't state one get the generic baseline tag.
+        fallback_reason = DEFAULT_FALLBACK_REASON
+
     return {
         "scrape_date": str(ds),
         "source_slug": str(slug),
@@ -236,7 +260,8 @@ def normalize_record(
         "rating": rating,
         "image_url": str(image_url) if image_url else None,
         "url": str(url) if url else None,
-        "is_fallback": bool(_first(raw.get("is_fallback"), is_fallback)),
+        "is_fallback": is_fallback,
+        "fallback_reason": str(fallback_reason) if fallback_reason else None,
         "source": str(raw.get("source") or "scrape"),
         "scraped_at": str(raw.get("scraped_at") or datetime.now(UTC).isoformat()),
         "attrs": attrs,
@@ -296,6 +321,11 @@ def validate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     """
     total = len(records)
     errors: list[str] = []
+    valid_count = 0
     for rec in records:
-        errors.extend(validate_record(rec))
-    return {"valid_count": total, "error_count": len(errors), "errors": errors}
+        issues = validate_record(rec)
+        if issues:
+            errors.extend(issues)
+        else:
+            valid_count += 1
+    return {"total": total, "valid_count": valid_count, "error_count": len(errors), "errors": errors}

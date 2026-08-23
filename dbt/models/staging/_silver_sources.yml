@@ -20,5 +20,9 @@ sources:
         description: Gemini AI classification result cache.
       - name: coicop_category_map
         description: Store native category -> COICOP division mapping.
+      - name: coicop_override_manual
+        description: Manual COICOP overrides saved by the labeling app (kept separate from the dbt-owned coicop_override seed table).
       - name: classification_queue
         description: REVIEW/UNCLASSIFIED rows awaiting human triage.
+      - name: hedonic_adjusted_prices
+        description: Quality-adjusted constant-specification prices for Division 09/08 electronics.

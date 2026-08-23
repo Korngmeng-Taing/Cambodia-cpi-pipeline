@@ -4,8 +4,8 @@ pipeline/fisher_calculator.py
 Superlative Fisher Ideal Price Index Calculator.
 
 Methodology:
-- Computes bilateral Laspeyres (P_L) using base-period expenditure/weights.
-- Computes bilateral Paasche (P_P) using current-period expenditure/weights.
+- Computes bilateral Laspeyres (P_L) using official base-period COICOP expenditure weights.
+- Computes bilateral Paasche (P_P) using current-period expenditure relatives.
 - Computes the Superlative Fisher Ideal Index:
     P_Fisher = sqrt(P_Laspeyres * P_Paasche)
 - Quantifies Consumer Substitution Bias:
@@ -58,16 +58,7 @@ class FisherCalculator:
     ) -> dict[str, float | int]:
         """
         Calculates Laspeyres, Paasche, Fisher Ideal Index, and Substitution Bias
-        over matched items.
-
-        Returns:
-            Dict containing {
-                "laspeyres_index": float,
-                "paasche_index": float,
-                "fisher_index": float,
-                "substitution_bias_pct": float,
-                "matched_items_count": int,
-            }
+        over matched items or division indices.
         """
         matched = prices_0.index.intersection(prices_1.index)
         matched = matched[(prices_0.loc[matched] > 0) & (prices_1.loc[matched] > 0)]
@@ -86,10 +77,14 @@ class FisherCalculator:
         p1 = prices_1.loc[matched].values.astype(float)
         price_ratios = p1 / p0
 
-        # Weighted calculation if category / item weights are available
-        if weights_0 is not None and weights_1 is not None:
+        # Weighted calculation with category/division weights (Diewert 1976)
+        if weights_0 is not None:
             w0 = weights_0.reindex(matched).fillna(0).values.astype(float)
-            w1 = weights_1.reindex(matched).fillna(0).values.astype(float)
+            w1 = (
+                weights_1.reindex(matched).fillna(0).values.astype(float)
+                if weights_1 is not None
+                else w0
+            )
 
             sum_w0 = np.sum(w0)
             sum_w1 = np.sum(w1)
@@ -111,7 +106,7 @@ class FisherCalculator:
                     "matched_items_count": n_matched,
                 }
 
-        # Unweighted Elementary Aggregation (Carli Laspeyres & Harmonic Paasche)
+        # Geometric / Harmonic fallback
         laspeyres = float(np.mean(price_ratios))
         paasche = float(1.0 / np.mean(1.0 / price_ratios))
         fisher = float(np.sqrt(laspeyres * paasche))
@@ -131,56 +126,52 @@ class FisherCalculator:
         base_period: str = "2026-08",
     ) -> dict[str, Any] | None:
         """
-        Computes Superlative Fisher Index between base period prices and current target_date,
-        persists to gold.cpi_fisher_superlative, and returns summary stats.
+        Computes Superlative Fisher Index between base period prices and current target_date
+        using COICOP Division aggregations & NIS weights, persists to gold.cpi_fisher_superlative,
+        and returns summary stats.
         """
         conn = self._get_connection()
         try:
-            # 1. Fetch base prices
+            # 1. Fetch division price indices and NIS weights for the target date
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT product_key, base_price_khr
-                    FROM gold.base_prices
-                    WHERE base_period = %s AND base_price_khr > 0;
-                    """,
-                    (base_period,),
-                )
-                base_rows = cur.fetchall()
-
-            # 2. Fetch current prices
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT item_id, p_khr_jevons
-                    FROM gold.fct_daily_price_stats
-                    WHERE scrape_date = %s::DATE AND p_khr_jevons > 0;
+                    SELECT 
+                        c.coicop_division,
+                        c.index_value,
+                        w.weight_pct,
+                        c.n_items
+                    FROM gold.cpi_category_daily c
+                    JOIN gold.coicop_weights w ON w.coicop_division = c.coicop_division
+                    WHERE c.scrape_date = %s::DATE 
+                      AND c.index_value > 0;
                     """,
                     (target_date,),
                 )
-                curr_rows = cur.fetchall()
+                div_rows = cur.fetchall()
 
-            if not base_rows or not curr_rows:
+            if not div_rows:
                 log.warning(
-                    "Insufficient observations for Fisher index on %s (base=%d, curr=%d)",
+                    "No division index observations for Fisher index on %s",
                     target_date,
-                    len(base_rows),
-                    len(curr_rows),
                 )
                 return None
 
-            s_base = pd.Series(
-                {r[0]: float(r[1]) for r in base_rows},
-                name="base_price",
-            )
-            s_curr = pd.Series(
-                {r[0]: float(r[1]) for r in curr_rows},
-                name="curr_price",
-            )
+            divisions = [r[0] for r in div_rows]
+            indices = [float(r[1]) / 100.0 for r in div_rows]  # normalized relative (P_t / P_0)
+            weights = [float(r[2]) for r in div_rows]
+            total_items = sum(int(r[3]) for r in div_rows)
 
-            metrics = self.calculate_bilateral_fisher(s_base, s_curr)
+            s_base = pd.Series(1.0, index=divisions, name="base_rel")
+            s_curr = pd.Series(indices, index=divisions, name="curr_rel")
+            s_weights = pd.Series(weights, index=divisions, name="weight")
 
-            # 3. Upsert into gold.cpi_fisher_superlative
+            metrics = self.calculate_bilateral_fisher(
+                s_base, s_curr, weights_0=s_weights, weights_1=s_weights
+            )
+            metrics["matched_items_count"] = total_items
+
+            # 2. Upsert into gold.cpi_fisher_superlative
             with conn.cursor() as cur:
                 cur.execute(
                     """

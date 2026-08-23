@@ -1,5 +1,6 @@
 -- ============================================================================
 -- CAMBODIA CPI PIPELINE — GOLD STORED PROCEDURES (SQL-FIRST INDEX CALCULATION)
+-- Enhanced with Unit-Price Guardrails, FX LOCF Carry-Forward & Ultra-Fast LAG Anomaly Detection
 -- ============================================================================
 
 -- 1. Procedure: Bootstrap Base Prices from Base Period observations
@@ -15,13 +16,19 @@ BEGIN
 
     -- Compute geometric mean base price for canonical items with n_obs >= 1
     -- Division is resolved at the canonical item level (dim_items.coicop_division)
+    -- Guardrail: Unit prices are only used when size_value >= 5 (guards against 1g misparses)
+    -- and unit_price_khr is within reasonable bounds (50 KHR to 5,000,000 KHR).
     INSERT INTO gold.base_prices (product_key, base_period, base_price_khr, n_obs, std_dev, coicop_division, created_at)
     SELECT 
         d.item_id AS product_key,
         p_base_period,
         ROUND(
             CASE
-                WHEN COUNT(*) FILTER (WHERE d.unit_price_khr > 0) = COUNT(*)
+                WHEN COUNT(*) FILTER (
+                    WHERE d.unit_price_khr > 0 
+                      AND d.unit_price_khr BETWEEN 50.0 AND 5000000.0 
+                      AND COALESCE(d.size_value, 0) >= 5
+                ) = COUNT(*)
                  AND COUNT(DISTINCT CASE WHEN d.size_unit IN ('kg','g') THEN 1 WHEN d.size_unit IN ('l','ml') THEN 2 END) = 1
                 THEN EXP(AVG(LN(d.unit_price_khr)) FILTER (WHERE d.unit_price_khr > 0))
                 ELSE EXP(AVG(LN(d.price_khr)) FILTER (WHERE d.price_khr > 0))
@@ -71,14 +78,16 @@ $$;
 
 
 -- 2. Procedure: Calculate Daily CPI Index (Elementary Jevons, Gap-Fill, Laspeyres, Anomalies)
-CREATE OR REPLACE PROCEDURE gold.sp_calculate_daily_cpi(p_date DATE)
+CREATE OR REPLACE PROCEDURE gold.sp_calculate_daily_cpi(p_date DATE, p_base_period VARCHAR(7) DEFAULT '2026-08')
 LANGUAGE plpgsql AS $$
 DECLARE
-    v_base_period VARCHAR(7) := '2026-08';
+    v_base_period VARCHAR(7) := COALESCE(p_base_period, '2026-08');
     v_total_weight NUMERIC(6,3);
     v_div_count INT;
 BEGIN
     -- Step 1: Elementary Aggregation — Jevons Geometric Mean per item_id
+    -- Guardrail: Unit prices are only used when size_value >= 5 and within realistic unit price bounds.
+    DELETE FROM gold.fct_daily_price_stats WHERE scrape_date = p_date;
     INSERT INTO gold.fct_daily_price_stats (
         scrape_date, item_id, coicop_division, p_khr_jevons, p_khr_unit, n_quotes, n_stores, is_imputed, gap_days
     )
@@ -86,20 +95,29 @@ BEGIN
         p_date,
         d.item_id,
         COALESCE(ci.coicop_division, 'UNCLASSIFIED') AS coicop_division,
-        -- Unit-price-aware elementary price: when every quote for this item/day
-        -- carries a comparable per-kg or per-L unit price (same base dimension), the
-        -- Jevons mean is taken over unit prices so pack-size changes cannot masquerade
-        -- as inflation (Layer 6). Otherwise fall back to the shelf price.
         ROUND(
             CASE
-                WHEN COUNT(*) FILTER (WHERE d.unit_price_khr > 0) = COUNT(*)
+                WHEN COUNT(*) FILTER (
+                    WHERE d.unit_price_khr > 0 
+                      AND d.unit_price_khr BETWEEN 50.0 AND 5000000.0 
+                      AND COALESCE(d.size_value, 0) >= 5
+                ) = COUNT(*)
                  AND COUNT(DISTINCT CASE WHEN d.size_unit IN ('kg','g') THEN 1 WHEN d.size_unit IN ('l','ml') THEN 2 END) = 1
                 THEN EXP(AVG(LN(d.unit_price_khr)) FILTER (WHERE d.unit_price_khr > 0))
                 ELSE EXP(AVG(LN(d.price_khr)) FILTER (WHERE d.price_khr > 0))
             END,
             2
         ) AS p_khr_jevons,
-        ROUND(EXP(AVG(LN(NULLIF(d.unit_price_khr, 0)))), 2) AS p_khr_unit,
+        ROUND(
+            EXP(
+                AVG(LN(d.unit_price_khr)) FILTER (
+                    WHERE d.unit_price_khr > 0 
+                      AND d.unit_price_khr BETWEEN 50.0 AND 5000000.0 
+                      AND COALESCE(d.size_value, 0) >= 5
+                )
+            ), 
+            2
+        ) AS p_khr_unit,
         COUNT(*) AS n_quotes,
         COUNT(DISTINCT d.store_slug) AS n_stores,
         FALSE AS is_imputed,
@@ -121,7 +139,21 @@ BEGIN
         is_imputed = FALSE,
         gap_days = 0;
 
-    -- Step 2: Gap-Filling — Forward carry unobserved items up to <= 7 consecutive days
+    -- Step 2: Gap-Filling — Class-Mean Imputation for unobserved items (<= 7 consecutive days)
+    -- Computes the average price relative of observed items in each division, adjusting the missing item's
+    -- last price by the division movement (ILO standard), falling back to previous price if no movement exists.
+    WITH class_movement AS (
+        SELECT 
+            d.coicop_division,
+            EXP(AVG(LN(d.p_khr_jevons / NULLIF(prev.p_khr_jevons, 0))) FILTER (WHERE prev.p_khr_jevons > 0 AND d.p_khr_jevons > 0)) AS move_ratio
+        FROM gold.fct_daily_price_stats d
+        JOIN gold.fct_daily_price_stats prev 
+          ON prev.item_id = d.item_id 
+         AND prev.scrape_date = (p_date - INTERVAL '1 day')::DATE
+        WHERE d.scrape_date = p_date
+          AND d.is_imputed = FALSE
+        GROUP BY d.coicop_division
+    )
     INSERT INTO gold.fct_daily_price_stats (
         scrape_date, item_id, coicop_division, p_khr_jevons, p_khr_unit, n_quotes, n_stores, is_imputed, gap_days
     )
@@ -129,13 +161,20 @@ BEGIN
         p_date,
         prev.item_id,
         prev.coicop_division,
-        prev.p_khr_jevons,
+        ROUND(
+            prev.p_khr_jevons * COALESCE(
+                CASE WHEN cm.move_ratio BETWEEN 0.5 AND 2.0 THEN cm.move_ratio ELSE 1.0 END, 
+                1.0
+            ), 
+            2
+        ) AS p_khr_jevons,
         prev.p_khr_unit,
         prev.n_quotes,
         prev.n_stores,
         TRUE AS is_imputed,
         prev.gap_days + 1 AS gap_days
     FROM gold.fct_daily_price_stats prev
+    LEFT JOIN class_movement cm ON cm.coicop_division = prev.coicop_division
     WHERE prev.scrape_date = (p_date - INTERVAL '1 day')::DATE
       AND prev.gap_days < 7
       AND prev.item_id NOT IN (
@@ -144,12 +183,22 @@ BEGIN
     ON CONFLICT (scrape_date, item_id) DO NOTHING;
 
     -- Step 3: Category (Division) Aggregation (Jevons elementary relative over base prices)
+    -- Guardrail: Single-item ratio is bounded to [0.10, 10.0] to protect division geometric mean
     DELETE FROM gold.cpi_category_daily WHERE scrape_date = p_date;
     INSERT INTO gold.cpi_category_daily (scrape_date, coicop_division, index_value, base_period, n_items, weight_pct)
     SELECT 
         p_date,
         d.coicop_division,
-        ROUND(EXP(AVG(LN(d.p_khr_jevons / b.base_price_khr))) * 100.0, 4) AS index_value,
+        ROUND(
+            EXP(
+                AVG(
+                    LN(
+                        GREATEST(0.10, LEAST(10.0, d.p_khr_jevons / NULLIF(b.base_price_khr, 0)))
+                    )
+                ) FILTER (WHERE d.p_khr_jevons > 0 AND b.base_price_khr > 0)
+            ) * 100.0, 
+            4
+        ) AS index_value,
         v_base_period,
         COUNT(d.item_id) AS n_items,
         w.weight_pct
@@ -157,9 +206,12 @@ BEGIN
     JOIN gold.base_prices b ON d.item_id = b.product_key AND b.base_period = v_base_period
     JOIN gold.coicop_weights w ON d.coicop_division = w.coicop_division
     WHERE d.scrape_date = p_date
+      AND d.p_khr_jevons > 0
+      AND b.base_price_khr > 0
     GROUP BY d.coicop_division, w.weight_pct;
 
     -- Step 3b: Populate Unified 12 COICOP Division Mart (gold.mart_cpi_division_daily)
+    -- FX rate uses LOCF lookback so weekends/holidays carry forward the latest official rate
     DELETE FROM gold.mart_cpi_division_daily WHERE scrape_date = p_date;
     INSERT INTO gold.mart_cpi_division_daily (
         scrape_date, coicop_division, division_name, weight_pct,
@@ -172,13 +224,19 @@ BEGIN
             w.division_name,
             w.weight_pct,
             c.index_value AS idx_khr,
-            ROUND(c.index_value * COALESCE(er.rate, 4044.0) / 4044.0, 4) AS idx_usd,
+            ROUND(c.index_value * 4044.0 / COALESCE(er.rate, 4044.0), 4) AS idx_usd,
             c.n_items,
             COUNT(DISTINCT f.store_slug) AS n_stores,
             ROUND(COUNT(*) FILTER (WHERE f.on_promo = TRUE)::NUMERIC / NULLIF(COUNT(*), 0) * 100.0, 2) AS promo_share
         FROM gold.cpi_category_daily c
         JOIN gold.coicop_weights w ON w.coicop_division = c.coicop_division
-        LEFT JOIN staging.exchange_rates er ON er.execution_date = p_date
+        LEFT JOIN LATERAL (
+            SELECT rate 
+            FROM staging.exchange_rates 
+            WHERE execution_date <= p_date 
+            ORDER BY execution_date DESC 
+            LIMIT 1
+        ) er ON TRUE
         LEFT JOIN silver.fct_daily_prices f ON f.scrape_date = p_date AND f.coicop_division = c.coicop_division
         WHERE c.scrape_date = p_date
         GROUP BY c.coicop_division, w.division_name, w.weight_pct, c.index_value, er.rate, c.n_items
@@ -239,7 +297,7 @@ BEGIN
         WITH current_headline AS (
             SELECT 
                 ROUND(SUM(index_value * (weight_pct / NULLIF(v_total_weight, 0))), 4) AS headline_khr,
-                -- Core CPI excludes Division 01 (Food) & 07 (Transport/Fuel)
+                -- Core CPI excludes Division 01 (Food) & Division 07 (Transport/Fuel)
                 ROUND(
                     SUM(CASE WHEN coicop_division NOT IN ('01', '07') THEN index_value * weight_pct END) /
                     NULLIF(SUM(CASE WHEN coicop_division NOT IN ('01', '07') THEN weight_pct END), 0),
@@ -276,7 +334,7 @@ BEGIN
             p_date,
             v_base_period,
             ch.headline_khr,
-            ROUND(ch.headline_khr * COALESCE(er.rate, 4044.0) / 4044.0, 4) AS cpi_headline_usd,
+            ROUND(ch.headline_khr * 4044.0 / COALESCE(er.rate, 4044.0), 4) AS cpi_headline_usd,
             gv.index_value AS cpi_geks_multilateral,
             COALESCE(ch.core_khr, ch.headline_khr) AS cpi_core_khr,
             ROUND((ch.headline_khr - ph.cpi_headline_khr) / NULLIF(ph.cpi_headline_khr, 0) * 100.0, 3) AS inflation_dod_pct,
@@ -288,64 +346,79 @@ BEGIN
             NOW()
         FROM current_headline ch
         CROSS JOIN quote_stats qs
-        LEFT JOIN staging.exchange_rates er ON er.execution_date = p_date
+        LEFT JOIN LATERAL (
+            SELECT rate 
+            FROM staging.exchange_rates 
+            WHERE execution_date <= p_date 
+            ORDER BY execution_date DESC 
+            LIMIT 1
+        ) er ON TRUE
         LEFT JOIN prev_headline ph ON TRUE
         LEFT JOIN prev_month_headline pmh ON TRUE
         LEFT JOIN geks_val gv ON TRUE;
     END IF;
 
-    -- Step 5: Price Anomaly Detection & Mart Population
+    -- Step 5: Price Anomaly Detection & Mart Population (Single-Pass LAG Window)
     DELETE FROM gold.price_anomalies WHERE scrape_date = p_date;
     DELETE FROM gold.mart_price_anomalies WHERE scrape_date = p_date;
 
-    INSERT INTO gold.price_anomalies (scrape_date, product_key, store_slug, price_khr, expected_price_khr, pct_change, anomaly_type)
-    SELECT 
-        curr.scrape_date,
-        curr.item_id AS product_key,
-        curr.store_slug,
-        curr.price_khr,
-        prev.price_khr AS expected_price_khr,
-        ROUND(((curr.price_khr - prev.price_khr) / prev.price_khr * 100.0), 2) AS pct_change,
-        CASE WHEN curr.price_khr > prev.price_khr THEN 'SPIKE_UP' ELSE 'CRASH_DOWN' END AS anomaly_type
-    FROM silver.fct_daily_prices curr
-    JOIN silver.fct_daily_prices prev 
-      ON curr.item_id = prev.item_id 
-     AND curr.store_slug = prev.store_slug 
-     AND prev.scrape_date = (p_date - INTERVAL '1 day')::DATE
-    WHERE curr.scrape_date = p_date
-      AND prev.price_khr > 0
-      AND ABS((curr.price_khr - prev.price_khr) / prev.price_khr) > 0.15;
-
-    INSERT INTO gold.mart_price_anomalies (
-        scrape_date, item_id, product_key, store_slug, canonical_name,
-        coicop_division, price_khr, expected_price_khr, pct_change,
-        anomaly_type, root_cause_flag, is_reviewed, created_at
+    WITH recent_prices AS (
+        SELECT 
+            scrape_date,
+            item_id,
+            store_slug,
+            name_clean,
+            coicop_division,
+            price_khr,
+            on_promo,
+            LAG(price_khr) OVER (PARTITION BY item_id, store_slug ORDER BY scrape_date) AS prev_price_khr,
+            LAG(on_promo) OVER (PARTITION BY item_id, store_slug ORDER BY scrape_date) AS prev_on_promo
+        FROM silver.fct_daily_prices
+        WHERE scrape_date >= (p_date - INTERVAL '7 days')::DATE
+          AND scrape_date <= p_date
+          AND price_khr > 0
+    ),
+    anomalies AS (
+        SELECT 
+            scrape_date,
+            item_id,
+            item_id AS product_key,
+            store_slug,
+            name_clean AS canonical_name,
+            coicop_division,
+            price_khr,
+            prev_price_khr AS expected_price_khr,
+            ROUND(((price_khr - prev_price_khr) / prev_price_khr * 100.0), 2) AS pct_change,
+            CASE WHEN price_khr > prev_price_khr THEN 'SPIKE_UP' ELSE 'CRASH_DOWN' END AS anomaly_type,
+            CASE 
+                WHEN on_promo <> prev_on_promo THEN 'PROMO_SHIFT'
+                WHEN ABS((price_khr - prev_price_khr) / prev_price_khr) > 0.50 THEN 'SUSPECTED_PARSING_ERROR'
+                ELSE 'GENUINE_PRICE_VOLATILITY'
+            END AS root_cause_flag
+        FROM recent_prices
+        WHERE scrape_date = p_date
+          AND prev_price_khr IS NOT NULL
+          AND prev_price_khr > 0
+          AND ABS((price_khr - prev_price_khr) / prev_price_khr) > 0.15
+    ),
+    ins_mart AS (
+        INSERT INTO gold.mart_price_anomalies (
+            scrape_date, item_id, product_key, store_slug, canonical_name,
+            coicop_division, price_khr, expected_price_khr, pct_change,
+            anomaly_type, root_cause_flag, is_reviewed, created_at
+        )
+        SELECT 
+            scrape_date, item_id, product_key, store_slug, canonical_name,
+            coicop_division, price_khr, expected_price_khr, pct_change,
+            anomaly_type, root_cause_flag, FALSE, NOW()
+        FROM anomalies
+        RETURNING *
+    )
+    INSERT INTO gold.price_anomalies (
+        scrape_date, product_key, store_slug, price_khr, expected_price_khr, pct_change, anomaly_type, item_id, created_at
     )
     SELECT 
-        curr.scrape_date,
-        curr.item_id,
-        curr.item_id AS product_key,
-        curr.store_slug,
-        curr.name_clean AS canonical_name,
-        curr.coicop_division,
-        curr.price_khr,
-        prev.price_khr AS expected_price_khr,
-        ROUND(((curr.price_khr - prev.price_khr) / prev.price_khr * 100.0), 2) AS pct_change,
-        CASE WHEN curr.price_khr > prev.price_khr THEN 'SPIKE_UP' ELSE 'CRASH_DOWN' END AS anomaly_type,
-        CASE 
-            WHEN curr.on_promo <> prev.on_promo THEN 'PROMO_SHIFT'
-            WHEN ABS((curr.price_khr - prev.price_khr) / prev.price_khr) > 0.50 THEN 'SUSPECTED_PARSING_ERROR'
-            ELSE 'GENUINE_PRICE_VOLATILITY'
-        END AS root_cause_flag,
-        FALSE AS is_reviewed,
-        NOW()
-    FROM silver.fct_daily_prices curr
-    JOIN silver.fct_daily_prices prev 
-      ON curr.item_id = prev.item_id 
-     AND curr.store_slug = prev.store_slug 
-     AND prev.scrape_date = (p_date - INTERVAL '1 day')::DATE
-    WHERE curr.scrape_date = p_date
-      AND prev.price_khr > 0
-      AND ABS((curr.price_khr - prev.price_khr) / prev.price_khr) > 0.15;
+        scrape_date, product_key, store_slug, price_khr, expected_price_khr, pct_change, anomaly_type, item_id, NOW()
+    FROM ins_mart;
 END;
 $$;

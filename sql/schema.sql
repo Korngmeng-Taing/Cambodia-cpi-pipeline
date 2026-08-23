@@ -3,15 +3,58 @@
 -- Schemas: staging (Bronze), silver (Clean observations & dims), gold (Index & stats)
 -- ============================================================================
 
+CREATE SCHEMA IF NOT EXISTS bronze;
 CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS silver;
 CREATE SCHEMA IF NOT EXISTS gold;
 
 -- ============================================================================
+-- 0. BRONZE (Raw Store Listings & Errors)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS bronze.raw_prices (
+    raw_price_id BIGSERIAL PRIMARY KEY,
+    store_id VARCHAR(64) NOT NULL,
+    item_description_raw TEXT NOT NULL,
+    price NUMERIC(12,4) NOT NULL,
+    currency VARCHAR(8) DEFAULT 'KHR',
+    scraped_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    source_url TEXT,
+    source_name VARCHAR(128) NOT NULL,
+    batch_id UUID,
+    raw_payload JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_raw_prices_store_scraped ON bronze.raw_prices (store_id, scraped_at);
+CREATE INDEX IF NOT EXISTS idx_raw_prices_source_scraped ON bronze.raw_prices (source_name, scraped_at);
+-- CONTRACT: bronze.raw_prices is "deduped at insert", NOT strictly append-only.
+-- Re-scrapes of the same observation on the same day are collapsed by the
+-- unique index below via INSERT ... ON CONFLICT DO NOTHING
+-- (see pipeline/bronze_scraper.py:write_canonical_batch, which also pre-filters
+-- duplicates app-side). New rows are never mutated after insert.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_raw_prices_observation
+    ON bronze.raw_prices (
+        store_id, source_name,
+        COALESCE(source_url, ''), item_description_raw, price,
+        (scraped_at AT TIME ZONE 'UTC')::date
+    );
+
+CREATE TABLE IF NOT EXISTS bronze.scrape_errors (
+    error_id BIGSERIAL PRIMARY KEY,
+    batch_id UUID,
+    store_id VARCHAR(64),
+    source_name VARCHAR(128),
+    raw_record TEXT,
+    error_type VARCHAR(64),
+    error_message TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================================
 -- 1. STAGING (Bronze Ingestion)
 -- ============================================================================
 
--- Raw scrapes table: Append-only with UUID run_id per batch
+-- Raw scrapes: one batch record per store per scrape day (upserted on re-run).
 CREATE TABLE IF NOT EXISTS staging.raw_scrapes (
     id BIGSERIAL PRIMARY KEY,
     run_id UUID NOT NULL,
@@ -20,13 +63,11 @@ CREATE TABLE IF NOT EXISTS staging.raw_scrapes (
     source_type VARCHAR(32) NOT NULL,
     record_count INT NOT NULL DEFAULT 0,
     payload JSONB NOT NULL,
-    is_processed BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_raw_scrapes_day_store ON staging.raw_scrapes(scrape_date, store_slug);
 CREATE INDEX IF NOT EXISTS idx_raw_scrapes_date_store ON staging.raw_scrapes(scrape_date, store_slug);
 CREATE INDEX IF NOT EXISTS idx_raw_scrapes_run_id ON staging.raw_scrapes(run_id);
-CREATE INDEX IF NOT EXISTS idx_raw_scrapes_unprocessed ON staging.raw_scrapes(is_processed) WHERE is_processed = FALSE;
 
 -- Exchange rates table: MEF USD/KHR official daily rate + fallback audit
 CREATE TABLE IF NOT EXISTS staging.exchange_rates (
@@ -56,51 +97,127 @@ CREATE TABLE IF NOT EXISTS staging.bronze_ingestion_stats (
 CREATE INDEX IF NOT EXISTS idx_bronze_stats_status_date
     ON staging.bronze_ingestion_stats(status, scrape_date);
 
--- Raw-item -> canonical-item mapping written by the canonicalization engine
--- (pipeline/canonicalizer.py). One row per raw item per scrape date.
-CREATE TABLE IF NOT EXISTS staging.stg_item_mapping (
-    id BIGSERIAL PRIMARY KEY,
-    source_name VARCHAR(64) NOT NULL,
-    scrape_date DATE NOT NULL,
-    raw_item_id VARCHAR(128) NOT NULL,
-    raw_product_name TEXT NOT NULL,
-    canonical_item_id UUID NOT NULL,
-    match_score NUMERIC(6, 4) NOT NULL,
-    is_new BOOLEAN NOT NULL DEFAULT FALSE,
-    hedonic_adjusted_price NUMERIC(14, 2),
-    -- COICOP classification outputs written by the rule-based dbt model and the
-    -- Gemini AI classifier (pipeline/gemini_coicop_classifier.py).
-    coicop_code VARCHAR(16),
-    classification_method VARCHAR(32), -- 'rule_keyword', 'rule_regex', 'gemini_ai'
-    confidence_score NUMERIC(5, 4),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_stg_item_mapping UNIQUE (source_name, raw_item_id, scrape_date)
-);
-CREATE INDEX IF NOT EXISTS idx_stg_mapping_coicop
-    ON staging.stg_item_mapping(coicop_code);
-CREATE INDEX IF NOT EXISTS idx_stg_mapping_canonical_date
-    ON staging.stg_item_mapping(canonical_item_id, scrape_date);
-
 -- ============================================================================
 -- 2. SILVER (Fact & Dimensions)
 -- ============================================================================
 
+-- Canonical items registry
+CREATE TABLE IF NOT EXISTS silver.canonical_items (
+    item_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    canonical_name TEXT NOT NULL,
+    brand VARCHAR(256),
+    barcode VARCHAR(64),
+    size_norm VARCHAR(32),
+    category VARCHAR(64),
+    first_seen TIMESTAMPTZ DEFAULT NOW(),
+    last_seen TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_canonical_items_barcode ON silver.canonical_items(barcode) WHERE barcode IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_canonical_items_name ON silver.canonical_items(canonical_name);
+
+-- Item matching audit log
+CREATE TABLE IF NOT EXISTS silver.item_match_log (
+    match_id BIGSERIAL PRIMARY KEY,
+    raw_price_id BIGINT NOT NULL,
+    item_id UUID NOT NULL REFERENCES silver.canonical_items(item_id),
+    match_method VARCHAR(32) NOT NULL CHECK (match_method IN ('barcode_exact', 'sku_exact', 'fuzzy_text', 'new_item')),
+    confidence NUMERIC(5,4) NOT NULL CHECK (confidence BETWEEN 0 AND 1),
+    matched_at TIMESTAMPTZ DEFAULT NOW(),
+    matched_by VARCHAR(64) DEFAULT 'auto'
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_item_match_log_raw_price_id ON silver.item_match_log(raw_price_id);
+CREATE INDEX IF NOT EXISTS idx_item_match_log_item_id ON silver.item_match_log(item_id);
+
+-- Review Queue for fuzzy matching and low-confidence classifications
+CREATE TABLE IF NOT EXISTS silver.needs_review (
+    review_id BIGSERIAL PRIMARY KEY,
+    raw_price_id BIGINT NOT NULL,
+    item_description_raw TEXT NOT NULL,
+    best_match_item_id UUID,
+    best_match_name TEXT,
+    confidence NUMERIC(5,4),
+    status VARCHAR(16) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','skipped')),
+    reviewed_at TIMESTAMPTZ,
+    reviewed_by VARCHAR(64),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- AI COICOP Memoization Cache
+CREATE TABLE IF NOT EXISTS silver.dim_coicop_ai_cache (
+    product_name TEXT PRIMARY KEY,
+    coicop_code VARCHAR(16) NOT NULL,
+    confidence_score NUMERIC(5, 4),
+    reasoning TEXT,
+    model_version VARCHAR(64),
+    classified_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Canonical product dimension created by the canonicalization engine
--- (pipeline/canonicalizer.py). raw_item_id is the source-specific key that
--- enables exact-match reuse; fuzzy name matches reuse canonical_item_id.
 CREATE TABLE IF NOT EXISTS silver.dim_canonical_products (
     canonical_item_id UUID PRIMARY KEY,
     canonical_name TEXT NOT NULL,
     coicop_code VARCHAR(16),
     source_name VARCHAR(64),
     raw_item_id VARCHAR(128),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    ml_confidence NUMERIC(5, 4),
+    classification_method VARCHAR(32),
+    needs_review BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_dim_canonical_raw_item
     ON silver.dim_canonical_products(source_name, raw_item_id);
 
+-- Silver Daily Cleansed Facts Table
+CREATE TABLE IF NOT EXISTS silver.fct_daily_prices (
+    scrape_date DATE NOT NULL,
+    store_slug VARCHAR(64) NOT NULL,
+    item_id VARCHAR(128) NOT NULL,
+    product_key VARCHAR(128) NOT NULL,
+    name_clean TEXT,
+    category_native TEXT,
+    coicop_division VARCHAR(16),
+    coicop_method VARCHAR(32),
+    coicop_confidence NUMERIC(5, 4),
+    currency VARCHAR(16),
+    price_original_curr NUMERIC(14, 2),
+    original_price_curr NUMERIC(14, 2),
+    original_price_khr NUMERIC(14, 2),
+    discount_pct NUMERIC(6, 2),
+    on_promo BOOLEAN,
+    price_khr NUMERIC(14, 2),
+    unit_price_khr NUMERIC(14, 2),
+    size_value NUMERIC(12, 4),
+    size_unit VARCHAR(32),
+    pack_qty INT,
+    is_outlier BOOLEAN,
+    cpi_eligible BOOLEAN,
+    is_fallback BOOLEAN,
+    scraped_at TIMESTAMPTZ,
+    PRIMARY KEY (scrape_date, store_slug, item_id)
+);
+
+-- Unified Canonical Item Dimension
+CREATE TABLE IF NOT EXISTS silver.dim_items (
+    item_id VARCHAR(128) PRIMARY KEY,
+    canonical_name TEXT,
+    brand VARCHAR(256),
+    barcode VARCHAR(64),
+    size_norm VARCHAR(32),
+    native_category TEXT,
+    coicop_division VARCHAR(16),
+    coicop_code VARCHAR(16),
+    unit_of_measure VARCHAR(32),
+    store_count INT DEFAULT 0,
+    avg_match_confidence NUMERIC(5,4),
+    first_seen DATE,
+    last_seen DATE,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
 -- Store Product Link Mapping
--- (removed: silver.store_products was a legacy table; link data now lives in dbt silver.item_match_log / dim_products)
+-- (removed: silver.store_products was a legacy table, link data now lives in dbt silver.item_match_log / dim_products)
 
 -- Manual Overrides Table
 CREATE TABLE IF NOT EXISTS silver.coicop_override (
@@ -113,6 +230,23 @@ CREATE TABLE IF NOT EXISTS silver.coicop_override (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_override_match ON silver.coicop_override(match_type, match_value);
+
+-- Manual Overrides from Labeling App
+-- The Streamlit triage UI (apps/labeling_app.py) writes HERE, not into
+-- silver.coicop_override: that name is owned by the dbt seed
+-- dbt/seeds/coicop_override.csv, which is fully recreated on every
+-- `dbt seed` run and would wipe any manually inserted rows.
+-- int_coicop_classified UNIONs this table with the seed at query time.
+CREATE TABLE IF NOT EXISTS silver.coicop_override_manual (
+    id SERIAL PRIMARY KEY,
+    match_type VARCHAR(32) NOT NULL, -- 'product_key', 'barcode', 'name'
+    match_value TEXT NOT NULL,
+    store_slug VARCHAR(64), -- NULL applies to all stores
+    coicop_division VARCHAR(16) NOT NULL,
+    reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_override_manual_match ON silver.coicop_override_manual(match_type, match_value);
 
 -- Store Native Category Mapping Table
 CREATE TABLE IF NOT EXISTS silver.coicop_category_map (
@@ -152,6 +286,24 @@ CREATE TABLE IF NOT EXISTS silver.classification_ground_truth (
 );
 CREATE INDEX IF NOT EXISTS idx_ground_truth_division ON silver.classification_ground_truth(coicop_division);
 CREATE INDEX IF NOT EXISTS idx_ground_truth_code ON silver.classification_ground_truth(coicop_code);
+
+-- Hedonic Quality Adjustment Table (Division 09 / 08 Electronics)
+CREATE TABLE IF NOT EXISTS silver.hedonic_adjusted_prices (
+    scrape_date DATE NOT NULL,
+    item_id VARCHAR(128) NOT NULL,
+    store_slug VARCHAR(64) NOT NULL,
+    canonical_name TEXT NOT NULL,
+    coicop_division VARCHAR(16) NOT NULL DEFAULT '09',
+    raw_price_khr NUMERIC(14, 2) NOT NULL,
+    ram_gb INT NOT NULL DEFAULT 0,
+    storage_gb INT NOT NULL DEFAULT 0,
+    hedonic_adjusted_price_khr NUMERIC(14, 2) NOT NULL,
+    adjustment_ratio NUMERIC(8, 4) NOT NULL DEFAULT 1.0000,
+    model_r2 NUMERIC(6, 4),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (scrape_date, item_id, store_slug)
+);
+CREATE INDEX IF NOT EXISTS idx_hedonic_date_div ON silver.hedonic_adjusted_prices(scrape_date, coicop_division);
 
 -- ============================================================================
 -- 3. GOLD (Aggregates, Base Prices, Indices, Anomalies, Forecasts)
@@ -216,6 +368,7 @@ CREATE TABLE IF NOT EXISTS gold.fct_daily_price_stats (
 );
 CREATE INDEX IF NOT EXISTS idx_fct_stats_date ON gold.fct_daily_price_stats(scrape_date);
 CREATE INDEX IF NOT EXISTS idx_fct_stats_coicop ON gold.fct_daily_price_stats(coicop_division);
+CREATE INDEX IF NOT EXISTS idx_fct_stats_date_div ON gold.fct_daily_price_stats(scrape_date, coicop_division);
 
 -- Daily Price Anomaly Detection (> 15% day-on-day shift)
 CREATE TABLE IF NOT EXISTS gold.price_anomalies (
@@ -230,8 +383,9 @@ CREATE TABLE IF NOT EXISTS gold.price_anomalies (
     anomaly_type VARCHAR(16) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE gold.price_anomalies ADD COLUMN IF NOT EXISTS item_id VARCHAR(128);
 CREATE INDEX IF NOT EXISTS idx_anomalies_date ON gold.price_anomalies(scrape_date);
-CREATE INDEX IF NOT EXISTS idx_anomalies_item ON gold.price_anomalies(item_id);
+CREATE INDEX IF NOT EXISTS idx_anomalies_product_key ON gold.price_anomalies(product_key);
 
 -- Multilateral GEKS-Törnqvist Price Index Storage
 CREATE TABLE IF NOT EXISTS gold.cpi_geks_multilateral (
@@ -246,6 +400,21 @@ CREATE TABLE IF NOT EXISTS gold.cpi_geks_multilateral (
     CONSTRAINT uq_geks_date_window UNIQUE (scrape_date, base_period, window_size)
 );
 CREATE INDEX IF NOT EXISTS idx_gold_geks_date ON gold.cpi_geks_multilateral (scrape_date);
+
+-- Superlative Fisher Ideal Index Storage
+CREATE TABLE IF NOT EXISTS gold.cpi_fisher_superlative (
+    scrape_date DATE NOT NULL,
+    base_period VARCHAR(16) NOT NULL DEFAULT '2026-08',
+    formula VARCHAR(32) NOT NULL DEFAULT 'Fisher-Superlative',
+    laspeyres_index NUMERIC(10, 4) NOT NULL,
+    paasche_index NUMERIC(10, 4) NOT NULL,
+    fisher_index NUMERIC(10, 4) NOT NULL,
+    substitution_bias_pct NUMERIC(6, 3) NOT NULL,
+    matched_items_count INT NOT NULL DEFAULT 0,
+    calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (scrape_date, base_period)
+);
+CREATE INDEX IF NOT EXISTS idx_gold_fisher_date ON gold.cpi_fisher_superlative(scrape_date DESC);
 
 -- Unified National Headline & Core CPI Mart (Reporting & Metabase Ready)
 CREATE TABLE IF NOT EXISTS gold.mart_cpi_daily (
@@ -302,10 +471,15 @@ CREATE TABLE IF NOT EXISTS gold.mart_price_anomalies (
 );
 CREATE INDEX IF NOT EXISTS idx_mart_anomalies_unreviewed ON gold.mart_price_anomalies(is_reviewed, scrape_date DESC);
 
--- Performance Indexes for Silver Fact Table
+-- Performance Indexes for Silver Fact & Bronze Tables
 CREATE INDEX IF NOT EXISTS idx_fct_daily_prices_date_item ON silver.fct_daily_prices(scrape_date, item_id);
 CREATE INDEX IF NOT EXISTS idx_fct_daily_prices_item_store_date ON silver.fct_daily_prices(item_id, store_slug, scrape_date);
+CREATE INDEX IF NOT EXISTS idx_fct_daily_prices_scrape_date ON silver.fct_daily_prices(scrape_date);
+CREATE INDEX IF NOT EXISTS idx_fct_daily_prices_store_item ON silver.fct_daily_prices(store_slug, item_id);
 CREATE INDEX IF NOT EXISTS idx_silver_dim_items_id ON silver.dim_items(item_id);
+CREATE INDEX IF NOT EXISTS idx_raw_prices_scraped_at ON bronze.raw_prices(scraped_at);
+CREATE INDEX IF NOT EXISTS idx_item_match_log_raw_price ON silver.item_match_log(raw_price_id);
+CREATE INDEX IF NOT EXISTS idx_canonical_items_name ON silver.canonical_items(canonical_name);
 
 -- ============================================================================
 -- SEED DATA: OFFICIAL CAMBODIA NIS COICOP WEIGHTS & AEON CATEGORY MAP

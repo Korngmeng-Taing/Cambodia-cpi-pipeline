@@ -2,7 +2,7 @@
 -- Conformed store & source master dimension — one row per store_slug with source metadata,
 -- channel classification, default COICOP division, and lifecycle scrape stats.
 {{ config(
-    materialized='view'
+    materialized='table'
 ) }}
 
 with store_metadata as (

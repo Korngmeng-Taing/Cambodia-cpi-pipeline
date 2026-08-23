@@ -111,7 +111,6 @@ def test_ingest_fx_path(mock_conn, mock_engine_cls):
     assert result["fx_rate"] == 4050.0
     engine.store_fx_rate.assert_called_once()
     engine.write_canonical_batch.assert_not_called()
-    engine.minio.put_json.assert_called_once()
 
 
 @patch("pipeline.bronze_ingestion._get_db_connection")

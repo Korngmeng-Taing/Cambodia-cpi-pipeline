@@ -4,9 +4,6 @@ aeon3,AEON 3 Mean Chey,fashion,department_store,KHR,03,0.800,true
 delishop,Delishop Cambodia,grocery,online_grocery,USD,01,0.800,true
 l192,L192 Marketplace,retail,e_commerce,USD,05,0.800,true
 communitypharma,Community Pharmacy,pharmacy,health,USD,06,0.800,true
-pharmacy,Pharmacy Retail,pharmacy,health,USD,06,0.800,true
-u-care,U-Care Pharmacy,pharmacy,health,USD,06,0.800,true
-ucare,U-Care Pharmacy,pharmacy,health,USD,06,0.800,true
 samnangshop,Khmer Samnang Phone Shop,electronics,retail_phone,USD,08,0.800,true
 arystore,Ary Store Phone,electronics,retail_phone,USD,08,0.800,true
 cellcard,Cellcard Mobile,telecom,telecom_operator,USD,08,0.800,true
@@ -21,8 +18,4 @@ sokhahotel,Sokha Hotel & Resort,hotel,hospitality,USD,11,0.800,true
 hyyathotel,Hyatt Regency Phnom Penh,hotel,hospitality,USD,11,0.800,true
 bayonbkk,Bayon Restaurant BKK,restaurant,food_service,USD,11,0.800,true
 new_gasoline,MOC Petroleum Gasoline,fuel,gas_station,KHR,07,0.800,true
-tela,Tela Petroleum,fuel,gas_station,KHR,07,0.800,true
-ptt,PTT Station Cambodia,fuel,gas_station,KHR,07,0.800,true
-caltex,Caltex Cambodia,fuel,gas_station,KHR,07,0.800,true
-total,TotalEnergies Cambodia,fuel,gas_station,KHR,07,0.800,true
 mef_fx,Ministry of Economy & Finance FX,fx,official_authority,KHR,00,0.800,true

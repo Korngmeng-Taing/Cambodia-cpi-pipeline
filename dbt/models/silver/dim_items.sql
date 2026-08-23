@@ -3,6 +3,7 @@
 -- brand, barcode, size, unit of measure, store coverage, and COICOP division.
 {{ config(
     materialized='incremental',
+    incremental_strategy='delete+insert',
     unique_key='item_id',
     on_schema_change='append_new_columns'
 ) }}
@@ -52,7 +53,18 @@ select
     coalesce(ms.avg_match_confidence, 1.000) as avg_match_confidence,
     coalesce(fs.first_seen, ci.first_seen::date) as first_seen,
     coalesce(fs.last_seen, ci.last_seen::date) as last_seen,
-    coalesce(fs.is_active, (ci.last_seen >= now() - interval '30 days')) as is_active
+    coalesce(fs.is_active, (ci.last_seen >= now() - interval '30 days')) as is_active,
+    case
+        when coalesce(fs.last_seen, ci.last_seen::date) >= current_date - interval '3 days'
+             and coalesce(fs.first_seen, ci.first_seen::date) >= current_date - interval '7 days'
+            then 'NEW_ENTRY'
+        when coalesce(fs.last_seen, ci.last_seen::date) >= current_date - interval '3 days'
+            then 'ACTIVE'
+        when coalesce(fs.last_seen, ci.last_seen::date) >= current_date - interval '14 days'
+            then 'TEMPORARILY_OUT_OF_STOCK'
+        else 'DISCONTINUED'
+    end as lifecycle_status,
+    (current_date - coalesce(fs.last_seen, ci.last_seen::date)) as days_since_last_seen
 from {{ source('silver', 'canonical_items') }} ci
 left join match_stats ms on ms.item_id = ci.item_id
 left join fact_stats fs on fs.item_id = ci.item_id

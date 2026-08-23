@@ -1,6 +1,8 @@
 # Cambodia National Consumer Price Index (CPI) Pipeline Architecture
 
-![Cambodia National Consumer Price Index (CPI) Medallion Pipeline](./cpi_architecture_diagram.jpg)
+![Cambodia National Consumer Price Index (CPI) Simple Architecture](./cpi_simple_architecture.jpg)
+
+![Cambodia CPI Tech Stack Overview](./cpi_tech_stack.jpg)
 
 ---
 
@@ -17,19 +19,20 @@ The pipeline executes daily across 5 interconnected layers:
 - **Macroeconomic Fuel & Official FX:** MOC Petroleum Gasoline (Live GraphQL), Ministry of Economy & Finance (MEF USD/KHR official daily rate).
 
 ### 2. Bronze & Staging Layer
-- **MinIO Object Storage:** Raw JSON snapshots (`raw.json`) and Snappy Parquet archives.
 - **PostgreSQL Staging (`staging.raw_scrapes`):** Append-only raw JSONB payloads with unique `run_id`.
-- **dbt Staging Views (`stg_raw_scrapes`):** Unpacks JSONB into structured columns.
+- **Bronze Raw Price Observations (`bronze.raw_prices`):** Typed raw price observations (~35,000 listings/day).
+- **dbt Staging Views (`stg_raw_scrapes`):** Unpacks JSONB into structured columns with zero-product quality gates.
 
 ### 3. Silver Layer: Clean Core & Intelligence
 - **Python RapidFuzz Entity Matching:** Deduplicates products across stores into canonical UUID5 identities (`silver.canonical_items`, `silver.item_match_log`).
 - **dbt Price Cleaning & Unit Standardization:** Converts USD $\to$ KHR via MEF rates, clamps discounts ($0\%$–$95\%$), standardizes unit prices (`KHR/kg`, `KHR/L`), and flags outliers.
-- **Gemini AI COICOP Classifier:** Multi-stage division ladder (Overrides $\to$ AI cache $\to$ Regex traps $\to$ Keyword ladder $\to$ Category map $\to$ Store defaults). The keyword ladder runs **before** the category map because store-native categories are too broad; a personal-care guard + word-boundaried traps prevent food/material words from stealing cosmetics, and medical/protective masks are pinned to 06.
+- **Gemini AI COICOP Classifier:** 9-tier daily-scoped division ladder (Exact/per-store overrides $\to$ Store purity $\to$ AI cache with store-context gate $\to$ Global overrides $\to$ Traps with personal-care guard $\to$ Keyword STRONG rules (`coicop_keywords.csv`, priority <300) $\to$ Category map $\to$ Keyword WEAK rules + store defaults). Cached answers are pre-warmed into `silver.dim_coicop_ai_cache` (~30,800 products across 82 unique 5-digit COICOP 2018 classes).
+- **Hedonic Quality Adjustments:** Constant-specification regression (`silver.hedonic_adjusted_prices`) holding RAM/Storage constant for Division 09/08 consumer electronics.
 - **Conformed Star Schema & Analytical Views:**
   - `silver.dim_items` (Master product catalog)
   - `silver.dim_stores` (20 Cambodian retailers/sources)
   - `silver.fct_daily_prices` (Clean daily price observations)
-  - `silver.fct_daily_prices_imputed` (<= 7-day forward price carry for temporarily missing items)
+  - `silver.hedonic_adjusted_prices` (Constant-specification quality adjusted prices)
   - `silver.fct_jevons_daily` (Stage 1 Elementary Jevons geometric mean prices & item relatives $P_t / P_0 \times 100$)
   - `silver.fct_laspeyres_daily` (Stage 2 Higher-Level category aggregation across 12 COICOP divisions)
   - `silver.fct_laspeyres_headline_daily` (Stage 3 National headline CPI in Silver)
@@ -37,11 +40,14 @@ The pipeline executes daily across 5 interconnected layers:
 
 ### 4. Gold Layer: Econometric Engine & 12 Division Tables
 - **Strict 2-Stage Sequence (Jevons $\to$ Laspeyres):**
-  1. **Stage 1 (Elementary Jevons):** Unweighted geometric mean price per canonical item across all stores (`gold.fct_daily_price_stats`).
-  2. **Stage 2 (Higher-Level Laspeyres):** Category and headline weighted roll-up using official Cambodia NIS 2004 expenditure weights (`gold.cpi_category_daily`, `gold.cpi_headline_daily`).
+  1. **Stage 1 (Elementary Jevons & Imputation):** Unweighted geometric mean price per canonical item across all stores (`gold.fct_daily_price_stats`). Missing products ($\le 7$ days) receive **Class-Mean Imputation** (ILO standard) based on division geometric movement.
+  2. **Stage 2 (Higher-Level Laspeyres):** Category and headline weighted roll-up using official Cambodia NIS 2004 expenditure weights (`gold.cpi_category_daily`, `gold.cpi_headline_daily`) with dynamic $100.000\%$ reweighting.
 - **12 Dedicated Division Analytical Tables:**
   - `gold.cpi_div01_food` through `gold.cpi_div12_misc` exposing full item-level price trends, base indices, and metrics per division.
-- **Multilateral GEKS-Törnqvist:** 13-period rolling window transitive index eliminating product churn & chain drift (`gold.cpi_geks_multilateral`).
+- **Advanced Econometrics:**
+  - **Multilateral GEKS-Törnqvist:** 13-period rolling window transitive index with Movement Splicing (`gold.cpi_geks_multilateral`).
+  - **Superlative Fisher Ideal Index:** Measures consumer substitution bias ($\text{Bias} = I_{\text{Laspeyres}} - I_{\text{Fisher}}$).
+  - **Operational Anomaly Detection:** Single-pass `LAG()` window identifying $>15\%$ price shocks and promo shifts (`gold.mart_price_anomalies`).
 
 ### 5. Serving & BI
 - **Metabase Executive Dashboards (:3000):** Visual charts for headline CPI, 12 COICOP division indices, inflation curves, top movers, and promo depth.

@@ -8,5 +8,5 @@ select
     coicop_division,
     coicop_method
 from {{ ref('int_coicop_classified') }}
-where store_slug in ('communitypharma', 'pharmacy', 'u-care', 'ucare', 'delishop', 'aeon', 'aeon3', 'samnangshop', 'arystore', 'bookmebus', 'redbus')
+where store_slug in ('communitypharma', 'delishop', 'aeon', 'aeon3', 'samnangshop', 'arystore', 'bookmebus', 'redbus')
   and coicop_division = '04'

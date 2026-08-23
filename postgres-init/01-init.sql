@@ -41,7 +41,7 @@ BEGIN
         SELECT n.nspname AS schema_name, c.relname AS obj_name, c.relkind
         FROM pg_class c
         JOIN pg_namespace n ON n.oid = c.relnamespace
-        WHERE n.nspname IN ('staging','silver','gold')
+        WHERE n.nspname IN ('bronze','staging','silver','gold')
           AND c.relkind IN ('r','p','v','m')
           AND pg_get_userbyid(c.relowner) <> 'cpi_user'
     LOOP
@@ -65,7 +65,7 @@ BEGIN
         SELECT p.oid::regprocedure::text AS sig, p.prokind
         FROM pg_proc p
         JOIN pg_namespace n ON n.oid = p.pronamespace
-        WHERE n.nspname IN ('staging','silver','gold')
+        WHERE n.nspname IN ('bronze','staging','silver','gold')
           AND pg_get_userbyid(p.proowner) <> 'cpi_user'
     LOOP
         obj_kind := CASE WHEN fn.prokind = 'p' THEN 'PROCEDURE' ELSE 'FUNCTION' END;
@@ -74,32 +74,39 @@ BEGIN
 END $$;
 
 -- Grant all permissions on created schemas, tables, sequences, functions, procedures to cpi_user
+GRANT ALL ON SCHEMA bronze TO cpi_user;
 GRANT ALL ON SCHEMA staging TO cpi_user;
 GRANT ALL ON SCHEMA silver TO cpi_user;
 GRANT ALL ON SCHEMA gold TO cpi_user;
 
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA bronze TO cpi_user;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA staging TO cpi_user;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA silver TO cpi_user;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA gold TO cpi_user;
 
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA bronze TO cpi_user;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA staging TO cpi_user;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA silver TO cpi_user;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA gold TO cpi_user;
 
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA bronze TO cpi_user;
 GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA staging TO cpi_user;
 GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA silver TO cpi_user;
 GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA gold TO cpi_user;
 
 GRANT ALL PRIVILEGES ON ALL PROCEDURES IN SCHEMA gold TO cpi_user;
 
+ALTER DEFAULT PRIVILEGES IN SCHEMA bronze GRANT ALL ON TABLES TO cpi_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA staging GRANT ALL ON TABLES TO cpi_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA silver GRANT ALL ON TABLES TO cpi_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA gold GRANT ALL ON TABLES TO cpi_user;
 
+ALTER DEFAULT PRIVILEGES IN SCHEMA bronze GRANT ALL ON SEQUENCES TO cpi_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA staging GRANT ALL ON SEQUENCES TO cpi_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA silver GRANT ALL ON SEQUENCES TO cpi_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA gold GRANT ALL ON SEQUENCES TO cpi_user;
 
+ALTER DEFAULT PRIVILEGES IN SCHEMA bronze GRANT ALL ON FUNCTIONS TO cpi_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA staging GRANT ALL ON FUNCTIONS TO cpi_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA silver GRANT ALL ON FUNCTIONS TO cpi_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA gold GRANT ALL ON FUNCTIONS TO cpi_user;

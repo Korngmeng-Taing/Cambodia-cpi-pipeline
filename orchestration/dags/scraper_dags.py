@@ -6,12 +6,11 @@ Per-source Daily Scraper DAGs — one DAG per source in SCRAPER_REGISTRY
 
 Each DAG implements the guide's Bronze ingestion path:
     fetch_records ─► canonical.normalize (Schema v1.0) ─► zero-product gate
-      ─► MinIO raw snapshot (s3://cpi-bronze/{store}/dt={date}/raw.json)
-      ─► Parquet cold archive ─► staging.raw_scrapes + bronze.raw_prices
+      ─► PostgreSQL staging.raw_scrapes + bronze.raw_prices
       ─► bronze_dq_gate (verifies non-empty staging row)
 
 DAG ids:  scrape_{source_slug}_dag   (e.g. scrape_aeon_dag, scrape_delishop_dag)
-Schedule: None — triggered by cpi_master_dag at 06:00 daily (also runnable standalone).
+Schedule: None — triggered by cpi_master_dag at 07:00 daily (also runnable standalone).
 """
 
 from __future__ import annotations
@@ -62,7 +61,7 @@ def _build_scraper_dag(source_slug: str, dag_id: str | None = None):
         schedule=None,  # orchestrated by cpi_master_dag at 06:00
         catchup=False,
         default_args=DEFAULT_ARGS,
-        tags=["bronze", "scraper", source_slug, "minio", "cpi"],
+        tags=["bronze", "scraper", source_slug, "cpi"],
         max_active_runs=1,
     ) as dag:
 
@@ -82,18 +81,6 @@ def _build_scraper_dag(source_slug: str, dag_id: str | None = None):
     return dag
 
 
-# Create standard DAGs per source in the registry (excluding dedicated named DAGs)
+# Create exactly one standard DAG per source in the registry (20 DAGs total)
 for _source_slug in SCRAPER_REGISTRY.keys():
-    if _source_slug in ("samnangshop", "bookmebus"):
-        continue
     globals()[f"scrape_{_source_slug}_dag"] = _build_scraper_dag(_source_slug)
-
-# Dedicated named DAG for Khmer Samnang Shop (scrape_somnangshop_dag)
-scrape_somnangshop_dag = _build_scraper_dag(
-    "samnangshop", dag_id="scrape_somnangshop_dag"
-)
-globals()["scrape_somnangshop_dag"] = scrape_somnangshop_dag
-
-# Dedicated named DAG for BookMeBus (scrape_bookMeBus_dag)
-scrape_bookMeBus_dag = _build_scraper_dag("bookmebus", dag_id="scrape_bookMeBus_dag")
-globals()["scrape_bookMeBus_dag"] = scrape_bookMeBus_dag

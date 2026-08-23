@@ -3,10 +3,18 @@ tests/test_gemini_coicop_classifier.py
 ──────────────────────────────────────
 Unit tests for the Gemini AI COICOP classifier (Prompt 5).
 Uses a fake model + a SQLAlchemy sqlite engine (no network, no API key).
+
+NOTE: as of the Risk-1 Option-A cleanup, silver.dim_canonical_products is no
+longer a write target for this module (it isn't joined by any dbt model that
+propagates COICOP into Silver/Gold facts). The classifier now:
+  - reads unclassified items from silver.classification_queue
+  - writes the canonical COICOP code into silver.dim_coicop_ai_cache
+  - flips queue rows to RESOLVED (or keeps them PENDING on low confidence)
+
+These tests reflect that contract.
 """
 
 import json
-import uuid
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -20,7 +28,15 @@ class FakeResponse:
 
 
 class FakeModel:
-    """Stand-in for genai.GenerativeModel: maps names -> (code, confidence, reason)."""
+    """Stand-in for genai.GenerativeModel: maps names -> (code, confidence, reason).
+
+    The real production call (classify_batch) sends
+        model.generate_content([SYSTEM_PROMPT] + [name, ...])
+    so this fake must skip the SYSTEM_PROMPT entry and only classify names that
+    appear in its mapping; anything it doesn't recognise is silently dropped
+    (matches the production contract: a "99.9.9" miss should never be returned
+    by the model itself, only when persist_classifications sees an empty result).
+    """
 
     def __init__(self, mapping: dict):
         self.mapping = mapping
@@ -31,7 +47,12 @@ class FakeModel:
         names = contents if isinstance(contents, list) else [contents]
         arr = []
         for name in names:
-            code, conf, reason = self.mapping.get(name, ("99.9.9", 0.0, "no match"))
+            # Skip the SYSTEM_PROMPT preamble — it's not a product name.
+            if not isinstance(name, str) or name.startswith("You are"):
+                continue
+            if name not in self.mapping:
+                continue
+            code, conf, reason = self.mapping[name]
             arr.append(
                 {
                     "product_name": name,
@@ -56,18 +77,10 @@ def _sqlite_engine():
         conn.execute(text("ATTACH DATABASE ':memory:' AS staging"))
         conn.execute(
             text(
-                "CREATE TABLE silver.dim_canonical_products ("
-                "canonical_item_id TEXT PRIMARY KEY, canonical_name TEXT, "
-                "coicop_code TEXT, classification_method TEXT, confidence_score REAL, "
-                "needs_review INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1)"
-            )
-        )
-        conn.execute(
-            text(
-                "CREATE TABLE staging.stg_item_mapping ("
-                "canonical_item_id TEXT, raw_item_id TEXT, raw_product_name TEXT, "
-                "scrape_date TEXT, coicop_code TEXT, classification_method TEXT, "
-                "confidence_score REAL)"
+                "CREATE TABLE silver.classification_queue ("
+                "product_key TEXT PRIMARY KEY, name_clean TEXT, "
+                "status TEXT NOT NULL DEFAULT 'PENDING', "
+                "resolved_division TEXT, resolved_at TEXT, reason TEXT)"
             )
         )
         conn.execute(
@@ -77,29 +90,37 @@ def _sqlite_engine():
                 "reasoning TEXT, model_version TEXT, classified_at TEXT)"
             )
         )
+        # staging.int_prices_cleaned is only consulted in the AI-first broad
+        # sweep (fetch_unclassified tier 2). Tests that exercise tier 1 (the
+        # queue) don't need it; the no-candidates test below intentionally
+        # leaves both empty.
     return engine
 
 
-def _seed_item(engine, table, cid, name, coicop="99.9.9"):
+def _seed_queue_item(engine, cid: str, name: str, status: str = "PENDING"):
+    """Insert a row into silver.classification_queue the way the dbt ladder does."""
     with engine.begin() as conn:
         conn.execute(
             text(
-                f"INSERT INTO {table} (canonical_item_id, canonical_name, coicop_code, is_active) "
-                "VALUES (:id, :name, :coicop, 1)"
+                "INSERT INTO silver.classification_queue "
+                "(product_key, name_clean, status) VALUES (:id, :name, :status)"
             ),
-            {"id": cid, "name": name, "coicop": coicop},
+            {"id": cid, "name": name, "status": status},
         )
 
 
-def _seed_mapping(engine, cid, rid, name, date="2026-08-18"):
+def _seed_cache_item(
+    engine, name: str, code: str, confidence: float = 0.9, reason: str = "cached"
+):
+    """Insert a row into silver.dim_coicop_ai_cache."""
     with engine.begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO staging.stg_item_mapping "
-                "(canonical_item_id, raw_item_id, raw_product_name, scrape_date, coicop_code) "
-                "VALUES (:cid, :rid, :name, :date, NULL)"
+                "INSERT INTO silver.dim_coicop_ai_cache "
+                "(product_name, coicop_code, confidence_score, reasoning, model_version) "
+                "VALUES (:name, :code, :conf, :reason, 'test')"
             ),
-            {"cid": cid, "rid": rid, "name": name, "date": date},
+            {"name": name, "code": code, "conf": confidence, "reason": reason},
         )
 
 
@@ -174,6 +195,7 @@ def test_classify_names_failed_batch_stays_unclassified():
 
 
 def test_classify_unclassified_with_gemini_end_to_end():
+    """End-to-end: queue is the unclassified source; cache is the canonical write target."""
     engine = _sqlite_engine()
     model = FakeModel(
         {
@@ -190,19 +212,10 @@ def test_classify_unclassified_with_gemini_end_to_end():
         ("Detergent 2kg", "R-DET"),
     ]
     for name, rid in items:
-        cid = str(uuid.uuid4())
-        _seed_item(engine, "silver.dim_canonical_products", cid, name)
-        _seed_mapping(engine, cid, rid, name)
+        _seed_queue_item(engine, rid, name)
 
     # Pre-cached name: no API call for Detergent 2kg.
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                "INSERT INTO silver.dim_coicop_ai_cache "
-                "(product_name, coicop_code, confidence_score, reasoning, model_version) "
-                "VALUES ('Detergent 2kg', '05.6.1', 0.9, 'household goods', 'test')"
-            )
-        )
+    _seed_cache_item(engine, "Detergent 2kg", "05.6.1", 0.9, "household goods")
 
     result = gcc.classify_unclassified_with_gemini(engine=engine, model=model)
     assert result["status"] == "OK"
@@ -210,39 +223,61 @@ def test_classify_unclassified_with_gemini_end_to_end():
     assert result["cache_hits"] == 1
     assert result["api_calls"] == 1  # 3 uncached names in one 50-batch
 
+    # silver.dim_coicop_ai_cache is the canonical write target.
     with engine.connect() as conn:
-        dims = conn.execute(
-            text(
-                "SELECT canonical_name, coicop_code FROM silver.dim_canonical_products"
-            )
-        ).fetchall()
-        mappings = conn.execute(
-            text(
-                "SELECT raw_product_name, coicop_code, classification_method, confidence_score "
-                "FROM staging.stg_item_mapping"
-            )
-        ).fetchall()
         cache_rows = conn.execute(
             text("SELECT product_name, coicop_code FROM silver.dim_coicop_ai_cache")
         ).fetchall()
+        queue_rows = conn.execute(
+            text(
+                "SELECT product_key, status, resolved_division, reason "
+                "FROM silver.classification_queue"
+            )
+        ).fetchall()
 
-    dim_by_name = {r[0]: r[1] for r in dims}
-    assert dim_by_name["Fresh Whole Milk 1L"] == "01.1.4"
-    assert dim_by_name["Smartphone Galaxy 8GB"] == "08.2.0"
-    assert dim_by_name["Organic Bananas"] == "99.9.9"  # unclassified stays
-    assert dim_by_name["Detergent 2kg"] == "05.6.1"  # from cache
+    cache_by_name = {r[0]: r[1] for r in cache_rows}
+    assert cache_by_name["Fresh Whole Milk 1L"] == "01.1.4"
+    assert cache_by_name["Smartphone Galaxy 8GB"] == "08.2.0"
+    assert cache_by_name["Detergent 2kg"] == "05.6.1"  # pre-seeded
+    assert "Organic Bananas" not in cache_by_name  # 99.9.9 deliberately not cached
 
-    map_by_name = {r[0]: r for r in mappings}
-    assert map_by_name["Fresh Whole Milk 1L"][1] == "01.1.4"
-    assert map_by_name["Fresh Whole Milk 1L"][2] == "gemini_ai"
-    assert map_by_name["Smartphone Galaxy 8GB"][2] == "gemini_ai"
-    # 99.9.9 never persisted to the mapping
-    assert map_by_name["Organic Bananas"][1] is None
+    # Queue: high-confidence rows resolved with derived 2-digit division;
+    # pre-cached row also resolves (via cache, no API). An AI response of
+    # "99.9.9" is filtered out before persist_classifications touches the
+    # queue (no real code to land), so R-BANANA stays in its original PENDING
+    # state untouched. That's the production contract.
+    queue_by_key = {r[0]: r for r in queue_rows}
+    assert queue_by_key["R-MILK"][1] == "RESOLVED"
+    assert queue_by_key["R-MILK"][2] == "01"
+    assert queue_by_key["R-PHONE"][1] == "RESOLVED"
+    assert queue_by_key["R-PHONE"][2] == "08"
+    assert queue_by_key["R-DET"][1] == "RESOLVED"
+    assert queue_by_key["R-DET"][2] == "05"
+    assert queue_by_key["R-BANANA"][1] == "PENDING"
+    assert queue_by_key["R-BANANA"][2] is None
+    assert queue_by_key["R-BANANA"][3] is None
 
-    # Cache: classified names cached, unclassified '99.9.9' deliberately not.
-    cache_names = {r[0] for r in cache_rows}
-    assert "Fresh Whole Milk 1L" in cache_names
-    assert "Organic Bananas" not in cache_names
+    # And exercise the low-confidence branch: seed a cache hit with conf < 0.50
+    # but a real (non-99.9.9) code, which IS persisted and flips the row to
+    # PENDING with the explanatory reason.
+    engine2 = _sqlite_engine()
+    _seed_queue_item(engine2, "R-MARG", "Margarine 250g")
+    _seed_cache_item(engine2, "Margarine 250g", "01.1.5", 0.30, "margarine")
+    gcc.persist_classifications(
+        engine2,
+        {"Margarine 250g": {"product_name": "Margarine 250g", "coicop_code": "01.1.5", "confidence_score": 0.30, "reasoning": "low conf"}},
+        [{"canonical_item_id": "R-MARG", "canonical_name": "Margarine 250g"}],
+    )
+    with engine2.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT status, resolved_division, reason FROM silver.classification_queue "
+                "WHERE product_key = 'R-MARG'"
+            )
+        ).fetchone()
+    assert row[0] == "PENDING"
+    assert row[1] is None
+    assert row[2] == "low confidence AI classification"
 
 
 def test_classify_unclassified_no_candidates():

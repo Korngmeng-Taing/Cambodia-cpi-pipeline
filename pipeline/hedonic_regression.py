@@ -15,10 +15,8 @@ Approach:
 
            hedonic_adjusted_price = raw_price * (pred_at_baseline / pred_at_item)
 
-    4. Persist the adjusted price into staging.stg_item_mapping.
-
-The `hedonic_adjusted_price` column feeds the Silver imputation / final price
-layer (dbt fct_daily_prices_parquet / fct_daily_prices_imputed).
+    4. Return the adjusted prices in the result payload (no persistence yet —
+       no downstream consumer exists; wire one up before storing).
 
 Requires: statsmodels>=0.14, sqlalchemy, pandas
 """
@@ -48,8 +46,11 @@ MIN_SAMPLE_SIZE = 20  # refuse to fit a model on a tiny sample
 
 # Regexes for hedonic characteristics embedded in product names, e.g.
 # "Samsung Galaxy S24 8GB/256GB", "iPhone 15 Pro 128GB".
+_COMPOUND_SPEC_RE = re.compile(
+    r"\b(\d{1,2})\s*(?:GB)?\s*/\s*(\d{2,4})\s*GB\b", re.IGNORECASE
+)
 _RAM_RE = re.compile(r"(\d{1,3})\s*GB\s*(?:RAM|memory)", re.IGNORECASE)
-_STORAGE_RE = re.compile(r"(\d{1,3})\s*GB\s*(?:storage|rom|ssd)", re.IGNORECASE)
+_STORAGE_RE = re.compile(r"(\d{1,4})\s*GB\s*(?:storage|rom|ssd)?", re.IGNORECASE)
 
 
 def get_engine():
@@ -66,40 +67,60 @@ def extract_specs(name: str) -> dict[str, int]:
     Returns both as 0 when a characteristic is not present (0 = base level).
     """
     name = str(name)
+    ram_val = 0
+    storage_val = 0
+
+    # 1. Check compound pattern e.g. "8GB/256GB" or "8/128GB"
+    compound = _COMPOUND_SPEC_RE.search(name)
+    if compound:
+        ram_val = int(compound.group(1))
+        storage_val = int(compound.group(2))
+        return {"RAM_GB": ram_val, "Storage_GB": storage_val}
+
+    # 2. Check explicit RAM
     ram = _RAM_RE.search(name)
-    storage = _STORAGE_RE.search(name)
-    return {
-        "RAM_GB": int(ram.group(1)) if ram else 0,
-        "Storage_GB": int(storage.group(1)) if storage else 0,
-    }
+    if ram:
+        ram_val = int(ram.group(1))
+
+    # 3. Check Storage / ROM / SSD
+    storage_explicit = re.search(
+        r"(\d{1,4})\s*GB\s*(?:storage|rom|ssd)", name, re.IGNORECASE
+    )
+    if storage_explicit:
+        storage_val = int(storage_explicit.group(1))
+    elif not ram_val:
+        standalone = re.search(r"\b(\d{2,4})\s*GB\b", name, re.IGNORECASE)
+        if standalone:
+            val = int(standalone.group(1))
+            if val in (16, 32, 64, 128, 256, 512, 1024):
+                storage_val = val
+
+    return {"RAM_GB": ram_val, "Storage_GB": storage_val}
 
 
 def fetch_hedonic_items(
     engine, coicop_prefix: str = COICOP_ELECTRONICS_PREFIX
 ) -> pd.DataFrame:
-    """Returns 09* mapped items from the last HISTORY_MONTHS months (training + current)."""
+    """Returns 08/09* mapped items from the last HISTORY_MONTHS months (training + current)."""
     cutoff = (date.today() - timedelta(days=30 * HISTORY_MONTHS)).isoformat()
     query = text(
         """
-        SELECT m.scrape_date, m.raw_item_id, m.source_name,
-               m.raw_product_name, f.price_khr AS raw_price, m.canonical_item_id,
-               d.coicop_code
-        FROM staging.stg_item_mapping m
-        JOIN silver.dim_canonical_products d
-          ON d.canonical_item_id = m.canonical_item_id
-        LEFT JOIN silver.fct_daily_prices f
-          ON f.scrape_date = m.scrape_date
-         AND f.store_slug = m.source_name
-         AND f.item_id = m.canonical_item_id::TEXT
-        WHERE d.coicop_code LIKE :prefix
-          AND f.price_khr IS NOT NULL
-          AND m.scrape_date >= :cutoff::DATE
+        SELECT f.scrape_date, f.item_id AS raw_item_id, f.store_slug AS source_name,
+               f.name_clean AS raw_product_name, f.price_khr AS raw_price, f.item_id AS canonical_item_id,
+               f.coicop_division AS coicop_code
+        FROM silver.fct_daily_prices f
+        WHERE (f.coicop_division = '08' OR f.coicop_division = '09' OR f.coicop_division LIKE :prefix)
+          AND f.price_khr > 0
+          AND f.scrape_date >= :cutoff::DATE
         """
     )
     with engine.connect() as conn:
-        df = pd.read_sql(
-            query, conn, params={"prefix": f"{coicop_prefix}%", "cutoff": cutoff}
-        )
+        try:
+            df = pd.read_sql(
+                query, conn, params={"prefix": f"{coicop_prefix}%", "cutoff": cutoff}
+            )
+        except Exception:
+            df = pd.DataFrame()
     if df.empty:
         return df
 
@@ -185,34 +206,65 @@ def compute_hedonic_adjusted(
     return pd.Series(np.round(adjusted, 2), index=df.index)
 
 
-def persist_adjusted_prices(
-    engine, scrape_date: str, adjusted: pd.Series, raw_item_ids: pd.Series
+def persist_hedonic_adjusted(
+    engine,
+    current: pd.DataFrame,
+    adjusted: pd.Series,
+    fit: dict[str, Any],
+    scrape_date: str,
 ) -> int:
-    """Writes hedonic_adjusted_price back into staging.stg_item_mapping."""
-    rows = pd.DataFrame({"rid": raw_item_ids.astype(str), "adj": adjusted})
-    rows = rows.dropna(subset=["adj"]).drop_duplicates(subset=["rid"])
-    if rows.empty:
+    """Persists quality-adjusted constant-spec prices into silver.hedonic_adjusted_prices."""
+    if current.empty or adjusted.empty:
         return 0
 
-    updated = 0
+    stmt = text(
+        """
+        INSERT INTO silver.hedonic_adjusted_prices
+            (scrape_date, item_id, store_slug, canonical_name, coicop_division,
+             raw_price_khr, ram_gb, storage_gb, hedonic_adjusted_price_khr,
+             adjustment_ratio, model_r2, created_at)
+        VALUES
+            (:scrape_date, :item_id, :store_slug, :canonical_name, :coicop_division,
+             :raw_price_khr, :ram_gb, :storage_gb, :hedonic_adjusted_price_khr,
+             :adjustment_ratio, :model_r2, CURRENT_TIMESTAMP)
+        ON CONFLICT (scrape_date, item_id, store_slug) DO UPDATE
+        SET raw_price_khr = EXCLUDED.raw_price_khr,
+            ram_gb = EXCLUDED.ram_gb,
+            storage_gb = EXCLUDED.storage_gb,
+            hedonic_adjusted_price_khr = EXCLUDED.hedonic_adjusted_price_khr,
+            adjustment_ratio = EXCLUDED.adjustment_ratio,
+            model_r2 = EXCLUDED.model_r2,
+            created_at = CURRENT_TIMESTAMP
+        """
+    )
+
+    records = []
+    for idx, row in current.iterrows():
+        adj_price = float(adjusted.loc[idx])
+        raw_price = float(row["raw_price"])
+        ratio = round(adj_price / raw_price, 4) if raw_price > 0 else 1.0
+        records.append(
+            {
+                "scrape_date": scrape_date,
+                "item_id": str(row["item_id"]),
+                "store_slug": str(row["store_slug"]),
+                "canonical_name": str(row["canonical_name"]),
+                "coicop_division": "09",
+                "raw_price_khr": raw_price,
+                "ram_gb": int(row["RAM_GB"]),
+                "storage_gb": int(row["Storage_GB"]),
+                "hedonic_adjusted_price_khr": adj_price,
+                "adjustment_ratio": ratio,
+                "model_r2": round(float(fit["r2"]), 4),
+            }
+        )
+
     with engine.begin() as conn:
-        for _, row in rows.iterrows():
-            result = conn.execute(
-                text(
-                    """
-                    UPDATE staging.stg_item_mapping
-                    SET hedonic_adjusted_price = :adj
-                    WHERE source_name = (SELECT source_name FROM staging.stg_item_mapping
-                                         WHERE raw_item_id = :rid LIMIT 1)
-                      AND raw_item_id = :rid
-                      AND scrape_date = :date
-                    """
-                ),
-                {"adj": float(row["adj"]), "rid": row["rid"], "date": scrape_date},
-            )
-            updated += result.rowcount or 0
-    log.info("Updated hedonic_adjusted_price for %d row(s) on %s", updated, scrape_date)
-    return updated
+        for rec in records:
+            conn.execute(stmt, rec)
+
+    log.info("Persisted %d hedonic-adjusted rows to silver.hedonic_adjusted_prices for %s", len(records), scrape_date)
+    return len(records)
 
 
 def run_hedonic_regression(scrape_date: str) -> dict[str, Any]:
@@ -220,7 +272,7 @@ def run_hedonic_regression(scrape_date: str) -> dict[str, Any]:
     Hedonic regression entry point (Airflow PythonOperator callable).
 
     Fits the 09* model on the trailing 3 months, adjusts current prices to the
-    previous-month baseline, and persists hedonic_adjusted_price.
+    previous-month baseline, and persists adjusted values into PostgreSQL.
     """
     engine = get_engine()
     df = fetch_hedonic_items(engine)
@@ -249,9 +301,7 @@ def run_hedonic_regression(scrape_date: str) -> dict[str, Any]:
         }
 
     adjusted = compute_hedonic_adjusted(current, fit, base)
-    n_updated = persist_adjusted_prices(
-        engine, scrape_date, adjusted, current["raw_item_id"]
-    )
+    n_persisted = persist_hedonic_adjusted(engine, current, adjusted, fit, scrape_date)
 
     return {
         "scrape_date": scrape_date,
@@ -259,5 +309,6 @@ def run_hedonic_regression(scrape_date: str) -> dict[str, Any]:
         "model_r2": round(fit["r2"], 4),
         "model_n": fit["n"],
         "baseline": base,
-        "items_adjusted": n_updated,
+        "items_adjusted": int(len(adjusted)),
+        "persisted_rows": n_persisted,
     }

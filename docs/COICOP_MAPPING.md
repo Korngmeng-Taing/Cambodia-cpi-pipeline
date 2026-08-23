@@ -30,54 +30,82 @@ Every silver fact row in `silver.fct_daily_prices` carries `coicop_division` + `
 
 ---
 
-## 2. Store-Level Defaults (`int_coicop_classified.sql`)
+## 2. Store-Level Purity & Defaults
 
-Single-category stores receive a **fixed prior** (`store_default`, confidence 0.800) applied after the keyword ladder and category map, before the `UNCLASSIFIED` fallback:
+Single-division stores are now enforced as a **hard purity invariant** (Tier 2,
+confidence 0.850, applied *before* all automatic signals — only exact/per-store
+human overrides beat it):
 
-| Stores (`store_slug`) | Default Division | Reason |
-| --------------------------------------------- | ---------------------------- | --------------------------------------- |
-| pharmacy, u-care, ucare, communitypharma | **06** Health | Medicines & health products |
-| tela, ptt, caltex, total, new_gasoline | **07** Transport | Fuel & transport services |
-| redbus | **07** Transport | Passenger bus services |
-| cellcard, cellcard_wifi, smart, smart_wifi | **08** Communication | Telecom operators & ISP |
-| samnangshop, arystore | **08** Communication | Phone/electronics retail |
-| sokhahotel, hyyathotel, bayonbkk | **11** Restaurants & hotels | Hospitality & dining |
-| aeon3 | **03** Clothing & footwear | Fashion department store |
-| khmer24, realestate | **04** Housing | Rental listings |
-| l192 | **05** Household | General marketplace |
-| aeon, delishop | **01** Food | Grocery / supermarket |
+| Stores (`store_slug`) | Forced Division |
+| --------------------------------------------- | ---------------------------- |
+| communitypharma | **06** Health |
+| khmer24, realestate | **04** Housing |
+| sokhahotel, hyyathotel, hyatt, bayonbkk | **11** Restaurants & hotels |
+| bookmebus, redbus, redmebus | **07** Transport (transit) |
+| new_gasoline | **07** Transport (fuel) |
+| arystore, samnangshop, cellcard, cellcard_wifi, smart, smart_wifi | **08** Communication |
 
-> `store_default` is only reached when nothing higher matched; in practice every row resolves earlier (keyword_ladder, category_map, or a trap), so the defaults act as a safety net.
+Guarded by `test_communitypharma_coicop_06`, `test_realestate_khmer24_coicop_04`,
+`test_coicop_11_stores_only`, `test_no_aeon_in_coicop_06`,
+`test_coicop_08_stores_only`, `test_no_tech_or_housing_in_coicop_12`.
+Note: AEON is NOT store-pure — it legitimately stocks OTC medicine, so
+`test_no_aeon_in_coicop_06` only rejects weak heuristic methods
+(keyword/category guesses) landing in Health; override / gemini_ai /
+exception classifications into 06 at AEON are trusted.
+
+Remaining stores (aeon, delishop, aeon3, l192, nikashop…) are multi-division
+and fall through the full ladder; `coicop_store_defaults.csv` remains as a
+late safety net.
 
 ---
 
 ## 3. Classification Ladder (`int_coicop_classified.sql`)
 
-Observations are resolved in order (first match wins):
+Observations are resolved in order (first match wins). Since 2026-08-22 the
+model is **daily-scoped** (classifies only the current run's scrape_date;
+historical rows are preserved) and keyword rules are **data-driven**:
 
 ```
-1. override       → ref('coicop_override') seed (product_key / barcode / name match)
-2. gemini_ai      → silver.dim_coicop_ai_cache (cached classifications from Gemini)
-3. exceptions     → deterministic trap regex (COOKING WINE→01, TVHC SLIPPER→03, ...)
-4. keyword ladder → ordered word-regex per division (order: 12, 02, 05, 03, 06,
-                    09, 07, 08, 11, 10, 04, then 01)
-5. category_map   → silver.coicop_category_map (store native category → division)
-6. store_default  → fixed prior per store_slug (pharmacy→06, fuel→07)
-7. UNCLASSIFIED   → fallback; routed to silver.classification_queue for Gemini triage
+1. ov_exact      → barcode/product_key matches + name rules tagged to this store
+                   (seed silver.coicop_override + table silver.coicop_override_manual);
+                   also overrides the AI's code column — human authority
+2. store_purity  → hard invariant: pharmacies→06, khmer24/realestate→04,
+                   hotels→11, bookmebus/redbus/fuel→07, telecom stores→08.
+                   No automatic signal may break these.
+3. gemini_ai     → silver.dim_coicop_ai_cache (exact normalized-name match,
+                   conf >= 0.5) passed through a store-context GATE:
+                   cached answers of 08 outside telecom stores / 11 outside
+                   hotels are invalidated and fall through.
+4. ov_global     → untagged name-substring override rules
+5. exceptions    → deterministic trap regex. Rule #0 = personal-care guard
+                   (shampoo/conditioner/body-wash/soap names never fire food
+                   traps); medical masks -> 06 with AEON carve-out to 12.
+6. keyword STRONG → silver.coicop_keywords seed rows priority < 300
+                    (data-driven, ascending priority wins)
+7. category_map  → silver.coicop_category_map (store native category -> division)
+8. keyword WEAK   → seed rows priority >= 300 (trimmed food vocabulary),
+                   then store_default fixed priors
+9. UNCLASSIFIED  → fallback; routed to Gemini task & labeling queue
 ```
 
-The keyword ladder runs **before** the generic `category_map` because store-native
-categories are often too broad (aeon `Grocery` and many delishop categories map to 01).
-Keyword wins over the store category so phones (08), toys (09), towels (05) and personal
-care (12) are never swallowed into Food. Within the ladder, the **12 (personal care /
-hygiene)** rule is checked first so beauty names containing food/material-looking words
-(`honey`, `butter`, `biotin`, `silk`, `cotton`, `ale`, `gin`, `port`, ...) stay in 12.
-A personal-care guard at the top of the trap case has the same effect for the trap rules.
-Short alcohol/material words are word-boundaried (`\mham\M`, `\mgin\M`, `\male\M`, `\mport\M`,
-`\mtables?\M`, ...) so substrings inside unrelated words (`shAMpoo`, `ARginine`, `AMINORUM`,
-`MELALEUCA`, `INFLATABLE`, `LOTTE`) cannot trigger false positives.
+**Two-tier keywords:** STRONG rules (clothing, cosmetics, alcohol, household,
+health…) rank *above* the category map because scrapers often collapse
+unrelated shelves into generic native categories (AEON tags fashion as
+`Grocery`). WEAK food rules rank *below* it — the store taxonomy wins on fuzzy
+food words. Cross-cutting exception rows live at priorities 100–120 (e.g.
+`seasoning/spice/marinade → 01`, `bbq sauce → 01`, `measuring cup → 05`,
+`hot-pot base / teriyaki / tokpokki → 01`, `iphone|smartphone → 09` outside
+telecom stores, `short-noodle/biscuit/pretzel/porridge → 01`, dermo-cosmetic
+brands `avene|bioderma|biolane… → 12`).
 
-`coicop_method` records the winning step (`override` / `gemini_ai` / `exception` / `keyword_ladder` / `category_map` / `store_default`); `coicop_confidence` ranges from 1.00 (override) down to 0.80 (store_default). The keyword ladder is trusted **above** the generic category map (0.950 vs 0.900) because store-native categories are often too coarse.
+Word boundaries: short alcohol/material words are word-boundaried
+(`\mham\M`, `\mgin\M`, `\mrum\M`, `\mpots?\M`, `\mcups?\M`, `\moven\M`,
+`\mdesks?\M`) so substrings inside unrelated words cannot fire.
+
+`coicop_method` records the winning tier (`override` / `gemini_ai` /
+`exception` / `keyword_ladder` / `category_map` / `store_default`);
+`coicop_confidence`: 1.00 overrides · 0.99 traps · 0.95 keywords · 0.90
+category map · 0.85 purity/default · AI score otherwise.
 
 ---
 
@@ -85,6 +113,10 @@ Short alcohol/material words are word-boundaried (`\mham\M`, `\mgin\M`, `\male\M
 
 High-priority overrides for multilingual brand codes and multi-meaning keywords (enforced by `dbt/tests/test_traps.sql`):
 
+- `BALLANTINE'S` / `CHIVAS` / `JOHNNIE WALKER` / `MARTELL` / `HENNESSY` / `SAPPORO` / `HOEGAARDEN` $\rightarrow$ **02** (Alcohol & Spirits)
+- `ROHTO EYE DROPS` / `TIGER BALM` / `KWAN LOONG` / `NAGA BALM` / `BOW BALM` $\rightarrow$ **06** (Health & Medicated Balms)
+- `BIO-OIL` / `SAFORELLE` / `CETAPHIL` / `KLORANE` / `HADALABO` / `OLD SPICE DEODORANT` $\rightarrow$ **12** (Personal Care / Skincare)
+- `BEEF SPARERIB` / `CAMPAGNA SPAGHETTI` / `BUTTER COOKIES VANILLA RING` / `CANDY NECKLACE` / `PRINGLES` $\rightarrow$ **01** (Food & Confectionery)
 - `COOKING WINE 750ML` $\rightarrow$ **01** (Food)
 - `SOMERSBY CIDER 4X330ML` $\rightarrow$ **02** (Alcohol)
 - `WOLF BLASS SHIRAZ 750ML` $\rightarrow$ **02** (Alcohol)
@@ -100,7 +132,7 @@ High-priority overrides for multilingual brand codes and multi-meaning keywords 
 - `SPICY BEEF HOT POT 270G` $\rightarrow$ **01** (Food)
 - `SUNPLAY SKIN AQUA SPF50` / `LIPICE` $\rightarrow$ **12** (Miscellaneous / Cosmetics)
 
-Cosmetic & hygiene guards (added 2026-08-19):
+Cosmetic & hygiene guards (added 2026-08-19, updated 2026-08-23):
 
 - **Personal-care guard (first trap rule, returns `null`):** any name matching `shampoo | conditioner | body wash | lotion | perfume | soap | mask (word-boundaried \mmask\M) | sheet/face/eye/hair/foot/body mask | mask sheet/pack/box | facial mask | facemask | body/face/foot scrub | shower/bath foam | shower/bath cream | bubble bath | shower/bath oil | serum | toner | cleanser | tonic | ...` is routed to the keyword ladder so cosmetics never fall through to food/material words (`honey`, `butter`, `silk`, `sugar`, `salt`, `oil`, `rice`). Cosmetics land in **12** via the first keyword rule (kw12).
 - `BODY SCRUB` / `SHOWER CREAM` / `BATH FOAM` / `SHEET MASK` / `EYE MASK` / `HAIR MASK` / `FACEMASK` / `MASK SHEET PACK` $\rightarrow$ **12** (Miscellaneous / personal care)
@@ -123,9 +155,11 @@ Service traps (corrected 2026-08-19):
 | `silver.fct_daily_prices.coicop_division` | Per-observation division (`01`..`12` / `UNCLASSIFIED` / `REVIEW`) |
 | `silver.fct_daily_prices.coicop_method` | Ladder classification method |
 | `silver.dim_items.coicop_division` | Canonical item division |
-| `silver.dim_coicop_ai_cache` | Memoization cache for Gemini AI classifications |
+| `silver.dim_coicop_ai_cache` | Memoization cache for Gemini AI classifications (AI-first tier 3; stores `model_version`) |
+| `silver.coicop_keywords` (seed) | Data-driven keyword/trap rules (`dbt/seeds/coicop_keywords.csv`) |
 | `silver.classification_queue` | Operational queue for unclassified products / human triage |
-| `silver.coicop_override` (seed) | Human/manual overrides (highest priority in ladder) |
+| `silver.coicop_override` (seed) | Curated override rules — wiped on `dbt seed` |
+| `silver.coicop_override_manual` | Labeling-app decisions — **survives re-seeds** (migration 010) |
 | `silver.coicop_category_map` | Store native category → division mapping |
 | `gold.category_weights` (seed) | Official 12-division aggregation weights (sum = 100.000%) |
 
@@ -139,4 +173,6 @@ Pending review rows in `silver.classification_queue` / `silver.needs_review` can
 streamlit run apps/labeling_app.py
 ```
 
-Applying a triage decision writes to `silver.coicop_override` (or the category map) and marks the queue row as `RESOLVED`.
+Applying a triage decision writes to `silver.coicop_override_manual`
+(migration 010 — survives every `dbt seed`) or the category map, and marks the
+queue row as `RESOLVED`.

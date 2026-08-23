@@ -10,7 +10,6 @@
        ▼
  1. BRONZE  ──► staging.raw_scrapes (append-only JSONB + UUID run_id)
        │        bronze.raw_prices (clean rows for dbt)
-       │        MinIO raw snapshots s3://cpi-bronze/{store}/dt={date}/
        ▼
  2. SILVER  ──► Python ItemMatcher → silver.canonical_items / item_match_log
        │        dbt models: dim_items, dim_stores, fct_daily_prices, fct_daily_prices_imputed
@@ -81,9 +80,8 @@ Before anything is saved, `normalize_record()` (`pipeline/canonical.py`) reshape
 `pipeline/bronze_ingestion.py::ingest_source_bronze()` runs the full Bronze path per source:
 1. **Fetch & normalize**: `SCRAPER_REGISTRY[source].fetch_records()` → `canonical.normalize_records()` (Schema v1.0).
 2. **Zero-product guard**: A scrape returning 0 records raises before any DB write.
-3. **MinIO raw snapshot**: `s3://cpi-bronze/{store}/dt={date}/raw.json` via `pipeline/minio_storage.py`.
-4. **Parquet cold archive**: `s3://cpi-bronze/parquet/month=YYYY-MM/date=YYYY-MM-DD/{store}.parquet` via `pipeline/parquet_archiver.py` (streamed straight to MinIO — no local copy).
-5. **PostgreSQL writes**: `staging.raw_scrapes` (append-only JSONB + UUID `run_id`); MEF FX routed to `staging.exchange_rates`.
+3. **Price Bounds Validation**: Prices validated against source-specific bounds before persistence.
+4. **PostgreSQL writes**: `staging.raw_scrapes` (append-only JSONB + UUID `run_id`); MEF FX routed to `staging.exchange_rates`.
 
 ### Quality Gates Before Persisting to Staging
 1. **Schema validation**: Rows must satisfy the canonical contract; invalid rows are dropped/flagged.
@@ -108,7 +106,7 @@ Every decision is written to `silver.item_match_log` (`raw_price_id → item_id`
 
 ### Step 2: dbt Silver models & Analytical Views
 1. **`int_prices_cleaned`** (intermediate) — USD $\to$ KHR currency conversion via MEF FX, promo math (discount clamped to $[0\%, 95\%]$), price bounds, unit-price derivation.
-2. **`int_coicop_classified`** (intermediate) — COICOP classification ladder: override → AI cache → trap exceptions → keyword ladder → category map → store default → UNCLASSIFIED.
+2. **`int_coicop_classified`** (intermediate) — daily-scoped 9-tier COICOP ladder: exact/per-store overrides → store purity → AI cache (gated) → global overrides → traps → keyword STRONG (`coicop_keywords.csv`) → category map → keyword WEAK/store defaults → UNCLASSIFIED.
 3. **`dim_items`** — canonical item dimension with prioritized COICOP division selection.
 4. **`dim_stores`** — retailer and source dimension across 20 Cambodian sources.
 5. **`fct_daily_prices`** — primary daily fact table (one row per item/store/date with cleaned price, unit price, promo indicators).

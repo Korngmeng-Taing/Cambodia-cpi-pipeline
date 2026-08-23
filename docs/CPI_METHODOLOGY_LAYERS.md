@@ -12,7 +12,7 @@
 ## 1.1 Scope & Properties
 Captures daily prices across 19 online sources + official MEF USD/KHR exchange rates.
 - **Density**: Up to 35,000 observations per day.
-- **Storage**: Append-only PostgreSQL `staging.raw_scrapes` (canonical JSONB payloads stamped with a UUID `run_id`); clean rows in `bronze.raw_prices`; immutable raw snapshots on MinIO (`s3://cpi-bronze/{store}/dt={date}/raw.json`) + Parquet cold archive.
+- **Storage**: Append-only PostgreSQL `staging.raw_scrapes` (canonical JSONB payloads stamped with a UUID `run_id`); clean typed listings in `bronze.raw_prices`.
 - **Quality Gates**: Price bounds validation per source (`canonical.PRICE_BOUNDS`) and zero-product failure guards (`pipeline/bronze_ingestion.py`).
 
 ---

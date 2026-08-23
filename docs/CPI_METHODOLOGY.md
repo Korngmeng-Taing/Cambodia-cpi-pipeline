@@ -30,7 +30,7 @@ L6  Quality adjustment: pack-size / unit-price conversion & overlap methods
 
 | Layer | Physical Storage | Implementation | Role |
 |---|---|---|---|
-| **Bronze (Raw)** | `staging.raw_scrapes`, `staging.exchange_rates`, `bronze.raw_prices` | Airflow `scrape_{source}_dag` + `pipeline.bronze_ingestion` | Append-only raw JSONB with UUID `run_id`, zero-product guards, bounds validation; MinIO raw snapshots (`s3://cpi-bronze`) + Parquet cold archive. |
+| **Bronze (Raw)** | `staging.raw_scrapes`, `staging.exchange_rates`, `bronze.raw_prices` | Airflow `scrape_{source}_dag` + `pipeline.bronze_ingestion` | Append-only raw JSONB with UUID `run_id`, zero-product guards, bounds validation; atomic daily quote ingestion. |
 | **Silver** | `silver.canonical_items`, `silver.item_match_log`, `silver.dim_items`, `silver.dim_stores`, `silver.fct_daily_prices`, `silver.fct_daily_prices_imputed`, `silver.fct_jevons_daily`, `silver.fct_laspeyres_daily`, `silver.fct_laspeyres_headline_daily` | `pipeline.item_matcher` (RapidFuzz) + dbt models & views | EAN/Fuzzy item resolution; 0–95% promo clamp; unit-price derivation; COICOP classification ladder (`int_coicop_classified`); Jevons elementary relatives & Laspeyres category aggregation. |
 | **Silver Triage** | `silver.needs_review`, `silver.classification_queue`, `silver.coicop_override` | `apps/labeling_app.py` (Streamlit) | Human-in-the-loop triage for REVIEW / low-confidence items. |
 | **Gold (Index & Divisions)** | `gold.base_prices`, `gold.fct_daily_price_stats`, `gold.cpi_category_daily`, `gold.cpi_headline_daily`, `gold.cpi_div01_food` ... `gold.cpi_div12_misc`, `gold.cpi_geks_multilateral` | dbt Gold models + Airflow `gold_dag` + `pipeline.geks_calculator` | Jevons elementary aggregation; Laspeyres weighting; 12 dedicated COICOP division tables; GEKS multilateral index; anomaly detection. |
@@ -45,7 +45,7 @@ For item $i$ on date $t$, the elementary price is the geometric mean over qualif
 $$P_{i,t} = \exp\left( \frac{1}{N_{i,t}} \sum_{s=1}^{N_{i,t}} \ln(\text{price}_{i,s,t}) \right)$$
 *Qualifying criteria:* `cpi_eligible = TRUE`, `is_fallback = FALSE`, `is_outlier = FALSE`, `price_khr > 0`. When package sizes vary, the unit price (per kg / per litre) is used.
 
-> **Unit-price-aware selection (implemented 2026-08-20):** the elementary price is taken over **unit prices** (per-kg/L) whenever *every* quote for that item/day carries a comparable base dimension (all weight-based or all volume-based); otherwise it falls back to the shelf price. This is enforced identically in `gold_procedures.sql` (Step 1), `sql/views.sql` (`silver.fct_jevons_daily`), and `dbt/models/silver/fct_jevons_daily.sql`, so pack-size changes (shrinkflation) can no longer masquerade as price changes.
+> **Unit-price-aware selection & Class-Mean Imputation:** the elementary price is taken over **unit prices** (per-kg/L) whenever *every* quote for that item/day carries a comparable base dimension; otherwise it falls back to the shelf price. For missing items ($\le 7$ days), **Class-Mean Imputation** (ILO standard) adjusts the last observed price using the geometric average movement of observed items in its COICOP division.
 
 ### Layer 3 — Elementary Price Relative
 $$I_{i,t} = \left( \frac{P_{i,t}}{P_{i,0}} \right) \times 100$$
@@ -59,19 +59,20 @@ Overall Headline CPI (`gold.cpi_headline_daily`):
 $$\text{CPI}_t = \sum_{g \in \text{present}} I_{g,t} \times \left( \frac{W_g}{\sum_{j \in \text{present}} W_j} \right)$$
 using official NIS division weights ($W_g$) from the `category_weights` seed, summing to $100.000\%$.
 
-> **Weight renormalisation (implemented 2026-08-20):** the headline always reweights the official weights to the divisions present on a given day (`weight_pct / Σ weight_present`), matching the dbt and Silver-layer implementations. This replaced the previous fixed-division-by-100 formulation, which understated the headline whenever coverage was partial (e.g. Division 01 alone at index 110 produced `110 × 44.8/100 = 49.28` instead of `110`).
+> **Weight renormalisation:** the headline always reweights the official weights to the divisions present on a given day (`weight_pct / Σ weight_present`), matching the dbt and Silver-layer implementations.
 
-### Layer 5 — Multilateral GEKS-Törnqvist (Rolling Window)
-Eliminates chain drift from high product churn using a 13-period rolling window $W$ (`pipeline/geks_calculator.py`):
+### Layer 5 — Multilateral GEKS-Törnqvist & Superlative Fisher
+Eliminates chain drift from high product churn using a 13-period rolling window $W$ with **Movement Splicing** (`pipeline/geks_calculator.py`):
 $$\text{GEKS}_t = \prod_{j \in W} (T_{j,t})^{1 / |W|} = \exp\left( \frac{1}{|W|} \sum_{j \in W} \ln(T_{j,t}) \right)$$
-where $T_{j,t}$ is the bilateral Törnqvist relative over matched items present in both periods $j$ and $t$. Persisted to `gold.cpi_geks_multilateral`.
+Movement Splicing links the window movement to previous published indices without historical number revisions:
+$$I_t^{\text{Published}} = I_{t-1}^{\text{Published}} \times \frac{\text{GEKS}_{W_t}(t)}{\text{GEKS}_{W_t}(t-1)}$$
 
-> **Wired into production (2026-08-20):** `gold_dag` now runs `geks_multilateral_calc` after the daily stored procedure — the daily 13-period rolling GEKS is persisted to `gold.cpi_geks_multilateral`, and a best-effort 13-month GEKS is computed for diagnostics once enough history exists. (Unweighted when no expenditure weights are supplied, i.e. GEKS-Jevons.)
+Additionally, the **Superlative Fisher Ideal Index** ($I_{\text{Fisher}} = \sqrt{I_{\text{Laspeyres}} \times I_{\text{Paasche}}}$) is calculated in `pipeline/fisher_calculator.py` to quantify **Consumer Substitution Bias** ($\text{Bias} = I_{\text{Laspeyres}} - I_{\text{Fisher}}$).
 
-### Layer 6 — Quality Adjustment
-- **Unit Price Normalization**: Automatic conversion of raw package sizes (e.g. `5KG`, `380ML`, `24 x 25g`) to base metric units (`KHR/kg` or `KHR/L`) prevents package resizing from masquerading as price inflation (dbt `items_normalized.sql`).
-- **Overlap Linking**: Discontinued items are bridged across overlapping periods without historical level distortion.
-- **Price Anomalies**: Day-on-day shifts $> 15\%$ flagged in `gold.fct_price_anomalies`.
+### Layer 6 — Quality Adjustment & Hedonics
+- **Unit Price Normalization**: Automatic conversion of raw package sizes to base metric units (`KHR/kg` or `KHR/L`) protects against shrinkflation.
+- **Hedonic Quality Adjustment**: OLS log-linear hedonic regression ($\ln(\text{Price}) = \beta_0 + \beta_1 \text{RAM} + \beta_2 \text{Storage}$) adjusts Division 09/08 consumer electronics prices to holding quality constant (`pipeline/hedonic_regression.py` $\to$ `silver.hedonic_adjusted_prices`).
+- **Operational Price Anomalies**: Single-pass `LAG()` window flags day-on-day shifts $> 15\%$ into `gold.mart_price_anomalies`.
 
 ---
 
@@ -79,5 +80,5 @@ where $T_{j,t}$ is the bilateral Törnqvist relative over matched items present 
 
 - **Base period**: `base_period` dbt var, default `2026-08` (set via `BASE_PERIOD` env).
 - **Weights**: `dbt/seeds/category_weights.csv` (materialized to `gold.category_weights`) — 12 divisions summing to 100.000%.
-- **Classification**: `dbt/seeds/coicop_override.csv` (materialized to `silver.coicop_override`) + `silver.coicop_category_map` (see `COICOP_MAPPING.md`).
+- **Classification**: 9-tier daily-scoped ladder in `int_coicop_classified.sql` — human overrides (`coicop_override.csv` + `silver.coicop_override_manual`) → store purity → Gemini AI cache (AI-first, `silver.dim_coicop_ai_cache`) → global overrides → traps → keyword rules (`coicop_keywords.csv`, two-tier) → `silver.coicop_category_map` → weak keywords/store defaults. See `COICOP_MAPPING.md`.
 - **Tariffs**: `dbt/seeds/utility_tariffs.csv` (materialized to `silver.utility_tariffs`) — regulated EDC electricity + PPWSA water fixed prices for Division `04` (see `SCRAPER_METHODOLOGY_GUIDE.md` §5).

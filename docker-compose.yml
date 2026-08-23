@@ -1,6 +1,6 @@
 # =============================================================================
 # CAMBODIA CPI PIPELINE — MEDALLION ARCHITECTURE STACK
-# PostgreSQL 16 (Bronze / Silver / Gold) + MinIO Object Storage + Airflow 2.9.3 + dbt + Metabase
+# PostgreSQL 16 (Bronze / Silver / Gold) + Airflow 2.9.3 + dbt + Metabase
 # =============================================================================
 
 x-airflow-common: &airflow-common
@@ -36,12 +36,6 @@ x-airflow-common: &airflow-common
     DB_PASS: cpi_pass
     DBT_PROFILES_DIR: /opt/airflow/dbt
 
-    # MinIO / S3 Object Storage
-    MINIO_ENDPOINT: http://minio:9000
-    MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-    MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
-    MINIO_BUCKET: ${MINIO_BUCKET:-cpi-bronze}
-
     # Pipeline Constants & Tokens
     BASE_PERIOD: ${BASE_PERIOD:-2026-08}
     DEFAULT_USD_KHR_RATE: ${DEFAULT_USD_KHR_RATE:-4044}
@@ -49,6 +43,8 @@ x-airflow-common: &airflow-common
     VIREAKBUNTHAM_BEARER_TOKEN: ${VIREAKBUNTHAM_BEARER_TOKEN:-}
     GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
+    GEMINI_MAX_ITEMS_PER_RUN: ${GEMINI_MAX_ITEMS_PER_RUN:-1000}
+    AEON_MAX_PAGES: ${AEON_MAX_PAGES:-0}
   volumes:
     - ./orchestration/dags:/opt/airflow/dags
     - ./orchestration/logs:/opt/airflow/logs
@@ -58,13 +54,12 @@ x-airflow-common: &airflow-common
     - ./scrapers:/opt/airflow/scrapers
     - ./sql:/opt/airflow/sql
     - ./tests:/opt/airflow/tests
+    - ./scripts:/opt/airflow/scripts
     - ./dbt:/opt/airflow/dbt
     - ./models:/opt/airflow/models
   depends_on:
     postgres:
       condition: service_healthy
-    minio:
-      condition: service_started
   networks:
     - cpi-net
 
@@ -90,45 +85,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    networks:
-      - cpi-net
-
-  # ── MinIO (S3-Compatible Object Storage for Raw Scrapes & Cold Parquet) ────
-  minio:
-    image: minio/minio:RELEASE.2024-05-10T01-41-38Z
-    container_name: minio
-    restart: unless-stopped
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - cpi-net
-
-  # ── MinIO Bucket Auto-Initializer ──────────────────────────────────────────
-  minio-init:
-    image: minio/mc:RELEASE.2024-05-09T17-04-24Z
-    container_name: minio-init
-    depends_on:
-      - minio
-    entrypoint: >
-      /bin/sh -c "
-      sleep 2;
-      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
-      /usr/bin/mc mb myminio/cpi-bronze || true;
-      /usr/bin/mc anonymous set download myminio/cpi-bronze || true;
-      exit 0;
-      "
     networks:
       - cpi-net
 
@@ -221,4 +177,3 @@ networks:
 
 volumes:
   postgres-data:
-  minio-data:

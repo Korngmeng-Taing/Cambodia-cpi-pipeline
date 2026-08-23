@@ -7,7 +7,7 @@ indices, and Headline Laspeyres CPI for Cambodia CPI.
 Workflow:
     calculate_daily_cpi_stored_proc ─► dbt_gold_run ─► dbt_gold_test
 
-Schedule: None — orchestrated by cpi_master_dag after coicop_classification_dag.
+Schedule: None — orchestrated by cpi_master_dag after silver_dag.
 """
 
 from __future__ import annotations
@@ -55,11 +55,14 @@ def _ensure_base_prices(**context) -> None:
 
 def _run_gold_procedures(**context) -> None:
     ds = context["ds"]
-    log.info("Calculating Daily Gold CPI for date: %s", ds)
+    base_period = os.getenv("BASE_PERIOD", "2026-08")
+    log.info("Calculating Daily Gold CPI for date: %s (base period %s)", ds, base_period)
     conn = get_db_connection()
     conn.autocommit = True
     with conn.cursor() as cur:
-        cur.execute("CALL gold.sp_calculate_daily_cpi(%s::DATE);", (ds,))
+        cur.execute(
+            "CALL gold.sp_calculate_daily_cpi(%s::DATE, %s);", (ds, base_period)
+        )
     conn.close()
     log.info("Successfully executed gold.sp_calculate_daily_cpi for %s", ds)
 
@@ -136,13 +139,13 @@ with DAG(
     _dbt_vars = '{"ds": "{{ ds }}"}'
     t_dbt_gold_run = BashOperator(
         task_id="dbt_gold_run",
-        bash_command=f"dbt run --select gold --project-dir {DBT_PROJECT_DIR} --vars '{_dbt_vars}'",
+        bash_command=f"dbt run --select gold --threads 4 --project-dir {DBT_PROJECT_DIR} --vars '{_dbt_vars}'",
         execution_timeout=timedelta(minutes=30),
     )
 
     t_dbt_gold_test = BashOperator(
         task_id="dbt_gold_test",
-        bash_command=f"dbt test --select gold --project-dir {DBT_PROJECT_DIR}",
+        bash_command=f"dbt test --select gold --threads 4 --project-dir {DBT_PROJECT_DIR}",
         execution_timeout=timedelta(minutes=15),
     )
 

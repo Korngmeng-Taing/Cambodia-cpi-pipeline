@@ -177,18 +177,41 @@ _UNIT_SYNONYMS = {
 }
 
 
+# Product abbreviation expansion dictionary
+_PRODUCT_ABBREVIATIONS = {
+    "SPK": "SPICY",
+    "ORG": "ORGANIC",
+    "LS": "LOW SODIUM",
+    "FF": "FAT FREE",
+    "LT": "LIGHT",
+    "REG": "REGULAR",
+    "FAM": "FAMILY",
+    "SM": "SMALL",
+    "MED": "MEDIUM",
+    "LG": "LARGE",
+    "PKT": "PACK",
+    "PK": "PACK",
+    "PKG": "PACK",
+    "BTL": "BOTTLE",
+    "DLX": "DELUXE",
+    "PREM": "PREMIUM",
+    "ORIG": "ORIGINAL",
+    "CTN": "CARTON",
+    "PCS": "PIECES",
+    "PC": "PIECE",
+}
+
+
 def segment_khmer_words(text: str) -> str:
     """
-    Inserts spaces between Khmer character clusters/words to handle
-    unsegmented Khmer scripts without spaces.
+    Inserts spaces around translated Khmer dictionary words while preserving
+    Khmer unicode character sequences.
     """
     if not text:
         return text
     # Replace dictionary matches with space-delimited English equivalents
     for k, v in _KHMER_TERMS.items():
         text = text.replace(k, f" {v} ")
-    # Segment remaining unspaced Khmer consonant clusters
-    text = re.sub(r"([\u1780-\u17B3][\u17B4-\u17D3]*)", r" \1 ", text)
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -252,14 +275,12 @@ def normalize_khmer(text: str) -> str:
 
 
 def expand_abbreviations(text: str) -> str:
-    """Expand common product abbreviations for better matching.
+    """Expand common product and unit abbreviations for better matching.
 
     E.g. "ORG" → "ORGANIC", "SPK" → "SPICY", "BTL" → "BOTTLE"
     """
-
-    def _replace(m):
-        word = m.group(0).upper()
-        return _UNIT_SYNONYMS.get(word.lower(), word)
+    if not text:
+        return ""
 
     # Expand unit abbreviations
     for abbr, canonical in _UNIT_SYNONYMS.items():
@@ -271,9 +292,15 @@ def expand_abbreviations(text: str) -> str:
         )
 
     # Expand English product abbreviations
-    text = _EN_ABBREV.sub(lambda m: m.group(0).upper(), text)
+    for abbr, expanded in _PRODUCT_ABBREVIATIONS.items():
+        text = re.sub(
+            r"\b" + re.escape(abbr) + r"\b",
+            expanded,
+            text,
+            flags=re.IGNORECASE,
+        )
 
-    return text
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def full_normalize(raw: str | None) -> str:

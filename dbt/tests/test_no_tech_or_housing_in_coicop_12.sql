@@ -8,5 +8,5 @@ select
     coicop_division,
     coicop_method
 from {{ ref('int_coicop_classified') }}
-where store_slug in ('arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'khmer24', 'realestate', 'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk', 'bookmebus', 'redbus', 'new_gasoline', 'tela', 'ptt', 'caltex', 'total')
+where store_slug in ('arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'khmer24', 'realestate', 'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk', 'bookmebus', 'redbus', 'new_gasoline')
   and coicop_division = '12'

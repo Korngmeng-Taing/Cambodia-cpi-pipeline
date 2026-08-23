@@ -8,6 +8,7 @@
 --   - name_clean: Khmer-aware normalization + uppercase + stripped of promo/price noise
 {{ config(
     materialized='incremental',
+    incremental_strategy='delete+insert',
     unique_key='raw_price_id',
     on_schema_change='append_new_columns'
 ) }}
@@ -30,6 +31,7 @@ raw as (
         rp.raw_payload ->> 'barcode' as barcode,
         rp.raw_payload ->> 'package_size' as size_norm,
         rp.raw_payload ->> 'is_fallback' as is_fallback_raw,
+        rp.raw_payload ->> 'fallback_reason' as fallback_reason,
         (rp.raw_payload ->> 'original_price')::numeric as original_price_curr,
         rp.price as price_original_curr,
         rp.currency,
@@ -77,24 +79,26 @@ parsed as (
                                     regexp_replace(
                                         regexp_replace(
                                             regexp_replace(
-                                                translate(
-                                                    regexp_replace(
-                                                        regexp_replace(
-                                                            regexp_replace(
-                                                                regexp_replace(raw.name_raw, '&amp;|&#39;|&lt;|&gt;|&quot;', ' ', 'g'),
-                                                                '[$\u17DB]?\s*\d{1,3}(?:[,.\s]\d{3})*(?:[.,]\d{1,2})?\s*(?:KHR|USD|RIEL|\$)?', ' ', 'g'
-                                                            ),
-                                                            '\b(SALE|PROMO|PROMOTION|DISCOUNT|CLEARANCE|HOT\s*DEAL|BEST\s*SELLER|NEW\s*ARRIVAL|LIMITED|SPECIAL\s*OFFER|FLASH\s*SALE|FREE\s*SHIPPING|BUNDLE)\b', ' ', 'gi'
-                                                        ),
-                                                        '\s+', ' '
+                                            -- Khmer digits are translated BEFORE price
+                                            -- stripping so prices written in Khmer
+                                            -- numerals (e.g. ៛៥០០០) actually match the
+                                            -- [0-9] strip pattern instead of leaking
+                                            -- into name_clean.
+                                            regexp_replace(
+                                                regexp_replace(
+                                                    translate(
+                                                        regexp_replace(raw.name_raw, '&amp;|&#39;|&lt;|&gt;|&quot;', ' ', 'g'),
+                                                        '០១២៣៤៥៦៧៨៩', '0123456789'
                                                     ),
-                                                    '០១២៣៤៥៦៧៨៩', '0123456789'
+                                                    '[$\u17DB]?\s*\d{1,3}(?:[,.\s]\d{3})*(?:[.,]\d{1,2})?\s*(?:KHR|USD|RIEL|\$)?', ' ', 'g'
                                                 ),
+                                                '\b(SALE|PROMO|PROMOTION|DISCOUNT|CLEARANCE|HOT\s*DEAL|BEST\s*SELLER|NEW\s*ARRIVAL|LIMITED|SPECIAL\s*OFFER|FLASH\s*SALE|FREE\s*SHIPPING|BUNDLE)\b', ' ', 'gi'
+                                            ),
                                                 'សាំង', 'GASOLINE', 'g'
                                             ),
                                             'ស្រា', 'BEER', 'g'
                                         ),
-                                        'អង្គរ', 'RICE', 'g'
+                                        'អង្ករ', 'RICE', 'g'
                                     ),
                                     'ត្រី', 'FISH', 'g'
                                 ),
@@ -182,21 +186,18 @@ select
         when wps.size_unit in ('ml', 'millilitre', 'milliliter', 'millilitres', 'milliliters') and wps.size_value > 0 then wps.price_khr / (wps.size_value / 1000.0)
         else null
     end as unit_price_khr,
-    -- Outlier detection: flag prices >3 stddev from the store-level mean
+    -- Outlier detection: flag extreme pricing anomalies or corrupt inputs
     case
-        when wps.price_khr > 0
-             and wps.stddev_price_store > 0
-             and wps.price_khr > wps.avg_price_store + 3 * wps.stddev_price_store
-        then true
-        when wps.price_khr > 0
-             and wps.stddev_price_store > 0
-             and wps.price_khr < wps.avg_price_store - 3 * wps.stddev_price_store
-        then true
+        when wps.price_khr <= 0 then true
+        when wps.price_khr > 100000000 then true -- Upper bound for consumer retail item (>100M KHR ~ $25,000 USD)
+        when wps.original_price_curr is not null and wps.price_original_curr > 0 
+             and wps.price_original_curr > wps.original_price_curr * 10 then true
         else false
     end as is_outlier,
     (wps.price_khr > 0 and wps.price_khr <= 100000000) as cpi_eligible,
-    -- Carry through is_fallback flag from scraper (raw_payload JSONB)
+    -- Carry through is_fallback flag + operator reason from scraper (raw_payload JSONB)
     coalesce(wps.is_fallback_raw::boolean, false) as is_fallback,
+    wps.fallback_reason,
     wps.scrape_date,
     wps.scraped_at
 from with_price_stats wps

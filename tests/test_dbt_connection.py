@@ -45,12 +45,9 @@ def test_postgres_connection_and_schemas():
         assert "silver" in schemas
         assert "gold" in schemas
 
-        # Verify hello world bronze model
-        cur.execute("SELECT message, layer, status FROM bronze.stg_hello_world;")
-        row = cur.fetchone()
-        assert row is not None
-        assert row[0] == "hello_world"
-        assert row[1] == "bronze"
-        assert row[2] == "connection_verified"
+        # Verify bronze table accessible
+        cur.execute("SELECT COUNT(*) FROM bronze.raw_prices;")
+        count = cur.fetchone()[0]
+        assert count >= 0
 
     conn.close()

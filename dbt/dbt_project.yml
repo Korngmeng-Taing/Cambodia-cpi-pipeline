@@ -23,9 +23,6 @@ vars:
 
 models:
   cpi:
-    bronze:
-      +schema: bronze
-      +materialized: view
     staging:
       +schema: staging
       +materialized: view
@@ -35,6 +32,9 @@ models:
       intermediate:
         +schema: staging
         +materialized: view
+    gold:
+      +schema: gold
+      +materialized: view
 
 seeds:
   cpi:
@@ -96,6 +96,26 @@ seeds:
         store_slug: varchar(50)
         coicop_division: varchar(10)
         reason: varchar(255)
+    coicop_classification_seed:
+      +column_types:
+        product_name: text
+        coicop_code: varchar(16)
+        confidence_score: numeric(5, 4)
+        reasoning: text
+        model_version: varchar(64)
+      # Day-0 bootstrap: upsert curated classifications into the real Gemini
+      # cache so the ladder's tier 3 resolves high-volume products with zero
+      # API calls. ON CONFLICT DO NOTHING = seed never overwrites a fresher
+      # Gemini result or human label. Rows carry model_version
+      # 'seed_bootstrap_v1' for traceability; '99.9.9' rows are excluded.
+      +post-hook:
+        - >-
+          INSERT INTO silver.dim_coicop_ai_cache
+              (product_name, coicop_code, confidence_score, reasoning, model_version)
+          SELECT s.product_name, s.coicop_code, s.confidence_score, s.reasoning, s.model_version
+          FROM {{ this }} s
+          WHERE s.coicop_code IS NOT NULL AND s.coicop_code <> '99.9.9'
+          ON CONFLICT (product_name) DO NOTHING
     utility_tariffs:
       +schema: silver
 

@@ -4,6 +4,7 @@
 -- gap_days tracks the carry distance).
 {{ config(
     materialized='incremental',
+    incremental_strategy='delete+insert',
     unique_key=['scrape_date', 'store_slug', 'item_id'],
     on_schema_change='append_new_columns'
 ) }}
@@ -85,7 +86,7 @@ select
     (price_khr is null) as is_imputed,
     gap_days
 from carried
-where (price_khr is not null or gap_days <= 7)
+where (price_khr is not null or (carried_price_khr is not null and gap_days <= 7))
 {% if is_incremental() %}
   and scrape_date >= (select start_date from date_range)
 {% endif %}

@@ -54,19 +54,33 @@ class ItemMatcher:
             self.barcode_cache.clear()
             self.exact_name_cache.clear()
             self.items_cache.clear()
+            self.sku_cache.clear()
             for item_id, name, barcode, size_norm in rows:
                 if barcode:
                     self.barcode_cache[barcode.strip()] = item_id
                 if name:
                     self.exact_name_cache[name.strip().upper()] = item_id
                 self.items_cache.append((item_id, name, size_norm))
+            # SKU cache: process_batch() only consults the in-memory cache, so
+            # without this preload every pre-existing SKU was invisible to the
+            # batch path and fell through to fuzzy/new_item matching.
+            cur.execute(
+                "SELECT source_name, raw_item_id, canonical_item_id FROM silver.dim_canonical_products WHERE source_name IS NOT NULL AND raw_item_id IS NOT NULL"
+            )
+            for source_name, raw_item_id, canonical_item_id in cur.fetchall():
+                self.sku_cache[(source_name, raw_item_id.strip())] = canonical_item_id
 
     def process_unmatched_batch(
-        self, limit: int = 100000, batch_size: int = 1000
+        self,
+        limit: int = 100000,
+        batch_size: int = 1000,
+        scrape_date: str | None = None,
     ) -> dict:
         conn = self._get_connection()
         try:
-            return self.process_batch(conn, limit=limit, batch_size=batch_size)
+            return self.process_batch(
+                conn, limit=limit, batch_size=batch_size, scrape_date=scrape_date
+            )
         finally:
             conn.close()
 
@@ -130,9 +144,22 @@ class ItemMatcher:
         if m1 and m2:
             v1, u1 = float(m1.group(1)), m1.group(2)
             v2, u2 = float(m2.group(1)), m2.group(2)
-            if u1 == u2 and v1 > 0 and v2 > 0:
-                diff = abs(v1 - v2) / max(v1, v2)
-                return diff <= tolerance
+            if v1 > 0 and v2 > 0:
+                # Normalize equivalent units so e.g. "330ml" matches "0.33L"
+                # (previously any unit mismatch rejected the candidate).
+                factors = {"ml": 0.001, "l": 1.0, "g": 0.001, "kg": 1.0}
+                f1, f2 = factors.get(u1), factors.get(u2)
+                if (
+                    f1 is not None
+                    and f2 is not None
+                    and (u1 in ("ml", "l")) == (u2 in ("ml", "l"))
+                ):
+                    b1, b2 = v1 * f1, v2 * f2
+                    diff = abs(b1 - b2) / max(b1, b2)
+                    return diff <= tolerance
+                if u1 == u2:
+                    diff = abs(v1 - v2) / max(v1, v2)
+                    return diff <= tolerance
         return False
 
     def match_by_fuzzy_text(
@@ -162,16 +189,24 @@ class ItemMatcher:
                     else:
                         candidates.append((row[0], row[1], None))
 
+        target_len = len(name_clean)
         for item_id, canonical_name, cand_size in candidates:
+            if not canonical_name:
+                continue
+            cand_len = len(canonical_name)
+            # Length filter: skip if strings differ in length by more than 35%
+            if abs(target_len - cand_len) > max(target_len, cand_len) * 0.35:
+                continue
+
             if not self._is_size_compatible(size_norm, cand_size):
                 continue
 
-            score = fuzz.token_sort_ratio(name_clean, canonical_name) / 100.0
+            score = fuzz.token_sort_ratio(name_clean, canonical_name, score_cutoff=int(best_score * 100)) / 100.0
             if score > best_score:
                 best_score = score
                 best_match_id = item_id
                 best_name = canonical_name
-                if best_score >= 0.98:
+                if best_score >= 0.96:
                     break
 
         if best_match_id:
@@ -315,7 +350,13 @@ class ItemMatcher:
                 (raw_price_id, raw_desc, item_id, best_name, confidence),
             )
 
-    def process_batch(self, conn, limit: int = 100000, batch_size: int = 1000) -> dict:
+    def process_batch(
+        self,
+        conn,
+        limit: int = 100000,
+        batch_size: int = 1000,
+        scrape_date: str | None = None,
+    ) -> dict:
         totals = {
             "matched_exact": 0,
             "matched_fuzzy": 0,
@@ -324,23 +365,27 @@ class ItemMatcher:
         }
         self._load_cache(conn)
 
+        query = """
+            SELECT rp.raw_price_id, rp.item_description_raw,
+                   (rp.raw_payload->>'barcode')::text as barcode,
+                   (rp.raw_payload->>'sku')::text as sku,
+                   rp.store_id,
+                   (rp.raw_payload->>'brand')::text as brand,
+                   (rp.raw_payload->>'package_size')::text as package_size
+            FROM bronze.raw_prices rp
+            LEFT JOIN silver.item_match_log iml ON rp.raw_price_id = iml.raw_price_id
+            WHERE iml.raw_price_id IS NULL
+        """
+        params: list[Any] = []
+        if scrape_date:
+            query += " AND rp.scraped_at::date = %s::date"
+            params.append(scrape_date)
+
+        query += " ORDER BY rp.raw_price_id LIMIT %s"
+        params.append(limit)
+
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT rp.raw_price_id, rp.item_description_raw,
-                       (rp.raw_payload->>'barcode')::text as barcode,
-                       (rp.raw_payload->>'sku')::text as sku,
-                       rp.store_id,
-                       (rp.raw_payload->>'brand')::text as brand,
-                       (rp.raw_payload->>'package_size')::text as package_size
-                FROM bronze.raw_prices rp
-                LEFT JOIN silver.item_match_log iml ON rp.raw_price_id = iml.raw_price_id
-                WHERE iml.raw_price_id IS NULL
-                ORDER BY rp.raw_price_id
-                LIMIT %s
-                """,
-                (limit,),
-            )
+            cur.execute(query, tuple(params))
             rows = cur.fetchall()
 
         if not rows:
@@ -349,6 +394,7 @@ class ItemMatcher:
         match_logs = []
         new_items = []
         reviews = []
+        sku_registrations = []
 
         for row in rows:
             raw_price_id, desc, barcode, sku, store_id, brand, package_size = row
@@ -397,7 +443,11 @@ class ItemMatcher:
             if barcode:
                 self.barcode_cache[barcode.strip()] = new_id
             if sku:
-                self.sku_cache[(store_id, sku.strip())] = new_id
+                sku_clean = sku.strip()
+                self.sku_cache[(store_id, sku_clean)] = new_id
+                sku_registrations.append(
+                    (str(new_id), name_clean, store_id, sku_clean)
+                )
             if name_upper:
                 self.exact_name_cache[name_upper] = new_id
             self.items_cache.append((new_id, name_clean, package_size))
@@ -416,6 +466,18 @@ class ItemMatcher:
                     ON CONFLICT (item_id) DO NOTHING
                     """,
                     new_items,
+                    page_size=1000,
+                )
+            if sku_registrations:
+                execute_batch(
+                    cur,
+                    """
+                    INSERT INTO silver.dim_canonical_products
+                        (canonical_item_id, canonical_name, source_name, raw_item_id)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (canonical_item_id) DO NOTHING
+                    """,
+                    sku_registrations,
                     page_size=1000,
                 )
             if match_logs:

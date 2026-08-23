@@ -1,34 +1,138 @@
-\mychapter{III. METHODOLOGY}{III. METHODOLOGY }
-% \section{FUNCTIONAL REQUIREMENTS}
-% \section{NON-FUNCTIONAL REQUIREMENTS}
-%\section{TOOL AND TECHNOLOGY REQUIREMENTS}
-\section{Project Topology}
+\mychapter{III. METHODOLOGY}{III. METHODOLOGY}
 
+\section{Methodological Framework and System Architecture}
+\hs This research develops an automated, high-frequency price collection, econometric aggregation, and machine learning inflation forecasting pipeline for Cambodia. The methodology is organized around a four-phase structure implementing a \textbf{Medallion Data Architecture} on PostgreSQL 16, Apache Airflow, dbt Core, Google Gemini/Ollama AI, and time-series predictive modeling.
 
-\section{Steps of Implementation}
-\subsection{Data Collection}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{images/cpi_simple_architecture.jpg}
+    \caption{Medallion Pipeline Architecture and Multi-Phase Methodology}
+    \label{fig:cpi_architecture}
+\end{figure}
 
-\subsection{Preprocessing Data}
-\subsection{Data augmentation}
+\section{Phase 1: Data Infrastructure, Multi-Source Ingestion, Preprocessing, and Classification}
 
+\subsection{Data Infrastructure and Storage Design}
+\hs The pipeline utilizes a Medallion Star-Schema storage architecture in PostgreSQL 16:
+\begin{enumerate}
+    \item \textbf{Bronze Layer (\texttt{staging.raw\_scrapes}, \texttt{bronze.raw\_prices}):} Ingests immutable, append-only raw JSONB records with timestamps and unique execution run identifiers.
+    \item \textbf{Silver Layer (\texttt{silver.dim\_items}, \texttt{silver.dim\_stores}, \texttt{silver.fct\_daily\_prices}):} Normalized conformed dimensions, canonical product mappings, and cleaned daily price quotes converted to standard Cambodian Riel (KHR).
+    \item \textbf{Gold Layer (\texttt{gold.fct\_daily\_price\_stats}, \texttt{gold.cpi\_headline\_daily}):} Aggregated elementary Jevons price relatives, 12 COICOP division indices, and the national headline CPI.
+\end{enumerate}
 
-\subsection{Train, Test and Validation}
+\subsection{Automated Web Scraping (12 COICOP Divisions)}
+\hs Ingestion executes daily via Apache Airflow across 20 Cambodian market sources spanning all 12 United Nations COICOP divisions:
+\begin{itemize}
+    \item \textbf{Divisions 01 \& 02 (Food, Beverages, Alcohol, Tobacco):} AEON 1, AEON 3, DeliShop Cambodia, and L192 Marketplace.
+    \item \textbf{Division 03 (Clothing \& Footwear):} AEON 3 Mean Chey and L192 Marketplace.
+    \item \textbf{Division 04 (Housing, Utilities, Gas):} Khmer24 Real Estate, Realestate.com.kh, EDC electricity, and PPWSA water tariffs.
+    \item \textbf{Division 05 (Furnishings \& Household Maintenance):} AEON 1, AEON 3, and L192.
+    \item \textbf{Division 06 (Health):} Community Pharmacy.
+    \item \textbf{Division 07 (Transport):} redBus Cambodia, BookMeBus, and Ministry of Commerce (MOC) gasoline live API.
+    \item \textbf{Division 08 (Communication):} Cellcard, Smart Axiata, Khmer Samnang, and Ary Store.
+    \item \textbf{Divisions 09 \& 10 (Recreation, Culture, Education):} AEON 1, Ary Store, and L192.
+    \item \textbf{Division 11 (Restaurants \& Hotels):} Sokha Hotel, Hyatt Regency, and Bayon Restaurant.
+    \item \textbf{Division 12 (Miscellaneous Goods \& FX):} AEON 1, Community Pharmacy, and Ministry of Economy and Finance (MEF) official FX API.
+\end{itemize}
 
-\subsection{Model Selection}
-\subsection{Performance Comparison}
+\subsection{Data Preprocessing, Entity Matching, and Classification}
+\begin{enumerate}
+    \item \textbf{Text Normalization:} Promotional buzzword stripping, Khmer numeral conversion (០--៩ $\to$ 0--9), and Khmer noun translation.
+    \item \textbf{Standardized Pricing:} Extracting volume/weight metrics into standardized units (\textit{KHR/kg, KHR/L}) to neutralize shrinkflation.
+    \item \textbf{Entity Resolution:} RapidFuzz Token-Sort fuzzy matching ($Score \ge 0.95$) to create canonical product identities in \texttt{silver.canonical\_items}.
+    \item \textbf{7-Tier Hybrid Classification Cascade:}
+    \begin{itemize}
+        \item Tier 1: Domain-specific pinning (e.g., Khmer24 $\to$ Div 04, redBus $\to$ Div 07).
+        \item Tier 2: Manual overrides from \texttt{coicop\_override.csv} ($Confidence = 1.0$).
+        \item Tier 3: PostgreSQL AI cache lookup in \texttt{silver.dim\_coicop\_ai\_cache} ($Confidence \ge 0.90$).
+        \item Tier 4: Regex keyword ladder (Div 12 $\to$ 02 $\to$ 05 $\to$ \dots $\to$ 01).
+        \item Tier 5: Cloud LLM classification using Google Gemini Flash in batches of 50.
+        \item Tier 6: Local offline LLM fallback using Ollama (Qwen 2.5 7B) for rate-limit and network resilience.
+        \item Tier 7: Streamlit human review queue for low-confidence items ($Score < 0.50$).
+    \end{itemize}
+\end{enumerate}
 
-\subsection{Experimental Setup}
+\section{Phase 2: Exploratory Data Analysis and 12 COICOP Category Visualization}
+\subsection{Weight Assignment and Basket Calibration}
+\hs Official expenditure weights from the Cambodia National Institute of Statistics (NIS) 2004 survey are normalized across all 12 COICOP divisions to sum to exactly $100.000\%$.
 
+\subsection{Exploratory Visualization and Validation}
+\begin{itemize}
+    \item \textbf{High-Frequency Trend Tracking:} Time-series line charts of price movements across all 12 divisions.
+    \item \textbf{Volatility and Outlier Analysis:} Rolling volatility box plots and heatmaps identifying price shocks.
+    \item \textbf{Weight Treemaps:} Hierarchical visualizations of expenditure shares across divisions, groups, and classes.
+    \item \textbf{Coverage Audits:} Daily verification of classified SKU proportions in \texttt{gold.v\_coverage}.
+\end{itemize}
 
+\section{Phase 3: Econometric CPI Aggregation and Machine Learning Inflation Forecasting}
 
+\subsection{Two-Stage Econometric CPI Aggregation}
+\subsubsection{1. Elementary Aggregates (Jevons Geometric Mean)}
+\begin{equation}
+    \bar{P}_{i, t} = \exp\left( \frac{1}{K} \sum_{k=1}^{K} \ln P_{i, k, t} \right), \quad R_{i, t} = \left( \frac{\bar{P}_{i, t}}{\bar{P}_{i, 0}} \right) \times 100
+\end{equation}
 
+\subsubsection{2. Higher-Level Aggregation (Laspeyres Index)}
+\begin{equation}
+    I_{d, t} = \frac{1}{N_d} \sum_{i \in d} R_{i, t}, \quad \text{CPI}_t = \sum_{d=1}^{12} w_d \times I_{d, t} \quad \left(\sum_{d=1}^{12} w_d = 100.000\%\right)
+\end{equation}
 
+\subsubsection{3. Multilateral GEKS-T\"ornqvist Index}
+\begin{equation}
+    \ln \text{GEKS}_t = \frac{1}{|W|} \sum_{j \in W} \ln T_{j, t}
+\end{equation}
 
+\subsection{Feature Engineering for Machine Learning}
+\hs Features generated for inflation forecasting include:
+\begin{itemize}
+    \item \textbf{Lags and Returns:} 1-day, 7-day, 14-day, and 30-day price lags and momentum returns.
+    \item \textbf{Rolling Statistical Moments:} 7-day and 30-day rolling means, standard deviations, and volatilities per division.
+    \item \textbf{Exogenous Regressors:} Official daily MEF USD/KHR exchange rates, retail gasoline prices (MOC regular/diesel), and Cambodian holiday indicators (e.g., Khmer New Year, Pchum Ben).
+\end{itemize}
 
+\subsection{Machine Learning Predictive Models and Evaluation}
+\hs Predictive modeling is conducted using:
+\begin{itemize}
+    \item \textbf{Prophet:} Additive time-series model decomposing trend, multi-period seasonality, and festival holiday effects.
+    \item \textbf{XGBoost / LightGBM:} Gradient-boosted decision trees capturing non-linear interactions between commodity prices, exchange rates, and fuel costs.
+    \item \textbf{LSTM / GRU Neural Networks:} Recurrent deep architectures modeling long-term sequence dependencies.
+\end{itemize}
 
+\hs Model accuracy is validated using expanding window cross-validation evaluated on Root Mean Square Error (RMSE), Mean Absolute Percentage Error (MAPE), and Mean Absolute Error (MAE):
+\begin{equation}
+    \text{RMSE} = \sqrt{\frac{1}{n}\sum_{t=1}^n (\text{CPI}_t - \widehat{\text{CPI}}_t)^2}, \quad \text{MAPE} = \frac{100\%}{n}\sum_{t=1}^n \left| \frac{\text{CPI}_t - \widehat{\text{CPI}}_t}{\text{CPI}_t} \right|
+\end{equation}
 
+\section{Phase 4: Interactive Dashboard Development and Deployment}
+\subsection{Metabase Executive BI Dashboard (:3000)}
+\hs Provides real-time headline CPI gauges, day-on-day and year-on-year inflation trajectories, 12 division drill-downs, top rising/falling goods, and ingestion data quality monitoring.
 
+\subsection{Streamlit Human-in-the-Loop and ML Forecasting UI (:8501)}
+\hs Allows analysts to interactively select forecasting horizons (7, 30, 90 days), compare model predictions with confidence bands, and triage low-confidence COICOP classifications.
 
+\subsection{Containerized Production Deployment}
+\hs The complete ecosystem is containerized using Docker Compose encompassing PostgreSQL 16, Apache Airflow, Metabase, Streamlit, and local Ollama inference.
 
-
-
+\section{Project Activity Schedule and Milestone Roadmap}
+\begin{table}[H]
+\centering
+\begin{tabular}{|p{4.8cm}|*{10}{>{\centering\arraybackslash}p{0.55cm}|}}
+\hline
+\textbf{Phase / Activity} & \multicolumn{10}{c|}{\textbf{Week}} \\
+\cline{2-11}
+ & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 \\
+\hline
+\textbf{Phase 1: Ingestion \& Classification} & \progressbar{ } & \progressbar{ } & \progressbar{ } & & & & & & & \\
+\hline
+\textbf{Phase 2: EDA \& 12 COICOP Viz} & & \progressbar{ } & \progressbar{ } & \progressbar{ } & & & & & & \\
+\hline
+\textbf{Phase 3: CPI Aggregation \& ML Forecast} & & & & \progressbar{ } & \progressbar{ } & \progressbar{ } & & & & \\
+\hline
+\textbf{Phase 4: Dashboards \& Deployment} & & & & & & \progressbar{ } & \progressbar{ } & & & \\
+\hline
+\textbf{Phase 5: Thesis Writing \& Defense} & & & & & & & \progressbar{ } & \progressbar{ } & \progressbar{ } & \progressbar{ } \\
+\hline
+\end{tabular}
+\caption{Project Activity Schedule and Milestone Roadmap}
+\label{table:project_roadmap}
+\end{table}

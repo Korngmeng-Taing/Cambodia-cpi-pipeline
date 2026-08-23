@@ -13,7 +13,7 @@ concurrency:
 jobs:
   # ── 1. Lint & Code Quality ──────────────────────────────────────────────────
   lint:
-    name: Lint & Style Checks
+    name: Lint & Code Quality
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -30,14 +30,29 @@ jobs:
           pip install --upgrade pip
           pip install ruff
 
-      - name: Run Ruff Lint (Syntax & Critical Errors)
+      - name: Run Ruff Lint (Syntax & Critical Checks)
         run: |
-          ruff check --select=E9,F63,F7,F82,F401,F841 --ignore=E501,EXE002,W292 pipeline scrapers orchestration tests
+          ruff check --select=E9,F63,F7,F82,F401,F841 --ignore=E501,EXE002,W292 pipeline scrapers orchestration tests scripts apps
 
-  # ── 2. Unit & Econometric Index Tests ──────────────────────────────────────
-  unit-tests:
-    name: Pytest Unit & Econometric Suite
+  # ── 2. Full Pytest Test Suite (with PostgreSQL 16 Service) ──────────────────
+  test-suite:
+    name: Pytest Unit & Integration Suite
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cpi_user
+          POSTGRES_PASSWORD: cpi_pass
+          POSTGRES_DB: cpi_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -48,20 +63,31 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install Dependencies
+      - name: Install System & Python Dependencies
         run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client
           pip install --upgrade pip
-          pip install pytest pytest-asyncio rapidfuzz numpy pandas scipy sqlalchemy statsmodels pendulum python-dotenv boto3 pyarrow psycopg2-binary beautifulsoup4 requests
+          pip install pytest pytest-asyncio rapidfuzz numpy pandas scipy sqlalchemy statsmodels pendulum python-dotenv boto3 pyarrow psycopg2-binary beautifulsoup4 requests google-genai
 
-      - name: Run Unit & Econometric Tests
+      - name: Initialize PostgreSQL Schemas & Stored Procedures
+        env:
+          PGPASSWORD: cpi_pass
         run: |
-          pytest tests/test_fisher_calculator.py \
-                 tests/test_geks_calculator.py \
-                 tests/test_hedonic_regression.py \
-                 tests/test_canonical.py \
-                 tests/test_pipeline_contracts.py -v
+          psql -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/schema.sql
+          psql -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/gold_procedures.sql
+          psql -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/views.sql
 
-  # ── 3. Database Schema & dbt Compilation ────────────────────────────────────
+      - name: Run Full Pytest Suite
+        env:
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_NAME: cpi_db
+          DB_USER: cpi_user
+          DB_PASS: cpi_pass
+        run: |
+          pytest tests/ -v
+
+  # ── 3. dbt Model Compilation, Seeding & Tests ──────────────────────────────
   dbt-validation:
     name: PostgreSQL 16 & dbt Validation
     runs-on: ubuntu-latest
@@ -104,7 +130,7 @@ jobs:
           psql -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/gold_procedures.sql
           psql -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/views.sql
 
-      - name: Validate dbt Models & Seeds
+      - name: Run dbt Pipeline (Deps → Seed → Compile → Test)
         env:
           DB_HOST: localhost
           DB_PORT: "5432"
@@ -113,6 +139,20 @@ jobs:
           DB_PASS: cpi_pass
         run: |
           dbt deps --project-dir dbt --profiles-dir dbt
-          dbt compile --project-dir dbt --profiles-dir dbt --target cpi_target
           dbt seed --project-dir dbt --profiles-dir dbt --target cpi_target
+          dbt compile --project-dir dbt --profiles-dir dbt --target cpi_target
+          dbt test --project-dir dbt --profiles-dir dbt --target cpi_target
+
+  # ── 4. Docker Compose Syntax & Compose Config Validation ────────────────────
+  docker-validation:
+    name: Docker Compose Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose Configuration
+        run: |
+          docker compose config --quiet
+          echo "docker-compose.yml configuration is valid."
 

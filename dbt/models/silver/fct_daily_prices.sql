@@ -3,11 +3,24 @@
 -- with COICOP classification + KHR prices + quality flags.
 {{ config(
     materialized='incremental',
+    incremental_strategy='delete+insert',
     unique_key=['scrape_date', 'store_slug', 'item_id'],
     on_schema_change='append_new_columns'
 ) }}
 
-with grouped as (
+with classified as (
+    -- Resolve a single COICOP row per (item_id, store_slug) defensively,
+    -- in case int_coicop_classified ever has duplicates on the join key.
+    select distinct on (item_id, store_slug)
+        item_id,
+        store_slug,
+        coicop_division,
+        coicop_method,
+        coicop_confidence
+    from {{ ref('int_coicop_classified') }}
+    order by item_id, store_slug, coicop_confidence desc
+),
+grouped as (
     select
         p.scrape_date,
         p.store_slug,
@@ -15,9 +28,9 @@ with grouped as (
         p.item_id::text as product_key,
         min(p.name_clean) as name_clean,
         min(p.category_native) as category_native,
-        coalesce(c.coicop_division, 'UNCLASSIFIED') as coicop_division,
-        coalesce(c.coicop_method, 'unclassified') as coicop_method,
-        coalesce(c.coicop_confidence, 0.000) as coicop_confidence,
+        coalesce(min(c.coicop_division), 'UNCLASSIFIED') as coicop_division,
+        coalesce(min(c.coicop_method), 'unclassified') as coicop_method,
+        coalesce(min(c.coicop_confidence), 0.000) as coicop_confidence,
         min(p.currency) as currency,
         min(p.price_original_curr) as price_original_curr,
         min(p.original_price_curr) as original_price_curr,
@@ -33,13 +46,13 @@ with grouped as (
         bool_or(p.is_fallback) as is_fallback,
         max(p.scraped_at) as scraped_at
     from {{ ref('int_prices_cleaned') }} p
-    left join {{ ref('int_coicop_classified') }} c
+    left join classified c
         on c.item_id = p.item_id::text
        and c.store_slug = p.store_slug
     where p.item_id is not null
       and p.price_khr > 0
     {% if is_incremental() %}
-        {% if var('ds', '') != '' %}
+        {% if var('ds', '') and var('ds') != 'None' and var('ds') != 'null' and var('ds') != 'none' %}
             and p.scrape_date = '{{ var("ds") }}'::date
         {% else %}
             and p.scrape_date >= (select coalesce(max(scrape_date) - interval '2 days', '2020-01-01'::date) from {{ this }})
@@ -48,10 +61,7 @@ with grouped as (
     group by
         p.scrape_date,
         p.store_slug,
-        p.item_id,
-        c.coicop_division,
-        c.coicop_method,
-        c.coicop_confidence
+        p.item_id
 )
 select
     scrape_date,

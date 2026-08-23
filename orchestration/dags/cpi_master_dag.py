@@ -3,7 +3,7 @@ orchestration/dags/cpi_master_dag.py
 ────────────────────────────────────
 Master Orchestrator for the Cambodia CPI Medallion Pipeline.
 
-Daily 06:00 Asia/Phnom_Penh (or manual trigger):
+Daily 07:00 Asia/Phnom_Penh (or manual trigger):
     Stage 1 (Bronze): Trigger all 20 per-source scraper DAGs in parallel.
     Stage 2 (Silver): Trigger silver_dag (Item matching + Gemini AI Classification + Log-Linear Hedonic + dbt Silver).
     Stage 3 (Gold):   Trigger gold_dag (Daily stored procedures + Spliced GEKS + dbt Gold models + tests).
@@ -48,7 +48,7 @@ with DAG(
     schedule="0 7 * * *",  # Daily at 07:00 Phnom Penh time
     catchup=False,
     default_args=DEFAULT_ARGS,
-    tags=["cpi", "master", "medallion", "minio", "dbt", "geks", "production"],
+    tags=["cpi", "master", "medallion", "dbt", "geks", "production"],
 ) as dag:
 
     start_cpi_pipeline = EmptyOperator(
@@ -57,12 +57,7 @@ with DAG(
 
     trigger_scrapers: list[TriggerDagRunOperator] = []
     for source_slug in SCRAPER_REGISTRY.keys():
-        if source_slug == "samnangshop":
-            target_dag_id = "scrape_somnangshop_dag"
-        elif source_slug == "bookmebus":
-            target_dag_id = "scrape_bookMeBus_dag"
-        else:
-            target_dag_id = f"scrape_{source_slug}_dag"
+        target_dag_id = f"scrape_{source_slug}_dag"
 
         trigger_scrapers.append(
             TriggerDagRunOperator(
@@ -76,6 +71,9 @@ with DAG(
             )
         )
 
+    # Deliberately all_done: a single scraper failure must not block the daily
+    # index — silver/gold process whatever bronze produced. Failed sources stay
+    # visible as failed trigger tasks in this run's graph.
     bronze_layer_complete = EmptyOperator(
         task_id="bronze_layer_complete",
         trigger_rule="all_done",

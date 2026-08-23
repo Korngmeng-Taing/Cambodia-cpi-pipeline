@@ -1,0 +1,61 @@
+product_name,coicop_code,confidence_score,reasoning,model_version
+Fresh Whole Milk 1L,01.1.4,0.90,"Dairy - fresh milk",seed_bootstrap_v1
+Condensed Milk 397g Can,01.1.4,0.90,"Dairy - condensed milk",seed_bootstrap_v1
+Coca-Cola Can 330ml,01.1.9,0.90,"Non-alcoholic beverage - soft drink",seed_bootstrap_v1
+Sprite Can 330ml,01.1.9,0.90,"Non-alcoholic beverage - soft drink",seed_bootstrap_v1
+Drinking Water 5L Bottle,01.1.9,0.90,"Bottled water",seed_bootstrap_v1
+Jasmine Rice 5kg Bag,01.1.1,0.95,"Staple cereal - rice",seed_bootstrap_v1
+White Sugar 1kg,01.1.2,0.95,"Sugar",seed_bootstrap_v1
+Cooking Oil Soybean 2L,01.1.5,0.95,"Edible oil",seed_bootstrap_v1
+Fish Sauce 750ml Bottle,01.1.6,0.95,"Condiment - fish sauce",seed_bootstrap_v1
+Soy Sauce 700ml Bottle,01.1.6,0.95,"Condiment - soy sauce",seed_bootstrap_v1
+Instant Noodles Pack,01.1.9,0.90,"Instant noodles",seed_bootstrap_v1
+Chicken Eggs Tray of 10,01.1.7,0.95,"Eggs",seed_bootstrap_v1
+Instant Coffee 3-in-1 Sachet,01.2.2,0.90,"Coffee for home consumption",seed_bootstrap_v1
+Coconut Milk 400ml Can,01.1.9,0.90,"Canned coconut milk for cooking",seed_bootstrap_v1
+Wheat Flour 1kg,01.1.1,0.90,"Baking flour",seed_bootstrap_v1
+Angkor Beer Can 330ml,02.1.1,0.95,"Domestic lager beer",seed_bootstrap_v1
+Heineken Bottle 330ml,02.1.1,0.95,"Imported beer",seed_bootstrap_v1
+Marlboro Red Cigarettes Pack of 20,02.2.0,0.95,"Cigarettes",seed_bootstrap_v1
+Men's Casual Cotton Polo T-Shirt,03.1.2,0.90,"Mens clothing",seed_bootstrap_v1
+Women's Floral Summer Maxi Dress,03.1.2,0.90,"Womens clothing",seed_bootstrap_v1
+Children's T-Shirt Cotton,03.1.3,0.90,"Childrens clothing",seed_bootstrap_v1
+Rubber Flip Flop Sandals,03.2.1,0.90,"Footwear",seed_bootstrap_v1
+Apartment For Rent BKK1 1 Bedroom,04.1.1,0.95,"Actual rentals - residential",seed_bootstrap_v1
+House For Rent Chamkarmon 2 Bedrooms,04.1.1,0.95,"Actual rentals - residential",seed_bootstrap_v1
+Electricity Prepaid Token 50 kWh,04.5.1,0.95,"Electricity",seed_bootstrap_v1
+Clean Water Supply Monthly Bill,04.4.1,0.95,"Water supply",seed_bootstrap_v1
+LPG Gas Cylinder 13kg,04.5.2,0.95,"Household cooking gas",seed_bootstrap_v1
+Stainless Steel Electric Kettle 1.8L,05.4.1,0.90,"Small kitchen appliance",seed_bootstrap_v1
+Non-Stick Granite Frying Pan 28cm,05.3.1,0.90,"Kitchen cookware",seed_bootstrap_v1
+LIX Floor Cleaner 2L,05.6.1,0.90,"Household cleaning products",seed_bootstrap_v1
+OMO Detergent Powder 2kg,05.6.1,0.90,"Laundry detergent",seed_bootstrap_v1
+Light Bulb LED E27 9W,05.5.1,0.90,"Household light fitting",seed_bootstrap_v1
+Paracetamol 500mg Tablets (Box/100),06.1.3,0.95,"OTC analgesic",seed_bootstrap_v1
+Amoxicillin 500mg Capsules (Box/20),06.1.3,0.95,"Antibiotic medicine",seed_bootstrap_v1
+Surgical Mask 3-Ply Box of 50,06.1.3,0.90,"Medical protective supplies",seed_bootstrap_v1
+Vitamin C 1000mg Tablets,06.2.0,0.90,"Vitamin supplement",seed_bootstrap_v1
+Blood Pressure Monitor Digital,06.2.2,0.85,"Home medical appliance",seed_bootstrap_v1
+Regular Gasoline Per Litre,07.2.2,0.98,"Motor fuel",seed_bootstrap_v1
+Diesel Per Litre,07.2.2,0.98,"Motor fuel",seed_bootstrap_v1
+Bus Ticket Phnom Penh To Siem Reap,07.3.1,0.95,"Passenger transport by bus",seed_bootstrap_v1
+Motorcycle Helmet Standard,07.2.4,0.80,"Two-wheeler accessory",seed_bootstrap_v1
+Smart Phone Credit Top Up 5 USD,08.2.0,0.95,"Telecom prepaid services",seed_bootstrap_v1
+Cellcard SIM Card Prepaid,08.2.0,0.95,"Telecom services",seed_bootstrap_v1
+Mobile Internet Data Pack 10GB,08.2.1,0.90,"Internet access services",seed_bootstrap_v1
+Wireless Bluetooth Earbuds Pro,09.1.3,0.75,"Personal audio equipment",seed_bootstrap_v1
+Netflix Subscription Monthly,09.3.3,0.90,"Streaming service subscription",seed_bootstrap_v1
+Football Size 5,09.2.1,0.90,"Sports equipment",seed_bootstrap_v1
+Pedigree Adult Dog Food 3kg,09.3.4,0.95,"Pet food",seed_bootstrap_v1
+School Notebook A4,10.2.0,0.90,"Stationery for education",seed_bootstrap_v1
+English Course Monthly Fee,10.4.0,0.90,"Private education services",seed_bootstrap_v1
+Fried Rice Plate Restaurant,11.1.1,0.95,"Restaurant meal",seed_bootstrap_v1
+Hotel Room Phnom Penh Per Night,11.2.0,0.95,"Accommodation services",seed_bootstrap_v1
+Iced Coffee Cafe Cup,11.1.2,0.90,"Takeaway beverage",seed_bootstrap_v1
+Head & Shoulders Shampoo 340ml,12.1.2,0.90,"Personal care - shampoo",seed_bootstrap_v1
+Colgate Toothpaste 180g,12.1.2,0.90,"Personal care - toothpaste",seed_bootstrap_v1
+Dove Bar Soap 100g,12.1.2,0.90,"Personal care - soap",seed_bootstrap_v1
+Haircut Men Downtown Barber,12.3.1,0.85,"Grooming services",seed_bootstrap_v1
+Sanitary Pads Pack of 16,12.1.2,0.90,"Personal hygiene products",seed_bootstrap_v1
+Baby Diapers Medium Pack of 40,12.1.3,0.90,"Baby care articles",seed_bootstrap_v1
+Umbrella Compact Folding,12.1.3,0.70,"Miscellaneous personal article",seed_bootstrap_v1

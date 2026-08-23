@@ -1,20 +1,20 @@
 # CPI Pipeline — Scraper Methodology & Source Guide
 
 **Author:** CPI Engineering & Methodology Team
-**Architecture:** PostgreSQL 16 + Airflow + dbt (`D:\CPI PIPELINE`)
-**Medallion Layers:** Bronze (`staging.raw_scrapes`, `bronze.raw_prices`, MinIO) ──► Silver (`silver.*` + dbt) ──► Gold (`gold.*`)
+**Architecture:** Pure Structured Medallion Architecture — PostgreSQL 16 + Airflow + dbt (`D:\CPI PIPELINE`)
+**Medallion Layers:** Bronze (`bronze.raw_prices`, `staging.exchange_rates`) ──► Silver (`silver.*` + dbt) ──► Gold (`gold.*`)
 
 ---
 
 ## 1. Architectural Overview & Ingestion Standards
 
-Every night at 06:00, Airflow orchestrates daily data extraction across **19 Cambodian retail, telecom, transport, housing, hospitality, fuel, electronics, and dining sources** alongside official USD/KHR exchange rates from the Ministry of Economy & Finance (MEF).
+Every night at 07:00, Airflow orchestrates daily data extraction across **19 Cambodian retail, telecom, transport, housing, hospitality, fuel, electronics, and dining sources** alongside official USD/KHR exchange rates from the Ministry of Economy & Finance (MEF).
 
 ```
                       ┌──────────────────────────────────────────────────────────┐
                       │               20 Daily Scraper DAGs                      │
                       │  (scrape_{source}_dag: 19 sources + MEF FX, fan-out from │
-                      │   cpi_master_dag at 06:00 Asia/Phnom_Penh)               │
+                      │   cpi_master_dag at 07:00 Asia/Phnom_Penh)               │
                       └────────────────────────────┬─────────────────────────────┘
                                                    │
                                                    ▼
@@ -24,20 +24,19 @@ Every night at 06:00, Airflow orchestrates daily data extraction across **19 Cam
                       └────────────────────────────┬─────────────────────────────┘
                                                    │
                                                    ▼
-              ┌──────────────────────────────────────────────────────────────────┐
-              │  MinIO raw snapshot    │   PostgreSQL 16 Bronze                  │
-              │  s3://cpi-bronze/      │   staging.raw_scrapes (append-only      │
-              │   {store}/dt={date}/   │     JSONB + UUID run_id)                │
-              │   raw.json             │   staging.exchange_rates (MEF FX)       │
-              │  + Parquet cold        │   bronze.raw_prices (clean rows, dbt)   │
-              │    archive             │                                         │
-              └────────────────────────┴─────────────────────────────────────────┘
+                      ┌──────────────────────────────────────────────────────────┐
+                      │                 PostgreSQL 16 Bronze                     │
+                      │   bronze.raw_prices (Typed atomic product listings)      │
+                      │   staging.exchange_rates (Official MEF USD/KHR rate)     │
+                      │   staging.raw_scrapes (Batch metadata & audit records)   │
+                      └────────────────────────────┬─────────────────────────────┘
                                                    │
                                                    ▼
                       ┌──────────────────────────────────────────────────────────┐
                       │                Silver Layer (silver_dag)                 │
                       │   pipeline.item_matcher (RapidFuzz)                      │
                       │   → silver.canonical_items / item_match_log              │
+                      │   pipeline.gemini_coicop_classifier (AI Memoization)     │
                       │   dbt models: int_prices_cleaned, dim_items, dim_stores, │
                       │   int_coicop_classified, fct_daily_prices                │
                       └────────────────────────────┬─────────────────────────────┘
@@ -47,9 +46,16 @@ Every night at 06:00, Airflow orchestrates daily data extraction across **19 Cam
                       │                  Gold Layer (gold_dag)                   │
                       │   dbt: base_prices, fct_daily_price_stats,               │
                       │        cpi_category_daily, cpi_headline_daily,           │
-                      │        fct_price_anomalies                               │
+                      │        12 Dedicated COICOP Division Tables               │
                       │   Python: pipeline.geks_calculator (13-period GEKS-      │
-                      │        Törnqvist → gold.cpi_geks_multilateral)           │
+                      │        Törnqvist) & pipeline.fisher_calculator           │
+                      └────────────────────────────┬─────────────────────────────┘
+                                                   │
+                                                   ▼
+                      ┌──────────────────────────────────────────────────────────┐
+                      │               Serving, Observability & BI                │
+                      │   Metabase (Port 3000): Scraper Health Matrix & Alerts   │
+                      │   Power BI (Port 5432): Interactive CPI & Inflation BI   │
                       └──────────────────────────────────────────────────────────┘
 ```
 
@@ -60,7 +66,7 @@ Every night at 06:00, Airflow orchestrates daily data extraction across **19 Cam
 3. **Anti-Bot & TLS Impersonation**: Uses `curl_cffi` browser TLS fingerprint impersonation (`chrome`, `safari`, `edge`) to prevent Cloudflare/Akamai bot challenges.
 4. **Dual-Layer Fallback**: If a live 3rd-party vendor site experiences downtime or Cloudflare origin tunnel failure, scrapers automatically fallback to the latest valid historical snapshot or curated baseline tariff matrix with `is_fallback=True` to prevent pipeline interruption.
 5. **Zero-Product Quality Gate**: A scrape returning 0 products raises an error before database writes, preventing empty ingestion (`pipeline/bronze_ingestion.py`).
-6. **MinIO Raw Snapshot**: Every batch is written immutably to `s3://cpi-bronze/{store}/dt={date}/raw.json` before PostgreSQL persistence (`pipeline/minio_storage.py`).
+6. **Typed Relational Ingestion**: Every batch is parsed and inserted directly into `bronze.raw_prices` with structured types (Schema-on-Write).
 
 ---
 

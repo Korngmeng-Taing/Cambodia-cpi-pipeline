@@ -113,6 +113,21 @@ class TestItemMatcher(unittest.TestCase):
         # 1L vs 1000ml -> different units string fallback
         self.assertTrue(self.matcher._is_size_compatible("1L", "1L"))
 
+    def test_process_batch_with_scrape_date(self):
+        self.cursor.fetchall.side_effect = [
+            [],  # canonical_items cache
+            [],  # dim_canonical_products sku cache
+            [],  # raw_prices query rows
+        ]
+        stats = self.matcher.process_batch(
+            self.conn, limit=500, scrape_date="2026-08-23"
+        )
+        self.assertEqual(stats["matched_exact"], 0)
+        # Check that query executed includes scrape_date condition
+        calls = [str(call) for call in self.cursor.execute.mock_calls]
+        query_call = [c for c in calls if "rp.scraped_at::date = %s::date" in c]
+        self.assertTrue(len(query_call) > 0)
+
 
 if __name__ == "__main__":
     unittest.main()

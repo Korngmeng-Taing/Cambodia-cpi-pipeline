@@ -130,7 +130,7 @@ jobs:
           psql -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/gold_procedures.sql
           psql -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/views.sql
 
-      - name: Run dbt Pipeline (Deps → Seed → Compile → Test)
+      - name: Run dbt Pipeline (Deps → Seed → Run Models → Test)
         env:
           DB_HOST: localhost
           DB_PORT: "5432"
@@ -140,7 +140,7 @@ jobs:
         run: |
           dbt deps --project-dir dbt --profiles-dir dbt
           dbt seed --project-dir dbt --profiles-dir dbt --target cpi_target
-          dbt compile --project-dir dbt --profiles-dir dbt --target cpi_target
+          dbt run --project-dir dbt --profiles-dir dbt --target cpi_target
           dbt test --project-dir dbt --profiles-dir dbt --target cpi_target
 
   # ── 4. Docker Compose Syntax & Compose Config Validation ────────────────────

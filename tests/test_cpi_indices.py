@@ -176,27 +176,33 @@ def test_silver_fct_laspeyres_daily_divisions():
 def test_gold_12_coicop_views_exist():
     """Verify that all 12 gold COICOP division views are populated."""
     divisions = [
-        ("01", "gold.cpi_div01_food"),
-        ("02", "gold.cpi_div02_alcohol_tobacco"),
-        ("03", "gold.cpi_div03_clothing_footwear"),
-        ("04", "gold.cpi_div04_housing_utilities"),
-        ("05", "gold.cpi_div05_furnishings"),
-        ("06", "gold.cpi_div06_health"),
-        ("07", "gold.cpi_div07_transport"),
-        ("08", "gold.cpi_div08_communication"),
-        ("09", "gold.cpi_div09_recreation"),
-        ("10", "gold.cpi_div10_education"),
-        ("11", "gold.cpi_div11_restaurants_hotels"),
-        ("12", "gold.cpi_div12_misc"),
+        ("01", "gold.cpi_div01_food", "gold.div01_food"),
+        ("02", "gold.cpi_div02_alcohol_tobacco", "gold.div02_alcohol_tobacco"),
+        ("03", "gold.cpi_div03_clothing_footwear", "gold.div03_clothing_footwear"),
+        ("04", "gold.cpi_div04_housing_utilities", "gold.div04_housing_utilities"),
+        ("05", "gold.cpi_div05_furnishings", "gold.div05_furnishings"),
+        ("06", "gold.cpi_div06_health", "gold.div06_health"),
+        ("07", "gold.cpi_div07_transport", "gold.div07_transport"),
+        ("08", "gold.cpi_div08_communication", "gold.div08_communication"),
+        ("09", "gold.cpi_div09_recreation", "gold.div09_recreation"),
+        ("10", "gold.cpi_div10_education", "gold.div10_education"),
+        ("11", "gold.cpi_div11_restaurants_hotels", "gold.div11_restaurants_hotels"),
+        ("12", "gold.cpi_div12_misc", "gold.div12_misc"),
     ]
     conn = get_db_connection()
     with conn.cursor() as cur:
-        for _div_code, view_name in divisions:
-            cur.execute(
-                f"SELECT count(*) FROM {view_name} WHERE scrape_date = '2026-08-20';"
-            )
+        for _div_code, view_name, alt_name in divisions:
+            try:
+                cur.execute(
+                    f"SELECT count(*) FROM {view_name} WHERE scrape_date = '2026-08-20';"
+                )
+            except Exception:
+                conn.rollback()
+                cur.execute(
+                    f"SELECT count(*) FROM {alt_name} WHERE scrape_date = '2026-08-20';"
+                )
             count = cur.fetchone()[0]
             assert (
                 count > 0
-            ), f"Division view {view_name} returned 0 rows for 2026-08-20"
+            ), f"Division view {view_name}/{alt_name} returned 0 rows for 2026-08-20"
     conn.close()

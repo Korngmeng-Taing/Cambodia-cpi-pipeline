@@ -128,7 +128,6 @@ jobs:
         run: |
           psql -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/schema.sql
           psql -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/gold_procedures.sql
-          psql -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/views.sql
 
       - name: Run dbt Pipeline (Deps → Seed → Run Models → Test)
         env:
@@ -142,6 +141,12 @@ jobs:
           dbt seed --project-dir dbt --profiles-dir dbt --target cpi_target
           dbt run --project-dir dbt --profiles-dir dbt --target cpi_target
           dbt test --project-dir dbt --profiles-dir dbt --target cpi_target
+
+      - name: Initialize Analytical Views
+        env:
+          PGPASSWORD: cpi_pass
+        run: |
+          psql -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/views.sql
 
   # ── 4. Docker Compose Syntax & Compose Config Validation ────────────────────
   docker-validation:

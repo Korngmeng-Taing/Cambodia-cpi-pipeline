@@ -85,8 +85,7 @@ ORDER BY d.scrape_date DESC, d.store_slug;
 
 
 -- 6. View: Elementary Jevons Index & Relatives (Silver Layer)
-DROP VIEW IF EXISTS silver.fct_jevons_daily CASCADE;
-CREATE VIEW silver.fct_jevons_daily AS
+CREATE OR REPLACE VIEW silver.fct_jevons_daily AS
 WITH clean_obs AS (
 SELECT
         scrape_date,
@@ -144,8 +143,7 @@ LEFT JOIN daily_jevons prev
 
 
 -- 7. View: Higher-Level Laspeyres Category Aggregation (Silver Layer)
-DROP VIEW IF EXISTS silver.fct_laspeyres_daily CASCADE;
-CREATE VIEW silver.fct_laspeyres_daily AS
+CREATE OR REPLACE VIEW silver.fct_laspeyres_daily AS
 WITH category_indices AS (
     SELECT
         j.scrape_date,
@@ -195,8 +193,7 @@ FROM category_with_prev;
 
 
 -- 8. View: Headline Laspeyres CPI Aggregation (Silver Layer)
-DROP VIEW IF EXISTS silver.fct_laspeyres_headline_daily CASCADE;
-CREATE VIEW silver.fct_laspeyres_headline_daily AS
+CREATE OR REPLACE VIEW silver.fct_laspeyres_headline_daily AS
 WITH daily_headline AS (
     SELECT
         scrape_date,
@@ -229,8 +226,7 @@ LEFT JOIN daily_headline prev
 -- ============================================================================
 
 -- Gold Division 01: Food and non-alcoholic beverages
-DROP VIEW IF EXISTS gold.cpi_div01_food CASCADE;
-CREATE VIEW gold.cpi_div01_food AS
+CREATE OR REPLACE VIEW gold.cpi_div01_food AS
 SELECT
     j.scrape_date,
     j.item_id,
@@ -250,10 +246,11 @@ LEFT JOIN silver.dim_items m
     ON m.item_id::text = j.item_id::text
 WHERE j.coicop_division = '01';
 
+CREATE OR REPLACE VIEW gold.div01_food AS SELECT * FROM gold.cpi_div01_food;
+
 
 -- Gold Division 02: Alcoholic beverages, tobacco and narcotics
-DROP VIEW IF EXISTS gold.cpi_div02_alcohol_tobacco CASCADE;
-CREATE VIEW gold.cpi_div02_alcohol_tobacco AS
+CREATE OR REPLACE VIEW gold.cpi_div02_alcohol_tobacco AS
 SELECT
     j.scrape_date,
     j.item_id,
@@ -273,10 +270,11 @@ LEFT JOIN silver.dim_items m
     ON m.item_id::text = j.item_id::text
 WHERE j.coicop_division = '02';
 
+CREATE OR REPLACE VIEW gold.div02_alcohol_tobacco AS SELECT * FROM gold.cpi_div02_alcohol_tobacco;
+
 
 -- Gold Division 03: Clothing and footwear
-DROP VIEW IF EXISTS gold.cpi_div03_clothing_footwear CASCADE;
-CREATE VIEW gold.cpi_div03_clothing_footwear AS
+CREATE OR REPLACE VIEW gold.cpi_div03_clothing_footwear AS
 SELECT
     j.scrape_date,
     j.item_id,
@@ -296,10 +294,11 @@ LEFT JOIN silver.dim_items m
     ON m.item_id::text = j.item_id::text
 WHERE j.coicop_division = '03';
 
+CREATE OR REPLACE VIEW gold.div03_clothing_footwear AS SELECT * FROM gold.cpi_div03_clothing_footwear;
+
 
 -- Gold Division 04: Housing, water, electricity, gas and other fuels
-DROP VIEW IF EXISTS gold.cpi_div04_housing_utilities CASCADE;
-CREATE VIEW gold.cpi_div04_housing_utilities AS
+CREATE OR REPLACE VIEW gold.cpi_div04_housing_utilities AS
 SELECT
     j.scrape_date,
     j.item_id,
@@ -319,10 +318,11 @@ LEFT JOIN silver.dim_items m
     ON m.item_id::text = j.item_id::text
 WHERE j.coicop_division = '04';
 
+CREATE OR REPLACE VIEW gold.div04_housing_utilities AS SELECT * FROM gold.cpi_div04_housing_utilities;
+
 
 -- Gold Division 05: Furnishings, household equipment and routine household maintenance
-DROP VIEW IF EXISTS gold.cpi_div05_furnishings CASCADE;
-CREATE VIEW gold.cpi_div05_furnishings AS
+CREATE OR REPLACE VIEW gold.cpi_div05_furnishings AS
 SELECT
     j.scrape_date,
     j.item_id,
@@ -342,10 +342,11 @@ LEFT JOIN silver.dim_items m
     ON m.item_id::text = j.item_id::text
 WHERE j.coicop_division = '05';
 
+CREATE OR REPLACE VIEW gold.div05_furnishings AS SELECT * FROM gold.cpi_div05_furnishings;
+
 
 -- Gold Division 06: Health
-DROP VIEW IF EXISTS gold.cpi_div06_health CASCADE;
-CREATE VIEW gold.cpi_div06_health AS
+CREATE OR REPLACE VIEW gold.cpi_div06_health AS
 SELECT
     j.scrape_date,
     j.item_id,
@@ -365,10 +366,11 @@ LEFT JOIN silver.dim_items m
     ON m.item_id::text = j.item_id::text
 WHERE j.coicop_division = '06';
 
+CREATE OR REPLACE VIEW gold.div06_health AS SELECT * FROM gold.cpi_div06_health;
+
 
 -- Gold Division 07: Transport
-DROP VIEW IF EXISTS gold.cpi_div07_transport CASCADE;
-CREATE VIEW gold.cpi_div07_transport AS
+CREATE OR REPLACE VIEW gold.cpi_div07_transport AS
 SELECT
     j.scrape_date,
     j.item_id,
@@ -388,10 +390,11 @@ LEFT JOIN silver.dim_items m
     ON m.item_id::text = j.item_id::text
 WHERE j.coicop_division = '07';
 
+CREATE OR REPLACE VIEW gold.div07_transport AS SELECT * FROM gold.cpi_div07_transport;
+
 
 -- Gold Division 08: Communication
-DROP VIEW IF EXISTS gold.cpi_div08_communication CASCADE;
-CREATE VIEW gold.cpi_div08_communication AS
+CREATE OR REPLACE VIEW gold.cpi_div08_communication AS
 SELECT
     j.scrape_date,
     j.item_id,
@@ -411,10 +414,11 @@ LEFT JOIN silver.dim_items m
     ON m.item_id::text = j.item_id::text
 WHERE j.coicop_division = '08';
 
+CREATE OR REPLACE VIEW gold.div08_communication AS SELECT * FROM gold.cpi_div08_communication;
+
 
 -- Gold Division 09: Recreation and culture
-DROP VIEW IF EXISTS gold.cpi_div09_recreation CASCADE;
-CREATE VIEW gold.cpi_div09_recreation AS
+CREATE OR REPLACE VIEW gold.cpi_div09_recreation AS
 SELECT
     j.scrape_date,
     j.item_id,
@@ -434,10 +438,11 @@ LEFT JOIN silver.dim_items m
     ON m.item_id::text = j.item_id::text
 WHERE j.coicop_division = '09';
 
+CREATE OR REPLACE VIEW gold.div09_recreation AS SELECT * FROM gold.cpi_div09_recreation;
+
 
 -- Gold Division 10: Education
-DROP VIEW IF EXISTS gold.cpi_div10_education CASCADE;
-CREATE VIEW gold.cpi_div10_education AS
+CREATE OR REPLACE VIEW gold.cpi_div10_education AS
 SELECT
     j.scrape_date,
     j.item_id,
@@ -457,10 +462,11 @@ LEFT JOIN silver.dim_items m
     ON m.item_id::text = j.item_id::text
 WHERE j.coicop_division = '10';
 
+CREATE OR REPLACE VIEW gold.div10_education AS SELECT * FROM gold.cpi_div10_education;
+
 
 -- Gold Division 11: Restaurants and hotels
-DROP VIEW IF EXISTS gold.cpi_div11_restaurants_hotels CASCADE;
-CREATE VIEW gold.cpi_div11_restaurants_hotels AS
+CREATE OR REPLACE VIEW gold.cpi_div11_restaurants_hotels AS
 SELECT
     j.scrape_date,
     j.item_id,
@@ -480,10 +486,11 @@ LEFT JOIN silver.dim_items m
     ON m.item_id::text = j.item_id::text
 WHERE j.coicop_division = '11';
 
+CREATE OR REPLACE VIEW gold.div11_restaurants_hotels AS SELECT * FROM gold.cpi_div11_restaurants_hotels;
+
 
 -- Gold Division 12: Miscellaneous goods and services
-DROP VIEW IF EXISTS gold.cpi_div12_misc CASCADE;
-CREATE VIEW gold.cpi_div12_misc AS
+CREATE OR REPLACE VIEW gold.cpi_div12_misc AS
 SELECT
     j.scrape_date,
     j.item_id,
@@ -502,6 +509,8 @@ FROM silver.fct_jevons_daily j
 LEFT JOIN silver.dim_items m
     ON m.item_id::text = j.item_id::text
 WHERE j.coicop_division = '12';
+
+CREATE OR REPLACE VIEW gold.div12_misc AS SELECT * FROM gold.cpi_div12_misc;
 
 
 -- ============================================================================
@@ -567,8 +576,7 @@ ORDER BY h.scrape_date DESC;
 -- ============================================================================
 
 -- 10.1 Daily Scraper Operational Health Dashboard (Real-Time Bronze Ingestion)
-DROP VIEW IF EXISTS gold.v_monitor_scraper_daily CASCADE;
-CREATE VIEW gold.v_monitor_scraper_daily AS
+CREATE OR REPLACE VIEW gold.v_monitor_scraper_daily AS
 SELECT
     r.scrape_date,
     r.store_slug,
@@ -609,8 +617,7 @@ ORDER BY r.scrape_date DESC, r.record_count DESC;
 
 
 -- 10.2 20-Source Scraper Availability Matrix (Current Live Health)
-DROP VIEW IF EXISTS gold.v_monitor_source_health_matrix CASCADE;
-CREATE VIEW gold.v_monitor_source_health_matrix AS
+CREATE OR REPLACE VIEW gold.v_monitor_source_health_matrix AS
 WITH source_stats AS (
     SELECT
         store_slug,
@@ -638,8 +645,7 @@ ORDER BY days_since_last_scrape ASC, avg_daily_volume_7d DESC;
 
 
 -- 10.3 Daily Price Anomaly & Extreme Shift Alerts (> 20% DoD)
-DROP VIEW IF EXISTS gold.v_monitor_price_alerts CASCADE;
-CREATE VIEW gold.v_monitor_price_alerts AS
+CREATE OR REPLACE VIEW gold.v_monitor_price_alerts AS
 SELECT
     curr.scrape_date,
     curr.store_slug,
@@ -668,8 +674,7 @@ ORDER BY curr.scrape_date DESC, ABS((curr.price_khr - prev.price_khr) / prev.pri
 
 
 -- 10.4 MEF USD/KHR Exchange Rate Health & Freshness Monitor
-DROP VIEW IF EXISTS gold.v_monitor_fx_health CASCADE;
-CREATE VIEW gold.v_monitor_fx_health AS
+CREATE OR REPLACE VIEW gold.v_monitor_fx_health AS
 SELECT
     execution_date,
     rate AS usd_khr_exchange_rate,

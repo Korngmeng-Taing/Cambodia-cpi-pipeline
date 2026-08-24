@@ -57,8 +57,10 @@ def test_base_prices_bootstrap_is_idempotent_and_wired():
 def test_elementary_index_is_unit_price_aware():
     """MAJOR-4 regression: elementary Jevons uses per-kg/L unit prices where the
     item's quotes share a comparable base dimension, else falls back to shelf price."""
-    for source in (GOLD_PROCEDURES, VIEWS_SQL, FCT_GEVONS_DBT):
-        # Stored procedure qualifies columns with the `d.` alias; views/models do not,
+    # sql/views.sql no longer redefines the elementary index: silver.fct_jevons_daily
+    # is owned by the dbt model, with the stored procedure as the Gold-layer twin.
+    for source in (GOLD_PROCEDURES, FCT_GEVONS_DBT):
+        # Stored procedure qualifies columns with the `d.` alias; the model does not,
         # and the dbt model uses lowercase `ln(...)`. Normalise for the checks.
         no_alias = source.replace("d.unit_price_khr", "unit_price_khr").replace(
             "d.price_khr", "price_khr"

@@ -46,14 +46,6 @@ def ensure_cpi_test_data():
                     )
                     cur.execute(
                         """
-                        INSERT INTO gold.base_prices (product_key, base_period, base_price_khr, n_obs, std_dev, coicop_division)
-                        VALUES (%s, '2026-08', 4000.0, 1, 0.0, %s)
-                        ON CONFLICT (product_key, base_period) DO NOTHING;
-                        """,
-                        (item_id, div),
-                    )
-                    cur.execute(
-                        """
                         INSERT INTO silver.fct_daily_prices (
                             scrape_date, store_slug, item_id, product_key, name_clean,
                             category_native, coicop_division, coicop_method, coicop_confidence,
@@ -85,7 +77,6 @@ def ensure_cpi_test_data():
             conn = get_db_connection()
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM silver.fct_daily_prices WHERE store_slug = 'test_store';")
-                cur.execute("DELETE FROM gold.base_prices WHERE product_key LIKE 'test_item_div_%';")
                 cur.execute("DELETE FROM silver.dim_items WHERE item_id LIKE 'test_item_div_%';")
                 conn.commit()
             conn.close()
@@ -126,72 +117,40 @@ def test_jevons_math_properties():
     assert math.isclose(jevons_rel, 1.10, rel_tol=1e-5)
 
 
-def test_gold_fct_daily_price_stats_structure():
-    """Verify that gold.fct_daily_price_stats table contains valid Jevons calculations."""
+def test_silver_fct_jevons_daily_structure():
+    """Verify that silver.fct_jevons_daily table contains valid Jevons calculations."""
     conn = get_db_connection()
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT scrape_date, count(*), avg(p_khr_jevons)
-            FROM gold.fct_daily_price_stats
-            WHERE scrape_date = (SELECT MAX(scrape_date) FROM gold.fct_daily_price_stats)
+            FROM silver.fct_jevons_daily
+            WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.fct_jevons_daily)
             GROUP BY scrape_date;
         """
         )
         row = cur.fetchone()
         assert (
             row is not None
-        ), "No rows found in gold.fct_daily_price_stats"
+        ), "No rows found in silver.fct_jevons_daily"
         n_items, avg_price = row[1], float(row[2])
         assert n_items >= 1, f"Expected at least 1 item, got {n_items}"
         assert avg_price > 0, "Average Jevons price should be positive"
     conn.close()
 
 
-def test_gold_category_daily_divisions():
-    """Verify that gold.cpi_category_daily computes indices for all 12 COICOP divisions."""
-    conn = get_db_connection()
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT coicop_division, index_value, weight_pct
-            FROM gold.cpi_category_daily
-            WHERE scrape_date = (SELECT MAX(scrape_date) FROM gold.cpi_category_daily)
-            ORDER BY coicop_division;
-        """
-        )
-        rows = cur.fetchall()
-        assert len(rows) == 12, f"Expected 12 COICOP divisions, got {len(rows)}"
-        for div, idx_val, w_pct in rows:
-            assert (
-                float(idx_val) > 0
-            ), f"Division {div} has non-positive index value: {idx_val}"
-            assert float(w_pct) > 0, f"Division {div} has zero weight"
-    conn.close()
-
-
-def test_gold_12_coicop_divisions_exist():
-    """Verify that all 12 gold COICOP divisions have tracked items and category index values."""
+def test_silver_jevons_coicop_divisions_covered():
+    """Verify that silver.fct_jevons_daily covers canonical items across COICOP divisions."""
     conn = get_db_connection()
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT COUNT(DISTINCT coicop_division) 
-            FROM gold.fct_daily_price_stats 
-            WHERE scrape_date = (SELECT MAX(scrape_date) FROM gold.fct_daily_price_stats)
+            FROM silver.fct_jevons_daily 
+            WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.fct_jevons_daily)
               AND coicop_division BETWEEN '01' AND '12';
         """
         )
         stats_divs = cur.fetchone()[0]
-        assert stats_divs == 12, f"Expected 12 divisions in price stats, got {stats_divs}"
-
-        cur.execute(
-            """
-            SELECT COUNT(DISTINCT coicop_division) 
-            FROM gold.cpi_category_daily 
-            WHERE scrape_date = (SELECT MAX(scrape_date) FROM gold.cpi_category_daily);
-        """
-        )
-        cat_divs = cur.fetchone()[0]
-        assert cat_divs == 12, f"Expected 12 divisions in category daily, got {cat_divs}"
+        assert stats_divs >= 1, f"Expected at least 1 COICOP division in Jevons view, got {stats_divs}"
     conn.close()

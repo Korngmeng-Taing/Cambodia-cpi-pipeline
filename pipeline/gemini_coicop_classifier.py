@@ -287,10 +287,13 @@ def classify_batch(model, names: list[str]) -> list[dict[str, Any]]:
     for item in results:
         if not isinstance(item, dict):
             continue
+        code = str(item.get("coicop_code") or UNCLASSIFIED).strip()
+        if code.startswith("13."):
+            code = "12." + code[3:]
         normalized.append(
             {
                 "product_name": str(item.get("product_name") or "").strip(),
-                "coicop_code": str(item.get("coicop_code") or UNCLASSIFIED).strip(),
+                "coicop_code": code,
                 "confidence_score": float(item.get("confidence_score") or 0.0),
                 "reasoning": str(item.get("reasoning") or ""),
             }
@@ -592,6 +595,8 @@ def persist_classifications(
     for row in updates:
         is_low_conf = row["confidence_score"] < 0.50
         division = row["coicop_code"].split(".")[0].zfill(2)
+        if division == "13":
+            division = "12"
         try:
             with engine.begin() as conn:
                 if is_low_conf:

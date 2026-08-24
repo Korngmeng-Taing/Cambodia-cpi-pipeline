@@ -348,7 +348,10 @@ left join lateral (
 left join lateral (
     select
         gated.coicop_code,
-        lpad(split_part(gated.coicop_code, '.', 1), 2, '0') as coicop_division,
+        case
+            when split_part(gated.coicop_code, '.', 1) in ('12', '13') then '12'
+            else lpad(split_part(gated.coicop_code, '.', 1), 2, '0')
+        end as coicop_division,
         gated.confidence_score
     from (
         select

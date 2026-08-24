@@ -196,11 +196,14 @@ def upsert_batch_to_cache(engine, results: list[dict[str, Any]], model_name: str
 
     with engine.begin() as conn:
         for row in valid:
+            code = str(row["coicop_code"]).strip()
+            if code.startswith("13."):
+                code = "12." + code[3:]
             conn.execute(
                 stmt,
                 {
                     "name": str(row["product_name"]).strip(),
-                    "coicop": str(row["coicop_code"]).strip(),
+                    "coicop": code,
                     "confidence": round(float(row.get("confidence_score", 0.90)), 4),
                     "reasoning": str(row.get("reasoning", "")),
                     "model": model_name,

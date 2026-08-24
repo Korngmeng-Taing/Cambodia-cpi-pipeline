@@ -54,13 +54,7 @@ Primary daily price fact table (grain: `scrape_date`, `store_slug`, `item_id`):
 Daily fact view with $\le 7$-day forward price carry for temporarily missing products.
 
 ### `silver.fct_jevons_daily`
-Stage 1 Elementary Jevons aggregation: Unweighted geometric mean prices across stores per `item_id`, baseline index comparison ($P_t / P_0 \times 100$), and day-on-day price relatives ($P_t / P_{t-1}$).
-
-### `silver.fct_laspeyres_daily`
-Stage 2 Higher-Level category aggregation: Computes category indices for all 12 COICOP divisions using official Cambodia NIS weights and day-on-day % change.
-
-### `silver.fct_laspeyres_headline_daily`
-Stage 3 Headline Laspeyres CPI roll-up across all 12 COICOP divisions in the Silver layer.
+Elementary Jevons aggregation: Unweighted geometric mean prices across stores ($P_{\text{Jevons}}$) per `item_id`, standardized geometric unit prices, quote counts, and store density metrics.
 
 ---
 

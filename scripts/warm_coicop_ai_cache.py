@@ -22,7 +22,6 @@ import json
 import logging
 import os
 import re
-import sys
 import time
 from typing import Any
 
@@ -31,8 +30,7 @@ from sqlalchemy import create_engine, text
 try:
     import google.generativeai as genai
 except ImportError:
-    print("ERROR: google-generativeai package is required. Run: pip install google-generativeai")
-    sys.exit(1)
+    genai = None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -86,16 +84,72 @@ def get_engine():
     return create_engine(conn_str)
 
 
+class GeminiModelPool:
+    """Manages a pool of Gemini API keys with round-robin rotation and automatic quota failover."""
+
+    def __init__(self, keys: list[str], model_name: str = DEFAULT_MODEL):
+        self.keys = list(keys)
+        self.model_name = model_name
+        self.exhausted_keys: set[str] = set()
+        self._current_idx = 0
+
+    @property
+    def active_keys(self) -> list[str]:
+        return [k for k in self.keys if k not in self.exhausted_keys]
+
+    def mark_exhausted(self, key: str):
+        self.exhausted_keys.add(key)
+        log.warning(
+            "Gemini API key (%s...) exhausted. %d active key(s) remaining in pool.",
+            key[:12] if len(key) >= 12 else key,
+            len(self.active_keys),
+        )
+
+    def generate_content(self, contents, **kwargs):
+        if genai is None:
+            raise RuntimeError("google-generativeai is required (pip install google-generativeai)")
+        active = self.active_keys
+        if not active:
+            raise RuntimeError("All Gemini API keys in the pool have been exhausted.")
+
+        last_exc = None
+        for _ in range(len(active)):
+            active = self.active_keys
+            if not active:
+                break
+            key = active[self._current_idx % len(active)]
+            self._current_idx += 1
+            try:
+                genai.configure(api_key=key)
+                model = genai.GenerativeModel(
+                    model_name=self.model_name,
+                    generation_config=genai.GenerationConfig(response_mime_type="application/json"),
+                )
+                return model.generate_content(contents, **kwargs)
+            except Exception as exc:
+                last_exc = exc
+                msg = str(exc)
+                if "429" in msg or "ResourceExhausted" in msg or "quota" in msg.lower():
+                    self.mark_exhausted(key)
+                    if self.active_keys:
+                        log.info(
+                            "Failing over to next Gemini API key (%d active keys left)...",
+                            len(self.active_keys),
+                        )
+                        continue
+                raise
+        if last_exc:
+            raise last_exc
+        raise RuntimeError("All Gemini API keys in the pool have been exhausted.")
+
+
 def build_gemini_model(model_name: str):
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
+    raw_keys = os.getenv("GEMINI_API_KEYS") or os.getenv("GEMINI_API_KEY") or ""
+    api_keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
+    if not api_keys:
         raise ValueError("GEMINI_API_KEY environment variable is not set.")
-    genai.configure(api_key=api_key)
-    log.info("Initialized Gemini model: %s (JSON Mode)", model_name)
-    return genai.GenerativeModel(
-        model_name=model_name,
-        generation_config=genai.GenerationConfig(response_mime_type="application/json"),
-    )
+    log.info("Initialized Gemini Model Pool with %d key(s): %s (JSON Mode)", len(api_keys), model_name)
+    return GeminiModelPool(api_keys, model_name=model_name)
 
 
 def fetch_uncached_products(engine, limit: int = 1000, scrape_date: str | None = None) -> list[str]:

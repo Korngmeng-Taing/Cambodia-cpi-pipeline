@@ -94,16 +94,6 @@ with DAG(
         trigger_rule="all_success",
     )
 
-    trigger_gold = TriggerDagRunOperator(
-        task_id="trigger_gold_dag",
-        trigger_dag_id="gold_dag",
-        conf={"scrape_date": "{{ ds }}"},
-        wait_for_completion=True,
-        poke_interval=WAIT_POKE_INTERVAL,
-        execution_timeout=timedelta(seconds=WAIT_TIMEOUT_SECONDS),
-        reset_dag_run=True,
-    )
-
     cpi_pipeline_success = EmptyOperator(
         task_id="cpi_pipeline_success",
         trigger_rule="all_success",
@@ -112,4 +102,4 @@ with DAG(
     # ── Strict Sequential Medallion Flow ──────────────────────────────────────
     start_cpi_pipeline >> trigger_scrapers >> bronze_layer_complete
     bronze_layer_complete >> trigger_silver >> silver_layer_complete
-    silver_layer_complete >> trigger_gold >> cpi_pipeline_success
+    silver_layer_complete >> cpi_pipeline_success

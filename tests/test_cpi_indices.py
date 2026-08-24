@@ -126,40 +126,37 @@ def test_jevons_math_properties():
     assert math.isclose(jevons_rel, 1.10, rel_tol=1e-5)
 
 
-def test_silver_fct_jevons_daily_structure():
-    """Verify that silver.fct_jevons_daily table/view contains valid Jevons calculations."""
+def test_gold_fct_daily_price_stats_structure():
+    """Verify that gold.fct_daily_price_stats table contains valid Jevons calculations."""
     conn = get_db_connection()
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT scrape_date, count(*), avg(p_khr_jevons), avg(jevons_index_base)
-            FROM silver.fct_jevons_daily
-            WHERE scrape_date = '2026-08-20'
+            SELECT scrape_date, count(*), avg(p_khr_jevons)
+            FROM gold.fct_daily_price_stats
+            WHERE scrape_date = (SELECT MAX(scrape_date) FROM gold.fct_daily_price_stats)
             GROUP BY scrape_date;
         """
         )
         row = cur.fetchone()
         assert (
             row is not None
-        ), "No rows found in silver.fct_jevons_daily for 2026-08-20"
-        n_items, avg_price, avg_base_idx = row[1], float(row[2]), float(row[3])
+        ), "No rows found in gold.fct_daily_price_stats"
+        n_items, avg_price = row[1], float(row[2])
         assert n_items >= 1, f"Expected at least 1 item, got {n_items}"
         assert avg_price > 0, "Average Jevons price should be positive"
-        assert (
-            10.0 <= avg_base_idx <= 1000.0
-        ), f"Base index out of reasonable bounds: {avg_base_idx}"
     conn.close()
 
 
-def test_silver_fct_laspeyres_daily_divisions():
-    """Verify that silver.fct_laspeyres_daily computes indices for all 12 COICOP divisions."""
+def test_gold_category_daily_divisions():
+    """Verify that gold.cpi_category_daily computes indices for all 12 COICOP divisions."""
     conn = get_db_connection()
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT coicop_division, category_index_value, weight_pct
-            FROM silver.fct_laspeyres_daily
-            WHERE scrape_date = '2026-08-20'
+            SELECT coicop_division, index_value, weight_pct
+            FROM gold.cpi_category_daily
+            WHERE scrape_date = (SELECT MAX(scrape_date) FROM gold.cpi_category_daily)
             ORDER BY coicop_division;
         """
         )
@@ -173,36 +170,28 @@ def test_silver_fct_laspeyres_daily_divisions():
     conn.close()
 
 
-def test_gold_12_coicop_views_exist():
-    """Verify that all 12 gold COICOP division views are populated."""
-    divisions = [
-        ("01", "gold.cpi_div01_food", "gold.div01_food"),
-        ("02", "gold.cpi_div02_alcohol_tobacco", "gold.div02_alcohol_tobacco"),
-        ("03", "gold.cpi_div03_clothing_footwear", "gold.div03_clothing_footwear"),
-        ("04", "gold.cpi_div04_housing_utilities", "gold.div04_housing_utilities"),
-        ("05", "gold.cpi_div05_furnishings", "gold.div05_furnishings"),
-        ("06", "gold.cpi_div06_health", "gold.div06_health"),
-        ("07", "gold.cpi_div07_transport", "gold.div07_transport"),
-        ("08", "gold.cpi_div08_communication", "gold.div08_communication"),
-        ("09", "gold.cpi_div09_recreation", "gold.div09_recreation"),
-        ("10", "gold.cpi_div10_education", "gold.div10_education"),
-        ("11", "gold.cpi_div11_restaurants_hotels", "gold.div11_restaurants_hotels"),
-        ("12", "gold.cpi_div12_misc", "gold.div12_misc"),
-    ]
+def test_gold_12_coicop_divisions_exist():
+    """Verify that all 12 gold COICOP divisions have tracked items and category index values."""
     conn = get_db_connection()
     with conn.cursor() as cur:
-        for _div_code, view_name, alt_name in divisions:
-            try:
-                cur.execute(
-                    f"SELECT count(*) FROM {view_name} WHERE scrape_date = '2026-08-20';"
-                )
-            except Exception:
-                conn.rollback()
-                cur.execute(
-                    f"SELECT count(*) FROM {alt_name} WHERE scrape_date = '2026-08-20';"
-                )
-            count = cur.fetchone()[0]
-            assert (
-                count > 0
-            ), f"Division view {view_name}/{alt_name} returned 0 rows for 2026-08-20"
+        cur.execute(
+            """
+            SELECT COUNT(DISTINCT coicop_division) 
+            FROM gold.fct_daily_price_stats 
+            WHERE scrape_date = (SELECT MAX(scrape_date) FROM gold.fct_daily_price_stats)
+              AND coicop_division BETWEEN '01' AND '12';
+        """
+        )
+        stats_divs = cur.fetchone()[0]
+        assert stats_divs == 12, f"Expected 12 divisions in price stats, got {stats_divs}"
+
+        cur.execute(
+            """
+            SELECT COUNT(DISTINCT coicop_division) 
+            FROM gold.cpi_category_daily 
+            WHERE scrape_date = (SELECT MAX(scrape_date) FROM gold.cpi_category_daily);
+        """
+        )
+        cat_divs = cur.fetchone()[0]
+        assert cat_divs == 12, f"Expected 12 divisions in category daily, got {cat_divs}"
     conn.close()

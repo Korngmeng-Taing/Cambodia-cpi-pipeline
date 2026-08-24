@@ -217,23 +217,89 @@ def _normalize_name(name: str) -> str:
     return re.sub(r"\s+", " ", str(name)).strip().lower()
 
 
-def _build_model():
+def _get_api_keys() -> list[str]:
+    raw = os.getenv("GEMINI_API_KEYS") or os.getenv("GEMINI_API_KEY") or ""
+    return [k.strip() for k in raw.split(",") if k.strip()]
+
+
+class GeminiModelPool:
+    """Manages a pool of Gemini API keys with round-robin rotation and automatic quota failover."""
+
+    def __init__(self, keys: list[str], model_name: str = DEFAULT_MODEL):
+        if not keys:
+            raise RuntimeError("No Gemini API keys provided to GeminiModelPool")
+        self.keys = list(keys)
+        self.model_name = model_name
+        self.exhausted_keys: set[str] = set()
+        self._current_idx = 0
+
+    @property
+    def active_keys(self) -> list[str]:
+        return [k for k in self.keys if k not in self.exhausted_keys]
+
+    def mark_exhausted(self, key: str):
+        self.exhausted_keys.add(key)
+        log.warning(
+            "Gemini API key (%s...) exhausted. %d active key(s) remaining in pool.",
+            key[:12] if len(key) >= 12 else key,
+            len(self.active_keys),
+        )
+
+    def generate_content(self, contents, **kwargs):
+        if genai is None:
+            raise RuntimeError("google-generativeai is required (pip install google-generativeai)")
+
+        active = self.active_keys
+        if not active:
+            raise RuntimeError("All Gemini API keys in the pool have been exhausted.")
+
+        last_exc = None
+        for _ in range(len(active)):
+            active = self.active_keys
+            if not active:
+                break
+            key = active[self._current_idx % len(active)]
+            self._current_idx += 1
+            try:
+                genai.configure(api_key=key)
+                model = genai.GenerativeModel(
+                    model_name=self.model_name,
+                    generation_config=genai.GenerationConfig(response_mime_type="application/json"),
+                )
+                return model.generate_content(contents, **kwargs)
+            except Exception as exc:
+                last_exc = exc
+                if _is_rate_limit_error(exc) and _is_quota_exhausted_error(exc):
+                    self.mark_exhausted(key)
+                    if self.active_keys:
+                        log.info(
+                            "Failing over to next Gemini API key (%d active keys left)...",
+                            len(self.active_keys),
+                        )
+                        continue
+                raise
+        if last_exc:
+            raise last_exc
+        raise RuntimeError("All Gemini API keys in the pool have been exhausted.")
+
+
+def _build_model(keys: list[str] | None = None, model_name: str | None = None):
     if genai is None:
         raise RuntimeError(
             "google-generativeai is required (pip install google-generativeai)"
         )
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
+    api_keys = keys or _get_api_keys()
+    if not api_keys:
         raise RuntimeError(
             "GEMINI_API_KEY is not set; Gemini COICOP classification cannot run"
         )
-    genai.configure(api_key=api_key)
-    model_name = os.getenv("GEMINI_MODEL", DEFAULT_MODEL)
-    log.info("Building Gemini model %s with JSON mode", model_name)
-    return genai.GenerativeModel(
-        model_name=model_name,
-        generation_config=genai.GenerationConfig(response_mime_type="application/json"),
+    model_name = model_name or os.getenv("GEMINI_MODEL", DEFAULT_MODEL)
+    log.info(
+        "Building Gemini Model Pool with %d key(s) for model %s with JSON mode",
+        len(api_keys),
+        model_name,
     )
+    return GeminiModelPool(api_keys, model_name=model_name)
 
 
 def _parse_json_array(raw_text: str) -> list[dict[str, Any]]:
@@ -260,6 +326,29 @@ def _is_rate_limit_error(exc: Exception) -> bool:
     return "429" in msg or "ResourceExhausted" in msg or "quota" in msg.lower()
 
 
+def _is_quota_exhausted_error(exc: Exception) -> bool:
+    """True when the error indicates the account request/token quota has been exhausted."""
+    msg = str(exc)
+    return (
+        "free_tier_requests" in msg
+        or "quota exceeded" in msg.lower()
+        or "limit: 500" in msg
+        or "exceeded your current quota" in msg.lower()
+    )
+
+
+def _extract_retry_delay(exc: Exception) -> float:
+    """Extracts suggested retry delay in seconds from the exception message, if available."""
+    msg = str(exc)
+    m = re.search(r"retry\s+in\s+([0-9]+(?:\.[0-9]+)?)\s*s", msg, re.IGNORECASE)
+    if m:
+        return float(m.group(1))
+    m2 = re.search(r"seconds:\s*([0-9]+)", msg)
+    if m2:
+        return float(m2.group(1))
+    return RATE_LIMIT_BACKOFF_SECONDS
+
+
 def classify_batch(model, names: list[str]) -> list[dict[str, Any]]:
     """
     Sends one batch of product names to Gemini in JSON mode and parses the
@@ -273,12 +362,16 @@ def classify_batch(model, names: list[str]) -> list[dict[str, Any]]:
             break
         except Exception as exc:  # noqa: BLE001
             if attempt == 1 and _is_rate_limit_error(exc):
+                if _is_quota_exhausted_error(exc):
+                    # Hard daily/free-tier quota exceeded; retrying immediately won't succeed
+                    raise
+                backoff = min(_extract_retry_delay(exc), RATE_LIMIT_BACKOFF_SECONDS)
                 log.warning(
                     "Gemini rate limit hit; backing off %.0fs then retrying batch of %d",
-                    RATE_LIMIT_BACKOFF_SECONDS,
+                    backoff,
                     len(names),
                 )
-                time.sleep(RATE_LIMIT_BACKOFF_SECONDS)
+                time.sleep(backoff)
                 continue
             raise
     results = _parse_json_array(response.text)
@@ -339,6 +432,7 @@ def classify_names(
     cache_hits = len(seen)
     api_calls = 0
     failed = 0
+    consecutive_rate_limits = 0
     for idx, batch in enumerate(api_batches):
         if idx > 0:
             time.sleep(BATCH_DELAY_SECONDS)
@@ -352,13 +446,33 @@ def classify_names(
                 cache[key] = item
                 # prefer the exact input spelling for the join back to the row
                 seen[item_name] = item
+            consecutive_rate_limits = 0
         except Exception as exc:  # noqa: BLE001 - one bad batch must not kill the run
             failed += 1
             log.warning("Gemini batch of %d name(s) failed: %s", len(batch), exc)
-            # Re-check: any name in the failed batch that is still uncached stays
-            # unclassified (classified later once the API is healthy again).
             for name in batch:
                 seen.setdefault(name, _unclassified_result(name))
+
+            is_quota = _is_quota_exhausted_error(exc)
+            if _is_rate_limit_error(exc):
+                consecutive_rate_limits += 1
+
+            # Circuit breaker: if quota is exhausted or multiple consecutive rate limits hit,
+            # stop calling the API to avoid hanging the DAG for 30+ minutes.
+            if is_quota or consecutive_rate_limits >= 2:
+                remaining_batches = api_batches[idx + 1 :]
+                remaining_count = sum(len(b) for b in remaining_batches)
+                log.warning(
+                    "Gemini API quota exhausted / repeated rate limits. "
+                    "Short-circuiting remaining %d batch(es) (%d items) to avoid pipeline delay; "
+                    "the dbt rule ladder will classify these products.",
+                    len(remaining_batches),
+                    remaining_count,
+                )
+                for rem_batch in remaining_batches:
+                    for name in rem_batch:
+                        seen.setdefault(name, _unclassified_result(name))
+                break
 
     return {
         "results": seen,

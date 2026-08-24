@@ -18,6 +18,7 @@ Sources (20 total — 2 live, 18 demo→live):
 11. Khmer24                (khmer24)       — Housing       — Multi-Language Scraping
 12. Realestate.com.kh      (realestate)    — Housing       — Category-Segmented Pagination
 13. redBus Cambodia        (redbus)        — Transport     — Route & Fare Portal (LIVE)
+14. BookMeBus Cambodia     (bookmebus)     — Transport     — Route & Pricing API
 15. Sokha Hotel            (sokhahotel)    — Hotel         — Booking Engine JSON API
 16. Hyatt Regency          (hyyathotel)    — Hotel         — Structured Spec Matrix
 17. Bayon Restaurant       (bayonbkk)      — Restaurant    — Apollo State Extraction

@@ -111,10 +111,8 @@ Every decision is written to `silver.item_match_log` (`raw_price_id → item_id`
 4. **`dim_stores`** — retailer and source dimension across 20 Cambodian sources.
 5. **`fct_daily_prices`** — primary daily fact table (one row per item/store/date with cleaned price, unit price, promo indicators).
 6. **`fct_daily_prices_imputed`** — conformed daily fact view with $\le 7$-day forward price carry.
-7. **`silver.fct_jevons_daily`** — Stage 1 Elementary Jevons geometric mean prices, base relatives ($P_t / P_0 \times 100$), and day-on-day relative changes.
-8. **`silver.fct_laspeyres_daily`** — Stage 2 Higher-Level category aggregation across the 12 COICOP divisions using official NIS weights.
-9. **`silver.fct_laspeyres_headline_daily`** — Stage 3 National Headline Laspeyres CPI in the Silver layer.
-10. **`classification_queue`** — operational triage queue for unclassified products.
+7. **`silver.fct_jevons_daily`** — Elementary Jevons store-unweighted geometric mean prices ($P_{\text{Jevons}}$) per canonical item.
+8. **`classification_queue`** — operational triage queue for unclassified products.
 
 Example — price cleaning for the 5kg bag of rice:
 $$\text{Discount} = \frac{24300 - 20300}{24300} \times 100 = 16.46\%$$

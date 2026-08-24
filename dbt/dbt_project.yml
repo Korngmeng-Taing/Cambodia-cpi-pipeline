@@ -32,9 +32,6 @@ models:
       intermediate:
         +schema: staging
         +materialized: view
-    gold:
-      +schema: gold
-      +materialized: view
 
 seeds:
   cpi:

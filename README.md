@@ -14,7 +14,7 @@
 | **Transformation** | **dbt-core** (Silver & Gold) | Turns raw price records, entity-matching outputs, Jevons calculations, pack-size conversions, and COICOP weighted roll-ups into version-controlled, testable SQL models. |
 | **Item Matching (Silver)** | **Python Service** (`ItemMatcher` with `RapidFuzz`) | Exact barcode & SKU matching with fallback token-sort fuzzy matching in Python, landing structured mappings (`silver.canonical_items`, `silver.item_match_log`). |
 | **Hybrid Classification** | **Rule Engine (dbt SQL)** + **Gemini AI** (`gemini-3.1-flash-lite` / `gemini-2.5-flash`) | Daily-scoped 9-tier ladder: store purity, data-driven keyword rules (`coicop_keywords.csv`), category maps, and high-throughput Gemini cache (`silver.dim_coicop_ai_cache`, functional expression index `idx_coicop_ai_norm`, batched at 50 items/call via `scripts/warm_coicop_ai_cache.py`). |
-| **Index Math (Silver & Gold)** | **dbt SQL** + **Python** (`GEKSCalculator`, `FisherCalculator`) | Elementary Jevons prices (`silver.fct_jevons_daily`), Laspeyres category & headline aggregations (`silver.fct_laspeyres_daily`, `gold.cpi_headline_daily`), 12 dedicated Gold COICOP division tables, rolling 13-period multilateral GEKS-Törnqvist indices (`gold.cpi_geks_multilateral`), and Superlative Fisher Ideal indices (`gold.cpi_fisher_superlative`). |
+| **Index Math (Silver & Gold)** | **dbt SQL** + **Python** (`GEKSCalculator`, `FisherCalculator`) | Elementary Jevons prices (`silver.fct_jevons_daily`), Laspeyres category & headline aggregations (`gold.cpi_category_daily`, `gold.cpi_headline_daily`), 12 dedicated Gold COICOP division tables, rolling 13-period multilateral GEKS-Törnqvist indices (`gold.cpi_geks_multilateral`), and Superlative Fisher Ideal indices (`gold.cpi_fisher_superlative`). |
 | **Scraper Observability** | **Metabase v0.49** | Real-time operational monitoring: 20-Source Live Health Matrix, daily ingestion volume trends, and price anomaly alerts. |
 | **Interactive Analytics** | **Microsoft Power BI** | Executive BI dashboards: National headline CPI, 12 COICOP division time-series, month-on-month inflation, substitution bias, and item-level price trends. |
 
@@ -54,10 +54,8 @@
 ### Silver (Clean, Resolve & Elementary Aggregation)
 - **Item Matching Service**: Python (`pipeline/item_matcher.py`) executing Barcode exact → SKU exact → RapidFuzz token sort ratio writing to `silver.canonical_items` and `silver.item_match_log`.
 - **Hybrid COICOP Engine**: daily-scoped 9-tier ladder (`int_coicop_classified.sql`): overrides -> store purity -> gated AI cache -> traps -> two-tier keyword rules (`coicop_keywords.csv`) -> category map -> defaults.
-- **Elementary Jevons & Laspeyres Views**:
-  - `silver.fct_jevons_daily`: Computes store-unweighted geometric mean prices ($P_{\text{Jevons}}$), base price comparisons ($P_t / P_0 \times 100$), and day-on-day price relatives ($P_t / P_{t-1}$).
-  - `silver.fct_laspeyres_daily`: Category-level aggregation across the 12 COICOP divisions using official Cambodia NIS weights.
-  - `silver.fct_laspeyres_headline_daily`: Daily Headline Laspeyres CPI in the Silver layer.
+- **Elementary Jevons Geometric Mean**:
+  - `silver.fct_jevons_daily`: Computes store-unweighted elementary geometric mean prices ($P_{\text{Jevons}}$) per canonical item, standardized unit prices, quote counts, and store density metrics.
 
 ### Gold (Serving, 12 Division Tables & Multilateral Aggregation)
 - **12 Dedicated Division Tables**: `gold.cpi_div01_food` through `gold.cpi_div12_misc` exposing granular product price trends, base indices, and metrics per COICOP division.

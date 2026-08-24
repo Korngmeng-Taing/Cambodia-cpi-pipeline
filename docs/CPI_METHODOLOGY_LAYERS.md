@@ -42,7 +42,7 @@ Every decision is audited in `silver.item_match_log` (`raw_price_id → item_id`
 ## 3.2 Jevons Geometric Mean (`silver.fct_jevons_daily` & `gold.fct_daily_price_stats`)
 For each `item_id` on `scrape_date`:
 $$P_{i,t} = \exp\left( \frac{1}{N_{i,t}} \sum_{s=1}^{N_{i,t}} \ln(\text{price}_{i,s,t}) \right)$$
-- `silver.fct_jevons_daily`: Computes elementary geometric mean prices, base price relatives ($P_t / P_0 \times 100$), and day-on-day price relatives ($P_t / P_{t-1}$) directly in the Silver layer.
+- `silver.fct_jevons_daily`: Computes elementary store-unweighted geometric mean prices ($P_{\text{Jevons}}$) per canonical item directly in the Silver layer.
 - `gold.fct_daily_price_stats`: Imputes missing items forward $\le 7$ days (LOCF) and persists elementary price stats for Gold aggregation.
 
 ## 3.3 Conformed Daily Fact & Dimensions (`silver.dim_items`, `silver.fct_daily_prices`)
@@ -51,11 +51,9 @@ $$P_{i,t} = \exp\left( \frac{1}{N_{i,t}} \sum_{s=1}^{N_{i,t}} \ln(\text{price}_{
 
 ---
 
-# Layer 4 — Higher-Level Aggregation (Laspeyres)
+# Layer 4 — Higher-Level Aggregation (Laspeyres & Gold Marts)
 
 ## 4.1 Division & Headline Indices
-- Silver Category Aggregation (`silver.fct_laspeyres_daily`): Aggregates elementary Jevons price relatives geometrically per COICOP division with day-on-day % change.
-- Silver Headline Roll-Up (`silver.fct_laspeyres_headline_daily`): Daily Headline Laspeyres CPI in Silver.
 - Gold 12 Division Tables (`gold.cpi_div01_food` to `gold.cpi_div12_misc`): Dedicated tables providing granular product-level price tracking, base indices, and metrics for each of the 12 COICOP divisions.
 - Headline Laspeyres Roll-Up:
   $$\text{CPI}_t = \sum_{g \in \text{present}} I_{g,t} \times \left( \frac{W_g}{\sum_{j \in \text{present}} W_j} \right)$$

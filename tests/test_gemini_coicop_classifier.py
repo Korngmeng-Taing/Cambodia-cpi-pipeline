@@ -191,6 +191,59 @@ def test_classify_names_failed_batch_stays_unclassified():
     assert outcome["results"]["Milk"]["coicop_code"] == "99.9.9"
 
 
+def test_is_quota_exhausted_and_extract_delay():
+    quota_err = RuntimeError(
+        "429 Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 500. Please retry in 41.46s"
+    )
+    assert gcc._is_rate_limit_error(quota_err) is True
+    assert gcc._is_quota_exhausted_error(quota_err) is True
+    assert gcc._extract_retry_delay(quota_err) == 41.46
+
+    generic_err = RuntimeError("429 ResourceExhausted: retry after seconds: 15")
+    assert gcc._is_rate_limit_error(generic_err) is True
+    assert gcc._is_quota_exhausted_error(generic_err) is False
+    assert gcc._extract_retry_delay(generic_err) == 15.0
+
+
+def test_classify_names_circuit_breaker_on_quota():
+    class QuotaExhaustedModel:
+        def __init__(self):
+            self.calls = 0
+
+        def generate_content(self, contents, system_instruction=None):
+            self.calls += 1
+            raise RuntimeError("429 Quota exceeded for metric: free_tier_requests, limit: 500")
+
+    model = QuotaExhaustedModel()
+    names = [f"Item {i}" for i in range(10)]  # 5 batches with batch_size=2
+    outcome = gcc.classify_names(names, model=model, batch_size=2)
+
+    # Circuit breaker must halt after 1 call (quota exhausted error) instead of 5 calls
+    assert model.calls == 1
+    assert outcome["failed"] == 1
+    assert len(outcome["results"]) == 10
+    for name in names:
+        assert outcome["results"][name]["coicop_code"] == "99.9.9"
+
+
+def test_get_api_keys(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "key1, key2,key3")
+    assert gcc._get_api_keys() == ["key1", "key2", "key3"]
+
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEYS", "keyA, keyB ")
+    assert gcc._get_api_keys() == ["keyA", "keyB"]
+
+
+def test_gemini_model_pool_failover():
+    pool = gcc.GeminiModelPool(["key1", "key2"])
+    assert pool.active_keys == ["key1", "key2"]
+    pool.mark_exhausted("key1")
+    assert pool.active_keys == ["key2"]
+    pool.mark_exhausted("key2")
+    assert pool.active_keys == []
+
+
 # ── Integration-style (sqlite + fake model) ──────────────────────────────────
 
 

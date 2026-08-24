@@ -33,9 +33,7 @@ The pipeline executes daily across 5 interconnected layers:
   - `silver.dim_stores` (20 Cambodian retailers/sources)
   - `silver.fct_daily_prices` (Clean daily price observations)
   - `silver.hedonic_adjusted_prices` (Constant-specification quality adjusted prices)
-  - `silver.fct_jevons_daily` (Stage 1 Elementary Jevons geometric mean prices & item relatives $P_t / P_0 \times 100$)
-  - `silver.fct_laspeyres_daily` (Stage 2 Higher-Level category aggregation across 12 COICOP divisions)
-  - `silver.fct_laspeyres_headline_daily` (Stage 3 National headline CPI in Silver)
+  - `silver.fct_jevons_daily` (Elementary Jevons store-unweighted geometric mean prices $P_{\text{Jevons}}$)
   - `silver.classification_queue` (Active triage queue for unclassified products)
 
 ### 4. Gold Layer: Econometric Engine & 12 Division Tables

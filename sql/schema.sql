@@ -36,7 +36,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_raw_prices_observation
     ON bronze.raw_prices (
         store_id, source_name,
         COALESCE(source_url, ''), item_description_raw, price,
-        (scraped_at AT TIME ZONE 'UTC')::date
+        ((scraped_at AT TIME ZONE 'UTC')::date)
     );
 
 CREATE TABLE IF NOT EXISTS bronze.scrape_errors (

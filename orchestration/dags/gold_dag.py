@@ -5,7 +5,7 @@ Gold Layer DAG — computes daily Elementary Jevons stats, 12 COICOP Category
 indices, and Headline Laspeyres CPI for Cambodia CPI.
 
 Workflow:
-    calculate_daily_cpi_stored_proc ─► dbt_gold_run ─► dbt_gold_test
+    calculate_daily_cpi_stored_proc ─► dbt_gold_run ─► dbt_gold_test ─► refresh_serving_views
 
 Schedule: None — orchestrated by cpi_master_dag after silver_dag.
 """
@@ -30,6 +30,7 @@ log = logging.getLogger(__name__)
 DAG_ID = "gold_dag"
 local_tz = pendulum.timezone("Asia/Phnom_Penh")
 DBT_PROJECT_DIR = os.getenv("DBT_PROJECT_DIR", "/opt/airflow/dbt")
+SQL_DIR = os.getenv("CPI_SQL_DIR", "/opt/airflow/sql")
 
 DEFAULT_ARGS = {
     "owner": "cpi-team",
@@ -56,7 +57,9 @@ def _ensure_base_prices(**context) -> None:
 def _run_gold_procedures(**context) -> None:
     ds = context["ds"]
     base_period = os.getenv("BASE_PERIOD", "2026-08")
-    log.info("Calculating Daily Gold CPI for date: %s (base period %s)", ds, base_period)
+    log.info(
+        "Calculating Daily Gold CPI for date: %s (base period %s)", ds, base_period
+    )
     conn = get_db_connection()
     conn.autocommit = True
     with conn.cursor() as cur:
@@ -65,6 +68,27 @@ def _run_gold_procedures(**context) -> None:
         )
     conn.close()
     log.info("Successfully executed gold.sp_calculate_daily_cpi for %s", ds)
+
+
+def _refresh_serving_views(**context) -> None:
+    """Re-applies sql/views.sql after dbt has rebuilt its models.
+
+    dbt replaces a view model by renaming the old relation aside and dropping it
+    with CASCADE, so serving views layered on dbt output are destroyed on every
+    run. They are not created at database bootstrap either, since they read
+    dbt-materialized relations. Re-applying the idempotent CREATE OR REPLACE
+    script here keeps the Metabase/Power BI layer in sync with each Gold run.
+    """
+    views_path = os.path.join(SQL_DIR, "views.sql")
+    log.info("Refreshing serving views from %s", views_path)
+    with open(views_path, encoding="utf-8") as fh:
+        ddl = fh.read()
+    conn = get_db_connection()
+    conn.autocommit = True
+    with conn.cursor() as cur:
+        cur.execute(ddl)
+    conn.close()
+    log.info("Serving views refreshed")
 
 
 def _run_geks_multilateral(**context) -> dict:
@@ -149,10 +173,16 @@ with DAG(
         execution_timeout=timedelta(minutes=15),
     )
 
+    t_refresh_serving_views = PythonOperator(
+        task_id="refresh_serving_views",
+        python_callable=_refresh_serving_views,
+    )
+
     (
         t_ensure_base_prices
         >> t_calculate_cpi
         >> [t_geks_multilateral, t_fisher_superlative]
         >> t_dbt_gold_run
         >> t_dbt_gold_test
+        >> t_refresh_serving_views
     )

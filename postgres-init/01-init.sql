@@ -3,6 +3,10 @@
 -- Sets up databases for Airflow, Metabase, and CPI Application
 -- =============================================================================
 
+-- The postgres image entrypoint runs this file with `psql -v ON_ERROR_STOP=1`,
+-- which also applies to the \i includes below: a DDL error aborts container
+-- bootstrap instead of leaving the warehouse half-initialized.
+
 -- 1. Airflow Metadata Database
 CREATE USER airflow WITH PASSWORD 'airflow';
 CREATE DATABASE airflow OWNER airflow;
@@ -24,9 +28,12 @@ GRANT ALL PRIVILEGES ON DATABASE metabase TO metabase;
 -- Grant schema creation rights and permissions
 GRANT ALL ON SCHEMA public TO cpi_user;
 
--- Execute DDL definitions
+-- Execute DDL definitions.
+-- sql/views.sql is deliberately NOT applied here: the serving views read
+-- dbt-materialized relations that do not exist until the first dbt run, and
+-- pre-creating them makes dbt's view replacement CASCADE-drop them. They are
+-- (re)created by gold_dag's refresh_serving_views task after dbt.
 \i /sql/schema.sql
-\i /sql/views.sql
 \i /sql/gold_procedures.sql
 
 -- Transfer ownership of all pipeline objects to cpi_user so DDL run by the

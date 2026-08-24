@@ -1,11 +1,16 @@
 -- dim_items
 -- Unified canonical item dimension — one row per item_id with canonical metadata,
 -- brand, barcode, size, unit of measure, store coverage, and COICOP division.
+-- The post-hook restores the item_id primary key declared in sql/schema.sql, which
+-- dbt drops when it rebuilds the table (see fct_daily_prices).
 {{ config(
     materialized='incremental',
     incremental_strategy='delete+insert',
     unique_key='item_id',
-    on_schema_change='append_new_columns'
+    on_schema_change='append_new_columns',
+    post_hook=[
+        "create unique index if not exists uq_dim_items_item_id on {{ this }} (item_id)"
+    ]
 ) }}
 
 with match_stats as (

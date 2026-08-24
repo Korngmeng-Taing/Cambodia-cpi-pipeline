@@ -131,3 +131,14 @@ models:
       - name: category_index_value
         tests:
           - not_null
+
+  - name: fct_laspeyres_headline_daily
+    description: Daily headline Laspeyres CPI in the Silver layer, weighted across the 12 COICOP divisions.
+    columns:
+      - name: scrape_date
+        tests:
+          - not_null
+          - unique
+      - name: headline_cpi
+        tests:
+          - not_null

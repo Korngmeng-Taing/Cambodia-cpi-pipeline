@@ -1,11 +1,18 @@
 -- fct_daily_prices
 -- Final silver daily fact — one row per (scrape_date, store_slug, item_id)
 -- with COICOP classification + KHR prices + quality flags.
+-- The post-hook restores the grain constraint declared in sql/schema.sql: dbt builds
+-- this table itself, so the primary key from the bootstrap DDL is gone after the
+-- first (or any full-refresh) run, leaving writers that rely on
+-- ON CONFLICT (scrape_date, store_slug, item_id) without a conflict target.
 {{ config(
     materialized='incremental',
     incremental_strategy='delete+insert',
     unique_key=['scrape_date', 'store_slug', 'item_id'],
-    on_schema_change='append_new_columns'
+    on_schema_change='append_new_columns',
+    post_hook=[
+        "create unique index if not exists uq_fct_daily_prices_grain on {{ this }} (scrape_date, store_slug, item_id)"
+    ]
 ) }}
 
 with classified as (

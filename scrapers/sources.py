@@ -1442,11 +1442,10 @@ class SmartWifiScraper(BaseScraper):
 # 11. Khmer24 Real Estate (Housing)
 # ═══════════════════════════════════════════════════════════════════════════
 KHMER24_CATEGORIES = [
-    ("House For Rent", "https://www.khmer24.com/c-house-for-rent"),
-    ("Condo For Rent", "https://www.khmer24.com/c-condo-for-rent"),
-    ("Apartment For Rent", "https://www.khmer24.com/c-apartment-for-rent"),
-    ("Room For Rent", "https://www.khmer24.com/c-room-for-rent"),
-    ("Commercial For Rent", "https://www.khmer24.com/c-commercial-for-rent"),
+    ("House For Rent", "https://www.khmer24.com/en/c-house-for-rent.html"),
+    ("Apartment For Rent", "https://www.khmer24.com/en/c-apartment-for-rent.html"),
+    ("Room For Rent", "https://www.khmer24.com/en/c-room-for-rent.html"),
+    ("Land For Rent", "https://www.khmer24.com/en/c-land-for-rent.html"),
 ]
 
 KHMER24_BASELINE_RENTALS = [
@@ -1535,43 +1534,39 @@ class Khmer24Scraper(BaseScraper):
             seen_urls = set()
             for a in soup.find_all("a"):
                 href = a.get("href") or ""
-                if (".html" in href or "adid" in href) and href not in seen_urls:
-                    txt = a.get_text(separator=" ", strip=True)
-                    m = re.search(r"\$\s*([\d,]+(\.\d+)?)", txt)
-                    if m:
-                        price = _to_float(m.group(1).replace(",", ""))
+                if "adid-" in href and href not in seen_urls:
+                    seen_urls.add(href)
+                    txt = a.get_text(separator=" | ", strip=True)
+                    m_price = re.search(r"\$\s*([\d,]+(\.\d+)?)", txt)
+                    m_id = re.search(r"adid-(\d+)", href)
+                    if m_price and m_id:
+                        price = _to_float(m_price.group(1).replace(",", ""))
                         if price and price > 0:
-                            clean_title = re.sub(
-                                r"\$\s*[\d,]+(\.\d+)?", "", txt
-                            ).strip()
-                            if len(clean_title) >= 3:
-                                seen_urls.add(href)
-                                item_id_match = re.search(
-                                    r"adid-(\d+)|-([a-zA-Z0-9]+)\.html", href
+                            item_id = m_id.group(1)
+                            parts = [p.strip() for p in txt.split("|") if p.strip()]
+                            clean_title = "Rental Property"
+                            for p in parts:
+                                if len(p) > 5 and not re.match(r"^\d+$", p) and "Verified" not in p and "$" not in p:
+                                    clean_title = p
+                                    break
+                            records.append(
+                                build_canonical_record(
+                                    source_slug="khmer24",
+                                    source_type="realestate",
+                                    store_name="Khmer24 Real Estate",
+                                    item_id=f"k24_{item_id}",
+                                    name=clean_title,
+                                    price=price,
+                                    currency="USD",
+                                    category_native=f"Residential Rental > {cat_name}",
+                                    url=(
+                                        href
+                                        if href.startswith("http")
+                                        else f"https://www.khmer24.com{href}"
+                                    ),
+                                    scrape_date=ds,
                                 )
-                                item_id = (
-                                    item_id_match.group(1) or item_id_match.group(2)
-                                    if item_id_match
-                                    else str(len(seen_urls))
-                                )
-                                records.append(
-                                    build_canonical_record(
-                                        source_slug="khmer24",
-                                        source_type="realestate",
-                                        store_name="Khmer24 Real Estate",
-                                        item_id=f"k24_{item_id}",
-                                        name=clean_title,
-                                        price=price,
-                                        currency="USD",
-                                        category_native=f"Residential Rental > {cat_name}",
-                                        url=(
-                                            href
-                                            if href.startswith("http")
-                                            else f"https://www.khmer24.com{href}"
-                                        ),
-                                        scrape_date=ds,
-                                    )
-                                )
+                            )
         except Exception as exc:
             log.warning("Khmer24 live scrape failed for %s: %s", cat_name, exc)
         return records

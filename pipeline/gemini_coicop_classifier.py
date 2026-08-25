@@ -207,9 +207,20 @@ Response format (strict JSON array, no markdown fences, no extra text):
 def get_engine():
     conn_str = os.getenv(
         "CPI_DATABASE_URL",
-        "postgresql+psycopg2://cpi_user:cpi_pass@postgres:5432/cpi_db",
+        "postgresql+psycopg2://cpi_user:cpi_pass@localhost:5432/cpi_db",
     )
-    return create_engine(conn_str)
+    try:
+        eng = create_engine(conn_str)
+        with eng.connect() as test_conn:
+            pass
+        return eng
+    except Exception:
+        if "postgres" in conn_str:
+            alt = conn_str.replace("postgres:5432", "localhost:5432")
+        else:
+            alt = conn_str.replace("localhost:5432", "postgres:5432")
+        return create_engine(alt)
+
 
 
 def _normalize_name(name: str) -> str:

@@ -13,7 +13,7 @@
 | **Storage & Warehouse** | **PostgreSQL 16** (`bronze`/`staging`/`silver`/`gold` schemas) | Pure relational data warehouse hosting typed atomic raw listings, item-matching state, cleaned facts, and analytical CPI marts. |
 | **Transformation** | **dbt-core** (Silver & Gold) | Turns raw price records, entity-matching outputs, Jevons calculations, pack-size conversions, and COICOP weighted roll-ups into version-controlled, testable SQL models. |
 | **Item Matching (Silver)** | **Python Service** (`ItemMatcher` with `RapidFuzz`) | Exact barcode & SKU matching with fallback token-sort fuzzy matching in Python, landing structured mappings (`silver.canonical_items`, `silver.item_match_log`). |
-| **Hybrid Classification** | **Rule Engine (dbt SQL)** + **Gemini AI** (`gemini-3.1-flash-lite` / `gemini-2.5-flash`) | Daily-scoped 9-tier ladder: store purity, data-driven keyword rules (`coicop_keywords.csv`), category maps, and high-throughput Gemini cache (`silver.dim_coicop_ai_cache`, functional expression index `idx_coicop_ai_norm`, batched at 50 items/call via `scripts/warm_coicop_ai_cache.py`). |
+| **Hybrid Classification** | **AI-First Engine (dbt SQL + Gemini AI)** (`gemini-3.1-flash-lite` / `gemini-2.5-flash`) | Streamlined 4-tier ladder: human overrides (`coicop_override`), store domain purity, high-throughput Gemini cache (`silver.dim_coicop_ai_cache`, functional expression index `idx_coicop_ai_norm`), and category fallback. |
 | **Index Math (Silver & Gold)** | **dbt SQL** + **Python** (`GEKSCalculator`, `FisherCalculator`) | Elementary Jevons prices (`silver.fct_jevons_daily`), Laspeyres category & headline aggregations (`gold.cpi_category_daily`, `gold.cpi_headline_daily`), 12 dedicated Gold COICOP division tables, rolling 13-period multilateral GEKS-Törnqvist indices (`gold.cpi_geks_multilateral`), and Superlative Fisher Ideal indices (`gold.cpi_fisher_superlative`). |
 | **Scraper Observability** | **Metabase v0.49** | Real-time operational monitoring: 20-Source Live Health Matrix, daily ingestion volume trends, and price anomaly alerts. |
 | **Interactive Analytics** | **Microsoft Power BI** | Executive BI dashboards: National headline CPI, 12 COICOP division time-series, month-on-month inflation, substitution bias, and item-level price trends. |
@@ -41,8 +41,8 @@
 │ MEF FX Daily    │                   │ silver.fct_laspeyres      │ gold.cpi_div01_food  │ • MoM / DoD Inflation Rate    │
 │ ... (20 total)  │ Atomic & Typed    │   _headline_daily         │   ... to div12_misc  │ • Spliced Multilateral GEKS   │
 │                 │ Rows in Postgres  │ Python RapidFuzz matching │ gold.cpi_geks        │ • Superlative Fisher Index    │
-│                 │                   │ Hybrid Gemini AI Fallback │   _multilateral      │ • Consumer Substitution Bias  │
-│                 │                   │                           │ gold.cpi_fisher      │                               │
+│                 │                   │ AI-First Gemini Flash     │   _multilateral      │ • Consumer Substitution Bias  │
+│                 │                   │ Memoized Cache Pipeline   │ gold.cpi_fisher      │                               │
 │                 │                   │                           │   _superlative       │                               │
 └─────────────────┴───────────────────┴───────────────────────────┴──────────────────────┴───────────────────────────────┘
 ```
@@ -52,10 +52,11 @@
 - **Scraper Registry**: 20 production scrapers (`scrapers/sources.py`) extracting native categories, automated fallbacks, and zero-product quality gates.
 
 ### Silver (Clean, Resolve & Elementary Aggregation)
-- **Item Matching Service**: Python (`pipeline/item_matcher.py`) executing Barcode exact → SKU exact → RapidFuzz token sort ratio writing to `silver.canonical_items` and `silver.item_match_log`.
-- **Hybrid COICOP Engine**: daily-scoped 9-tier ladder (`int_coicop_classified.sql`): overrides -> store purity -> gated AI cache -> traps -> two-tier keyword rules (`coicop_keywords.csv`) -> category map -> defaults.
+- **Item Matching Service**: Python (`pipeline/item_matcher.py`) executing Barcode exact → SKU exact → RapidFuzz token sort ratio with 100% automated canonical UUID creation (`silver.canonical_items`, `silver.item_match_log`).
+- **AI-First COICOP Engine**: Streamlined 4-tier daily-scoped ladder (`int_coicop_classified.sql`): human overrides -> store purity -> Gemini AI cache (`silver.dim_coicop_ai_cache`) -> native category map / fallback.
 - **Elementary Jevons Geometric Mean**:
   - `silver.fct_jevons_daily`: Computes store-unweighted elementary geometric mean prices ($P_{\text{Jevons}}$) per canonical item, standardized unit prices, quote counts, and store density metrics.
+
 
 ### Gold (Serving, 12 Division Tables & Multilateral Aggregation)
 - **12 Dedicated Division Tables**: `gold.cpi_div01_food` through `gold.cpi_div12_misc` exposing granular product price trends, base indices, and metrics per COICOP division.

@@ -29,8 +29,9 @@ flowchart TD
     subgraph Silver["🥈 SILVER LAYER (Clean & Resolve)"]
         B2 --> S1["int_prices_cleaned.sql\n• Strip promo spam\n• MEF FX conversion to KHR\n• Standardize Unit (KHR/kg, KHR/L)"]
         S1 --> S2["item_matcher.py (RapidFuzz)\n• Exact Barcode / SKU matching\n• Normalized token-sort deduplication\n• Assigns canonical UUID"]
-        S2 --> S3["int_coicop_classified.sql\n• 9-tier hybrid ladder\n• Store purity + Keyword rules\n• Google Gemini AI Cache"]
+        S2 --> S3["int_coicop_classified.sql\n• Streamlined 4-tier AI-First ladder\n• Store purity + Human overrides\n• Google Gemini AI Cache"]
         S3 --> S4[("silver.fct_daily_prices\nClean Observation Rows")]
+
     end
 
     subgraph Gold["🥇 GOLD LAYER (Econometric Calculation)"]
@@ -159,15 +160,17 @@ To prevent the same beer from being counted as 3 different products, the `ItemMa
 
 ---
 
-### C. 9-Tier COICOP Classification Ladder (`int_coicop_classified.sql`)
+### C. AI-First COICOP Classification Ladder (`int_coicop_classified.sql`)
 The item is matched against the hierarchy:
-* **Tier 1 (Manual Overrides):** None.
+* **Tier 1 (Exact Overrides):** None.
 * **Tier 2 (Store Purity):** AEON/Delishop sell multiple categories $\to$ Fall through.
-* **Tier 3 (Gemini AI Cache):** Checked `silver.dim_coicop_ai_cache`.
-* **Tier 5 (Keyword STRONG Rules):** Matches keyword rule `"BEER"` with priority `210` ($< 300$).
+* **Tier 3 (Global Overrides):** None.
+* **Tier 4 (Gemini AI Cache):** Checked `silver.dim_coicop_ai_cache` $\to$ Matched `"ANGKOR BEER CAN 330ML"`.
 * **Assigned COICOP 2018 Classification:**
   * **Dotted Code:** `02.2.1` (Beer)
   * **Division:** `02` (Alcoholic beverages and tobacco)
+  * **Method:** `gemini_ai` (Confidence: `0.950`)
+
 
 ### Resulting Silver Fact Rows (`silver.fct_daily_prices`):
 
@@ -330,7 +333,8 @@ Alongside the official Laspeyres Headline CPI, the pipeline executes two econome
 ├───────────────┼───────────────────────────────────┼─────────────────────────────────────────────────────────────┤
 │ **Silver**    │ `int_prices_cleaned.sql`          │ Strips promo words, MEF USD->KHR FX conversion, unit parses │
 │               │ `pipeline/item_matcher.py`        │ RapidFuzz deduplication ──► `silver.canonical_items`        │
-│               │ `int_coicop_classified.sql`       │ 9-tier classification ──► `silver.fct_daily_prices`         │
+│               │ `int_coicop_classified.sql`       │ AI-First 4-tier classification ──► `silver.fct_daily_prices` │
+
 ├───────────────┼───────────────────────────────────┼─────────────────────────────────────────────────────────────┤
 │ **Gold 1**    │ `gold.sp_calculate_daily_cpi`     │ Unweighted Jevons geometric mean ($P_t$), base compare     │
 │               │ Class-Mean Imputation             │ ──► `gold.fct_daily_price_stats` (16,000 distinct items)    │

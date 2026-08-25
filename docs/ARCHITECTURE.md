@@ -26,7 +26,7 @@ The pipeline executes daily across 5 interconnected layers:
 ### 3. Silver Layer: Clean Core & Intelligence
 - **Python RapidFuzz Entity Matching:** Deduplicates products across stores into canonical UUID5 identities (`silver.canonical_items`, `silver.item_match_log`).
 - **dbt Price Cleaning & Unit Standardization:** Converts USD $\to$ KHR via MEF rates, clamps discounts ($0\%$–$95\%$), standardizes unit prices (`KHR/kg`, `KHR/L`), and flags outliers.
-- **Gemini AI COICOP Classifier:** 9-tier daily-scoped division ladder (Exact/per-store overrides $\to$ Store purity $\to$ AI cache with store-context gate $\to$ Global overrides $\to$ Traps with personal-care guard $\to$ Keyword STRONG rules (`coicop_keywords.csv`, priority <300) $\to$ Category map $\to$ Keyword WEAK rules + store defaults). Cached answers are pre-warmed into `silver.dim_coicop_ai_cache` (~30,800 products across 82 unique 5-digit COICOP 2018 classes).
+- **Gemini AI COICOP Classifier:** Streamlined 4-tier daily-scoped division ladder (Exact/per-store overrides $\to$ Store domain purity $\to$ Global overrides $\to$ High-throughput Gemini AI memoized cache in `silver.dim_coicop_ai_cache` $\to$ Native category map / Fallback queue). Over 99% of daily products resolve from cache in 0ms with >98% semantic accuracy.
 - **Hedonic Quality Adjustments:** Constant-specification regression (`silver.hedonic_adjusted_prices`) holding RAM/Storage constant for Division 09/08 consumer electronics.
 - **Conformed Star Schema & Analytical Views:**
   - `silver.dim_items` (Master product catalog)

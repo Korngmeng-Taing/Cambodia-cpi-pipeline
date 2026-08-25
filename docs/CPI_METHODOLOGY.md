@@ -79,6 +79,6 @@ Additionally, the **Superlative Fisher Ideal Index** ($I_{\text{Fisher}} = \sqrt
 ## 4. Reference Tables
 
 - **Base period**: `base_period` dbt var, default `2026-08` (set via `BASE_PERIOD` env).
-- **Weights**: `dbt/seeds/category_weights.csv` (materialized to `gold.category_weights`) — 12 divisions summing to 100.000%.
-- **Classification**: 9-tier daily-scoped ladder in `int_coicop_classified.sql` — human overrides (`coicop_override.csv` + `silver.coicop_override_manual`) → store purity → Gemini AI cache (AI-first, `silver.dim_coicop_ai_cache`) → global overrides → traps → keyword rules (`coicop_keywords.csv`, two-tier) → `silver.coicop_category_map` → weak keywords/store defaults. See `COICOP_MAPPING.md`.
+- **Classification**: Streamlined 4-tier daily-scoped ladder in `int_coicop_classified.sql` — human overrides (`coicop_override.csv` + `silver.coicop_override_manual`) → store domain purity → Gemini AI cache (AI-first, `silver.dim_coicop_ai_cache`) → store native category map / defaults. See `COICOP_MAPPING.md`.
 - **Tariffs**: `dbt/seeds/utility_tariffs.csv` (materialized to `silver.utility_tariffs`) — regulated EDC electricity + PPWSA water fixed prices for Division `04` (see `SCRAPER_METHODOLOGY_GUIDE.md` §5).
+

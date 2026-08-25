@@ -61,53 +61,26 @@ late safety net.
 
 ## 3. Classification Ladder (`int_coicop_classified.sql`)
 
-Observations are resolved in order (first match wins). Since 2026-08-22 the
-model is **daily-scoped** (classifies only the current run's scrape_date;
-historical rows are preserved) and keyword rules are **data-driven**:
+Observations are resolved in order (first match wins). The model is **daily-scoped** (classifies only the current run's `scrape_date`; historical rows are preserved) and implements a streamlined **AI-First Classification Engine**:
 
 ```
-1. ov_exact      → barcode/product_key matches + name rules tagged to this store
-                   (seed silver.coicop_override + table silver.coicop_override_manual);
-                   also overrides the AI's code column — human authority
-2. store_purity  → hard invariant: pharmacies→06, khmer24/realestate→04,
-                   hotels→11, bookmebus/redbus/fuel→07, telecom stores→08.
-                   No automatic signal may break these.
-3. gemini_ai     → silver.dim_coicop_ai_cache (exact normalized-name match,
-                   conf >= 0.5) passed through a store-context GATE:
-                   cached answers of 08 outside telecom stores / 11 outside
-                   hotels are invalidated and fall through.
-4. ov_global     → untagged name-substring override rules
-5. exceptions    → deterministic trap regex. Rule #0 = personal-care guard
-                   (shampoo/conditioner/body-wash/soap names never fire food
-                   traps); medical masks -> 06 with AEON carve-out to 12.
-6. keyword STRONG → silver.coicop_keywords seed rows priority < 300
-                    (data-driven, ascending priority wins)
-7. category_map  → silver.coicop_category_map (store native category -> division)
-8. keyword WEAK   → seed rows priority >= 300 (trimmed food vocabulary),
-                   then store_default fixed priors
-9. UNCLASSIFIED  → fallback; routed to Gemini task & labeling queue
+1. ov_exact      → Barcode/product_key exact matches + store-tagged name rules
+                   (seed silver.coicop_override + table silver.coicop_override_manual) — human authority.
+2. store_purity  → Domain purity invariant: pharmacies→06, khmer24/realestate→04,
+                   hotels→11, bookmebus/redbus/fuel→07, dedicated telecoms→08.
+3. ov_global     → Untagged global name-substring override rules (e.g. COOKING WINE→01, HAIRCUT→12).
+4. gemini_ai     → silver.dim_coicop_ai_cache (exact normalized-name match,
+                   conf >= 0.50) pre-warmed by Gemini Flash in batches of 50.
+5. category_map  → silver.coicop_category_map (store native category -> division fallback).
+6. store_default → Hard store default priors + coicop_store_defaults seed.
+7. UNCLASSIFIED  → Fallback queue for subsequent AI batch pre-warming.
 ```
 
-**Two-tier keywords:** STRONG rules (clothing, cosmetics, alcohol, household,
-health…) rank *above* the category map because scrapers often collapse
-unrelated shelves into generic native categories (AEON tags fashion as
-`Grocery`). WEAK food rules rank *below* it — the store taxonomy wins on fuzzy
-food words. Cross-cutting exception rows live at priorities 100–120 (e.g.
-`seasoning/spice/marinade → 01`, `bbq sauce → 01`, `measuring cup → 05`,
-`hot-pot base / teriyaki / tokpokki → 01`, `iphone|smartphone → 09` outside
-telecom stores, `short-noodle/biscuit/pretzel/porridge → 01`, dermo-cosmetic
-brands `avene|bioderma|biolane… → 12`).
-
-Word boundaries: short alcohol/material words are word-boundaried
-(`\mham\M`, `\mgin\M`, `\mrum\M`, `\mpots?\M`, `\mcups?\M`, `\moven\M`,
-`\mdesks?\M`) so substrings inside unrelated words cannot fire.
-
-`coicop_method` records the winning tier (`override` / `gemini_ai` /
-`exception` / `keyword_ladder` / `category_map` / `store_default`);
-`coicop_confidence`: 1.00 overrides · 0.99 traps · 0.95 keywords · 0.90
-category map · 0.85 purity/default · AI score otherwise.
+`coicop_method` records the winning tier (`override` / `store_default` / `gemini_ai` / `category_map` / `unclassified`);
+`coicop_confidence`: 1.00 overrides · 0.85 purity · AI score (~0.90–1.00) · 0.90 category map · 0.00 unclassified.
 
 ---
+
 
 ## 4. Product Traps (deterministic exceptions)
 

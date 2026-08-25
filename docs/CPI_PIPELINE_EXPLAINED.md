@@ -98,21 +98,22 @@ The `silver_dag` runs two steps:
 
 ### Step 1: Item Resolution (`pipeline/item_matcher.py`, RapidFuzz)
 1. **Barcode exact** ($\ge 8$ digits) → same canonical `item_id`.
-2. **SKU + brand + size** → store-native mapping.
-3. **Fuzzy name**: RapidFuzz `token_sort_ratio >= 0.95` auto-accepts; `0.85 <= score < 0.95` routes to `silver.needs_review`.
-4. **New item**: Mints a deterministic UUID5 canonical item.
+2. **SKU exact** → store-native mapping.
+3. **Fuzzy name**: RapidFuzz `token_sort_ratio >= 0.95` auto-accepts into existing canonical item.
+4. **New item**: Automatically mints a new canonical UUID in `silver.canonical_items`.
 
-Every decision is written to `silver.item_match_log` (`raw_price_id → item_id`, `match_method`, `confidence`); canonical products live in `silver.canonical_items`. Low-confidence matches go to `silver.needs_review` for human triage.
+Every decision is written to `silver.item_match_log` (`raw_price_id → item_id`, `match_method`, `confidence`); canonical products live in `silver.canonical_items` with 100% automated resolution.
 
 ### Step 2: dbt Silver models & Analytical Views
 1. **`int_prices_cleaned`** (intermediate) — USD $\to$ KHR currency conversion via MEF FX, promo math (discount clamped to $[0\%, 95\%]$), price bounds, unit-price derivation.
-2. **`int_coicop_classified`** (intermediate) — daily-scoped 9-tier COICOP ladder: exact/per-store overrides → store purity → AI cache (gated) → global overrides → traps → keyword STRONG (`coicop_keywords.csv`) → category map → keyword WEAK/store defaults → UNCLASSIFIED.
+2. **`int_coicop_classified`** (intermediate) — daily-scoped 4-tier AI-First COICOP ladder: human overrides → store domain purity → Gemini AI memoized cache (`silver.dim_coicop_ai_cache`) → category map / fallback queue.
 3. **`dim_items`** — canonical item dimension with prioritized COICOP division selection.
 4. **`dim_stores`** — retailer and source dimension across 20 Cambodian sources.
 5. **`fct_daily_prices`** — primary daily fact table (one row per item/store/date with cleaned price, unit price, promo indicators).
 6. **`fct_daily_prices_imputed`** — conformed daily fact view with $\le 7$-day forward price carry.
 7. **`silver.fct_jevons_daily`** — Elementary Jevons store-unweighted geometric mean prices ($P_{\text{Jevons}}$) per canonical item.
 8. **`classification_queue`** — operational triage queue for unclassified products.
+
 
 Example — price cleaning for the 5kg bag of rice:
 $$\text{Discount} = \frac{24300 - 20300}{24300} \times 100 = 16.46\%$$

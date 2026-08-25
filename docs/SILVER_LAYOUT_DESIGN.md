@@ -3,6 +3,9 @@
 **Status:** ✅ Active — Conformed Medallion Star Schema in PostgreSQL 16 (`cpi_db`)  
 **Schema:** `silver.*` (Curated Core) + `staging.*` (Intermediate Transformations & Raw) + dbt Models
 
+![Silver Layer Pipeline Architecture](./silver_layer_diagram.jpg)
+
+
 ---
 
 ## 1. Core Architectural Principle
@@ -63,19 +66,16 @@ Elementary Jevons aggregation: Unweighted geometric mean prices across stores ($
 These tables manage entity matching, AI memoization, and human-in-the-loop review queues:
 
 ### `silver.canonical_items`
-Deterministic UUID5 canonical identity master maintained by `pipeline/item_matcher.py`.
+Deterministic UUID canonical identity master maintained automatically by `pipeline/item_matcher.py`. Unmatched items ($\text{score} < 0.95$) automatically create new canonical items.
 
 ### `silver.item_match_log`
-Full audit trail mapping `raw_price_id` $\to$ `item_id` with match method (`barcode_exact`, `sku_exact`, `fuzzy_text`, `new_item`) and confidence score ($0.000$–$1.000$).
+Full audit trail mapping `raw_price_id` $\to$ `item_id` with match method (`barcode_exact`, `sku_exact`, `fuzzy_text`, `new_item`) and confidence score ($0.000$–$1.000$). Fully automated with zero manual intervention.
 
 ### `silver.dim_coicop_ai_cache`
-Persistent memoization cache for Gemini AI classifications. Prevents duplicate LLM API calls across daily runs.
-
-### `silver.needs_review`
-Low-confidence product matches ($0.70$–$0.89$) routed here for human triage via `apps/labeling_app.py`.
+Persistent memoization cache for Gemini AI classifications (`gemini-3.1-flash-lite` / `gemini-2.5-flash`). Prevents duplicate LLM API calls across daily runs.
 
 ### `silver.classification_queue`
-Active triage queue capturing unclassified items for automated Gemini AI batch processing and manual tagging.
+Active triage queue capturing unclassified items for automated Gemini AI batch pre-warming and manual tagging.
 
 ---
 
@@ -83,7 +83,7 @@ Active triage queue capturing unclassified items for automated Gemini AI batch p
 
 To keep the `silver` schema clean for BI tools:
 - **`int_prices_cleaned`**: Performs USD $\to$ KHR currency conversion, promo clamping ($[0\%, 95\%]$), unit pricing math (per kg / per L), and $\pm 3\sigma$ outlier detection.
-- **`int_coicop_classified`**: Runs the 9-tier daily-scoped classification ladder (exact/per-store overrides $\to$ store purity $\to$ gated AI cache $\to$ global overrides $\to$ traps $\to$ keyword STRONG rules from `coicop_keywords.csv` priority <300 $\to$ category map $\to$ keyword WEAK rules + store defaults $\to$ unclassified). STRONG keywords outrank the generic category map so broad store categories (aeon `Grocery` → 01) never swallow phones/toys/towels/cosmetics; WEAK food rules sit *below* the map. Only the current run's `scrape_date` is classified each day; historical rows are preserved for index stability.
+- **`int_coicop_classified`**: Runs the streamlined AI-First 4-tier classification ladder (Human overrides $\to$ Store purity mapping $\to$ Gated Gemini AI memoization cache `silver.dim_coicop_ai_cache` $\to$ Native category map / Unclassified fallback). Replaces unindexed keyword/regex rules with high-accuracy Gemini AI batch classification while preserving historical stability and sub-second SQL performance.
 
 ---
 

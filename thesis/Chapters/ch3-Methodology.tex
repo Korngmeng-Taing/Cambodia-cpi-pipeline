@@ -39,17 +39,15 @@
 \begin{enumerate}
     \item \textbf{Text Normalization:} Promotional buzzword stripping, Khmer numeral conversion (០--៩ $\to$ 0--9), and Khmer noun translation.
     \item \textbf{Standardized Pricing:} Extracting volume/weight metrics into standardized units (\textit{KHR/kg, KHR/L}) to neutralize shrinkflation.
-    \item \textbf{Entity Resolution:} RapidFuzz Token-Sort fuzzy matching ($Score \ge 0.95$) to create canonical product identities in \texttt{silver.canonical\_items}.
-    \item \textbf{7-Tier Hybrid Classification Cascade:}
+    \item \textbf{Entity Resolution:} RapidFuzz Token-Sort fuzzy matching ($Score \ge 0.95$) and exact barcode/SKU resolution to automatically create canonical product identities in \texttt{silver.canonical\_items}.
+    \item \textbf{AI-First COICOP Classification Engine:}
     \begin{itemize}
-        \item Tier 1: Domain-specific pinning (e.g., Khmer24 $\to$ Div 04, redBus $\to$ Div 07).
-        \item Tier 2: Manual overrides from \texttt{coicop\_override.csv} ($Confidence = 1.0$).
-        \item Tier 3: PostgreSQL AI cache lookup in \texttt{silver.dim\_coicop\_ai\_cache} ($Confidence \ge 0.90$).
-        \item Tier 4: Regex keyword ladder (Div 12 $\to$ 02 $\to$ 05 $\to$ \dots $\to$ 01).
-        \item Tier 5: Cloud LLM classification using Google Gemini Flash in batches of 50.
-        \item Tier 6: Local offline LLM fallback using Ollama (Qwen 2.5 7B) for rate-limit and network resilience.
-        \item Tier 7: Streamlit human review queue for low-confidence items ($Score < 0.50$).
+        \item Tier 1: Human authority overrides from \texttt{coicop\_override.csv} ($Confidence = 1.0$).
+        \item Tier 2: Domain-specific store purity pinning (e.g., Khmer24 $\to$ Div 04, redBus $\to$ Div 07, Community Pharmacy $\to$ Div 06, Telecoms $\to$ Div 08).
+        \item Tier 3: High-throughput Gemini AI memoization cache in \texttt{silver.dim\_coicop\_ai\_cache} ($Confidence \ge 0.90$) pre-warmed via batched Google Gemini Flash.
+        \item Tier 4: Store native category map taxonomy fallback and unclassified triage buffer.
     \end{itemize}
+
 \end{enumerate}
 
 \section{Phase 2: Exploratory Data Analysis and 12 COICOP Category Visualization}

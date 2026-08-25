@@ -54,7 +54,7 @@ class TestItemMatcher(unittest.TestCase):
 
     @patch("pipeline.item_matcher.fuzz.token_sort_ratio", return_value=90.0)
     @patch("pipeline.item_matcher.clean_name_for_matching", return_value="CLEAN NAME")
-    def test_fuzzy_needs_review(self, mock_clean, mock_fuzz):
+    def test_fuzzy_below_threshold_creates_new_item(self, mock_clean, mock_fuzz):
         item_id = uuid.uuid4()
         self.cursor.fetchone.side_effect = [None]
         self.cursor.fetchall.return_value = [(item_id, "CLEAN NAME DB")]
@@ -63,13 +63,13 @@ class TestItemMatcher(unittest.TestCase):
             1, "Raw Name", None, None, "store1", self.conn
         )
 
-        self.assertEqual(stats["sent_to_review"], 1)
-        review_call = [
+        self.assertEqual(stats["new_items_created"], 1)
+        log_call = [
             call
             for call in self.cursor.execute.mock_calls
-            if "INSERT INTO silver.needs_review" in str(call)
+            if "INSERT INTO silver.item_match_log" in str(call)
         ][0]
-        self.assertIn("INSERT INTO silver.needs_review", str(review_call))
+        self.assertIn("new_item", str(log_call))
 
     @patch("pipeline.item_matcher.fuzz.token_sort_ratio", return_value=50.0)
     @patch("pipeline.item_matcher.clean_name_for_matching", return_value="CLEAN NAME")

@@ -10,8 +10,8 @@ select
     coicop_method
 from {{ ref('int_coicop_classified') }}
 where
-    -- Case 1: Tech/telecom store NOT mapped to 08
-    (store_slug in ('arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') and coicop_division <> '08')
+    -- Case 1: Pure telecom stores NOT mapped to 08
+    (store_slug in ('cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') and coicop_division <> '08')
     or
-    -- Case 2: Non-tech store erroneously mapped to 08
-    (store_slug not in ('arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') and coicop_division = '08')
+    -- Case 2: Pure non-tech store (pharmacy, hotel, transit, gas, realestate) erroneously mapped to 08
+    (store_slug in ('communitypharma', 'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk', 'bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'realestate', 'khmer24') and coicop_division = '08')

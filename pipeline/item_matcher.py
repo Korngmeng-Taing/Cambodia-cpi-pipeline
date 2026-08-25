@@ -294,19 +294,8 @@ class ItemMatcher:
                 self._log_match(raw_price_id, item_id, "fuzzy_text", conf, actual_conn)
                 stats["matched_fuzzy"] += 1
                 return stats
-            elif conf >= self.review_threshold:
-                self._send_to_review(
-                    raw_price_id,
-                    item_description_raw,
-                    item_id,
-                    matched_name,
-                    conf,
-                    actual_conn,
-                )
-                stats["sent_to_review"] += 1
-                return stats
 
-        # 4. Create new canonical item
+        # 4. Create new canonical item for all unmatched items
         item_id = self.create_canonical_item(
             name_clean, actual_brand, barcode, size_norm, actual_conn
         )
@@ -430,14 +419,8 @@ class ItemMatcher:
                     match_logs.append((raw_price_id, str(item_id), "fuzzy_text", conf))
                     totals["matched_fuzzy"] += 1
                     continue
-                elif conf >= self.review_threshold:
-                    reviews.append(
-                        (raw_price_id, desc, str(item_id), matched_name, conf)
-                    )
-                    totals["sent_to_review"] += 1
-                    continue
 
-            # 5. Create new canonical item
+            # 5. Create new canonical item (all other unmatched items)
             new_id = uuid.uuid4()
             new_items.append((str(new_id), name_clean, brand, barcode, package_size))
             if barcode:

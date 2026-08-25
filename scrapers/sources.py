@@ -561,6 +561,7 @@ class DelishopScraper(BaseScraper):
 # ═══════════════════════════════════════════════════════════════════════════
 L192_GQL_URL = "https://graph-fs.l192.com/graphql"
 L192_PAGE_SIZE = 50
+L192_MAX_PAGES = int(os.environ.get("L192_MAX_PAGES", "20"))
 
 L192_BASELINE_PRODUCTS = [
     {
@@ -656,15 +657,18 @@ class L192Scraper(BaseScraper):
         }
         """
         all_items: list[dict[str, Any]] = []
-        # Paginate across 4 pages (up to 200 live items)
-        for page_idx in range(4):
-            offset = page_idx * 50
+        page_idx = 0
+        max_pages = L192_MAX_PAGES if L192_MAX_PAGES > 0 else 100
+        consecutive_errors = 0
+
+        while page_idx < max_pages:
+            offset = page_idx * L192_PAGE_SIZE
             payload = {
                 "query": query,
                 "variables": {
                     "filter": {"categoryId": 0},
                     "offset": offset,
-                    "limit": 50,
+                    "limit": L192_PAGE_SIZE,
                 },
                 "operationName": "productSearch",
             }
@@ -683,14 +687,24 @@ class L192Scraper(BaseScraper):
                         .get("items")
                         or []
                     )
+                    if not batch:
+                        break
                     all_items.extend(batch)
-                    if len(batch) < 50:
+                    consecutive_errors = 0
+                    if len(batch) < L192_PAGE_SIZE:
                         break
                 else:
-                    break
+                    log.warning("L192 page %d returned HTTP %d", page_idx, resp.status_code)
+                    consecutive_errors += 1
+                    if consecutive_errors >= 3:
+                        break
             except Exception as e:
                 log.warning("L192 page %d fetch failed: %s", page_idx, e)
-                break
+                consecutive_errors += 1
+                if consecutive_errors >= 3:
+                    break
+            page_idx += 1
+            time.sleep(THROTTLE_DELAY)
         return all_items
 
     def fetch_records(
@@ -4098,12 +4112,23 @@ class MefExchangeRateScraper(BaseScraper):
             resp = requests.get(MEF_FX_URL, timeout=15)
             resp.raise_for_status()
             body = resp.json()
-            if isinstance(body, list) and body:
-                body = body[0]
-            rate = (
-                _to_float(body.get("rate") or body.get("usd_khr") or body.get("value"))
-                or DEFAULT_USD_KHR
-            )
+            items = body.get("data") if isinstance(body, dict) else body
+            if isinstance(items, list):
+                for item in items:
+                    if isinstance(item, dict):
+                        curr_id = str(item.get("currency_id") or "").upper()
+                        symbol = str(item.get("symbol") or "").upper()
+                        if curr_id == "USD" or "USD/KHR" in symbol:
+                            val = item.get("average") or item.get("bid") or item.get("ask") or item.get("rate") or item.get("value")
+                            parsed = _to_float(val)
+                            if parsed and parsed > 0:
+                                rate = parsed
+                                break
+            elif isinstance(body, dict):
+                rate = (
+                    _to_float(body.get("rate") or body.get("usd_khr") or body.get("value"))
+                    or DEFAULT_USD_KHR
+                )
         except Exception as exc:
             log.warning("MEF FX API failed, using default %s: %s", DEFAULT_USD_KHR, exc)
         return [

@@ -10,7 +10,12 @@
     materialized='incremental',
     incremental_strategy='delete+insert',
     unique_key='raw_price_id',
-    on_schema_change='append_new_columns'
+    on_schema_change='append_new_columns',
+    post_hook=[
+        "CREATE INDEX IF NOT EXISTS idx_int_prices_cleaned_date_item ON {{ this }} (scrape_date, item_id)",
+        "CREATE INDEX IF NOT EXISTS idx_int_prices_cleaned_raw_price_id ON {{ this }} (raw_price_id)",
+        "CREATE INDEX IF NOT EXISTS idx_int_prices_cleaned_store ON {{ this }} (store_slug)"
+    ]
 ) }}
 
 with exchange as (

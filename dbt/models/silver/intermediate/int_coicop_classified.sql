@@ -35,7 +35,7 @@
     ]
 ) }}
 
-with items as (
+with items as materialized (
     -- DAILY-SCOPED: classify ONLY the products present in the current run's
     -- scrape (Airflow passes --vars '{"ds": "YYYY-MM-DD"}'; manual dbt runs
     -- fall back to the latest scrape_date). Historical rows already stored in
@@ -66,7 +66,7 @@ with items as (
           {% endif %}
     ) p
     join {{ source('silver', 'canonical_items') }} ci
-        on ci.item_id::text = p.item_id::text
+        on ci.item_id = p.item_id
     {% if is_incremental() %}
     where not exists (
         select 1 from {{ this }} t
@@ -76,34 +76,34 @@ with items as (
     )
     {% endif %}
 ),
-all_overrides as (
+all_overrides as materialized (
     select match_type, trim(match_value) as match_value, lower(trim(match_value)) as match_val_lower, store_slug, lpad(coicop_division, 2, '0') as coicop_division
     from {{ ref('coicop_override') }}
     union all
     select match_type, trim(match_value) as match_value, lower(trim(match_value)) as match_val_lower, store_slug, lpad(coicop_division, 2, '0') as coicop_division
     from {{ source('silver', 'coicop_override_manual') }}
 ),
-ov_barcode as (
+ov_barcode as materialized (
     select distinct on (match_value)
         match_value as barcode,
         coicop_division
     from all_overrides
     where match_type = 'barcode' and match_value is not null and match_value <> ''
 ),
-ov_product_key as (
+ov_product_key as materialized (
     select distinct on (match_value)
         match_value as product_key,
         coicop_division
     from all_overrides
     where match_type = 'product_key' and match_value is not null and match_value <> ''
 ),
-ov_name_store as (
+ov_name_store as materialized (
     select distinct on (store_slug, match_val_lower)
         match_val_lower, store_slug, coicop_division
     from all_overrides
     where match_type = 'name' and store_slug is not null and store_slug <> ''
 ),
-store_purity as (
+store_purity as materialized (
     select
         i.item_id,
         i.store_slug,
@@ -116,7 +116,7 @@ store_purity as (
         end as purity_division
     from items i
 ),
-ai_prejoined as (
+ai_prejoined as materialized (
     select distinct on (lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')))
         lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')) as norm_name,
         coicop_code,
@@ -128,14 +128,14 @@ ai_prejoined as (
     from {{ source('silver', 'dim_coicop_ai_cache') }}
     where coicop_code <> '99.9.9'
 ),
-cat_map_prejoined as (
+cat_map_prejoined as materialized (
     select distinct on (store_slug, lower(trim(category_native)))
         store_slug,
         lower(trim(category_native)) as cat_key,
         lpad(coicop_division, 2, '0') as coicop_division
     from {{ source('silver', 'coicop_category_map') }}
 ),
-store_defaults_prejoined as (
+store_defaults_prejoined as materialized (
     select distinct on (store_slug)
         store_slug,
         lpad(default_coicop_division, 2, '0') as coicop_division,
@@ -143,7 +143,7 @@ store_defaults_prejoined as (
     from {{ ref('coicop_store_defaults') }}
     where is_active = true
 ),
-items_fast as (
+items_fast as materialized (
     select
         i.item_id,
         i.store_slug,
@@ -174,14 +174,15 @@ items_fast as (
     left join cat_map_prejoined cm on cm.store_slug = i.store_slug and cm.cat_key = i.norm_category
     left join store_defaults_prejoined sd on sd.store_slug = i.store_slug
 ),
-unresolved_items as (
+unresolved_items as materialized (
     select f.item_id, f.store_slug, f.canonical_name, f.norm_category
     from items_fast f
     where f.ov_exact_id_div is null
       and f.purity_division is null
       and f.ai_div is null
+      and f.cat_map_div is null
 ),
-ov_name_store_matched as (
+ov_name_store_matched as materialized (
     select distinct on (u.item_id, u.store_slug)
         u.item_id,
         u.store_slug,
@@ -191,7 +192,7 @@ ov_name_store_matched as (
       on o.store_slug = u.store_slug
      and position(o.match_val_lower in lower(u.canonical_name)) > 0
 ),
-traps_and_keywords as (
+traps_and_keywords as materialized (
     select
         u.item_id,
         u.store_slug,

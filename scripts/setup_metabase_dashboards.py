@@ -1,16 +1,36 @@
 """
 =============================================================================
 CAMBODIA CPI PIPELINE — METABASE OPERATIONS & MONITORING PROVISIONER
-Provisions the dedicated Pipeline Operations, Store Ingestion Monitoring,
-and Dimension/Fact Explorer Dashboard directly into Metabase (PostgreSQL 5432).
+Provisions the dedicated Pipeline Operations, Real-Time DAG Monitoring,
+Store Ingestion Tracking, and Dimension/Fact Explorer directly into Metabase.
 =============================================================================
 """
 
+import os
 import psycopg2
 import json
 import secrets
 import string
 from datetime import datetime, timezone
+
+def get_db_connection(dbname):
+    hosts = [os.environ.get("POSTGRES_HOST", "localhost"), "postgres", "localhost", "127.0.0.1"]
+    for h in hosts:
+        try:
+            user = "metabase" if dbname == "metabase" else "cpi_user"
+            password = "metabase" if dbname == "metabase" else "cpi_pass"
+            conn = psycopg2.connect(
+                host=h,
+                port=5432,
+                dbname=dbname,
+                user=user,
+                password=password,
+                connect_timeout=3
+            )
+            return conn
+        except Exception:
+            continue
+    raise RuntimeError(f"Could not connect to database {dbname} on any candidate host: {hosts}")
 
 def generate_entity_id(length=21):
     alphabet = string.ascii_letters + string.digits + "-_"
@@ -118,8 +138,7 @@ def place_card_on_dashboard(cur, dashboard_id, card_id, col, row, size_x, size_y
         """, (now, now, size_x, size_y, row, col, card_id, dashboard_id, viz_json, entity_id))
 
 def purge_other_items(cur, target_collection_name, target_dashboard_name):
-    print("[0/2] Purging other legacy dashboards, cards, collections, and dropped tables from Metabase...")
-    # 1. Remove old dashboard card placements
+    print("[0/2] Purging legacy items from Metabase...")
     cur.execute("""
         DELETE FROM report_dashboardcard 
         WHERE dashboard_id IN (
@@ -128,13 +147,11 @@ def purge_other_items(cur, target_collection_name, target_dashboard_name):
         );
     """, (target_dashboard_name,))
     
-    # 2. Remove old dashboards
     cur.execute("""
         DELETE FROM report_dashboard 
         WHERE name != %s;
     """, (target_dashboard_name,))
     
-    # 3. Remove old cards not in target collection
     cur.execute("""
         DELETE FROM report_card 
         WHERE collection_id IN (
@@ -143,45 +160,34 @@ def purge_other_items(cur, target_collection_name, target_dashboard_name):
         );
     """, (target_collection_name,))
     
-    # 4. Remove other non-personal collections
     cur.execute("""
         DELETE FROM collection 
         WHERE name != %s AND personal_owner_id IS NULL;
     """, (target_collection_name,))
 
-    # 5. Purge dropped tables from Metabase internal schema cache
-    cpi_conn = psycopg2.connect("postgresql://cpi_user:cpi_pass@localhost:5432/cpi_db")
-    cpi_cur = cpi_conn.cursor()
-    cpi_cur.execute("""
-        SELECT table_schema, table_name
-        FROM information_schema.tables
-        WHERE table_schema IN ('silver', 'gold', 'staging');
-    """)
-    real_tables = set(cpi_cur.fetchall())
-    cpi_conn.close()
+    try:
+        cpi_conn = get_db_connection("cpi_db")
+        cpi_cur = cpi_conn.cursor()
+        cpi_cur.execute("""
+            SELECT table_schema, table_name
+            FROM information_schema.tables
+            WHERE table_schema IN ('silver', 'gold', 'staging', 'airflow_monitor');
+        """)
+        real_tables = set(cpi_cur.fetchall())
+        cpi_conn.close()
 
-    cur.execute("SELECT id, schema, name, active FROM metabase_table;")
-    all_mb_tables = cur.fetchall()
-    for tid, tschema, tname, active in all_mb_tables:
-        if (tschema, tname) not in real_tables or active is False:
-            cur.execute("DELETE FROM metabase_fieldvalues WHERE field_id IN (SELECT id FROM metabase_field WHERE table_id = %s);", (tid,))
-            cur.execute("DELETE FROM metabase_field WHERE table_id = %s;", (tid,))
-            cur.execute("DELETE FROM metabase_table WHERE id = %s;", (tid,))
-
-    # Set visibility
-    cur.execute("UPDATE metabase_table SET visibility_type = NULL WHERE schema = 'silver' AND name IN ('dim_stores', 'dim_items', 'fct_daily_prices');")
-    hidden_silver = [
-        'canonical_items', 'classification_ground_truth', 'classification_queue',
-        'coicop_category_map', 'coicop_classification_seed', 'coicop_keywords',
-        'coicop_override', 'coicop_override_manual', 'coicop_store_defaults',
-        'coicop_text_rules', 'dim_coicop_ai_cache', 'item_match_log',
-        'needs_review', 'utility_tariffs', 'fct_daily_prices_imputed'
-    ]
-    for t in hidden_silver:
-        cur.execute("UPDATE metabase_table SET visibility_type = 'hidden' WHERE schema = 'silver' AND name = %s;", (t,))
+        cur.execute("SELECT id, schema, name, active FROM metabase_table;")
+        all_mb_tables = cur.fetchall()
+        for tid, tschema, tname, active in all_mb_tables:
+            if (tschema, tname) not in real_tables or active is False:
+                cur.execute("DELETE FROM metabase_fieldvalues WHERE field_id IN (SELECT id FROM metabase_field WHERE table_id = %s);", (tid,))
+                cur.execute("DELETE FROM metabase_field WHERE table_id = %s;", (tid,))
+                cur.execute("DELETE FROM metabase_table WHERE id = %s;", (tid,))
+    except Exception as e:
+        print(f"Warning syncing schema tables: {e}")
 
 def provision_all():
-    conn = psycopg2.connect("postgresql://metabase:metabase@localhost:5432/metabase")
+    conn = get_db_connection("metabase")
     cur = conn.cursor()
     
     col_name = "01 - Cambodia CPI Pipeline Monitoring & Data Explorer"
@@ -193,7 +199,7 @@ def provision_all():
     c_ops = get_or_create_collection(
         cur, 
         col_name, 
-        "Source health, DAG ingest status, store comparisons, fuel prices, and dimensional tables", 
+        "Live DAG monitoring, incident tracking, source ingestion health, fuel prices, and dimensional fact tables", 
         "#2E5BFF"
     )
 
@@ -201,46 +207,63 @@ def provision_all():
     d_id = create_or_update_dashboard(
         cur, 
         dash_name, 
-        "Live monitoring of scraper sources, daily ingestion volumes, store comparisons, fuel prices, and Silver dim/fact tables.", 
+        "Live real-time monitoring of Airflow DAG runs, scraper ingestion progress, failure alerts, and Silver/Gold data warehouse tables.", 
         c_ops
     )
 
+    # Clean out any old cards and placements from this dashboard and collection to eliminate duplicates
+    cur.execute("DELETE FROM report_dashboardcard WHERE dashboard_id = %s;", (d_id,))
+    cur.execute("DELETE FROM report_card WHERE collection_id = %s;", (c_ops,))
+
     cards = [
-        # --- TOP KPI ROW ---
+        # ─── ROW 0: TOP KPI STATUS SUMMARY (Y=0, H=3) ──────────────────────────
         {
-            "name": "Total Sources Monitored",
-            "desc": "Total configured scraper sources and retail market channels.",
+            "name": "DAGs Running In-Flight Now",
+            "desc": "Count of Airflow DAGs currently actively executing right now.",
             "display": "scalar",
-            "sql": "SELECT COUNT(*) AS \"Total Sources\" FROM silver.dim_stores;",
+            "sql": """
+                SELECT COUNT(*) AS "DAGs Running Now"
+                FROM airflow_monitor.dag_run
+                WHERE state = 'running'
+                  AND DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh') = CURRENT_DATE;
+            """,
             "viz": {},
             "grid": (0, 0, 4, 3)
         },
         {
-            "name": "Failed / Missing Ingestions Today",
-            "desc": "Number of configured sources that failed or returned 0 quotes today.",
+            "name": "Failed DAGs / Tasks Today",
+            "desc": "Count of DAG runs or task instances that encountered failures today.",
             "display": "scalar",
             "sql": """
-                SELECT GREATEST(0, 
-                    (SELECT COUNT(*) FROM silver.dim_stores WHERE is_active = TRUE) - 
-                    (SELECT COUNT(DISTINCT store_slug) FROM silver.fct_daily_prices WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.fct_daily_prices))
-                ) AS \"Failed / Missing Ingestions Today\";
+                SELECT COUNT(*) AS "Failed Tasks Today"
+                FROM airflow_monitor.task_instance
+                WHERE state IN ('failed', 'upstream_failed')
+                  AND DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh') = CURRENT_DATE;
             """,
             "viz": {},
             "grid": (4, 0, 5, 3)
         },
         {
-            "name": "Total Products Ingested Today",
-            "desc": "Total cleaned product quotes collected across all stores today.",
+            "name": "Total Raw Scrapes Today",
+            "desc": "Total raw record batches successfully staged in staging.raw_scrapes today.",
             "display": "scalar",
-            "sql": "SELECT COUNT(*) AS \"Total Ingested Products\" FROM silver.fct_daily_prices WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.fct_daily_prices);",
+            "sql": """
+                SELECT COALESCE(SUM(record_count), 0) AS "Raw Records Staged Today"
+                FROM staging.raw_scrapes
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM staging.raw_scrapes);
+            """,
             "viz": {},
             "grid": (9, 0, 5, 3)
         },
         {
-            "name": "Unique Canonical Products Today",
-            "desc": "Total distinct canonical product items tracked today.",
+            "name": "Cleaned Products in Silver (Latest)",
+            "desc": "Total cleaned and validated product price quotes in silver.fct_daily_prices.",
             "display": "scalar",
-            "sql": "SELECT COUNT(DISTINCT item_id) AS \"Unique Products Today\" FROM silver.fct_daily_prices WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.fct_daily_prices);",
+            "sql": """
+                SELECT COUNT(*) AS "Cleaned Products in Silver"
+                FROM silver.fct_daily_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.fct_daily_prices);
+            """,
             "viz": {},
             "grid": (14, 0, 5, 3)
         },
@@ -248,69 +271,156 @@ def provision_all():
             "name": "Official MEF USD/KHR Rate Today",
             "desc": "Official daily exchange rate from Ministry of Economy and Finance (MEF API).",
             "display": "scalar",
-            "sql": "SELECT rate AS \"USD/KHR Rate Today\" FROM staging.exchange_rates WHERE execution_date = (SELECT MAX(execution_date) FROM staging.exchange_rates);",
+            "sql": """
+                SELECT rate AS "USD/KHR Rate Today"
+                FROM staging.exchange_rates
+                WHERE execution_date = (SELECT MAX(execution_date) FROM staging.exchange_rates);
+            """,
             "viz": {},
             "grid": (19, 0, 5, 3)
         },
 
-        # --- STORE INGESTION & COMPARISONS ---
+        # ─── ROW 3: LIVE DAG STATUS & FAILURE ALERT (Y=3, H=7) ─────────────────
         {
-            "name": "Total Ingested Products Per Store Today",
-            "desc": "Cleaned product quote volume collected per store channel today.",
-            "display": "bar",
-            "sql": """
-                SELECT 
-                    store_slug AS "Store",
-                    COUNT(*) AS "Products Ingested"
-                FROM silver.fct_daily_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.fct_daily_prices)
-                GROUP BY store_slug
-                ORDER BY "Products Ingested" DESC;
-            """,
-            "viz": {
-                "graph.dimensions": ["Store"],
-                "graph.metrics": ["Products Ingested"],
-                "graph.colors": ["#2E5BFF"]
-            },
-            "grid": (0, 3, 11, 8)
-        },
-        {
-            "name": "Store Ingest Volume: Today vs Yesterday",
-            "desc": "Comparison of ingested product count per store between today and yesterday.",
+            "name": "Failed DAG Tasks & Ingestion Alerts (Today)",
+            "desc": "Real-time list of failed DAG tasks and errors. If empty, all tasks ran successfully.",
             "display": "table",
             "sql": """
-                WITH today_stats AS (
+                SELECT 
+                    ti.dag_id AS "Failed DAG",
+                    ti.task_id AS "Failed Task",
+                    ti.state AS "State",
+                    ti.try_number AS "Attempt #",
+                    TO_CHAR(ti.start_date AT TIME ZONE 'Asia/Phnom_Penh', 'HH24:MI:SS') AS "Started (ICT)",
+                    TO_CHAR(ti.end_date AT TIME ZONE 'Asia/Phnom_Penh', 'HH24:MI:SS') AS "Ended (ICT)",
+                    ROUND(ti.duration::numeric, 1) AS "Duration (s)"
+                FROM airflow_monitor.task_instance ti
+                WHERE DATE(ti.start_date AT TIME ZONE 'Asia/Phnom_Penh') = CURRENT_DATE
+                  AND ti.state IN ('failed', 'upstream_failed')
+                ORDER BY ti.end_date DESC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (0, 3, 11, 7)
+        },
+        {
+            "name": "Real-Time Airflow DAG Pipeline Monitor (Today)",
+            "desc": "Live execution state of all DAGs triggered today (Scrapers, Silver, Master, Gold).",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    dr.dag_id AS "DAG Name",
+                    CASE 
+                        WHEN dr.state = 'success' THEN 'SUCCESS'
+                        WHEN dr.state = 'running' THEN 'RUNNING'
+                        WHEN dr.state = 'failed' THEN 'FAILED'
+                        WHEN dr.state = 'queued' THEN 'QUEUED'
+                        ELSE UPPER(dr.state)
+                    END AS "Status",
+                    dr.run_type AS "Run Type",
+                    TO_CHAR(dr.start_date AT TIME ZONE 'Asia/Phnom_Penh', 'HH24:MI:SS') AS "Start (ICT)",
+                    TO_CHAR(dr.end_date AT TIME ZONE 'Asia/Phnom_Penh', 'HH24:MI:SS') AS "End (ICT)",
+                    ROUND(EXTRACT(EPOCH FROM (COALESCE(dr.end_date, NOW()) - dr.start_date))::numeric, 1) AS "Duration (s)"
+                FROM airflow_monitor.dag_run dr
+                WHERE DATE(dr.start_date AT TIME ZONE 'Asia/Phnom_Penh') = CURRENT_DATE
+                ORDER BY 
+                    CASE WHEN dr.state = 'running' THEN 1 WHEN dr.state = 'failed' THEN 2 ELSE 3 END,
+                    dr.start_date DESC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (11, 3, 13, 7)
+        },
+
+        # ─── ROW 10: STORE INGESTION PROGRESS & HEALTH (Y=10, H=8) ────────────
+        {
+            "name": "Daily Store Scraper Ingestion Progress",
+            "desc": "Status and volume of raw scraped data collected today per active retail/market channel.",
+            "display": "table",
+            "sql": """
+                WITH today_scrapes AS (
+                    SELECT store_slug, record_count, created_at
+                    FROM staging.raw_scrapes
+                    WHERE scrape_date = (SELECT MAX(scrape_date) FROM staging.raw_scrapes)
+                ),
+                today_dags AS (
+                    SELECT 
+                        REPLACE(REPLACE(dag_id, 'scrape_', ''), '_dag', '') AS store_slug,
+                        state,
+                        start_date AT TIME ZONE 'Asia/Phnom_Penh' AS start_time,
+                        end_date AT TIME ZONE 'Asia/Phnom_Penh' AS end_time
+                    FROM airflow_monitor.dag_run
+                    WHERE DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh') = CURRENT_DATE
+                      AND dag_id LIKE 'scrape_%_dag'
+                )
+                SELECT 
+                    s.store_slug AS "Store Slug",
+                    s.store_name AS "Store Name",
+                    s.source_type AS "Channel Type",
+                    COALESCE(UPPER(d.state), 'NOT RUN') AS "DAG State",
+                    COALESCE(ts.record_count, 0) AS "Raw Records Today",
+                    CASE 
+                        WHEN COALESCE(ts.record_count, 0) > 0 THEN 'INGESTED'
+                        WHEN d.state = 'running' THEN 'SCRAPING NOW'
+                        WHEN d.state = 'failed' THEN 'FAILED'
+                        ELSE 'WAITING'
+                    END AS "Ingest Status",
+                    TO_CHAR(d.start_time, 'HH24:MI:SS') AS "Started (ICT)",
+                    TO_CHAR(d.end_time, 'HH24:MI:SS') AS "Finished (ICT)"
+                FROM silver.dim_stores s
+                LEFT JOIN today_dags d ON d.store_slug = s.store_slug
+                LEFT JOIN today_scrapes ts ON ts.store_slug = s.store_slug
+                WHERE s.is_active = TRUE
+                ORDER BY 
+                    CASE 
+                        WHEN COALESCE(ts.record_count, 0) = 0 AND d.state = 'failed' THEN 1
+                        WHEN d.state = 'running' THEN 2
+                        WHEN COALESCE(ts.record_count, 0) > 0 THEN 3
+                        ELSE 4
+                    END,
+                    "Raw Records Today" DESC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (0, 10, 12, 8)
+        },
+        {
+            "name": "Store Ingest Volume: Latest Day vs Previous Day",
+            "desc": "Comparison of ingested product count per store between latest day and previous day.",
+            "display": "table",
+            "sql": """
+                WITH latest_date AS (
+                    SELECT MAX(scrape_date) AS m_date FROM silver.fct_daily_prices
+                ),
+                today_stats AS (
                     SELECT store_slug, COUNT(*) AS count_today
-                    FROM silver.fct_daily_prices
-                    WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.fct_daily_prices)
+                    FROM silver.fct_daily_prices, latest_date
+                    WHERE scrape_date = latest_date.m_date
                     GROUP BY store_slug
                 ),
                 yesterday_stats AS (
                     SELECT store_slug, COUNT(*) AS count_yesterday
-                    FROM silver.fct_daily_prices
-                    WHERE scrape_date = (SELECT MAX(scrape_date) - INTERVAL '1 day' FROM silver.fct_daily_prices)
+                    FROM silver.fct_daily_prices, latest_date
+                    WHERE scrape_date = latest_date.m_date - INTERVAL '1 day'
                     GROUP BY store_slug
                 )
                 SELECT 
                     s.store_slug AS "Store Slug",
                     s.store_name AS "Store Name",
-                    COALESCE(t.count_today, 0) AS "Today Ingest",
-                    COALESCE(y.count_yesterday, 0) AS "Yesterday Ingest",
+                    COALESCE(t.count_today, 0) AS "Latest Ingest",
+                    COALESCE(y.count_yesterday, 0) AS "Previous Ingest",
                     COALESCE(t.count_today, 0) - COALESCE(y.count_yesterday, 0) AS "Volume Diff",
                     ROUND((COALESCE(t.count_today, 0) - COALESCE(y.count_yesterday, 0))::NUMERIC / NULLIF(y.count_yesterday, 0) * 100.0, 1) AS "DoD Change (%)"
                 FROM silver.dim_stores s
                 LEFT JOIN today_stats t ON t.store_slug = s.store_slug
                 LEFT JOIN yesterday_stats y ON y.store_slug = s.store_slug
-                ORDER BY "Today Ingest" DESC;
+                ORDER BY "Latest Ingest" DESC;
             """,
             "viz": {"table.pivot_column": None},
-            "grid": (11, 3, 13, 8)
+            "grid": (12, 10, 12, 8)
         },
 
-        # --- LIVE FUEL & GASOLINE PRICES ---
+        # ─── ROW 18: RETAIL & GASOLINE PRICES (Y=18, H=6) ─────────────────────
         {
-            "name": "All Gasoline & Retail Fuel Prices Today",
-            "desc": "Live prices of Gasoline (EA92, EA95), Diesel, and Petroleum products collected today.",
+            "name": "All Gasoline & Retail Fuel Prices (Latest)",
+            "desc": "Live prices of Gasoline (EA92, EA95), Diesel, and Petroleum products collected.",
             "display": "table",
             "sql": """
                 SELECT 
@@ -332,10 +442,10 @@ def provision_all():
                 ORDER BY price_khr ASC;
             """,
             "viz": {"table.pivot_column": None},
-            "grid": (0, 11, 24, 6)
+            "grid": (0, 18, 24, 6)
         },
 
-        # --- CORE DIMENSION & FACT TABLES ---
+        # ─── ROW 24: CORE DIMENSION & FACT TABLES (Y=24..48) ───────────────────
         {
             "name": "Table: dim_store",
             "desc": "Master store metadata table including store slugs, names, types, currencies, and active status.",
@@ -356,7 +466,7 @@ def provision_all():
                 ORDER BY store_slug ASC;
             """,
             "viz": {"table.pivot_column": None},
-            "grid": (0, 17, 24, 6)
+            "grid": (0, 24, 24, 6)
         },
         {
             "name": "Table: dim_product (silver.dim_items)",
@@ -379,7 +489,7 @@ def provision_all():
                 LIMIT 500;
             """,
             "viz": {"table.pivot_column": None},
-            "grid": (0, 23, 24, 8)
+            "grid": (0, 30, 24, 8)
         },
         {
             "name": "Table: fact_daily_price (silver.fct_daily_prices)",
@@ -403,7 +513,7 @@ def provision_all():
                 LIMIT 500;
             """,
             "viz": {"table.pivot_column": None},
-            "grid": (0, 31, 24, 9)
+            "grid": (0, 38, 24, 9)
         }
     ]
 
@@ -415,7 +525,7 @@ def provision_all():
     conn.commit()
     conn.close()
     print("\n=============================================================================")
-    print("SUCCESS: Metabase Operations & Monitoring Dashboard successfully configured!")
+    print("SUCCESS: Metabase Operations & Real-Time DAG Monitoring Dashboard configured!")
     print(f"  Dashboard ID: {d_id} | Collection ID: {c_ops}")
     print("  Metabase URL: http://localhost:3000")
     print("=============================================================================")

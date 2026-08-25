@@ -117,3 +117,23 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA bronze GRANT ALL ON FUNCTIONS TO cpi_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA staging GRANT ALL ON FUNCTIONS TO cpi_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA silver GRANT ALL ON FUNCTIONS TO cpi_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA gold GRANT ALL ON FUNCTIONS TO cpi_user;
+
+-- 4. Enable Airflow Metadata Foreign Data Wrapper for Metabase Monitoring
+CREATE EXTENSION IF NOT EXISTS postgres_fdw;
+CREATE SCHEMA IF NOT EXISTS airflow_monitor;
+CREATE SERVER IF NOT EXISTS airflow_server
+    FOREIGN DATA WRAPPER postgres_fdw
+    OPTIONS (host 'localhost', dbname 'airflow', port '5432');
+CREATE USER MAPPING IF NOT EXISTS FOR cpi_user
+    SERVER airflow_server
+    OPTIONS (user 'airflow', password 'airflow', password_required 'false');
+CREATE USER MAPPING IF NOT EXISTS FOR postgres
+    SERVER airflow_server
+    OPTIONS (user 'airflow', password 'airflow', password_required 'false');
+IMPORT FOREIGN SCHEMA public
+    LIMIT TO (dag_run, task_instance, task_fail, log, job)
+    FROM SERVER airflow_server
+    INTO airflow_monitor;
+GRANT USAGE ON SCHEMA airflow_monitor TO cpi_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA airflow_monitor TO cpi_user;
+

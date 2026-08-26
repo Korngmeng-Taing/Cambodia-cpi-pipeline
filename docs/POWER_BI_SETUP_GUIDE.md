@@ -1,5 +1,9 @@
 # Power BI Setup & Interactive Dashboard Guide
 
+> **[!WARNING]**
+> **IMPLEMENTATION STATUS (2026-08):** The Gold-layer index computation described in parts of this document - Jevons elementary aggregates, imputation, Laspeyres category/headline roll-ups, GEKS-Tornqvist, Fisher Ideal - is **planned but NOT implemented yet**. Its calculators, dbt models, and gold tables were removed from the codebase.
+> Currently live: Bronze ingestion; Silver cleaning / item matching / AI classification / hedonic adjustment; Gold star schema (dim_items, dim_stores, fct_daily_prices); monitoring views. See README "Implementation Status".
+
 This guide details how to connect **Microsoft Power BI Desktop** directly to your **Cambodia CPI PostgreSQL Data Warehouse** to build executive inflation dashboards.
 
 ---
@@ -20,35 +24,31 @@ In Power BI Desktop:
 
 ## 2. Recommended Data Model (Star Schema)
 
-Select and load the following tables from `gold` and `silver` schemas:
+Select and load the conformed star schema from the `gold` schema:
 
 ```
                           ┌────────────────────────┐
-                          │   silver.dim_items     │ (Item Dimension)
-                          │   - item_id (PK)       │
-                          │   - canonical_name     │
-                          │   - brand              │
-                          │   - size_norm          │
+                          │     gold.dim_stores    │ (Store Dimension)
+                          │   - store_slug (PK)    │
+                          │   - store_name         │
+                          │   - source_type        │
                           └───────────┬────────────┘
                                       │ 1
                                       │
                                       │ *
-┌─────────────────────────┐  ┌────────┴───────────────┐  ┌─────────────────────────┐
-│   gold.coicop_weights   │  │ gold.fct_daily_price_  │  │ gold.cpi_headline_daily │
-│   - coicop_division(PK) │  │   stats (Jevons Facts) │  │ (National Daily Indices)│
-│   - division_name       │  │ - scrape_date          │  │ - scrape_date           │
-│   - weight_pct          │  │ - item_id (FK)         │  │ - formula               │
-└───────────┬─────────────┘  │ - coicop_division (FK) │  │ - index_value (CPI)     │
-            │ 1              │ - p_khr_jevons         │  │ - divisions_present     │
-            │                │ - base_price_khr       │  └─────────────────────────┘
-            │ *              │ - jevons_index_base    │
-┌───────────┴─────────────┐  └────────────────────────┘  ┌─────────────────────────┐
-│ gold.cpi_category_daily │                              │ gold.cpi_fisher_        │
-│ (12 Division Indices)   │                              │   superlative           │
-│ - scrape_date           │                              │ - scrape_date           │
-│ - coicop_division (FK)  │                              │ - fisher_index          │
-│ - index_value           │                              │ - substitution_bias_pct │
-└─────────────────────────┘                              └─────────────────────────┘
+┌─────────────────────────┐     ┌─────┴──────────────────┐
+│     gold.dim_items      │1   *│ gold.fct_daily_prices  │ (Clean Daily Price Facts)
+│   - item_id (PK)        ├─────┤ - scrape_date          │
+│   - canonical_name      │     │ - store_slug (FK)      │
+│   - brand               │     │ - item_id (FK)         │
+│   - coicop_division     │     │ - price_khr            │
+│   - size_norm           │     │ - original_price_khr   │
+└─────────────────────────┘     │ - discount_pct         │
+                                │ - on_promo             │
+                                │ - unit_price_khr       │
+                                │ - cpi_eligible         │
+                                │ - is_outlier           │
+                                └────────────────────────┘
 ```
 
 ---

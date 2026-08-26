@@ -1,9 +1,13 @@
 # Updated Methodology & Activity Plan
+
+> **[!WARNING]**
+> **IMPLEMENTATION STATUS (2026-08):** The Gold-layer index computation described in parts of this document - Jevons elementary aggregates, imputation, Laspeyres category/headline roll-ups, GEKS-Tornqvist, Fisher Ideal - is **planned but NOT implemented yet**. Its calculators, dbt models, and gold tables were removed from the codebase.
+> Currently live: Bronze ingestion; Silver cleaning / item matching / AI classification / hedonic adjustment; Gold star schema (dim_items, dim_stores, fct_daily_prices); monitoring views. See README "Implementation Status".
 # Automated Price Collection for CPI and Inflation Estimation
 
 **Project:** Cambodia National Consumer Price Index (CPI) Pipeline  
 **Target:** Thesis Chapter 3 (Methodology & Implementation Activities)  
-**Architecture:** Medallion Data Architecture (PostgreSQL 16 + Airflow + dbt Core + Gemini/Ollama AI + ML Forecasting + Metabase/Streamlit)  
+**Architecture:** Medallion Data Architecture (PostgreSQL 16 + Airflow + dbt Core + Gemini/Ollama AI + ML Forecasting + Metabase/Power BI)  
 
 ---
 
@@ -15,7 +19,7 @@
 | **Data Storage** | Object Storage Buckets (MinIO) | **Medallion Star-Schema** in PostgreSQL 16 (`bronze.*`, `silver.*`, `gold.*`) |
 | **Classification** | Basic Keyword / Simple NLP | **7-Tier Hybrid Cascade** (Source Pinning $\to$ Overrides $\to$ AI Cache $\to$ Regex Ladder $\to$ Gemini Flash $\to$ Local Ollama Fallback $\to$ Human Triage) |
 | **CPI Calculation** | 1-Stage Simple Laspeyres | **Official 2-Stage Aggregation** (Stage 1 Elementary Jevons $\to$ Stage 2 Laspeyres with NIS Weights + 13-period Multilateral GEKS) |
-| **Serving & UI** | Single Streamlit App | **Dual-Engine UI** (Metabase BI on `:3000` + Streamlit Human Triage & ML Forecast UI on `:8501`) |
+| **Serving & UI** | Single Streamlit App | **Dual-Engine BI & Analytics** (Metabase Operations Dashboard on `:3000` + Power BI Inflation Analytics) |
 
 ---
 
@@ -54,7 +58,7 @@
 - **Tier 4 (Word-Boundaried Regex Ladder):** Safe precedence ordering (Div 12 $\to$ 02 $\to$ 05 $\to$ ... $\to$ 01) preventing personal care goods from being stolen by food rules.
 - **Tier 5 (Cloud LLM - Gemini Flash):** Batches of 50 unclassified products processed with structured JSON mode.
 - **Tier 6 (Local Offline LLM - Ollama Qwen 2.5 7B):** Local fallback ensuring zero rate limits and continuous offline execution during API outages.
-- **Tier 7 (Human-in-the-Loop Triage):** Low-confidence items ($< 0.50$) route to `silver.classification_queue` and the Streamlit review dashboard.
+- **Tier 7 (Automated AI Sweep & Triage Log):** Unclassified items are tracked in `silver.classification_queue` and re-evaluated by automated Gemini AI sweeps.
 
 ---
 
@@ -127,7 +131,7 @@
 - **Top Movers & Promo Impact:** Tables highlighting top rising and falling goods, and promotional discount depths.
 - **Pipeline Data Quality Mart:** Ingestion quote volume, unclassified review queue count, and scraper success rates.
 
-### 4.2 Streamlit ML & Human-in-the-Loop Application (`:8501`)
+### 4.2 Automated AI Classification Engine & Metabase Dashboard
 - **Interactive ML Forecasting Interface:** Allows analysts to select forecasting horizons (7-day, 30-day, 90-day), toggle models (Prophet vs. XGBoost vs. LSTM), and visualize predictive confidence intervals.
 - **COICOP Labeling & Triage Tool:** Enables analysts to inspect unclassified/low-confidence items and confirm or correct assignments into `silver.coicop_override`.
 
@@ -136,5 +140,5 @@
   - `postgres` (PostgreSQL 16 database lakehouse)
   - `airflow-webserver` & `airflow-scheduler` (Pipeline orchestration)
   - `metabase` (Business intelligence dashboard)
-  - `streamlit` (Human-in-the-loop and ML forecasting UI)
+  - `pipeline.gemini_coicop_classifier` (Automated UN COICOP AI classifier)
   - `ollama` (Local LLM fallback container)

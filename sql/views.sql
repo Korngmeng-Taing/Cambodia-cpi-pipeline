@@ -1,7 +1,7 @@
 -- ============================================================================
 -- CAMBODIA CPI PIPELINE — OPERATIONS & MONITORING SERVING VIEWS
--- Sourced from silver.fct_daily_prices, silver.dim_items, gold.coicop_weights,
--- and staging.exchange_rates.
+-- Sourced from gold.fct_daily_prices, gold.dim_items, gold.coicop_weights,
+-- silver.clean_store_prices, and staging.exchange_rates.
 -- ============================================================================
 
 
@@ -11,82 +11,16 @@ SELECT
     d.scrape_date,
     d.store_slug,
     COUNT(*) AS total_observations,
-    COUNT(DISTINCT d.product_key) AS unique_products,
-    COUNT(*) FILTER (WHERE d.coicop_division = 'REVIEW') AS review_queue_count,
-    ROUND(COUNT(*) FILTER (WHERE d.coicop_division <> 'REVIEW')::NUMERIC / NULLIF(COUNT(*), 0) * 100.0, 2) AS classification_rate_pct,
+    COUNT(DISTINCT d.item_id) AS unique_products,
+    COUNT(*) FILTER (WHERE m.coicop_division = 'REVIEW') AS review_queue_count,
+    ROUND(COUNT(*) FILTER (WHERE m.coicop_division <> 'REVIEW' AND m.coicop_division IS NOT NULL)::NUMERIC / NULLIF(COUNT(*), 0) * 100.0, 2) AS classification_rate_pct,
     COUNT(*) FILTER (WHERE m.barcode IS NOT NULL) AS barcode_count,
     ROUND(COUNT(*) FILTER (WHERE m.barcode IS NOT NULL)::NUMERIC / NULLIF(COUNT(*), 0) * 100.0, 2) AS barcode_coverage_pct,
-    COUNT(*) FILTER (WHERE d.is_outlier = TRUE) AS outlier_count,
-    COALESCE(imp.imputed_count, 0) AS imputed_count,
-    ROUND(COALESCE(imp.imputed_count, 0)::NUMERIC / NULLIF(COUNT(*), 0) * 100.0, 2) AS imputation_rate_pct
-FROM silver.fct_daily_prices d
-LEFT JOIN silver.dim_items m ON m.item_id::text = d.item_id
-LEFT JOIN (
-    SELECT scrape_date, store_slug, COUNT(*) AS imputed_count
-    FROM silver.fct_daily_prices_imputed
-    WHERE is_imputed = TRUE
-    GROUP BY scrape_date, store_slug
-) imp ON imp.scrape_date = d.scrape_date AND imp.store_slug = d.store_slug
-GROUP BY d.scrape_date, d.store_slug, imp.imputed_count
+    COUNT(*) FILTER (WHERE d.is_outlier = TRUE) AS outlier_count
+FROM gold.fct_daily_prices d
+LEFT JOIN gold.dim_items m ON m.item_id = d.item_id
+GROUP BY d.scrape_date, d.store_slug
 ORDER BY d.scrape_date DESC, d.store_slug;
-
-
--- ============================================================================
--- 9. View: Observed-Only Inflation (excludes LOCF-imputed rows from change calcs)
--- DoD/MoM inflation computed on actually-observed quotes only, so forward-carried
--- prices (is_imputed=TRUE) cannot smooth or zero out real price moves.
--- ============================================================================
-CREATE OR REPLACE VIEW gold.v_inflation_observed AS
-WITH observed_stats AS (
-    SELECT scrape_date, item_id, coicop_division, p_khr_jevons
-    FROM gold.fct_daily_price_stats
-    WHERE is_imputed = FALSE
-      AND p_khr_jevons > 0
-),
-base AS (
-    SELECT product_key AS item_id, base_price_khr
-    FROM gold.base_prices
-    WHERE base_period = (SELECT MAX(base_period) FROM gold.base_prices)
-),
-cat AS (
-    SELECT
-        s.scrape_date,
-        s.coicop_division,
-        ROUND(EXP(AVG(LN(s.p_khr_jevons / b.base_price_khr))) * 100.0, 4) AS index_value
-    FROM observed_stats s
-    JOIN base b ON b.item_id = s.item_id
-    WHERE b.base_price_khr > 0
-    GROUP BY s.scrape_date, s.coicop_division
-),
-cat_w AS (
-    SELECT c.scrape_date, c.coicop_division, c.index_value, w.weight_pct
-    FROM cat c
-    JOIN gold.coicop_weights w ON w.coicop_division = c.coicop_division
-),
-tot AS (
-    SELECT scrape_date, SUM(weight_pct) AS total_weight, COUNT(*) AS divisions_present
-    FROM cat_w
-    GROUP BY scrape_date
-),
-headline AS (
-    SELECT
-        c.scrape_date,
-        ROUND(SUM(c.index_value * (c.weight_pct / NULLIF(t.total_weight, 0))), 4) AS cpi_observed,
-        t.divisions_present
-    FROM cat_w c
-    JOIN tot t ON t.scrape_date = c.scrape_date
-    WHERE t.total_weight > 0
-    GROUP BY c.scrape_date, t.divisions_present
-)
-SELECT
-    h.scrape_date,
-    h.cpi_observed,
-    h.divisions_present,
-    ROUND((h.cpi_observed - prev.cpi_observed) / NULLIF(prev.cpi_observed, 0) * 100.0, 3) AS dod_inflation_pct_observed
-FROM headline h
-LEFT JOIN headline prev
-    ON prev.scrape_date = (h.scrape_date - INTERVAL '1 day')::DATE
-ORDER BY h.scrape_date DESC;
 
 
 -- ============================================================================
@@ -127,7 +61,7 @@ LEFT JOIN (
         COUNT(*) FILTER (WHERE is_fallback = TRUE) AS fallback_count,
         ROUND(COUNT(*) FILTER (WHERE is_fallback = TRUE)::NUMERIC / NULLIF(COUNT(*), 0) * 100.0, 1) AS fallback_pct,
         COUNT(*) FILTER (WHERE is_outlier = TRUE) AS outlier_count
-    FROM silver.fct_daily_prices
+    FROM gold.fct_daily_prices
     GROUP BY scrape_date, store_slug
 ) s ON s.scrape_date = r.scrape_date AND s.store_slug = r.store_slug
 ORDER BY r.scrape_date DESC, r.record_count DESC;
@@ -167,8 +101,8 @@ SELECT
     curr.scrape_date,
     curr.store_slug,
     curr.item_id,
-    curr.name_clean,
-    curr.coicop_division,
+    m.canonical_name AS name_clean,
+    m.coicop_division,
     prev.price_khr AS yesterday_price_khr,
     curr.price_khr AS today_price_khr,
     ROUND((curr.price_khr - prev.price_khr) / NULLIF(prev.price_khr, 0) * 100.0, 2) AS dod_price_change_pct,
@@ -179,11 +113,12 @@ SELECT
         WHEN curr.price_khr < prev.price_khr * 0.7 THEN 'HIGH_DROP (-30%)'
         ELSE 'MODERATE_SHIFT'
     END AS alert_level
-FROM silver.fct_daily_prices curr
-JOIN silver.fct_daily_prices prev
+FROM gold.fct_daily_prices curr
+JOIN gold.fct_daily_prices prev
   ON prev.item_id = curr.item_id
  AND prev.store_slug = curr.store_slug
  AND prev.scrape_date = (curr.scrape_date - INTERVAL '1 day')::DATE
+LEFT JOIN gold.dim_items m ON m.item_id = curr.item_id
 WHERE curr.price_khr > 0
   AND prev.price_khr > 0
   AND ABS(curr.price_khr - prev.price_khr) / prev.price_khr >= 0.20

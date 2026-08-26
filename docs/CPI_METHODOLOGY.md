@@ -1,6 +1,10 @@
 # CPI Index Methodology — Scraped-Data Path
 
-**Status:** ✅ Fully Implemented (Layers 1–6 active, PostgreSQL 16 + Airflow + dbt)  
+> **[!WARNING]**
+> **IMPLEMENTATION STATUS (2026-08):** The Gold-layer index computation described in parts of this document - Jevons elementary aggregates, imputation, Laspeyres category/headline roll-ups, GEKS-Tornqvist, Fisher Ideal - is **planned but NOT implemented yet**. Its calculators, dbt models, and gold tables were removed from the codebase.
+> Currently live: Bronze ingestion; Silver cleaning / item matching / AI classification / hedonic adjustment; Gold star schema (dim_items, dim_stores, fct_daily_prices); monitoring views. See README "Implementation Status".
+
+**Status:** ⚠️ Partially Implemented — Layers 1–3 live (Bronze/Silver/classification); index layers (Jevons/Laspeyres/GEKS/Fisher) **planned, not implemented**  
 **Date:** 2026-08-17  
 **Applies to:** Cambodia CPI Pipeline (`D:\CPI PIPELINE`) — Bronze (`staging.*`, `bronze.*`) $\rightarrow$ Silver (`silver.*`) $\rightarrow$ Gold (`gold.*`)
 
@@ -31,10 +35,10 @@ L6  Quality adjustment: pack-size / unit-price conversion & overlap methods
 | Layer | Physical Storage | Implementation | Role |
 |---|---|---|---|
 | **Bronze (Raw)** | `staging.raw_scrapes`, `staging.exchange_rates`, `bronze.raw_prices` | Airflow `scrape_{source}_dag` + `pipeline.bronze_ingestion` | Append-only raw JSONB with UUID `run_id`, zero-product guards, bounds validation; atomic daily quote ingestion. |
-| **Silver** | `silver.canonical_items`, `silver.item_match_log`, `silver.dim_items`, `silver.dim_stores`, `silver.fct_daily_prices`, `silver.fct_daily_prices_imputed`, `silver.fct_jevons_daily` | `pipeline.item_matcher` (RapidFuzz) + dbt models & views | EAN/Fuzzy item resolution; 0–95% promo clamp; unit-price derivation; COICOP classification ladder (`int_coicop_classified`); Jevons elementary geometric mean aggregation. |
-| **Silver Triage** | `silver.needs_review`, `silver.classification_queue`, `silver.coicop_override` | `apps/labeling_app.py` (Streamlit) | Human-in-the-loop triage for REVIEW / low-confidence items. |
-| **Gold (Index & Divisions)** | `gold.base_prices`, `gold.fct_daily_price_stats`, `gold.cpi_category_daily`, `gold.cpi_headline_daily`, `gold.cpi_div01_food` ... `gold.cpi_div12_misc`, `gold.cpi_geks_multilateral` | dbt Gold models + Airflow `gold_dag` + `pipeline.geks_calculator` | Jevons elementary aggregation; Laspeyres weighting; 12 dedicated COICOP division tables; GEKS multilateral index; anomaly detection. |
-| **Serving** | `gold.v_cpi_latest`, `gold.v_inflation`, `gold.v_inflation_observed`, `gold.v_top_movers`, `gold.v_promo_impact`, `gold.v_coverage` | Metabase (`:3000`) | Executive dashboards, inflation trajectories (incl. observed-only DoD inflation), and store coverage monitoring. |
+| **Silver (1 Store 1 Table)** | `silver.clean_store_prices`, `silver.canonical_items`, `silver.item_match_log` | `pipeline.item_matcher` (RapidFuzz) + dbt models (`int_prices_cleaned`, `clean_store_prices`) | Store-level clean quotes (1 store 1 table paradigm); EAN/Fuzzy item resolution; 0–95% promo clamp; unit-price derivation; COICOP classification ladder (`int_coicop_classified`). |
+| **Silver Triage** | `silver.classification_queue`, `silver.dim_coicop_ai_cache`, `silver.coicop_override_manual` | `pipeline/gemini_coicop_classifier.py` + `pipeline/gemini_item_reviewer.py` | Automated AI classification with Gemini Flash memoization cache and unclassified triage queue. |
+| **Gold (Star Schema & Dimensions)** | `gold.dim_items`, `gold.dim_stores`, `gold.fct_daily_prices` | dbt Gold models + Airflow `gold_dag` | Conformed Star Schema dimensional model (Master item dimensions, Store metadata dimension, Daily price facts with unit-pricing). |
+| **Serving Views** | `gold.v_coverage`, `gold.v_monitor_scraper_daily`, `gold.v_monitor_source_health_matrix`, `gold.v_monitor_price_alerts`, `gold.v_monitor_fx_health` | Metabase (`:3000`) | Executive observability dashboards, daily scraper health, price anomaly alerts, exchange rate monitor, and store coverage. |
 
 ---
 

@@ -1,5 +1,9 @@
 # End-to-End Product Classification & Ingestion Architecture
 
+> **[!WARNING]**
+> **IMPLEMENTATION STATUS (2026-08):** The Gold-layer index computation described in parts of this document - Jevons elementary aggregates, imputation, Laspeyres category/headline roll-ups, GEKS-Tornqvist, Fisher Ideal - is **planned but NOT implemented yet**. Its calculators, dbt models, and gold tables were removed from the codebase.
+> Currently live: Bronze ingestion; Silver cleaning / item matching / AI classification / hedonic adjustment; Gold star schema (dim_items, dim_stores, fct_daily_prices); monitoring views. See README "Implementation Status".
+
 This document provides a comprehensive, step-by-step specification of how raw product data is scraped, cleaned, deduplicated, classified into the **United Nations COICOP (Classification of Individual Consumption According to Purpose)** hierarchy, and aggregated into the official **Cambodia Consumer Price Index (CPI)**.
 
 ---
@@ -25,36 +29,28 @@ flowchart TD
         D -- "2. Store SKU" --> E
         D -- "3. Exact Clean Name" --> E
         D -- "4. Token-Sort Fuzzy" --> F["Fuzzy Match (Conf >= 0.95)"]
-        D -- "5. No Match" --> G["Create Canonical Item\n(silver.canonical_items)"]
+        D -- "5. No Match (< 0.95)" --> G["Create Canonical Item (Auto)\n(silver.canonical_items)"]
     end
 
-    subgraph S4["Stage 4: COICOP Classification Ladder (int_coicop_classified.sql)"]
-        E & F & G --> H{"Daily-Scoped 9-Tier Ladder\n(Only current scrape_date; First Match Wins)"}
-        H -- "Tier 1" --> I["Exact/Per-Store Human Overrides\n(coicop_override.csv + silver.coicop_override_manual)"]
-        H -- "Tier 2" --> I2["Store Purity\n(pharmacy->06, real estate->04, hotels->11,\ntransit/fuel->07, telecom->08)"]
-        H -- "Tier 3" --> J["silver.dim_coicop_ai_cache (Gemini Cache)\n+ store-context gate (08/11 validation)"]
-        H -- "Tier 4" --> J2["Global Name Overrides"]
-        H -- "Tier 5" --> K["Deterministic Traps\n(personal-care guard first:\nshampoo/soap never food traps)"]
-        H -- "Tier 6" --> L1["Keyword STRONG rules\n(silver.coicop_keywords priority < 300)"]
-        H -- "Tier 7" --> M["silver.coicop_category_map (Store Category)"]
-        H -- "Tier 8" --> L2["Keyword WEAK rules\n(silver.coicop_keywords priority >= 300)"]
-        H -- "Tier 8b" --> N["coicop_store_defaults.csv (Store Defaults)"]
-        H -- "No Match" --> O["Tag as 'UNCLASSIFIED' / 'REVIEW'"]
+    subgraph S4["Stage 4: AI-First 4-Tier COICOP Classification Ladder (int_coicop_classified.sql)"]
+        E & F & G --> H{"Daily-Scoped 4-Tier Ladder\n(Only current scrape_date; First Match Wins)"}
+        H -- "Tier 1" --> I["Human Authority Overrides\n(coicop_override.csv + silver.coicop_override_manual)"]
+        H -- "Tier 2" --> I2["Store Purity Pinning\n(pharmacy->06, khmer24->04, hotels->11,\ntransit/fuel->07, telecom->08)"]
+        H -- "Tier 3" --> J["Gemini AI Memoization Cache\n(silver.dim_coicop_ai_cache with domain gate)"]
+        H -- "Tier 4" --> M["Store Native Category Map Taxonomy\n(silver.coicop_category_map / Store Defaults)"]
+        H -- "Unmatched" --> O["Tag as 'UNCLASSIFIED' / Triage Queue\n(silver.classification_queue)"]
     end
 
-    subgraph S5["Stage 5 & 6: AI Classification & Human Triage"]
+    subgraph S5["Stage 5: Automated Gemini AI Cache Pre-Warming"]
         O --> P[("silver.classification_queue\nStatus = PENDING")]
         P --> Q["Gemini AI Classifier\n(gemini_coicop_classifier.py)"]
         Q -- "Conf >= 0.50" --> R["Cache in silver.dim_coicop_ai_cache\nMark Queue RESOLVED"]
-        Q -- "Conf < 0.50 / Error" --> S["Streamlit Human Triage UI\n(apps/labeling_app.py)"]
-        S -- "Analyst Approves" --> I
     end
 
-    subgraph S7["Stage 7: Gold Layer & CPI Calculation"]
-        I & J & K & L & M & N & R --> T[("silver.fct_daily_prices")]
-        T --> U["gold.fct_daily_price_stats (Jevons Elementary)"]
-        U --> V["gold.cpi_headline_daily (Laspeyres 100.000% NIS Weights)"]
-        U --> W["gold.cpi_geks_multilateral (Rolling Transitive GEKS)"]
+    subgraph S7["Stage 7: Gold Layer Star Schema"]
+        I & I2 & J & M & R --> T[("silver.clean_store_prices")]
+        T --> U[("gold.dim_items & gold.dim_stores")]
+        T --> V[("gold.fct_daily_prices")]
     end
 ```
 
@@ -140,52 +136,39 @@ flowchart TD
     D -- Yes --> D1["Link Item (Confidence = 1.0, Method = 'fuzzy_text')"]
     D -- No --> E{"4. Token-Sort Fuzzy Match\nwith Size Compatibility?"}
     E -- "Score >= 0.95" --> E1["Link Item (Confidence = score, Method = 'fuzzy_text')"]
-    E -- "0.85 <= Score < 0.95" --> E2["Send to silver.needs_review"]
-    E -- "Score < 0.85" --> F["Create New Canonical Item (silver.canonical_items)\nMethod = 'new_item'"]
+    E -- "Score < 0.95" --> F["Create New Canonical Item (Auto)\n(silver.canonical_items, Method = 'new_item')"]
 ```
 
 ### Key Technical Details:
 - **Token-Sort Fuzzy Ratio (`rapidfuzz.fuzz.token_sort_ratio`)**: Splits long, word-reordered titles into sorted word tokens before comparing, making it invariant to word order changes.
 - **Relative Size Tolerance**: Package sizes are checked with `_is_size_compatible()`, allowing $\le 10\%$ numeric tolerance for same-unit variations while rejecting cross-unit mismatches (e.g. 500g vs 5kg).
+- **Automated Ingestion**: Items scoring $< 0.95$ immediately create a new canonical product identity in `silver.canonical_items` with full audit logging in `silver.item_match_log`, removing manual labeling bottlenecks.
 
 ---
 
-## 5. Stage 4: Daily-Scoped 9-Tier COICOP Classification Ladder
+## 5. Stage 4: Streamlined AI-First 4-Tier COICOP Classification Ladder
 
 ### Implementation Files:
 - [`dbt/models/silver/intermediate/int_coicop_classified.sql`](file:///D:/CPI%20PIPELINE/dbt/models/silver/intermediate/int_coicop_classified.sql)
-- Seed: [`dbt/seeds/coicop_override.csv`](file:///D:/CPI%20PIPELINE/dbt/seeds/coicop_override.csv) (259 curated rows)
-- Seed: [`dbt/seeds/coicop_keywords.csv`](file:///D:/CPI%20PIPELINE/dbt/seeds/coicop_keywords.csv) (30 data-driven keyword/trap rules)
-- Seed: [`dbt/seeds/coicop_store_defaults.csv`](file:///D:/CPI%20PIPELINE/dbt/seeds/coicop_store_defaults.csv)
+- Seed: [`dbt/seeds/coicop_override.csv`](file:///D:/CPI%20PIPELINE/dbt/seeds/coicop_override.csv) (curated overrides)
+- Table: `silver.coicop_override_manual` (persistent manual operator overrides)
+- Table: `silver.dim_coicop_ai_cache` (Gemini AI memoization cache)
+- Table: `silver.coicop_category_map` (store native taxonomy mapping)
 
 ### Daily scoping:
 Each run classifies **only the products present in that day's scrape** (Airflow passes
 `--vars '{"ds": "YYYY-MM-DD"}'`; manual runs fall back to `max(scrape_date)`).
 Historical classification rows are preserved, so price-fact joins and index
-history stay stable. To re-classify all history after a major rule change,
-remove the date filter and run `--full-refresh` for this model.
+history stay stable.
 
 ### Resolution order (first match wins):
 
 | Tier | Tier Name | Source / Mechanism | Confidence | Purpose |
 | :--- | :--- | :--- | :--- | :--- |
-| **1** | **Exact / per-store override** | barcode & product_key matches (any tag) + name rules tagged to *this* store (`coicop_override.csv` + `silver.coicop_override_manual`) | `1.000` | Human authority; also overrides the AI's code column |
-| **2** | **Store purity** | hard invariant in SQL | `0.850` | pharmacies→06, khmer24/realestate→04, hotels→11, transit/fuel→07, telecom→08 — no automatic signal may break these |
-| **3** | **Gemini AI cache (+ gate)** | `silver.dim_coicop_ai_cache`, exact normalized-name match, conf ≥ 0.5. A store-context **gate** invalidates AI answers of division 08 outside telecom stores and 11 outside hotels | AI score | Primary automatic engine (AI-first mode); ~2,000 products cached |
-| **4** | **Global name override** | untagged name rules from both override tables | `1.000` | Curated cross-store corrections |
-| **5** | **Deterministic traps** | regex CASE in SQL; rule #0 is a personal-care guard (shampoo/soap/body-wash names never fire food traps); AEON masks→12 carve-out | `0.990` | Deterministic disambiguations (medical masks→06, pet food→09…) |
-| **6** | **Keyword STRONG** | `silver.coicop_keywords` rows with `priority < 300`, ordered ascending | `0.950` | High-precision blocks (cosmetics 200, alcohol 210, furnishings 230, clothing 240, health 250, recreation 260, transport 270, telecom/hotel fallbacks, education 290) + exception rows (seasoning→01 @100, bbq-sauce→01 @103, measuring-cup→05 @104, hot-pot-base→01 @105, phones→09 @108, food guards @110, dermo-brands→12 @120) |
-| **7** | **Category map** | `silver.coicop_category_map` (store native category → division) | `0.900` | Retailer taxonomy beats fuzzy text; ranked above weak keywords because scrapers often collapse unrelated shelves into generic categories |
-| **8** | **Keyword WEAK + store defaults** | seed rows `priority ≥ 300` (trimmed food vocabulary — bare `milk/egg/bun/roll/sugar/salt/sauce/snack/chips` tokens removed so true unknowns surface), then `coicop_store_defaults.csv` | `0.950` / `0.800` | Last automatic resort |
-| **9** | **Unclassified fallback** | unmatched rows | `0.000` | `'UNCLASSIFIED'` / `'REVIEW'` → routed to Gemini task & labeling queue |
-
-### Rules-as-data maintenance:
-Keyword rules live in `dbt/seeds/coicop_keywords.csv`
-(`division, match_column, match_regex, and_regex, negate_regex, exclude_stores,
-include_stores, priority, note`). Ascending priority = evaluated first;
-blank columns are no-ops. Edit a row → `dbt seed --select coicop_keywords` →
-next daily run self-heals affected items. The model joins this table generically
-(NULL-safe on every optional column).
+| **1** | **Human authority overrides** | `coicop_override.csv` seed + `silver.coicop_override_manual` table | `1.000` | Human authority; overrides all automated signals |
+| **2** | **Store purity pinning** | Domain invariants in SQL | `0.850` | pharmacies→06, khmer24→04, hotels→11, transit/fuel→07, telecom→08 |
+| **3** | **Gemini AI memoization cache** | `silver.dim_coicop_ai_cache` pre-warmed via batched Google Gemini Flash | AI score | High-accuracy automated semantic classification ($O(1)$ SQL lookup) |
+| **4** | **Store category map & fallback** | `silver.coicop_category_map` / store default mapping | `0.900` / `0.000` | Native retailer taxonomy fallback; unmatched routed to `silver.classification_queue` |
 
 ---
 
@@ -256,32 +239,26 @@ Gemini responds with strict JSON adherence:
 
 ---
 
-## 7. Stage 6: Human-in-the-Loop Triage Dashboard
+## 7. Automated AI Cache & Resilient Fallback
 
 ### Implementation Files:
-- [`apps/labeling_app.py`](file:///D:/CPI%20PIPELINE/apps/labeling_app.py)
+- [`pipeline/gemini_coicop_classifier.py`](file:///D:/CPI%20PIPELINE/pipeline/gemini_coicop_classifier.py)
+- [`scripts/warm_coicop_ai_cache.py`](file:///D:/CPI%20PIPELINE/scripts/warm_coicop_ai_cache.py)
 
 ### Workflow:
-1. **Review Dashboard**: Analysts access a Streamlit web application showing all items in `silver.classification_queue` where `status = 'PENDING'` or confidence is low.
-2. **Context Inspection**: The UI displays raw scraped title, store slug, price in KHR, native store category, and Gemini's suggested code and explanation.
-3. **Action**:
-   - **One-Click Accept**: Confirms Gemini's recommendation.
-   - **Manual Reclassification**: Selects the true COICOP division (01–12) from a dropdown.
-4. **Persistence**: Saves the decision into `silver.coicop_override_manual`
-   (migration `010_manual_override_table.sql`). This table is *not* wiped by
-   `dbt seed` — unlike the CSV-owned `silver.coicop_override` — so analyst
-   decisions survive every re-seed. In the dbt ladder these rows act as
-   Tier-1 exact/per-store overrides (or Tier-4 when untagged).
+1. **Automated Batch Sweeps**: Gemini AI processes unclassified products in high-density structured JSON mode (50 items/batch).
+2. **Context Inspection**: The prompt supplies product name, store context, and official UN COICOP 2018 taxonomy guidelines.
+3. **Deterministic Memoization**: High-confidence classifications are immediately upserted into `silver.dim_coicop_ai_cache`.
+4. **Persistence & Serving**: Future pipeline runs match cached canonical product names in $O(1)$ time, eliminating repeated API costs and ensuring 100% automated execution without human bottleneck.
 
 ---
 
 ## 8. Stage 7: Fact Table & Gold CPI Aggregation
 
 ### Implementation Files:
-- [`dbt/models/silver/fct_daily_prices.sql`](file:///D:/CPI%20PIPELINE/dbt/models/silver/fct_daily_prices.sql)
-- [`dbt/models/silver/dim_items.sql`](file:///D:/CPI%20PIPELINE/dbt/models/silver/dim_items.sql)
-- [`sql/gold_procedures.sql`](file:///D:/CPI%20PIPELINE/sql/gold_procedures.sql) (or dbt Gold models `base_prices`, `fct_daily_price_stats`, `cpi_category_daily`, `cpi_headline_daily`)
-- [`pipeline/geks_calculator.py`](file:///D:/CPI%20PIPELINE/pipeline/geks_calculator.py)
+- [`dbt/models/gold/fct_daily_prices.sql`](file:///D:/CPI%20PIPELINE/dbt/models/gold/fct_daily_prices.sql)
+- [`dbt/models/gold/dim_items.sql`](file:///D:/CPI%20PIPELINE/dbt/models/gold/dim_items.sql)
+- [`dbt/models/gold/dim_stores.sql`](file:///D:/CPI%20PIPELINE/dbt/models/gold/dim_stores.sql)
 - Seed: [`dbt/seeds/category_weights.csv`](file:///D:/CPI%20PIPELINE/dbt/seeds/category_weights.csv)
 
 ### Index Calculation Hierarchy:

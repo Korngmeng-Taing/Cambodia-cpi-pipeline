@@ -1,5 +1,9 @@
 # Cambodia Daily CPI Pipeline — Metabase BI Dashboard Suite Blueprint
 
+> **[!WARNING]**
+> **IMPLEMENTATION STATUS (2026-08):** The Gold-layer index computation described in parts of this document - Jevons elementary aggregates, imputation, Laspeyres category/headline roll-ups, GEKS-Tornqvist, Fisher Ideal - is **planned but NOT implemented yet**. Its calculators, dbt models, and gold tables were removed from the codebase.
+> Currently live: Bronze ingestion; Silver cleaning / item matching / AI classification / hedonic adjustment; Gold star schema (dim_items, dim_stores, fct_daily_prices); monitoring views. See README "Implementation Status".
+
 This document details the architecture, visual design, mathematical formulas, and SQL definitions of the **Metabase BI Dashboard Suite** for the Cambodia Daily Consumer Price Index (CPI) Medallion Pipeline.
 
 The dashboard suite is hosted live on **Metabase (Port 3000)** connected to the **PostgreSQL 16 Data Warehouse (`cpi_db`)**.
@@ -324,7 +328,7 @@ SELECT
     j.n_quotes AS "Quotes Count",
     j.n_stores AS "Store Count"
 FROM gold.fct_daily_price_stats j
-LEFT JOIN silver.dim_items m ON m.item_id = j.item_id
+LEFT JOIN gold.dim_items m ON m.item_id = j.item_id
 LEFT JOIN gold.base_prices b ON b.product_key = j.item_id
 WHERE j.scrape_date = (SELECT MAX(scrape_date) FROM gold.fct_daily_price_stats)
 ORDER BY j.coicop_division ASC, j.p_khr_jevons DESC
@@ -562,8 +566,8 @@ SELECT
     coicop_method AS "Classification Ladder Tier",
     COUNT(*) AS "Items Classified",
     ROUND(COUNT(*)::NUMERIC / SUM(COUNT(*)) OVER () * 100.0, 1) AS "Share (%)"
-FROM silver.fct_daily_prices
-WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.fct_daily_prices)
+FROM silver.clean_store_prices
+WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
   AND coicop_method IS NOT NULL
 GROUP BY coicop_method
 ORDER BY "Items Classified" DESC;

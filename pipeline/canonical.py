@@ -120,6 +120,23 @@ def _normalize_category(cat: Any) -> str:
     return str(cat).strip() or "General"
 
 
+def _to_bool(val: Any, default: bool = False) -> bool:
+    """Robustly converts boolean, int, and string truthy/falsy values to bool."""
+    if val is None:
+        return default
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)):
+        return val != 0
+    if isinstance(val, str):
+        v = val.strip().lower()
+        if v in ("true", "1", "yes", "t", "y"):
+            return True
+        if v in ("false", "0", "no", "f", "n", "none", "null", ""):
+            return False
+    return bool(val)
+
+
 def normalize_record(
     raw: dict[str, Any],
     *,
@@ -141,6 +158,9 @@ def normalize_record(
         raise ValueError(f"normalize_record expects a dict, got {type(raw).__name__}")
 
     slug = _first(raw.get("source_slug"), raw.get("store_slug"), source_slug)
+    if not slug:
+        raise ValueError("Canonical record missing required source_slug")
+
     stype = _first(raw.get("source_type"), source_type, "web")
     store_name = _first(raw.get("store"), raw.get("store_name"), store) or slug
     ds = _first(raw.get("scrape_date"), raw.get("scraped_date"), scrape_date)
@@ -160,20 +180,25 @@ def normalize_record(
         raw.get("item_id"), raw.get("product_id"), raw.get("sku"), raw.get("id")
     )
     if item_id is None:
-        # Stable content-derived ID. Python's hash() is salted per process
-        # (PYTHONHASHSEED), which made IDs differ between runs and collide
-        # unnamed items onto one value; sha1 of the resolved name is stable.
-        item_id = f"{slug}_{hashlib.sha1(name.encode('utf-8')).hexdigest()[:12]}"
+        item_id = f"{slug}_{hashlib.sha1(str(name).encode('utf-8')).hexdigest()[:12]}"
 
+    raw_curr = _first(raw.get("currency"), currency)
+    curr = str(raw_curr).strip().upper() if raw_curr else None
+
+    # Handle price_khr explicit fields or price/sale_price
     price = _as_float(
         _first(raw.get("price"), raw.get("sale_price"), raw.get("price_khr"))
     )
-    if price is None:
+    if price is None or price <= 0:
         raise ValueError(
-            f"Canonical record for '{slug}' ('{name}') missing a numeric price"
+            f"Canonical record for '{slug}' ('{name}') missing valid positive price: {price}"
         )
-    if not (MIN_PRICE <= price <= MAX_PRICE):
+    if price > MAX_PRICE:
         raise ValueError(f"Price bound violation for '{slug}' ('{name}'): {price}")
+
+    if curr is None:
+        # Default currency inference
+        curr = "KHR" if (raw.get("price_khr") is not None or price > 2000.0) else "USD"
 
     orig_price = _as_float(
         _first(
@@ -183,18 +208,16 @@ def normalize_record(
             raw.get("compare_at_price"),
         )
     )
-    if orig_price is None:
+    if orig_price is None or orig_price <= 0:
         orig_price = price
     orig_price = max(orig_price, price)
 
     on_promo_raw = raw.get("on_promo")
     if on_promo_raw is None:
-        # Source didn't state promo status: infer from the price gap.
         on_promo = orig_price > price
     else:
-        # Honor the source's explicit flag (previously an explicit False was
-        # discarded and a promo/discount fabricated whenever orig > price).
-        on_promo = bool(on_promo_raw)
+        on_promo = _to_bool(on_promo_raw)
+
     discount_pct = (
         round(((orig_price - price) / orig_price) * 100.0, 2)
         if orig_price > 0 and on_promo
@@ -231,13 +254,11 @@ def normalize_record(
     rating = _as_float(raw.get("rating")) or 0.0
     attrs = raw.get("attrs") if isinstance(raw.get("attrs"), dict) else {}
 
-    is_fallback = bool(_first(raw.get("is_fallback"), is_fallback))
+    is_fallback = _to_bool(_first(raw.get("is_fallback"), is_fallback))
     fallback_reason = raw.get("fallback_reason")
     if not is_fallback:
         fallback_reason = None
     elif fallback_reason is None or not str(fallback_reason).strip():
-        # Every fallback row must carry an operator-visible reason; scrapers
-        # that don't state one get the generic baseline tag.
         fallback_reason = DEFAULT_FALLBACK_REASON
 
     return {
@@ -245,8 +266,8 @@ def normalize_record(
         "source_slug": str(slug),
         "source_type": str(stype),
         "store": str(store_name),
-        "currency": str(_first(raw.get("currency"), currency) or "USD"),
-        "cpi_eligible": bool(_first(raw.get("cpi_eligible"), True)),
+        "currency": str(curr),
+        "cpi_eligible": _to_bool(_first(raw.get("cpi_eligible"), True), default=True),
         "item_id": str(item_id),
         "barcode": str(barcode) if barcode is not None else None,
         "name": str(name),

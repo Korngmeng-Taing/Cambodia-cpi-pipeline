@@ -75,10 +75,9 @@ Response format: Strict JSON array, e.g.:
 
 
 def get_engine():
-    conn_str = os.getenv(
-        "CPI_DATABASE_URL",
-        "postgresql://cpi_user:cpi_pass@localhost:5432/cpi_db",
-    )
+    from pipeline.config import get_database_url
+
+    conn_str = get_database_url()
     if "localhost" in conn_str and os.path.exists("/.dockerenv"):
         conn_str = conn_str.replace("localhost", "postgres")
     return create_engine(conn_str)

@@ -5,8 +5,9 @@ cpi:
       type: postgres
       host: "{{ env_var('DB_HOST', 'postgres') }}"
       port: 5432
-      user: "{{ env_var('DB_USER', 'cpi_user') }}"
-      password: "{{ env_var('DB_PASS', 'cpi_pass') }}"
+      user: "{{ env_var('DB_USER') }}"
+      # No default: dbt fails fast with a clear error when DB_PASS is unset.
+      password: "{{ env_var('DB_PASS') }}"
       dbname: "{{ env_var('DB_NAME', 'cpi_db') }}"
       schema: "{{ env_var('DB_SCHEMA', 'public') }}"
       threads: 4

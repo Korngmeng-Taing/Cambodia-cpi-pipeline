@@ -1,5 +1,9 @@
 # Gold Layer Implementation Plan: Cambodia CPI Pipeline
 
+> **[!WARNING]**
+> **IMPLEMENTATION STATUS (2026-08):** The Gold-layer index computation described in parts of this document - Jevons elementary aggregates, imputation, Laspeyres category/headline roll-ups, GEKS-Tornqvist, Fisher Ideal - is **planned but NOT implemented yet**. Its calculators, dbt models, and gold tables were removed from the codebase.
+> Currently live: Bronze ingestion; Silver cleaning / item matching / AI classification / hedonic adjustment; Gold star schema (dim_items, dim_stores, fct_daily_prices); monitoring views. See README "Implementation Status".
+
 **Document Version:** 1.0.0  
 **Target Architecture:** Medallion Architecture (PostgreSQL 16 + dbt + Apache Airflow + Python Econometrics)  
 **Upstream Prerequisite:** `silver.fct_jevons_daily` (Pure Elementary Unweighted Geometric Mean Prices)  

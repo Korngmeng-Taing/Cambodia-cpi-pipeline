@@ -47,7 +47,6 @@ RUN pip install --no-cache-dir \
     pytest>=8.0.0 \
     pytest-asyncio>=0.23.0 \
     httpx>=0.27.0 \
-    streamlit>=1.32.0 \
     google-generativeai>=0.4.0 \
     boto3>=1.34.0 \
     pyarrow>=15.0.0 \

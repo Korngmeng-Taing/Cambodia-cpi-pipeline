@@ -73,51 +73,10 @@ parsed as (
             then round((raw.original_price_curr - raw.price_original_curr) / raw.original_price_curr * 100.0, 2)
             else null
         end as raw_discount_pct,
-        -- Text cleaning: Khmer-aware expansion + uppercase + strip HTML entities + strip promo words + strip prices + collapse whitespace
-        upper(
-            regexp_replace(
-                regexp_replace(
-                    regexp_replace(
-                        regexp_replace(
-                            regexp_replace(
-                                regexp_replace(
-                                    regexp_replace(
-                                        regexp_replace(
-                                            regexp_replace(
-                                            -- Khmer digits are translated BEFORE price
-                                            -- stripping so prices written in Khmer
-                                            -- numerals (e.g. ៛៥០០០) actually match the
-                                            -- [0-9] strip pattern instead of leaking
-                                            -- into name_clean.
-                                            regexp_replace(
-                                                regexp_replace(
-                                                    translate(
-                                                        regexp_replace(raw.name_raw, '&amp;|&#39;|&lt;|&gt;|&quot;', ' ', 'g'),
-                                                        '០១២៣៤៥៦៧៨៩', '0123456789'
-                                                    ),
-                                                    '[$\u17DB]?\s*\d{1,3}(?:[,.\s]\d{3})*(?:[.,]\d{1,2})?\s*(?:KHR|USD|RIEL|\$)?', ' ', 'g'
-                                                ),
-                                                '\b(SALE|PROMO|PROMOTION|DISCOUNT|CLEARANCE|HOT\s*DEAL|BEST\s*SELLER|NEW\s*ARRIVAL|LIMITED|SPECIAL\s*OFFER|FLASH\s*SALE|FREE\s*SHIPPING|BUNDLE)\b', ' ', 'gi'
-                                            ),
-                                                'សាំង', 'GASOLINE', 'g'
-                                            ),
-                                            'ស្រា', 'BEER', 'g'
-                                        ),
-                                        'អង្ករ', 'RICE', 'g'
-                                    ),
-                                    'ត្រី', 'FISH', 'g'
-                                ),
-                                'ទឹក', 'WATER', 'g'
-                            ),
-                            'មាន់', 'CHICKEN', 'g'
-                        ),
-                        'ជ្រូក', 'PORK', 'g'
-                    ),
-                    'គោ', 'BEEF', 'g'
-                ),
-                '\s+', ' ', 'g'
-            )
-        ) as name_clean
+        -- C2 fix: cleaned name preserves package sizes (e.g. "330ml", "500g").
+        -- Logic mirrors `pipeline/text_clean.py:clean_name_for_matching()` via
+        -- the `clean_product_name` macro so Python + dbt stay in lockstep.
+        {{ clean_product_name('raw.name_raw') }} as name_clean
     from raw
     left join exchange er on er.execution_date = raw.scrape_date
 ),

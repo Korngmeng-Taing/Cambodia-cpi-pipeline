@@ -1,69 +1,66 @@
-# Silver Layer Design — Relational Tables for CPI
+# Silver Layer Design — Store-Level Cleaned Tables for CPI
 
-**Status:** ✅ Active — Conformed Medallion Star Schema in PostgreSQL 16 (`cpi_db`)  
-**Schema:** `silver.*` (Curated Core) + `staging.*` (Intermediate Transformations & Raw) + dbt Models
+> **[!WARNING]**
+> **IMPLEMENTATION STATUS (2026-08):** The Gold-layer index computation described in parts of this document - Jevons elementary aggregates, imputation, Laspeyres category/headline roll-ups, GEKS-Tornqvist, Fisher Ideal - is **planned but NOT implemented yet**. Its calculators, dbt models, and gold tables were removed from the codebase.
+> Currently live: Bronze ingestion; Silver cleaning / item matching / AI classification / hedonic adjustment; Gold star schema (dim_items, dim_stores, fct_daily_prices); monitoring views. See README "Implementation Status".
+
+**Status:** ✅ Active — 1 Store 1 Table Cleaned Model in PostgreSQL 16 (`cpi_db`)  
+**Schema:** `silver.*` (Clean Store Tables & System Control) + `staging.*` (Intermediate Transformations) + `gold.*` (Conformed Star Schema & Marts)
 
 ![Silver Layer Pipeline Architecture](./silver_layer_diagram.jpg)
-
 
 ---
 
 ## 1. Core Architectural Principle
 
-The Silver layer is structured into three clean tiers to prevent table clutter in downstream BI (Metabase) while preserving full auditability and modularity:
+The Medallion architecture strictly separates store-level observation data hygiene (Silver) from conformed multidimensional star schema analytics (Gold):
+- **Silver Layer (1 Store 1 Table / Clean Store Prices):** Preserves source grain and isolation. Scraped prices are parsed, currency-converted to KHR, promo-clamped, outlier-tagged, unit-standardized, and classified into standardized per-store / unified store observation tables (`silver.clean_store_prices`).
+- **Gold Layer (Conformed Star Schema & Marts):** Houses the conformed dimensional model (`gold.dim_items`, `gold.dim_stores`, `gold.fct_daily_prices`, `gold.fct_daily_prices_imputed`, `gold.fct_jevons_daily`) and downstream CPI index calculation engines.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                             SILVER ARCHITECTURE                             │
 ├───────────────────────────────┬─────────────────────────────────────────────┤
-│ 1. SYSTEM & OPERATIONAL       │ 2. CURATED SERVING CORE (Metabase-Facing)   │
-│    (Audit & Control Tables)   │    (Conformed Kimball Dimensional Model)    │
+│ 1. SYSTEM & OPERATIONAL       │ 2. CLEAN STORE-LEVEL PRICE TABLES           │
+│    (Audit & Control Tables)   │    (1 Store 1 Table / Clean Store Quotes)   │
 ├───────────────────────────────┼─────────────────────────────────────────────┤
-│ • silver.canonical_items      │ ──► silver.dim_items (Canonical products)   │
-│ • silver.item_match_log       │ ──► silver.dim_stores (Store metadata)      │
-│ • silver.dim_coicop_ai_cache  │ ──► silver.fct_daily_prices (Daily quotes)  │
-│ • silver.needs_review         │ ──► silver.fct_daily_prices_imputed         │
-│ • silver.classification_queue │                                             │
+│ • silver.canonical_items      │ ──► silver.clean_store_prices               │
+│ • silver.item_match_log       │     (Per-store clean quotes & observations) │
+│ • silver.dim_coicop_ai_cache  │                                             │
+│ • silver.classification_queue │ ──► Feeds Gold Star Schema (gold.*)         │
 ├───────────────────────────────┴─────────────────────────────────────────────┤
 │ 3. INTERMEDIATE TRANSFORMATIONS (Built in staging schema)                    │
 │ • staging.int_prices_cleaned (USD->KHR, promo clamping, unit standardization)│
-|  - staging.int_coicop_classified (9-tier daily-scoped COICOP ladder: purity + rules-as-data + gated AI cache)  |
+│ • staging.int_coicop_classified (4-tier AI-first COICOP classification ladder)│
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Curated Serving Core (The True Silver)
+## 2. Silver Layer Clean Price Tables (1 Store 1 Table)
 
-These are the primary conformed models exposed for analytics and Metabase reporting:
+### `silver.clean_store_prices`
+Unified and store-partitioned clean daily store price observations table:
+- Preserves raw observation granularity (`raw_price_id`, `store_slug`, `scrape_date`, `item_id`).
+- Standardized KHR pricing via official daily MEF exchange rates.
+- Promotion indicators (`discount_pct`, `on_promo`), standardized package units (`size_value`, `size_unit`, `unit_price_khr`), and quality flags (`is_outlier`, `cpi_eligible`).
+- Assigned COICOP division (`coicop_division`, `coicop_code`, `coicop_method`, `coicop_confidence`).
 
-### `silver.dim_items`
-Unified canonical item master dimension (one row per `item_id`):
-- `canonical_name`, `brand`, `barcode`, `size_norm`, `native_category`.
-- `coicop_division` resolved from classification ladder.
-- `unit_of_measure`, `store_count`, `avg_match_confidence`, lifecycle timestamps (`first_seen`, `last_seen`, `is_active`).
+---
 
-### `silver.dim_stores`
-Unified retailer & source dimension (one row per `store_slug`):
-- `store_name`, `source_type`, `channel`, `default_currency`, `default_coicop_division`.
-- `total_observations`, `distinct_products_count`, `first_scraped_at`, `last_scraped_at`.
+## 3. Gold Layer: Conformed Star Schema (Downstream)
 
-### `silver.fct_daily_prices`
-Primary daily price fact table (grain: `scrape_date`, `store_slug`, `item_id`):
-- Cleaned and classified price quote (`price_khr`, `unit_price_khr`).
-- Promotion indicators (`discount_pct`, `on_promo`), standardized units (`size_value`, `size_unit`), and quality flags (`is_outlier`, `cpi_eligible`).
-
-### `silver.fct_daily_prices_imputed`
-Daily fact view with $\le 7$-day forward price carry for temporarily missing products.
-
-### `silver.fct_jevons_daily`
-Elementary Jevons aggregation: Unweighted geometric mean prices across stores ($P_{\text{Jevons}}$) per `item_id`, standardized geometric unit prices, quote counts, and store density metrics.
+The star schema is materialized in the **Gold layer** (`gold.*`) for business intelligence, econometric models, and downstream index aggregation:
+- `gold.dim_items`: Canonical product master dimension across all retailers.
+- `gold.dim_stores`: Curated store dimension for Cambodian retailers and utility providers.
+- `gold.fct_daily_prices`: Conformed daily price fact table at `(scrape_date, store_slug, item_id)` grain.
+- *(Planned / Deferred)*: CPI calculation marts (Jevons elementary indices, headline Laspeyres index).
 
 ---
 
 ## 3. System & Operational Tables
 
-These tables manage entity matching, AI memoization, and human-in-the-loop review queues:
+These tables manage entity matching, AI memoization, and automated AI classification caches:
 
 ### `silver.canonical_items`
 Deterministic UUID canonical identity master maintained automatically by `pipeline/item_matcher.py`. Unmatched items ($\text{score} < 0.95$) automatically create new canonical items.

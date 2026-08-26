@@ -102,14 +102,14 @@
 \end{equation}
 
 \section{Phase 4: Interactive Dashboard Development and Deployment}
-\subsection{Metabase Executive BI Dashboard (:3000)}
-\hs Provides real-time headline CPI gauges, day-on-day and year-on-year inflation trajectories, 12 division drill-downs, top rising/falling goods, and ingestion data quality monitoring.
+\subsection{Metabase Executive BI \& Scraper Observability Dashboard (:3000)}
+\hs Provides real-time headline CPI gauges, day-on-day and year-on-year inflation trajectories, 12 division drill-downs, top rising/falling goods, 20-source scraper health matrix, and automated data quality monitoring.
 
-\subsection{Streamlit Human-in-the-Loop and ML Forecasting UI (:8501)}
-\hs Allows analysts to interactively select forecasting horizons (7, 30, 90 days), compare model predictions with confidence bands, and triage low-confidence COICOP classifications.
+\subsection{Power BI Inflation Analytics and Reporting}
+\hs Connects to the Gold data marts to provide interactive inflation drill-downs, COICOP division contribution analysis, and executive econometric reports.
 
 \subsection{Containerized Production Deployment}
-\hs The complete ecosystem is containerized using Docker Compose encompassing PostgreSQL 16, Apache Airflow, Metabase, Streamlit, and local Ollama inference.
+\hs The complete ecosystem is containerized using Docker Compose encompassing PostgreSQL 16 (Medallion Star-Schema), Apache Airflow (Workflow Orchestration), dbt Core (Transformation), and Metabase (Business Intelligence).
 
 \section{Project Activity Schedule and Milestone Roadmap}
 \begin{table}[H]

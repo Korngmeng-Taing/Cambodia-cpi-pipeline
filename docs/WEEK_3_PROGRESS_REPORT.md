@@ -1,4 +1,8 @@
 # Week 3 Progress Report
+
+> **[!WARNING]**
+> **IMPLEMENTATION STATUS (2026-08):** The Gold-layer index computation described in parts of this document - Jevons elementary aggregates, imputation, Laspeyres category/headline roll-ups, GEKS-Tornqvist, Fisher Ideal - is **planned but NOT implemented yet**. Its calculators, dbt models, and gold tables were removed from the codebase.
+> Currently live: Bronze ingestion; Silver cleaning / item matching / AI classification / hedonic adjustment; Gold star schema (dim_items, dim_stores, fct_daily_prices); monitoring views. See README "Implementation Status".
 # Automated Price Collection for CPI and Inflation Estimation
 
 **Project:** Cambodia National Consumer Price Index (CPI) Pipeline  
@@ -47,12 +51,13 @@ flowchart TD
         B3 -- "Regex Ladder" --> C3["Word-Boundaried Rule Ladder (Div 12 -> 02 -> ... -> 01)"]
         B3 -- "Unclassified" --> C4["Gemini 1.5/2.0 Flash (Batches of 50)"]
         C4 -- "API Fail / Offline" --> C5["Ollama Local Fallback (Qwen 2.5 7B)"]
-        C4 & C5 -- "Low Confidence" --> C6["Human Triage UI (apps/labeling_app.py)"]
-        C1 & C2 & C3 & C4 & C5 & C6 --> B4[("Conformed Silver Layer\n• silver.dim_items (Master Catalog)\n• silver.dim_stores (20 Outlets)\n• silver.fct_daily_prices (Clean Quotes)")]
+        C4 & C5 --> C6["Automated AI Cache (silver.dim_coicop_ai_cache)"]
+        C1 & C2 & C3 & C4 & C5 & C6 --> B4[("Conformed Silver Layer\n• silver.clean_store_prices (Clean Quotes)\n• silver.canonical_items (Canonical Items)\n• silver.item_match_log (Audit Trail)")]
     end
 
-    subgraph S3["3. Econometric Engine (Gold)"]
-        B4 --> D1["Stage 1: Elementary Jevons Index\n(gold.fct_daily_price_stats / Geometric Mean Item Relatives)"]
+    subgraph S3["3. Econometric Engine & Star Schema (Gold)"]
+        B4 --> D0[("Gold Star Schema\n• gold.dim_items (Master Dimensions)\n• gold.dim_stores (20 Outlets)\n• gold.fct_daily_prices (Daily Fact)")]
+        D0 --> D1["Stage 1: Elementary Jevons Index\n(gold.fct_daily_price_stats / Geometric Mean Item Relatives)"]
         D1 --> D2["Stage 2: Higher-Level Laspeyres Aggregation\n(gold.cpi_headline_daily / 100.000% NIS Weights)"]
         D1 --> D3["Multilateral GEKS-Törnqvist Index\n(gold.cpi_geks_multilateral / 13-Period Rolling Window)"]
     end
@@ -160,15 +165,18 @@ erDiagram
 
 ### Table Definitions:
 
-1. **Bronze Layer (`bronze.raw_prices`)**:
+1. **Bronze Layer (`bronze.raw_prices`, `staging.raw_scrapes`)**:
    - Raw, immutable append-only storage capturing original HTML strings, raw prices, currency symbols, and unstructured metadata.
-2. **Silver Layer (Conformed Star Schema)**:
-   - `silver.dim_items`: Canonical product master catalog with standardized names, brands, package sizes, and COICOP classifications.
-   - `silver.dim_stores`: Dimension metadata for all 20 outlets including channel type and default division defaults.
-   - `silver.fct_daily_prices`: Clean daily price quotes converted to KHR via daily MEF official exchange rates, unit prices (KHR/kg or KHR/L), and discount normalization.
+2. **Silver Layer (Clean Observations & Canonical Catalog)**:
+   - `silver.clean_store_prices`: Standardized daily price quotes converted to KHR via daily MEF official exchange rates, unit prices (KHR/kg or KHR/L), and discount normalization.
+   - `silver.canonical_items`: Canonical product master catalog with standardized names, brands, package sizes, and automated RapidFuzz entity resolution.
+   - `silver.item_match_log`: Audit trail for all match decisions.
    - `silver.dim_coicop_ai_cache`: Permanent memoization table storing AI classifications to eliminate duplicate API cost.
    - `silver.classification_queue`: Triage queue for unclassified products or items with confidence scores $< 0.50$.
-3. **Gold Layer (Econometric Indices)**:
+3. **Gold Layer (Conformed Star Schema & Econometric Indices)**:
+   - `gold.dim_items`: Curated canonical item dimension across all stores.
+   - `gold.dim_stores`: Curated store dimension metadata for all 20 outlets.
+   - `gold.fct_daily_prices`: Essential daily price fact table.
    - `gold.fct_daily_price_stats`: Elementary item-level Jevons geometric mean prices across stores.
    - `gold.cpi_category_daily`: Daily index for each of the 12 COICOP divisions.
    - `gold.cpi_headline_daily`: National headline CPI aggregated across all 12 divisions using Cambodia National Institute of Statistics (NIS) 2004 expenditure weights summing to $100.000\%$.
@@ -187,7 +195,7 @@ Tier 1: Domain-Specific Source Assignment (e.g., Khmer24 -> 04, RedBus -> 07, MO
               └── Tier 4: Word-Boundaried Regex Keyword Ladder (Div 12 -> 02 -> ... -> 01) [Conf = 0.90]
                     └── Tier 5: Cloud LLM Classifier (Gemini 1.5/2.0 Flash in Batches of 50)
                           └── Tier 6: Local Offline LLM Fallback (Ollama Qwen 2.5 7B)
-                                └── Tier 7: Human Review Queue (Streamlit Labeling App)
+                                └── Tier 7: Automated Gemini AI Classification & Cache
 ```
 
 ### Keyword Ladder Precedence:

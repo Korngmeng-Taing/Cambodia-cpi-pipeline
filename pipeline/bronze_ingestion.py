@@ -1,12 +1,12 @@
 """
 pipeline/bronze_ingestion.py
-────────────────────────────
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 Bronze ingestion entrypoint used by the per-source Airflow scraper DAGs.
 
-Flow (adheres to SCRAPER_METHODOLOGY_GUIDE.md §1 & §3):
-    fetch_records ─► canonical.normalize_records (Schema v1.0)
-      ─► zero-product quality gate ─► DQ validate
-      ─► PostgreSQL staging.raw_scrapes + bronze.raw_prices
+Flow (adheres to SCRAPER_METHODOLOGY_GUIDE.md Â§1 & Â§3):
+    fetch_records â”€â–º canonical.normalize_records (Schema v1.0)
+      â”€â–º zero-product quality gate â”€â–º DQ validate
+      â”€â–º PostgreSQL staging.raw_scrapes + bronze.raw_prices
 
 The MEF USD/KHR exchange rate is routed separately to staging.exchange_rates.
 """
@@ -23,28 +23,15 @@ import pendulum
 import psycopg2
 
 from pipeline.bronze_scraper import BronzeScraper
+from pipeline.config import DEFAULT_USD_KHR_RATE, get_db_connection
 from pipeline.canonical import normalize_records, validate_records
 from scrapers.sources import SCRAPER_REGISTRY
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_USD_KHR_RATE = float(os.getenv("DEFAULT_USD_KHR_RATE", "4044"))
 
-
-def _get_db_connection():
-    conn_str = os.getenv(
-        "CPI_DATABASE_URL",
-        "postgresql://cpi_user:cpi_pass@postgres:5432/cpi_db",
-    )
-    conn_str = conn_str.replace("postgresql+psycopg2://", "postgresql://")
-    try:
-        return psycopg2.connect(conn_str)
-    except psycopg2.OperationalError:
-        if "postgres" in conn_str:
-            alt = conn_str.replace("postgres:5432", "localhost:5432")
-        else:
-            alt = conn_str.replace("localhost:5432", "postgres:5432")
-        return psycopg2.connect(alt)
+# Canonical credential resolver (no embedded defaults) — see pipeline/config.py.
+_get_db_connection = get_db_connection
 
 
 def _ingest_fx(
@@ -56,9 +43,11 @@ def _ingest_fx(
 ) -> dict[str, Any]:
     """Persists the MEF USD/KHR rate + raw snapshot (no product rows)."""
     rate: float | None = None
+    is_fallback = False
     for rec in raw_records:
         if isinstance(rec, dict) and rec.get("rate") is not None:
             rate = float(rec["rate"])
+            is_fallback = bool(rec.get("is_fallback", False))
             break
     if rate is None or rate <= 0:
         raise ValueError(f"Invalid MEF FX rate for {scrape_date}: {rate!r}")
@@ -82,38 +71,50 @@ def _ingest_fx(
             rate=rate,
             conn=conn,
             execution_date=scrape_date,
-            source="official",
+            source="fallback" if is_fallback else "official",
             raw_payload=raw_records,
-            is_stale=False,
+            is_stale=is_fallback,
         )
-    return {"source_slug": source_slug, "records": 1, "fx_rate": rate}
+    _record_fallback_stats(conn, source_slug, scrape_date, raw_records)
+    return {"source_slug": source_slug, "records": 1, "fx_rate": rate, "is_fallback": is_fallback}
 
 
 def _record_fallback_stats(
     conn, source_slug: str, scrape_date: str, records: list[dict[str, Any]]
 ) -> None:
     """Persists per-batch fallback counts to staging.fallback_alerts so
-    baseline-only scrapes are observable and alertable (Risk 3). Never raises:
-    observability must not break ingestion."""
+    baseline-only scrapes are observable and alertable (Risk 3).
+    Guarded by a SAVEPOINT: database errors must never poison the transaction."""
     total = len(records)
     fallback = sum(1 for r in records if r.get("is_fallback"))
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO staging.fallback_alerts
-                    (scrape_date, store_slug, fallback_rows, total_rows)
-                VALUES (%s::DATE, %s, %s, %s)
-                ON CONFLICT (scrape_date, store_slug) DO UPDATE
-                SET fallback_rows = EXCLUDED.fallback_rows,
-                    total_rows = EXCLUDED.total_rows,
-                    created_at = NOW();
-                """,
-                (scrape_date, source_slug, fallback, total),
-            )
+            cur.execute("SAVEPOINT fallback_stats_sp")
+            try:
+                cur.execute(
+                    """
+                    INSERT INTO staging.fallback_alerts
+                        (scrape_date, store_slug, fallback_rows, total_rows)
+                    VALUES (%s::DATE, %s, %s, %s)
+                    ON CONFLICT (scrape_date, store_slug) DO UPDATE
+                    SET fallback_rows = EXCLUDED.fallback_rows,
+                        total_rows = EXCLUDED.total_rows,
+                        created_at = NOW();
+                    """,
+                    (scrape_date, source_slug, fallback, total),
+                )
+                cur.execute("RELEASE SAVEPOINT fallback_stats_sp")
+            except Exception as exc:
+                cur.execute("ROLLBACK TO SAVEPOINT fallback_stats_sp")
+                logger.warning(
+                    "Could not record fallback stats for %s on %s: %s",
+                    source_slug,
+                    scrape_date,
+                    exc,
+                )
     except Exception as exc:
         logger.warning(
-            "Could not record fallback stats for %s on %s: %s",
+            "Could not manage savepoint for fallback stats for %s on %s: %s",
             source_slug,
             scrape_date,
             exc,
@@ -123,8 +124,8 @@ def _record_fallback_stats(
 def ingest_source_bronze(source_slug: str, scrape_date: str) -> dict[str, Any]:
     """
     Full Bronze ingestion for a single source:
-        fetch → normalize (Schema v1.0) → zero-product gate → DQ validate
-        → MinIO raw snapshot → Parquet archive → PostgreSQL staging/bronze
+        fetch â†’ normalize (Schema v1.0) â†’ zero-product gate â†’ DQ validate
+        â†’ MinIO raw snapshot â†’ Parquet archive â†’ PostgreSQL staging/bronze
     """
     scraper_cls = SCRAPER_REGISTRY.get(source_slug)
     if not scraper_cls:
@@ -136,7 +137,7 @@ def ingest_source_bronze(source_slug: str, scrape_date: str) -> dict[str, Any]:
     )
     raw_records = scraper_cls().fetch_records(scrape_date=parsed_date)
     if not raw_records:
-        # Zero-Product Quality Gate (guide §1.5): raise before any DB write.
+        # Zero-Product Quality Gate (guide Â§1.5): raise before any DB write.
         raise ValueError(
             f"Zero-product quality gate: source '{source_slug}' returned 0 records on {date_str}"
         )

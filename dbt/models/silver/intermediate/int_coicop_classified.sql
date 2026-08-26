@@ -189,29 +189,121 @@ select
         'UNCLASSIFIED'
     ) as coicop_division,
     coalesce(
-        f.ov_exact_div,
+        case
+            when f.ai_div is not null and coalesce(f.ai_conf, 0.90) >= 0.50 then
+                case
+                    when f.ai_code is not null and f.ai_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then f.ai_code
+                    when f.ai_div = '01' then '01.1.1'
+                    when f.ai_div = '02' then '02.1.1'
+                    when f.ai_div = '03' then '03.1.2'
+                    when f.ai_div = '04' then '04.1.1'
+                    when f.ai_div = '05' then '05.1.1'
+                    when f.ai_div = '06' then '06.1.1'
+                    when f.ai_div = '07' then '07.2.2'
+                    when f.ai_div = '08' then '08.2.0'
+                    when f.ai_div = '09' then '09.1.1'
+                    when f.ai_div = '10' then '10.4.1'
+                    when f.ai_div = '11' then '11.1.1'
+                    when f.ai_div = '12' then '12.1.1'
+                end
+        end,
         case
             when f.purity_division is not null then
                 case f.purity_division
                     when '06' then '06.1.2'
                     when '04' then '04.1.1'
-                    when '11' then '11.2.0'
-                    when '07' then case when f.store_slug in ('bookmebus', 'redbus', 'redmebus') then '07.1.2' else '07.2.2' end
-                    when '08' then '08.2.0'
+                    when '11' then case when f.store_slug = 'bayonbkk' then '11.1.1' else '11.2.0' end
+                    when '07' then case when f.store_slug in ('bookmebus', 'redbus', 'redmebus') then '07.3.1' else '07.2.2' end
+                    when '08' then case when f.store_slug in ('arystore', 'samnangshop') then '08.2.0' else '08.3.0' end
                 end
         end,
-        f.ov_global_div,
         case
-            when f.ai_div is not null and coalesce(f.ai_conf, 0.90) >= 0.50 then f.ai_code
+            when f.ov_exact_div is not null then
+                case
+                    when f.ov_exact_div ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then f.ov_exact_div
+                    when f.ov_exact_div = '01' then '01.1.1'
+                    when f.ov_exact_div = '02' then '02.1.1'
+                    when f.ov_exact_div = '03' then '03.1.2'
+                    when f.ov_exact_div = '04' then '04.1.1'
+                    when f.ov_exact_div = '05' then '05.1.1'
+                    when f.ov_exact_div = '06' then '06.1.1'
+                    when f.ov_exact_div = '07' then '07.2.2'
+                    when f.ov_exact_div = '08' then '08.2.0'
+                    when f.ov_exact_div = '09' then '09.1.1'
+                    when f.ov_exact_div = '10' then '10.4.1'
+                    when f.ov_exact_div = '11' then '11.1.1'
+                    when f.ov_exact_div = '12' then '12.1.1'
+                    else '01.1.1'
+                end
         end,
-        f.cat_map_div,
+        case
+            when f.ov_global_div is not null then
+                case
+                    when f.ov_global_div ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then f.ov_global_div
+                    when f.ov_global_div = '01' then '01.1.1'
+                    when f.ov_global_div = '02' then '02.1.1'
+                    when f.ov_global_div = '03' then '03.1.2'
+                    when f.ov_global_div = '04' then '04.1.1'
+                    when f.ov_global_div = '05' then '05.1.1'
+                    when f.ov_global_div = '06' then '06.1.1'
+                    when f.ov_global_div = '07' then '07.2.2'
+                    when f.ov_global_div = '08' then '08.2.0'
+                    when f.ov_global_div = '09' then '09.1.1'
+                    when f.ov_global_div = '10' then '10.4.1'
+                    when f.ov_global_div = '11' then '11.1.1'
+                    when f.ov_global_div = '12' then '12.1.1'
+                    else '01.1.1'
+                end
+        end,
+        case
+            when f.cat_map_div is not null then
+                case
+                    when f.cat_map_div ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then f.cat_map_div
+                    when f.cat_map_div = '01' then '01.1.1'
+                    when f.cat_map_div = '02' then '02.1.1'
+                    when f.cat_map_div = '03' then '03.1.2'
+                    when f.cat_map_div = '04' then '04.1.1'
+                    when f.cat_map_div = '05' then '05.1.1'
+                    when f.cat_map_div = '06' then '06.1.1'
+                    when f.cat_map_div = '07' then '07.2.2'
+                    when f.cat_map_div = '08' then '08.2.0'
+                    when f.cat_map_div = '09' then '09.5.4'
+                    when f.cat_map_div = '10' then '10.4.1'
+                    when f.cat_map_div = '11' then '11.1.1'
+                    when f.cat_map_div = '12' then '12.1.1'
+                    else '01.1.1'
+                end
+        end,
         case when f.store_slug in ('khmer24', 'realestate') then '04.1.1' end,
         case when f.store_slug in ('communitypharma') then '06.1.2' end,
-        case when f.store_slug in ('sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk') then '11.2.0' end,
-        case when f.store_slug in ('bookmebus', 'redbus', 'redmebus') then '07.1.2' end,
+        case when f.store_slug in ('sokhahotel', 'hyyathotel', 'hyatt') then '11.2.0' end,
+        case when f.store_slug in ('bayonbkk') then '11.1.1' end,
+        case when f.store_slug in ('bookmebus', 'redbus', 'redmebus') then '07.3.1' end,
         case when f.store_slug in ('new_gasoline') then '07.2.2' end,
-        case when f.store_slug in ('cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then '08.2.0' end,
-        f.store_default_div,
+        case when f.store_slug in ('cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then '08.3.0' end,
+        case when f.store_slug in ('arystore', 'samnangshop') then '08.2.0' end,
+        case when f.store_slug in ('delishop', 'aeon') then '01.1.1' end,
+        case when f.store_slug in ('aeon3') then '03.1.2' end,
+        case when f.store_slug in ('l192') then '05.1.1' end,
+        case
+            when f.store_default_div is not null then
+                case
+                    when f.store_default_div ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then f.store_default_div
+                    when f.store_default_div = '01' then '01.1.1'
+                    when f.store_default_div = '02' then '02.1.1'
+                    when f.store_default_div = '03' then '03.1.2'
+                    when f.store_default_div = '04' then '04.1.1'
+                    when f.store_default_div = '05' then '05.1.1'
+                    when f.store_default_div = '06' then '06.1.1'
+                    when f.store_default_div = '07' then '07.2.2'
+                    when f.store_default_div = '08' then '08.2.0'
+                    when f.store_default_div = '09' then '09.1.1'
+                    when f.store_default_div = '10' then '10.4.1'
+                    when f.store_default_div = '11' then '11.1.1'
+                    when f.store_default_div = '12' then '12.1.1'
+                    else '01.1.1'
+                end
+        end,
         'UNCLASSIFIED'
     ) as coicop_code,
     case

@@ -1,5 +1,9 @@
 # Cambodia National Consumer Price Index (CPI) Pipeline Architecture
 
+> **[!WARNING]**
+> **IMPLEMENTATION STATUS (2026-08):** The Gold-layer index computation described in parts of this document - Jevons elementary aggregates, imputation, Laspeyres category/headline roll-ups, GEKS-Tornqvist, Fisher Ideal - is **planned but NOT implemented yet**. Its calculators, dbt models, and gold tables were removed from the codebase.
+> Currently live: Bronze ingestion; Silver cleaning / item matching / AI classification / hedonic adjustment; Gold star schema (dim_items, dim_stores, fct_daily_prices); monitoring views. See README "Implementation Status".
+
 ![Cambodia National Consumer Price Index (CPI) Simple Architecture](./cpi_simple_architecture.jpg)
 
 ![Cambodia CPI Tech Stack Overview](./cpi_tech_stack.jpg)
@@ -23,22 +27,27 @@ The pipeline executes daily across 5 interconnected layers:
 - **Bronze Raw Price Observations (`bronze.raw_prices`):** Typed raw price observations (~35,000 listings/day).
 - **dbt Staging Views (`stg_raw_scrapes`):** Unpacks JSONB into structured columns with zero-product quality gates.
 
-### 3. Silver Layer: Clean Core & Intelligence
+### 3. Silver Layer: Store-Level Cleaned Tables (1 Store 1 Table)
 - **Python RapidFuzz Entity Matching:** Deduplicates products across stores into canonical UUID5 identities (`silver.canonical_items`, `silver.item_match_log`).
 - **dbt Price Cleaning & Unit Standardization:** Converts USD $\to$ KHR via MEF rates, clamps discounts ($0\%$–$95\%$), standardizes unit prices (`KHR/kg`, `KHR/L`), and flags outliers.
 - **Gemini AI COICOP Classifier:** Streamlined 4-tier daily-scoped division ladder (Exact/per-store overrides $\to$ Store domain purity $\to$ Global overrides $\to$ High-throughput Gemini AI memoized cache in `silver.dim_coicop_ai_cache` $\to$ Native category map / Fallback queue). Over 99% of daily products resolve from cache in 0ms with >98% semantic accuracy.
 - **Hedonic Quality Adjustments:** Constant-specification regression (`silver.hedonic_adjusted_prices`) holding RAM/Storage constant for Division 09/08 consumer electronics.
-- **Conformed Star Schema & Analytical Views:**
-  - `silver.dim_items` (Master product catalog)
-  - `silver.dim_stores` (20 Cambodian retailers/sources)
-  - `silver.fct_daily_prices` (Clean daily price observations)
-  - `silver.hedonic_adjusted_prices` (Constant-specification quality adjusted prices)
-  - `silver.fct_jevons_daily` (Elementary Jevons store-unweighted geometric mean prices $P_{\text{Jevons}}$)
+- **Clean Store Observations & Operational Tables (1 Store 1 Table Paradigm):**
+  - `silver.clean_store_prices` (Standardized daily price quotes partitioned per store and source)
+  - `silver.canonical_items` (Canonical identity registry)
+  - `silver.item_match_log` (Automated item matching audit log)
+  - `silver.dim_coicop_ai_cache` (Persistent classification cache)
   - `silver.classification_queue` (Active triage queue for unclassified products)
 
-### 4. Gold Layer: Econometric Engine & 12 Division Tables
+### 4. Gold Layer: Conformed Star Schema & Econometric Engine
+- **Conformed Dimensional Star Schema:**
+  - `gold.dim_items` (Master canonical product dimension)
+  - `gold.dim_stores` (Conformed retailer and provider dimension)
+  - `gold.fct_daily_prices` (Conformed daily price facts at `(scrape_date, store_slug, item_id)` grain)
+  - `gold.fct_daily_prices_imputed` (Imputed price facts with forward carry $\le 7$ days)
+  - `gold.fct_jevons_daily` (Elementary Jevons unweighted geometric mean price facts $P_{\text{Jevons}}$)
 - **Strict 2-Stage Sequence (Jevons $\to$ Laspeyres):**
-  1. **Stage 1 (Elementary Jevons & Imputation):** Unweighted geometric mean price per canonical item across all stores (`gold.fct_daily_price_stats`). Missing products ($\le 7$ days) receive **Class-Mean Imputation** (ILO standard) based on division geometric movement.
+  1. **Stage 1 (Elementary Jevons & Imputation):** Unweighted geometric mean price per canonical item across all stores (`gold.fct_jevons_daily`). Missing products receive **Class-Mean Imputation** (ILO standard).
   2. **Stage 2 (Higher-Level Laspeyres):** Category and headline weighted roll-up using official Cambodia NIS 2004 expenditure weights (`gold.cpi_category_daily`, `gold.cpi_headline_daily`) with dynamic $100.000\%$ reweighting.
 - **12 Dedicated Division Analytical Tables:**
   - `gold.cpi_div01_food` through `gold.cpi_div12_misc` exposing full item-level price trends, base indices, and metrics per division.
@@ -49,17 +58,17 @@ The pipeline executes daily across 5 interconnected layers:
 
 ### 5. Serving & BI
 - **Metabase Executive Dashboards (:3000):** Visual charts for headline CPI, 12 COICOP division indices, inflation curves, top movers, and promo depth.
-- **Streamlit Human Review UI (:8501):** Human-in-the-loop triage for low-confidence matches and review queues.
+- **Metabase Analytics & BI (:3000):** Real-time operational monitoring, 20-source scraper health matrix, and analytical dashboards.
 
-### 6. Airflow 2.9.3 Master Orchestration Flow
+### 6. Airflow Master Orchestration Flow
 ```
 start_cpi_pipeline
   ──► [20 Scraper DAGs in Parallel]
   ──► bronze_layer_complete (Barrier Gate)
-  ──► trigger_silver_dag (Item Matching + dbt Silver)
+  ──► verify_bronze_minimum_success (Data Quality Gate)
+  ──► trigger_silver_dag (Item Matching + AI Cache Pre-Warm + Hedonic + dbt Silver)
   ──► silver_layer_complete (Barrier Gate)
-  ──► trigger_coicop_classification_dag (Gemini AI Classification)
-  ──► coicop_layer_complete (Barrier Gate)
-  ──► trigger_gold_dag (sp_calculate_daily_cpi + dbt Gold Models & DQ Tests)
+  ──► trigger_gold_dag (dbt Gold Models & DQ Tests + Serving Views)
+  ──► gold_layer_complete
   ──► cpi_pipeline_success
 ```

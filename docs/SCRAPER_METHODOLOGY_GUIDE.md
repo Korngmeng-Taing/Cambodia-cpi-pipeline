@@ -1,5 +1,9 @@
 # CPI Pipeline — Scraper Methodology & Source Guide
 
+> **[!WARNING]**
+> **IMPLEMENTATION STATUS (2026-08):** The Gold-layer index computation described in parts of this document - Jevons elementary aggregates, imputation, Laspeyres category/headline roll-ups, GEKS-Tornqvist, Fisher Ideal - is **planned but NOT implemented yet**. Its calculators, dbt models, and gold tables were removed from the codebase.
+> Currently live: Bronze ingestion; Silver cleaning / item matching / AI classification / hedonic adjustment; Gold star schema (dim_items, dim_stores, fct_daily_prices); monitoring views. See README "Implementation Status".
+
 **Author:** CPI Engineering & Methodology Team
 **Architecture:** Pure Structured Medallion Architecture — PostgreSQL 16 + Airflow + dbt (`D:\CPI PIPELINE`)
 **Medallion Layers:** Bronze (`bronze.raw_prices`, `staging.exchange_rates`) ──► Silver (`silver.*` + dbt) ──► Gold (`gold.*`)

@@ -1,12 +1,15 @@
 """
 tests/test_dbt_connection.py
-────────────────────────────
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 Integration test verifying PostgreSQL connection and Bronze/Silver/Gold schemas.
 """
+
+from __future__ import annotations
 
 import os
 
 import psycopg2
+import pytest
 
 
 def test_postgres_connection_and_schemas():
@@ -16,20 +19,22 @@ def test_postgres_connection_and_schemas():
         conn = psycopg2.connect(
             host=host,
             port=int(os.getenv("DB_PORT", "5432")),
-            user=os.getenv("DB_USER", "cpi_user"),
-            password=os.getenv("DB_PASS", "cpi_pass"),
+            user=os.getenv("DB_USER", ""),
+            password=os.getenv("DB_PASS", ""),
             dbname=os.getenv("DB_NAME", "cpi_db"),
         )
     except psycopg2.OperationalError:
-        # Fallback to postgres if localhost fails (or vice versa)
-        alt_host = "postgres" if host == "localhost" else "localhost"
-        conn = psycopg2.connect(
-            host=alt_host,
-            port=int(os.getenv("DB_PORT", "5432")),
-            user=os.getenv("DB_USER", "cpi_user"),
-            password=os.getenv("DB_PASS", "cpi_pass"),
-            dbname=os.getenv("DB_NAME", "cpi_db"),
-        )
+        try:
+            alt_host = "postgres" if host == "localhost" else "localhost"
+            conn = psycopg2.connect(
+                host=alt_host,
+                port=int(os.getenv("DB_PORT", "5432")),
+                user=os.getenv("DB_USER", ""),
+                password=os.getenv("DB_PASS", ""),
+                dbname=os.getenv("DB_NAME", "cpi_db"),
+            )
+        except psycopg2.OperationalError as e:
+            pytest.skip(f"Postgres database not reachable: {e}")
 
     with conn.cursor() as cur:
         # Verify required medallion schemas exist

@@ -8,6 +8,7 @@ import psycopg2
 from psycopg2.extras import execute_batch
 from rapidfuzz import fuzz
 
+from pipeline.config import get_database_url
 from pipeline.text_clean import clean_name_for_matching
 
 log = logging.getLogger(__name__)
@@ -23,10 +24,7 @@ class ItemMatcher:
         psycopg2.extras.register_uuid()
         self.auto_accept_threshold = auto_accept_threshold
         self.review_threshold = review_threshold
-        self.db_conn_str = db_conn_str or os.getenv(
-            "CPI_DATABASE_URL",
-            "postgresql://cpi_user:cpi_pass@localhost:5432/cpi_db",
-        )
+        self.db_conn_str = db_conn_str or get_database_url()
         self.barcode_cache: dict[str, uuid.UUID] = {}
         self.exact_name_cache: dict[str, uuid.UUID] = {}
         self.sku_cache: dict[tuple[str, str], uuid.UUID] = {}
@@ -64,11 +62,19 @@ class ItemMatcher:
             # SKU cache: process_batch() only consults the in-memory cache, so
             # without this preload every pre-existing SKU was invisible to the
             # batch path and fell through to fuzzy/new_item matching.
-            cur.execute(
-                "SELECT source_name, raw_item_id, canonical_item_id FROM silver.dim_canonical_products WHERE source_name IS NOT NULL AND raw_item_id IS NOT NULL"
-            )
-            for source_name, raw_item_id, canonical_item_id in cur.fetchall():
-                self.sku_cache[(source_name, raw_item_id.strip())] = canonical_item_id
+            try:
+                cur.execute("SAVEPOINT load_sku_cache_sp")
+                cur.execute(
+                    "SELECT source_name, raw_item_id, canonical_item_id FROM silver.dim_canonical_products WHERE source_name IS NOT NULL AND raw_item_id IS NOT NULL"
+                )
+                for source_name, raw_item_id, canonical_item_id in cur.fetchall():
+                    self.sku_cache[(source_name, raw_item_id.strip())] = canonical_item_id
+                cur.execute("RELEASE SAVEPOINT load_sku_cache_sp")
+            except Exception:
+                try:
+                    cur.execute("ROLLBACK TO SAVEPOINT load_sku_cache_sp")
+                except Exception:
+                    pass
 
     def process_unmatched_batch(
         self,
@@ -116,14 +122,19 @@ class ItemMatcher:
         if conn is not None:
             try:
                 with conn.cursor() as cur:
-                    cur.execute(
-                        "SELECT canonical_item_id FROM silver.dim_canonical_products WHERE source_name = %s AND raw_item_id = %s",
-                        (store_id, sku_clean),
-                    )
-                    res = cur.fetchone()
-                    if res:
-                        self.sku_cache[key] = res[0]
-                        return res[0], 1.0
+                    cur.execute("SAVEPOINT match_sku_sp")
+                    try:
+                        cur.execute(
+                            "SELECT canonical_item_id FROM silver.dim_canonical_products WHERE source_name = %s AND raw_item_id = %s",
+                            (store_id, sku_clean),
+                        )
+                        res = cur.fetchone()
+                        cur.execute("RELEASE SAVEPOINT match_sku_sp")
+                        if res:
+                            self.sku_cache[key] = res[0]
+                            return res[0], 1.0
+                    except Exception:
+                        cur.execute("ROLLBACK TO SAVEPOINT match_sku_sp")
             except Exception:
                 pass
         return None
@@ -294,6 +305,17 @@ class ItemMatcher:
                 self._log_match(raw_price_id, item_id, "fuzzy_text", conf, actual_conn)
                 stats["matched_fuzzy"] += 1
                 return stats
+            elif conf >= self.review_threshold:
+                self._send_to_review(
+                    raw_price_id,
+                    item_description_raw,
+                    item_id,
+                    matched_name,
+                    conf,
+                    actual_conn,
+                )
+                stats["sent_to_review"] += 1
+                return stats
 
         # 4. Create new canonical item for all unmatched items
         item_id = self.create_canonical_item(
@@ -419,6 +441,12 @@ class ItemMatcher:
                     match_logs.append((raw_price_id, str(item_id), "fuzzy_text", conf))
                     totals["matched_fuzzy"] += 1
                     continue
+                elif conf >= self.review_threshold:
+                    reviews.append(
+                        (raw_price_id, desc, str(item_id), matched_name, conf)
+                    )
+                    totals["sent_to_review"] += 1
+                    continue
 
             # 5. Create new canonical item (all other unmatched items)
             new_id = uuid.uuid4()
@@ -458,7 +486,7 @@ class ItemMatcher:
                     INSERT INTO silver.dim_canonical_products
                         (canonical_item_id, canonical_name, source_name, raw_item_id)
                     VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (canonical_item_id) DO NOTHING
+                    ON CONFLICT (source_name, raw_item_id) DO NOTHING
                     """,
                     sku_registrations,
                     page_size=1000,

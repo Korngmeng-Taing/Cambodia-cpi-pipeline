@@ -9,15 +9,17 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW_DATABASE_URL:-postgresql+psycopg2://airflow:airflow@postgres:5432/airflow}
     AIRFLOW__DATABASE__SQL_ALCHEMY_POOL_PRE_PING: "true"
-    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:-YlCImzjge_TeZc7jPJ7Jz2pgFJlFKMGFB7DkzCpjwBc=}
-    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY:-cpi_pipeline_airflow_secret_key_2026_secure}
+    # Cryptographic secrets are REQUIRED — no committed fallbacks.
+    # Generate a Fernet key with:  python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:?Set AIRFLOW__CORE__FERNET_KEY in .env}
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY:?Set AIRFLOW__WEBSERVER__SECRET_KEY in .env}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-    AIRFLOW__CORE__PARALLELISM: "8"
-    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "6"
+    AIRFLOW__CORE__PARALLELISM: "32"
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "24"
     AIRFLOW__WEBSERVER__WORKERS: "2"
     AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
-    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
     PYTHONPATH: /opt/airflow:/opt/airflow/dags
     
     # CPI Application Database Connection
@@ -26,14 +28,14 @@ x-airflow-common: &airflow-common
     POSTGRES_PORT: 5432
     CPI_DB_NAME: cpi_db
     CPI_DB_USER: cpi_user
-    CPI_DB_PASSWORD: cpi_pass
+    CPI_DB_PASSWORD: ${CPI_DB_PASSWORD:-cpi_pass}
 
     # dbt Environment Variables
     DB_HOST: postgres
     DB_PORT: "5432"
     DB_NAME: cpi_db
     DB_USER: cpi_user
-    DB_PASS: cpi_pass
+    DB_PASS: ${DB_PASS:-cpi_pass}
     DBT_PROFILES_DIR: /opt/airflow/dbt
 
     # Pipeline Constants & Tokens
@@ -56,7 +58,6 @@ x-airflow-common: &airflow-common
     - ./tests:/opt/airflow/tests
     - ./scripts:/opt/airflow/scripts
     - ./dbt:/opt/airflow/dbt
-    - ./models:/opt/airflow/models
   depends_on:
     postgres:
       condition: service_healthy
@@ -74,7 +75,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
     ports:
-      - "5432:5432"
+      # Loopback-only by default; expose LAN via .env if ever needed.
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d
@@ -99,7 +101,7 @@ services:
     command: >
       -c "
         airflow db migrate &&
-        airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@cpi.local || true
+        airflow users create --username '${AIRFLOW_ADMIN_USER:?Set AIRFLOW_ADMIN_USER in .env}' --password '${AIRFLOW_ADMIN_PASSWORD:?Set a strong AIRFLOW_ADMIN_PASSWORD in .env}' --firstname Admin --lastname User --role Admin --email admin@cpi.local || true
       "
     restart: "no"
 
@@ -136,6 +138,12 @@ services:
     depends_on:
       airflow-init:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   # ── dbt CLI Service ──────────────────────────────────────────────────────────
   dbt:
@@ -154,13 +162,13 @@ services:
     container_name: metabase
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:${METABASE_PORT:-3000}:3000"
     environment:
       MB_DB_TYPE: postgres
       MB_DB_DBNAME: metabase
       MB_DB_PORT: 5432
       MB_DB_USER: metabase
-      MB_DB_PASS: metabase
+      MB_DB_PASS: ${MB_DB_PASS:-metabase}
       MB_DB_HOST: postgres
     depends_on:
       postgres:

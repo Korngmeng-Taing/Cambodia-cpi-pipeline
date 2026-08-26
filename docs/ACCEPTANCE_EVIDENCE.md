@@ -1,5 +1,9 @@
 # Cambodia CPI Pipeline — Acceptance Evidence & Verification Matrix
 
+> **[!WARNING]**
+> **IMPLEMENTATION STATUS (2026-08):** The Gold-layer index computation described in parts of this document - Jevons elementary aggregates, imputation, Laspeyres category/headline roll-ups, GEKS-Tornqvist, Fisher Ideal - is **planned but NOT implemented yet**. Its calculators, dbt models, and gold tables were removed from the codebase.
+> Currently live: Bronze ingestion; Silver cleaning / item matching / AI classification / hedonic adjustment; Gold star schema (dim_items, dim_stores, fct_daily_prices); monitoring views. See README "Implementation Status".
+
 This document verifies the implementation against the design specifications and methodology requirements.
 
 ---
@@ -16,17 +20,17 @@ This document verifies the implementation against the design specifications and 
 | **Scraper Sources & Registry** | Bronze §2 | `pytest tests/test_sources.py tests/test_scrapers.py` | ✅ PASS (29/29) | 20 sources in `SCRAPER_REGISTRY` with native category extraction and fallbacks. |
 | **Hybrid Gemini AI Classification** | Silver §3 | `pytest tests/test_gemini_coicop_classifier.py` | ✅ PASS (9/9) | Memoized `dim_coicop_ai_cache` + structured JSON mode + review queue resolution. |
 | **Hedonic Quality Adjustment** | Silver §3 | `pytest tests/test_hedonic_regression.py` | ✅ PASS (5/5) | Specs extraction (RAM/Storage) + OLS quality-adjusted price computation. |
-| **GEKS-Törnqvist Multilateral** | Methodology §5 | `pytest tests/test_geks_calculator.py` | ✅ PASS (4/4) | Bilateral Törnqvist + transitive 13-period GEKS; transitivity/circularity verified. |
-| **Elementary Jevons & Laspeyres Indices** | Methodology §3 & §4 | `pytest tests/test_cpi_indices.py` | ✅ PASS (5/5) | Jevons geometric mean properties, 100% weight sum, and all 12 Gold division tables verified. |
-| **Full Python Test Suite** | All components | `pytest tests/ -v` | ✅ PASS (100/100) | Unit and integration test suite across all pipeline services, scrapers, and math engines, incl. `test_pipeline_contracts.py` (6 regression guards on headline reweighting, unit-price-aware Jevons, base-price freeze, GEKS wiring, observed-only inflation). |
-| **dbt Silver Data Quality** | dbt models & tests | `dbt run --select silver && dbt test --select silver` | ✅ PASS (46/46 tests) | 100% classification coverage, `test_price_sanity`, `test_unit_math`, `test_traps`, `test_coicop_coverage`, `test_idempotency`. All 46 gates green after UUID type alignment in `int_coicop_classified` and composite grain deduplication in `fct_daily_prices` (2026-08-21). |
-| **dbt Gold Data Quality & 12 Divisions** | dbt models & tests | `dbt run --select gold && dbt test --select gold` | ✅ PASS (17 models) | not_null / uniqueness / `> 0` / accepted-values gates on Gold models and 12 COICOP division tables. |
+| **GEKS-Törnqvist Multilateral** | Methodology §5 | *n/a* | ⚠️ **NOT IMPLEMENTED** | Calculator and test file (`pipeline/geks_calculator.py`, `tests/test_geks_calculator.py`) removed from codebase until the index layer is built. |
+| **Elementary Jevons & Laspeyres Indices** | Methodology §3 & §4 | `pytest tests/test_cpi_indices.py` | ✅ PASS (3/3) | COICOP weight-sum invariant, Jevons formula math properties, and Gold star-schema integration checks. Index aggregation itself **not implemented yet**. |
+| **Full Python Test Suite** | All components | `pytest tests/ -v` | ✅ PASS (104/104) | Unit and integration suite across pipeline services, scrapers, hedonic regression, and item matcher. |
+| **dbt Silver Data Quality** | dbt models & tests | `dbt run --select silver && dbt test --select silver` | ✅ PASS (29/29 tests) | 100% classification coverage, `test_price_sanity`, `test_unit_math`, `test_traps`, `test_coicop_coverage`, `test_size_preserved_in_name`, `test_coicop_code_format`. All 29 gates green against `silver.clean_store_prices`. |
+| **dbt Gold Data Quality** | dbt models & tests | `dbt run --select gold && dbt test --select gold` | ✅ PASS (3 models) | not_null / uniqueness / accepted-values gates on `dim_items`, `dim_stores`, `fct_daily_prices`. Division/mart models pending index layer. |
 | **Official COICOP Weights** | Methodology §4.2 | `SELECT SUM(weight_pct) FROM gold.coicop_weights;` | ✅ PASS | Exactly 100.000% across 12 divisions (`category_weights` seed). |
-| **Laspeyres Headline CPI** | Methodology §4 | `SELECT * FROM gold.cpi_headline_daily ORDER BY scrape_date DESC LIMIT 1;` | ✅ PASS | `index_value = Σ index_value × (weight / Σ weight_present)` (renormalised over present divisions), `formula='Laspeyres'`. Guarded by `test_headline_formula_is_reweighted_over_present` (2026-08-20 fix). |
-| **12 Dedicated Division Views** | Gold §4 | `SELECT count(*) FROM gold.cpi_div01_food ...` | ✅ PASS (12/12) | Individual tables populated across all 12 COICOP divisions with clean item-level tracking. |
-| **GEKS Output Table** | Methodology §5 | `SELECT * FROM gold.cpi_geks_multilateral ORDER BY scrape_date DESC LIMIT 1;` | ✅ PASS | 13-period transitive index persisted with `matched_items_count`. Wired into `gold_dag` (`geks_multilateral_calc`) 2026-08-20; daily rolling GEKS persisted, monthly GEKS best-effort. |
-| **Metabase BI Integration** | Serving | HTTP GET `http://localhost:3000` | ✅ PASS | Connected to `gold.v_cpi_latest`, `gold.v_inflation`, `gold.v_inflation_observed`, `gold.v_top_movers`, and 12 division tables. |
-| **Human Labeling App** | Ops | `streamlit run apps/labeling_app.py` | ✅ PASS | Interactive triage of `silver.classification_queue` into overrides and category maps. |
+| **Laspeyres Headline CPI** | Methodology §4 | *n/a* | ⚠️ **NOT IMPLEMENTED** | `gold.cpi_headline_daily` and its roll-up logic removed until the index layer is built. |
+| **12 Dedicated Division Views** | Gold §4 | *n/a* | ⚠️ **NOT IMPLEMENTED** | Per-division tables/views removed; division attribution currently lives on `gold.fct_daily_prices.coicop_division`. |
+| **GEKS Output Table** | Methodology §5 | *n/a* | ⚠️ **NOT IMPLEMENTED** | `gold.cpi_geks_multilateral` DDL removed (migration `005_gold_geks.sql` deleted). |
+| **Metabase BI Integration** | Serving | HTTP GET `http://localhost:3000` | ✅ PASS | Connected to monitoring views in `sql/views.sql`: `gold.v_coverage`, `gold.v_monitor_scraper_daily`, `gold.v_monitor_source_health_matrix`, `gold.v_monitor_price_alerts`, `gold.v_monitor_fx_health`. Index dashboards pending index layer. |
+| **Automated AI Classifier** | Ops | `pipeline/gemini_coicop_classifier.py` | ✅ PASS | End-to-end automated Gemini AI COICOP classification & cache warming. |
 
 ---
 

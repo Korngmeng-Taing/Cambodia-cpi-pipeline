@@ -8,9 +8,8 @@ CREATE TEMP TABLE tmp_fct_daily_prices_backup AS
 SELECT * FROM silver.fct_daily_prices;
 
 -- 2. Drop dependent views temporarily
---    (fct_daily_prices_imputed and gold.v_coverage are recreated below /
---     by the silver DAG's dbt run; v_promo_impact never existed upstream)
-DROP VIEW IF EXISTS silver.fct_daily_prices_imputed CASCADE;
+--    (gold.v_coverage is owned by sql/views.sql — the single source of truth.
+--     It is recreated from there after this migration; see step 8.)
 DROP VIEW IF EXISTS gold.v_coverage CASCADE;
 
 -- 3. Drop existing non-partitioned table
@@ -83,46 +82,7 @@ SELECT * FROM tmp_fct_daily_prices_backup;
 
 DROP TABLE tmp_fct_daily_prices_backup;
 
--- 8. Recreate dependent views dropped in step 2.
---    NOTE: gold.v_coverage below mirrors sql/views.sql §5 — keep the two in sync.
---    It requires silver.fct_daily_prices_imputed, which the silver DAG's
---    `dbt run` rebuilds (incremental). Skip gracefully if it is absent.
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM pg_class c
-        JOIN pg_namespace n ON n.oid = c.relnamespace
-        WHERE n.nspname = 'silver'
-          AND c.relname = 'fct_daily_prices_imputed'
-          AND c.relkind IN ('r', 'p', 'v', 'm')
-    ) THEN
-        EXECUTE $sql$
-            CREATE OR REPLACE VIEW gold.v_coverage AS
-            SELECT
-                d.scrape_date,
-                d.store_slug,
-                COUNT(*) AS total_observations,
-                COUNT(DISTINCT d.product_key) AS unique_products,
-                COUNT(*) FILTER (WHERE d.coicop_division = 'REVIEW') AS review_queue_count,
-                ROUND(COUNT(*) FILTER (WHERE d.coicop_division <> 'REVIEW')::NUMERIC / NULLIF(COUNT(*), 0) * 100.0, 2) AS classification_rate_pct,
-                COUNT(*) FILTER (WHERE m.barcode IS NOT NULL) AS barcode_count,
-                ROUND(COUNT(*) FILTER (WHERE m.barcode IS NOT NULL)::NUMERIC / NULLIF(COUNT(*), 0) * 100.0, 2) AS barcode_coverage_pct,
-                COUNT(*) FILTER (WHERE d.is_outlier = TRUE) AS outlier_count,
-                COALESCE(imp.imputed_count, 0) AS imputed_count,
-                ROUND(COALESCE(imp.imputed_count, 0)::NUMERIC / NULLIF(COUNT(*), 0) * 100.0, 2) AS imputation_rate_pct
-            FROM silver.fct_daily_prices d
-            LEFT JOIN silver.dim_items m ON m.item_id::text = d.item_id
-            LEFT JOIN (
-                SELECT scrape_date, store_slug, COUNT(*) AS imputed_count
-                FROM silver.fct_daily_prices_imputed
-                WHERE is_imputed = TRUE
-                GROUP BY scrape_date, store_slug
-            ) imp ON imp.scrape_date = d.scrape_date AND imp.store_slug = d.store_slug
-            GROUP BY d.scrape_date, d.store_slug, imp.imputed_count
-            ORDER BY d.scrape_date DESC, d.store_slug
-        $sql$;
-        RAISE NOTICE 'gold.v_coverage recreated.';
-    ELSE
-        RAISE NOTICE 'Skipped gold.v_coverage: run silver DAG dbt job (or \\i sql/views.sql) to restore it.';
-    END IF;
-END $$;
+-- 8. Serving views are owned by sql/views.sql (single source of truth —
+--    built on gold.fct_daily_prices / gold.dim_items). Recreate manually
+--    after running this migration:
+--        psql -v ON_ERROR_STOP=1 -d cpi_db -f sql/views.sql

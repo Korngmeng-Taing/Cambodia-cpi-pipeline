@@ -22,6 +22,11 @@ repos:
       - id: ruff
         args: [--fix]
 
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.2
+    hooks:
+      - id: gitleaks
+
   - repo: https://github.com/tconbeer/sqlfmt
     rev: v0.21.1
     hooks:

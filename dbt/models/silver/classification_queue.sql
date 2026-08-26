@@ -1,8 +1,6 @@
 -- classification_queue
--- Appends REVIEW / UNCLASSIFIED daily-fact rows to silver.classification_queue.
--- The table is owned by sql/schema.sql (id BIGSERIAL + labeling_app contract);
--- this model only appends NEW pending rows so re-runs do not duplicate and
--- historical RESOLVED rows are never touched.
+-- Appends UNCLASSIFIED daily-fact rows to silver.classification_queue for operational tracking.
+-- This model appends NEW pending rows so re-runs do not duplicate and historical rows are preserved.
 {{ config(
     materialized='incremental',
     strategy='append',
@@ -21,8 +19,9 @@ with candidates as (
         end as reason,
         'PENDING'::varchar(32) as status,
         now() as created_at
-    from {{ ref('fct_daily_prices') }} p
+    from {{ ref('clean_store_prices') }} p
     where p.coicop_division in ('REVIEW', 'UNCLASSIFIED')
+      and p.item_id is not null
     group by p.item_id::text, p.store_slug, p.coicop_division
 )
 select

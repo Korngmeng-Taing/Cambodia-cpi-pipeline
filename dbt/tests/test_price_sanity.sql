@@ -4,7 +4,6 @@ select
     scrape_date,
     store_slug,
     item_id,
-    name_clean,
     price_khr
 from {{ ref('fct_daily_prices') }}
 where cpi_eligible = true

@@ -1,14 +1,19 @@
 """
 tests/test_cpi_indices.py
-─────────────────────────
-Unit & Integration tests for Elementary Jevons Index, Higher-Level Laspeyres
-Aggregations, and 12 Gold COICOP Division Tables.
+────────────────────────
+Tests for the Gold Star Schema (dim_items, dim_stores, fct_daily_prices),
+COICOP weight integrity, and Jevons formula math properties.
+
+NOTE: CPI index computation (Jevons aggregation, Laspeyres roll-ups, GEKS,
+Fisher) is planned but NOT implemented yet — these tests only cover the
+materialized star schema and reference-data invariants.
 """
 
 from __future__ import annotations
 
 import math
 
+import psycopg2
 import pytest
 
 from pipeline.config import COICOP_WEIGHTS, get_db_connection
@@ -28,7 +33,7 @@ def ensure_cpi_test_data():
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT count(*) FROM silver.fct_daily_prices WHERE scrape_date = %s;",
+                "SELECT count(*) FROM gold.fct_daily_prices WHERE scrape_date = %s;",
                 (test_date,),
             )
             count = cur.fetchone()[0]
@@ -38,7 +43,7 @@ def ensure_cpi_test_data():
                     item_id = f"test_item_div_{div}"
                     cur.execute(
                         """
-                        INSERT INTO silver.dim_items (item_id, canonical_name, coicop_division)
+                        INSERT INTO gold.dim_items (item_id, canonical_name, coicop_division)
                         VALUES (%s, %s, %s)
                         ON CONFLICT (item_id) DO NOTHING;
                         """,
@@ -46,23 +51,19 @@ def ensure_cpi_test_data():
                     )
                     cur.execute(
                         """
-                        INSERT INTO silver.fct_daily_prices (
-                            scrape_date, store_slug, item_id, product_key, name_clean,
-                            category_native, coicop_division, coicop_method, coicop_confidence,
-                            currency, price_original_curr, original_price_curr, original_price_khr,
-                            discount_pct, on_promo, price_khr, unit_price_khr, size_value, size_unit,
-                            pack_qty, is_outlier, cpi_eligible, is_fallback, scraped_at
+                        INSERT INTO gold.fct_daily_prices (
+                            scrape_date, store_slug, item_id, price_khr, original_price_khr,
+                            discount_pct, on_promo, unit_price_khr, size_value, size_unit,
+                            pack_qty, cpi_eligible, is_outlier, is_fallback
                         )
                         VALUES (
-                            %s, 'test_store', %s, %s, %s,
-                            'Category', %s, 'manual', 1.0,
-                            'KHR', 4000.0, 4000.0, 4000.0,
-                            0.0, FALSE, 4000.0, 4000.0, 1.0, 'kg',
-                            1, FALSE, TRUE, FALSE, NOW()
+                            %s, 'test_store', %s, 4000.0, 4000.0,
+                            0.0, FALSE, 4000.0, 1.0, 'kg',
+                            1, TRUE, FALSE, FALSE
                         )
                         ON CONFLICT (scrape_date, store_slug, item_id) DO NOTHING;
                         """,
-                        (test_date, item_id, item_id, f"Test Product Division {div}", div),
+                        (test_date, item_id),
                     )
                 conn.commit()
     except Exception:
@@ -76,8 +77,8 @@ def ensure_cpi_test_data():
         try:
             conn = get_db_connection()
             with conn.cursor() as cur:
-                cur.execute("DELETE FROM silver.fct_daily_prices WHERE store_slug = 'test_store';")
-                cur.execute("DELETE FROM silver.dim_items WHERE item_id LIKE 'test_item_div_%';")
+                cur.execute("DELETE FROM gold.fct_daily_prices WHERE store_slug = 'test_store';")
+                cur.execute("DELETE FROM gold.dim_items WHERE item_id LIKE 'test_item_div_%';")
                 conn.commit()
             conn.close()
         except Exception:
@@ -117,40 +118,43 @@ def test_jevons_math_properties():
     assert math.isclose(jevons_rel, 1.10, rel_tol=1e-5)
 
 
-def test_silver_fct_jevons_daily_structure():
-    """Verify that silver.fct_jevons_daily table contains valid Jevons calculations."""
-    conn = get_db_connection()
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT scrape_date, count(*), avg(p_khr_jevons)
-            FROM silver.fct_jevons_daily
-            WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.fct_jevons_daily)
-            GROUP BY scrape_date;
-        """
-        )
-        row = cur.fetchone()
-        assert (
-            row is not None
-        ), "No rows found in silver.fct_jevons_daily"
-        n_items, avg_price = row[1], float(row[2])
-        assert n_items >= 1, f"Expected at least 1 item, got {n_items}"
-        assert avg_price > 0, "Average Jevons price should be positive"
-    conn.close()
+def test_gold_star_schema_tables():
+    """Verify that Gold layer contains dim_items, dim_stores, and fct_daily_prices with essential columns."""
+    try:
+        conn = get_db_connection()
+    except Exception as e:
+        pytest.skip(f"Database not available: {e}")
 
+    try:
+        with conn.cursor() as cur:
+            # 1. Verify gold.dim_stores
+            cur.execute("SELECT count(*) FROM gold.dim_stores;")
+            store_count = cur.fetchone()[0]
+            assert store_count >= 1, f"Expected stores in gold.dim_stores, found {store_count}"
 
-def test_silver_jevons_coicop_divisions_covered():
-    """Verify that silver.fct_jevons_daily covers canonical items across COICOP divisions."""
-    conn = get_db_connection()
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT COUNT(DISTINCT coicop_division) 
-            FROM silver.fct_jevons_daily 
-            WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.fct_jevons_daily)
-              AND coicop_division BETWEEN '01' AND '12';
-        """
-        )
-        stats_divs = cur.fetchone()[0]
-        assert stats_divs >= 1, f"Expected at least 1 COICOP division in Jevons view, got {stats_divs}"
-    conn.close()
+            # 2. Verify gold.dim_items
+            cur.execute("SELECT count(*) FROM gold.dim_items;")
+            item_count = cur.fetchone()[0]
+            assert item_count >= 1, f"Expected items in gold.dim_items, found {item_count}"
+
+            # 3. Verify gold.fct_daily_prices structure
+            cur.execute(
+                """
+                SELECT scrape_date, count(*), avg(price_khr)
+                FROM gold.fct_daily_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM gold.fct_daily_prices)
+                GROUP BY scrape_date;
+                """
+            )
+            row = cur.fetchone()
+            assert row is not None, "No rows found in gold.fct_daily_prices"
+            n_quotes, avg_price = row[1], float(row[2])
+            assert n_quotes >= 1, f"Expected at least 1 quote, got {n_quotes}"
+            assert avg_price > 0, "Average price in gold.fct_daily_prices must be positive"
+
+            # 4. Verify unified silver.clean_store_prices
+            cur.execute("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'silver' AND table_name = 'clean_store_prices';")
+            tbl_exists = cur.fetchone()[0]
+            assert tbl_exists == 1, "silver.clean_store_prices table must exist"
+    finally:
+        conn.close()

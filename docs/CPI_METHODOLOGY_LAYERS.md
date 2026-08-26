@@ -1,7 +1,11 @@
 # CPI Methodology — Layer-by-Layer Detail
 
-**Status:** ✅ Fully Implemented (Layers 1–6 active, PostgreSQL 16 + Airflow + dbt)  
-**Date:** 2026-08-17  
+> **[!WARNING]**
+> **IMPLEMENTATION STATUS (2026-08):** The Gold-layer index computation described in parts of this document — Jevons elementary aggregates, imputation, Laspeyres category/headline roll-ups, GEKS-Tornqvist, Fisher Ideal — is **planned but NOT implemented yet**. Its calculators, dbt models, and gold tables were removed from the codebase.
+> Currently live: Bronze ingestion; Silver cleaning / item matching / AI classification / hedonic adjustment; Gold star schema (dim_items, dim_stores, fct_daily_prices); monitoring views. See README "Implementation Status".
+
+**Status:** ⚠️ Partially Implemented — Layers 1–3 live (Bronze/Silver/classification); index layers (Jevons/Laspeyres/GEKS/Fisher) **planned, not implemented**  
+**Date:** 2026-08-26  
 **Project:** Cambodia CPI Pipeline (`D:\CPI PIPELINE`)  
 **Companion docs:** `CPI_METHODOLOGY.md` (summary) · `COICOP_MAPPING.md` (classification) · `BASKET_V1_DRAFT.md` (basket)
 
@@ -25,7 +29,6 @@ Captures daily prices across 19 online sources + official MEF USD/KHR exchange r
   - `cpi_eligible = TRUE` (excludes non-goods sources like real estate and hotels).
   - `is_fallback = FALSE` (excludes static catalogue fallbacks).
   - `price_khr > 0` and `is_outlier = FALSE`.
-- Base Period fixed at `base_period = '2026-08'` (dbt var / `BASE_PERIOD` env). Base prices are bootstrapped **once and frozen** per base period: `gold.sp_ensure_base_prices` (called by `gold_dag`) skips the bootstrap once rows exist, so historical indices never shift from silent re-anchoring. Force a re-baseline manually with `gold.sp_bootstrap_base_prices`.
 
 ---
 
@@ -33,21 +36,19 @@ Captures daily prices across 19 online sources + official MEF USD/KHR exchange r
 
 ## 3.1 Item Resolution Ladder (`pipeline/item_matcher.py`)
 1. **Barcode exact**: Barcode match ($\ge 8$ digits) maps to same canonical `item_id` in `silver.canonical_items`.
-2. **SKU + Brand + Size**: Links via store-native mapping (stubbed until schema provides it).
-3. **Fuzzy Name**: RapidFuzz `token_sort_ratio >= 0.95` (auto-accept) or `0.85 <= score < 0.95` (sent to `silver.needs_review`).
-4. **New Item**: Deterministic UUID canonical item.
+2. **SKU exact**: Store-native SKU resolution maps to canonical identity via `silver.dim_canonical_products`.
+3. **Fuzzy Name**: RapidFuzz `token_sort_ratio >= 0.95` auto-accepts to existing canonical item.
+4. **New Item**: Unmatched items (<0.95) automatically generate a new deterministic UUID canonical item.
 
 Every decision is audited in `silver.item_match_log` (`raw_price_id → item_id`, `match_method`, `confidence`).
 
-## 3.2 Jevons Geometric Mean (`silver.fct_jevons_daily` & `gold.fct_daily_price_stats`)
-For each `item_id` on `scrape_date`:
-$$P_{i,t} = \exp\left( \frac{1}{N_{i,t}} \sum_{s=1}^{N_{i,t}} \ln(\text{price}_{i,s,t}) \right)$$
-- `silver.fct_jevons_daily`: Computes elementary store-unweighted geometric mean prices ($P_{\text{Jevons}}$) per canonical item directly in the Silver layer.
-- `gold.fct_daily_price_stats`: Imputes missing items forward $\le 7$ days (LOCF) and persists elementary price stats for Gold aggregation.
+## 3.2 Clean Store Prices (1 Store 1 Table Paradigm in Silver)
+- `silver.clean_store_prices`: Standardized daily price quotes partitioned per store and source. Preserves store-level quote attributes with KHR conversion, promo clamping, unit price standardization, and COICOP tagging.
 
-## 3.3 Conformed Daily Fact & Dimensions (`silver.dim_items`, `silver.fct_daily_prices`)
-- `silver.dim_items`: One row per canonical product across all stores with canonical name, brand, barcode, size, native category, and resolved COICOP division.
-- `silver.fct_daily_prices`: One row per `(scrape_date, store_slug, item_id)`; `unit_price_khr` is standardized per base metric unit (kg/L) with promo clamping and quality flags. Missing items are forward carried $\le 7$ days in `silver.fct_daily_prices_imputed`.
+## 3.3 Conformed Star Schema (`gold.*`)
+- `gold.dim_items`: Master dimension — one row per canonical product across all stores with canonical name, brand, barcode, size, native category, store coverage, and resolved COICOP division.
+- `gold.dim_stores`: Curated dimensional master of all 20 Cambodian retailers and utility sources.
+- `gold.fct_daily_prices`: Primary price fact table — one row per `(scrape_date, store_slug, item_id)`; contains essential price facts, `unit_price_khr` (kg/L), discount metrics, and quality flags.
 
 ---
 
@@ -108,9 +109,9 @@ $$P_{i,t} = \exp\left( \frac{1}{N_{i,t}} \sum_{s=1}^{N_{i,t}} \ln(\text{price}_{
 |---|---|---|---|
 | **1** | Data Source | ✅ Done | `scrapers/*` (`SCRAPER_REGISTRY`), `staging.raw_scrapes`, `staging.exchange_rates`, MinIO raw snapshots |
 | **2** | Basket / Selection | ✅ Done | Silver filters (`cpi_eligible`, `is_fallback`), `BASKET_V1_DRAFT.md` |
-| **3** | Item Identity & Jevons | ✅ Done | `pipeline/item_matcher`, `silver.item_match_log`, `silver.dim_items`, `gold.fct_daily_price_stats` |
-| **—** | COICOP Classification | ✅ Done | dbt `int_coicop_classified`, `silver.coicop_override`, `apps/labeling_app.py` |
-| **4** | Laspeyres Aggregation | ✅ Done | `gold.cpi_category_daily`, `gold.cpi_headline_daily`, `gold.category_weights` |
-| **5** | GEKS Multilateral | ✅ Done | `pipeline/geks_calculator.py`, `gold.cpi_geks_multilateral` |
-| **6** | Quality Adjustment | ✅ Done | `int_prices_cleaned` unit conversion, promo clamp, `gold.fct_price_anomalies` |
-| **Serving** | Presentation & Ops | ✅ Done | Metabase (`gold.v_*` views), Streamlit UI, `orchestration/config/*.py` |
+| **3** | Item Identity | ✅ Done | `pipeline/item_matcher`, `silver.item_match_log`, `silver.clean_store_prices`, `gold.dim_items`, `gold.fct_daily_prices` |
+| **—** | COICOP Classification | ✅ Done | dbt `int_coicop_classified`, `pipeline.gemini_coicop_classifier`, `silver.dim_coicop_ai_cache` |
+| **4** | Laspeyres Aggregation | ⚠️ Planned | `gold.cpi_category_daily`, `gold.cpi_headline_daily` — tables/models removed until implemented |
+| **5** | GEKS Multilateral | ⚠️ Planned | `pipeline/geks_calculator.py`, `gold.cpi_geks_multilateral` — removed until implemented |
+| **6** | Quality Adjustment | ⚠️ Partial | Hedonic regression live (`silver.hedonic_adjusted_prices`); anomaly mart has no writer yet |
+| **Serving** | Presentation & Ops | ✅ Partial | Metabase (`gold.v_*` monitoring views); Power BI index models pending index layer |

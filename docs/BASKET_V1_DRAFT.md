@@ -122,7 +122,7 @@
 ## 3. Database Persistence
 
 The basket is selected and processed through:
-1. `silver.canonical_items` / `silver.dim_items`: Canonical item identities resolved via EAN/Fuzzy match (`pipeline/item_matcher.py`).
-2. `silver.fct_daily_prices`: Conformed daily observations per product/store/date.
-3. `gold.base_prices`: Base period geometric mean prices fixed at `base_period = '2026-08'` (dbt model `base_prices.sql`).
-4. `gold.category_weights`: Seed table (`dbt/seeds/category_weights.csv`) summing to exactly $100.000\%$, used by `gold.cpi_category_daily` and `gold.cpi_headline_daily`.
+1. `silver.canonical_items` & `gold.dim_items`: Canonical item identities resolved via EAN/Fuzzy match (`pipeline/item_matcher.py`).
+2. `silver.clean_store_prices` / `silver.clean_<store>_prices`: Store-level cleaned daily price observations (1 store 1 table).
+3. `gold.fct_daily_prices`: Conformed daily price facts containing essential price metrics and dimension foreign keys.
+4. `gold.category_weights`: Seed table (`dbt/seeds/category_weights.csv`) summing to exactly $100.000\%$.

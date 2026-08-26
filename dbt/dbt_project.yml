@@ -28,10 +28,13 @@ models:
       +materialized: view
     silver:
       +schema: silver
-      +materialized: view
+      +materialized: incremental
       intermediate:
         +schema: staging
         +materialized: view
+    gold:
+      +schema: gold
+      +materialized: table
 
 seeds:
   cpi:

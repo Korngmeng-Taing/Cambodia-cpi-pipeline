@@ -3,12 +3,25 @@ pipeline/config.py
 ──────────────────
 Configuration constants, database connection helpers, and official COICOP
 weights for the Cambodia CPI Medallion Pipeline.
+
+Credential resolution order (no embedded defaults — see .env.example):
+  1. ``CPI_DATABASE_URL``            full DSN, highest priority
+  2. ``DB_USER``/``DB_PASS``/...     individual parts (as set by docker-compose)
+  3. otherwise raise RuntimeError    fail fast instead of using known creds
 """
 
 from __future__ import annotations
 
 import os
 from typing import Any
+from urllib.parse import quote_plus, urlsplit, urlunsplit
+
+try:  # Optional convenience: pick up the project .env for local runs.
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:  # pragma: no cover
+    pass
 
 import psycopg2
 
@@ -37,21 +50,64 @@ COICOP_WEIGHTS: dict[str, dict[str, Any]] = {
 }
 
 
+def get_database_url() -> str:
+    """
+    Resolve the CPI database DSN (psycopg2 scheme) without any embedded
+    credential default. Raises RuntimeError with remediation hints when
+    nothing is configured so misconfiguration fails loudly and early.
+    """
+    url = os.getenv("CPI_DATABASE_URL")
+    if url:
+        return url.replace("postgresql+psycopg2://", "postgresql://")
+
+    user = os.getenv("DB_USER") or os.getenv("CPI_DB_USER")
+    password = os.getenv("DB_PASS") or os.getenv("CPI_DB_PASSWORD")
+    if not (user and password):
+        raise RuntimeError(
+            "Database credentials not configured: set CPI_DATABASE_URL "
+            "(or DB_USER + DB_PASS; see .env.example). Embedded default "
+            "credentials were removed for security."
+        )
+
+    host = os.getenv("DB_HOST") or os.getenv("POSTGRES_HOST", "localhost")
+    port = os.getenv("DB_PORT") or os.getenv("POSTGRES_PORT", "5432")
+    name = os.getenv("DB_NAME") or os.getenv("CPI_DB_NAME", "cpi_db")
+    return (
+        f"postgresql://{quote_plus(user)}:{quote_plus(password)}"
+        f"@{host}:{port}/{name}"
+    )
+
+
+def alternate_host_url(url: str) -> str:
+    """
+    Return the same DSN pointed at the complementary host
+    (localhost <-> postgres), used as container/host failover.
+    Parses the URL properly instead of fragile substring matching.
+    """
+    parts = urlsplit(url)
+    hostname = parts.hostname or "localhost"
+    alt_host = "postgres" if hostname == "localhost" else "localhost"
+    netloc_parts = []
+    if parts.username is not None:
+        netloc_parts.append(quote_plus(parts.username))
+        if parts.password is not None:
+            netloc_parts.append(f":{quote_plus(parts.password)}")
+        netloc_parts.append("@")
+    netloc_parts.append(alt_host)
+    if parts.port:
+        netloc_parts.append(f":{parts.port}")
+    return urlunsplit(
+        (parts.scheme, "".join(netloc_parts), parts.path, parts.query, parts.fragment)
+    )
+
+
 def get_db_connection():
     """
     Returns a PostgreSQL psycopg2 connection to the CPI database.
     Automatically handles container (postgres:5432) and host (localhost:5432) fallbacks.
     """
-    conn_str = os.getenv(
-        "CPI_DATABASE_URL",
-        "postgresql://cpi_user:cpi_pass@localhost:5432/cpi_db",
-    )
-    conn_str = conn_str.replace("postgresql+psycopg2://", "postgresql://")
+    conn_str = get_database_url()
     try:
         return psycopg2.connect(conn_str)
     except psycopg2.OperationalError:
-        if "localhost" in conn_str:
-            alt = conn_str.replace("localhost:5432", "postgres:5432")
-        else:
-            alt = conn_str.replace("postgres:5432", "localhost:5432")
-        return psycopg2.connect(alt)
+        return psycopg2.connect(alternate_host_url(conn_str))

@@ -16,6 +16,11 @@ def test_extract_specs_ram_and_storage():
     assert specs == {"RAM_GB": 8, "Storage_GB": 256}
 
 
+def test_extract_specs_explicit_ram_with_standalone_storage():
+    specs = hr.extract_specs("Samsung Galaxy A55 8GB RAM 128GB")
+    assert specs == {"RAM_GB": 8, "Storage_GB": 128}
+
+
 def test_extract_specs_missing_features_default_zero():
     specs = hr.extract_specs("Generic cable")
     assert specs == {"RAM_GB": 0, "Storage_GB": 0}
@@ -27,6 +32,15 @@ def test_fit_ols_rejects_tiny_sample():
     )
     with pytest.raises(ValueError, match=">= 20"):
         hr.fit_ols(small)
+
+
+def test_fit_ols_rank_deficiency_guard():
+    # 25 identical spec rows -> rank deficient X matrix
+    collinear = pd.DataFrame(
+        {"RAM_GB": [8] * 25, "Storage_GB": [128] * 25, "raw_price": [500.0 + i for i in range(25)]}
+    )
+    with pytest.raises(ValueError, match="rank-deficient"):
+        hr.fit_ols(collinear)
 
 
 def test_compute_hedonic_adjusted_neutralizes_spec_upgrade():
@@ -71,3 +85,50 @@ def test_baseline_specs_uses_prior_month():
     )
     base = hr.baseline_specs(df, "2026-08-18")
     assert base == {"RAM_GB": pytest.approx(6.0), "Storage_GB": pytest.approx(96.0)}
+
+
+def test_persist_hedonic_adjusted_record_construction():
+    current = pd.DataFrame(
+        [
+            {
+                "scrape_date": "2026-08-18",
+                "item_id": "phone_123",
+                "store_slug": "samnangshop",
+                "canonical_name": "iPhone 15 128GB",
+                "raw_price": 800.0,
+                "RAM_GB": 6,
+                "Storage_GB": 128,
+            }
+        ]
+    )
+    adjusted = pd.Series([780.0], index=current.index)
+    fit = {"r2": 0.95}
+
+    class MockConn:
+        def __init__(self):
+            self.executed = []
+
+        def execute(self, stmt, params):
+            self.executed.append(params)
+
+    class MockEngine:
+        def begin(self):
+            conn = MockConn()
+            self.last_conn = conn
+            from contextlib import contextmanager
+
+            @contextmanager
+            def _cm():
+                yield conn
+
+            return _cm()
+
+    mock_engine = MockEngine()
+    count = hr.persist_hedonic_adjusted(mock_engine, current, adjusted, fit, "2026-08-18")
+    assert count == 1
+    rec = mock_engine.last_conn.executed[0]
+    assert rec["item_id"] == "phone_123"
+    assert rec["store_slug"] == "samnangshop"
+    assert rec["canonical_name"] == "iPhone 15 128GB"
+    assert rec["hedonic_adjusted_price_khr"] == 780.0
+

@@ -4,7 +4,7 @@
 **Date:** 2026-08-17  
 **Scope:** Maps every observation to a COICOP **division** (`01`..`12`, `UNCLASSIFIED`, or `REVIEW`).
 
-Every silver fact row in `silver.fct_daily_prices` carries `coicop_division` + `coicop_method` + `coicop_confidence`. The mapping is computed by the dbt model `dbt/models/silver/int_coicop_classified.sql` against the **cleaned** product title (`name_clean`), ensuring promo text never pollutes keyword matching.
+Every silver fact row in `silver.clean_store_prices` carries `coicop_division` + `coicop_code` + `coicop_method` + `coicop_confidence`. The mapping is computed by the dbt model `dbt/models/silver/intermediate/int_coicop_classified.sql` against the **cleaned** product title (`name_clean`), ensuring promo text never pollutes keyword matching.
 
 ---
 
@@ -125,26 +125,20 @@ Service traps (corrected 2026-08-19):
 
 | Table | Role |
 | ------------------------------------- | --------------------------------------------------------- |
-| `silver.fct_daily_prices.coicop_division` | Per-observation division (`01`..`12` / `UNCLASSIFIED` / `REVIEW`) |
-| `silver.fct_daily_prices.coicop_method` | Ladder classification method |
-| `silver.dim_items.coicop_division` | Canonical item division |
+| `silver.clean_store_prices.coicop_division` | Per-observation division (`01`..`12` / `UNCLASSIFIED` / `REVIEW`) |
+| `silver.clean_store_prices.coicop_method` | Ladder classification method (`gemini_ai`, `store_default`, `override`) |
+| `gold.dim_items.coicop_division` | Canonical item division in conformed Gold master catalog |
 | `silver.dim_coicop_ai_cache` | Memoization cache for Gemini AI classifications (AI-first tier 3; stores `model_version`) |
-| `silver.coicop_keywords` (seed) | Data-driven keyword/trap rules (`dbt/seeds/coicop_keywords.csv`) |
-| `silver.classification_queue` | Operational queue for unclassified products / human triage |
-| `silver.coicop_override` (seed) | Curated override rules — wiped on `dbt seed` |
-| `silver.coicop_override_manual` | Labeling-app decisions — **survives re-seeds** (migration 010) |
-| `silver.coicop_category_map` | Store native category → division mapping |
+| `silver.classification_queue` | Automated triage tracking for unclassified products & AI sweeps |
+| `silver.coicop_override` (seed) | Curated override rules — barcode and exact product overrides |
+| `silver.coicop_store_defaults` (seed) | Default division mappings per retail source |
 | `gold.category_weights` (seed) | Official 12-division aggregation weights (sum = 100.000%) |
 
 ---
 
 ## 6. Review & Triage App
 
-Pending review rows in `silver.classification_queue` / `silver.needs_review` can be resolved via the dedicated Streamlit labeling interface:
-
-```bash
-streamlit run apps/labeling_app.py
-```
+Unclassified observations are automatically swept and classified by Gemini AI via `pipeline.gemini_coicop_classifier` and cached in `silver.dim_coicop_ai_cache`.
 
 Applying a triage decision writes to `silver.coicop_override_manual`
 (migration 010 — survives every `dbt seed`) or the category map, and marks the

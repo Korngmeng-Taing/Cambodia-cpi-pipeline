@@ -1,5 +1,9 @@
 # CPI Pipeline Explained — Simple Guide with Examples
 
+> **[!WARNING]**
+> **IMPLEMENTATION STATUS (2026-08):** The Gold-layer index computation described in parts of this document - Jevons elementary aggregates, imputation, Laspeyres category/headline roll-ups, GEKS-Tornqvist, Fisher Ideal - is **planned but NOT implemented yet**. Its calculators, dbt models, and gold tables were removed from the codebase.
+> Currently live: Bronze ingestion; Silver cleaning / item matching / AI classification / hedonic adjustment; Gold star schema (dim_items, dim_stores, fct_daily_prices); monitoring views. See README "Implementation Status".
+
 **Goal:** Turn messy daily scrapes from 20 Cambodian online sources into a clean, auditable, high-frequency Consumer Price Index (CPI).
 
 **The big idea — a 3-layer relational architecture on PostgreSQL 16 (Medallion):**
@@ -18,8 +22,8 @@
  3. GOLD    ──► gold.base_prices, fct_daily_price_stats, cpi_category_daily,
        │        cpi_headline_daily, cpi_geks_multilateral
        │
-       ├──► METABASE  ──► Executive Inflation Dashboards & Visual Charts (:3000)
-       └──► STREAMLIT ──► Human-in-the-loop Classification Review UI (:8501)
+        ├──► METABASE  ──► Executive Inflation Dashboards & Visual Charts (:3000)
+        └──► POWER BI  ──► Interactive Inflation Analytical Reports
 ```
 
 Orchestration: **Airflow 2.9.3** — `cpi_master_dag` runs daily at 06:00 Asia/Phnom_Penh, fans out to one DAG per source (20 total), then `silver_dag`, then `coicop_classification_dag`, then `gold_dag`.
@@ -167,6 +171,5 @@ Day-on-day shifts $> 15\%$ flagged as `SPIKE_UP` / `CRASH_DOWN`.
 ## Part 4 — Serving & Operations
 
 - **Metabase Dashboards** ([http://localhost:3000](http://localhost:3000)): Visualizes `gold.v_cpi_latest`, `gold.v_inflation`, `gold.v_promo_impact`, `gold.v_top_movers`, and the 12 COICOP division tables.
-- **Streamlit Review UI** ([http://localhost:8501](http://localhost:8501)): Interactive triage of `silver.classification_queue` / `silver.needs_review` into `silver.coicop_override`.
 - **Airflow Orchestration** ([http://localhost:8085](http://localhost:8085)): Master DAG `cpi_master_dag` coordinating 20 scrapers $\to$ Silver $\to$ COICOP AI $\to$ Gold in strict order.
 - **Ops utilities** (`orchestration/config/`): `clear_all_history.py`, `cleanup_dead_dags.py`.

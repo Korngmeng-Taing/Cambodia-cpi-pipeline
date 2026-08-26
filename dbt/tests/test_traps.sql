@@ -49,6 +49,6 @@ select
     t.trap,
     t.expected,
     f.coicop_division as actual
-from {{ ref('fct_daily_prices') }} f
+from {{ ref('clean_store_prices') }} f
 join trap_cases t on position(upper(t.trap) in upper(f.name_clean)) > 0
 where f.coicop_division <> t.expected

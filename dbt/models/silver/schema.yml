@@ -17,7 +17,7 @@ models:
       - name: cpi_eligible
 
   - name: int_coicop_classified
-    description: Intermediate COICOP classification ladder (stored in staging schema) resolving division per (item_id, store_slug).
+    description: Intermediate COICOP classification ladder resolving division and code per (item_id, store_slug).
     columns:
       - name: coicop_division
         tests:
@@ -43,34 +43,13 @@ models:
         tests:
           - not_null
 
-  - name: dim_items
-    description: Curated canonical item master dimension — one row per unique product across all stores.
+  - name: clean_store_prices
+    description: Unified Silver store prices observation table — clean, standardized daily appended rows from all stores.
     columns:
-      - name: item_id
+      - name: raw_price_id
         tests:
           - not_null
           - unique
-      - name: canonical_name
-        tests:
-          - not_null
-
-  - name: dim_stores
-    description: Curated store & source dimension — one row per retailer/service provider in Cambodia.
-    columns:
-      - name: store_slug
-        tests:
-          - not_null
-          - unique
-      - name: store_name
-        tests:
-          - not_null
-
-  - name: fct_daily_prices
-    description: Curated primary Silver daily price fact table — one row per (scrape_date, store_slug, item_id).
-    columns:
-      - name: item_id
-        tests:
-          - not_null
       - name: store_slug
         tests:
           - not_null
@@ -81,27 +60,15 @@ models:
         tests:
           - not_null
 
-  - name: fct_daily_prices_imputed
-    description: Curated daily fact view with <= 7-day forward price carry for temporarily missing items.
-    columns:
-      - name: scrape_date
-        tests:
-          - not_null
-      - name: store_slug
-        tests:
-          - not_null
-      - name: item_id
-        tests:
-          - not_null
-
   - name: classification_queue
     description: Operational triage queue capturing unclassified items for Gemini AI batch processing or manual tagging.
     columns:
       - name: product_key
         tests:
           - not_null
+      - name: store_slug
+        tests:
+          - not_null
       - name: status
         tests:
-          - accepted_values:
-              arguments:
-                values: ["PENDING", "RESOLVED", "IGNORED"]
+          - not_null

@@ -169,39 +169,71 @@ CREATE TABLE IF NOT EXISTS silver.dim_canonical_products (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_dim_canonical_raw_item
     ON silver.dim_canonical_products(source_name, raw_item_id);
 
--- Silver Daily Cleansed Facts Table
-CREATE TABLE IF NOT EXISTS silver.fct_daily_prices (
+-- Silver Store Cleaned Fact Observation Table (1 Store 1 Table Paradigm)
+CREATE TABLE IF NOT EXISTS silver.clean_store_prices (
+    raw_price_id BIGINT PRIMARY KEY,
     scrape_date DATE NOT NULL,
     store_slug VARCHAR(64) NOT NULL,
-    item_id VARCHAR(128) NOT NULL,
-    product_key VARCHAR(128) NOT NULL,
+    source_name VARCHAR(64),
+    item_id TEXT,
+    name_raw TEXT,
     name_clean TEXT,
     category_native TEXT,
-    coicop_division VARCHAR(16),
-    coicop_method VARCHAR(32),
-    coicop_confidence NUMERIC(5, 4),
+    brand VARCHAR(256),
+    barcode VARCHAR(64),
     currency VARCHAR(16),
     price_original_curr NUMERIC(14, 2),
     original_price_curr NUMERIC(14, 2),
+    usd_khr_rate NUMERIC(10, 4),
+    price_khr NUMERIC(14, 2),
     original_price_khr NUMERIC(14, 2),
     discount_pct NUMERIC(6, 2),
     on_promo BOOLEAN,
-    price_khr NUMERIC(14, 2),
+    size_norm VARCHAR(32),
+    size_value NUMERIC(12, 4),
+    size_unit VARCHAR(32),
+    pack_qty INT,
+    unit_price_khr NUMERIC(14, 2),
+    coicop_division VARCHAR(16),
+    coicop_code VARCHAR(16),
+    coicop_method VARCHAR(32),
+    coicop_confidence NUMERIC(5, 4),
+    is_outlier BOOLEAN,
+    cpi_eligible BOOLEAN,
+    is_fallback BOOLEAN,
+    fallback_reason TEXT,
+    match_method VARCHAR(32),
+    match_confidence NUMERIC(5, 4),
+    scraped_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_clean_store_prices_scrape_date_store ON silver.clean_store_prices(scrape_date, store_slug);
+CREATE INDEX IF NOT EXISTS idx_clean_store_prices_store_item ON silver.clean_store_prices(store_slug, item_id);
+CREATE INDEX IF NOT EXISTS idx_clean_store_prices_coicop_code ON silver.clean_store_prices(coicop_code);
+CREATE INDEX IF NOT EXISTS idx_clean_store_prices_coicop_division ON silver.clean_store_prices(coicop_division);
+
+-- Gold Conformed Daily Price Fact Table (Essential Metrics & Foreign Keys)
+CREATE TABLE IF NOT EXISTS gold.fct_daily_prices (
+    scrape_date DATE NOT NULL,
+    store_slug VARCHAR(64) NOT NULL,
+    item_id TEXT NOT NULL,
+    price_khr NUMERIC(14, 2) NOT NULL,
+    original_price_khr NUMERIC(14, 2),
+    discount_pct NUMERIC(6, 2),
+    on_promo BOOLEAN,
     unit_price_khr NUMERIC(14, 2),
     size_value NUMERIC(12, 4),
     size_unit VARCHAR(32),
     pack_qty INT,
-    is_outlier BOOLEAN,
     cpi_eligible BOOLEAN,
+    is_outlier BOOLEAN,
     is_fallback BOOLEAN,
-    scraped_at TIMESTAMPTZ,
     PRIMARY KEY (scrape_date, store_slug, item_id)
 );
 
--- Unified Canonical Item Dimension
-CREATE TABLE IF NOT EXISTS silver.dim_items (
+-- Gold Conformed Item Dimension (Master Catalog)
+CREATE TABLE IF NOT EXISTS gold.dim_items (
     item_id VARCHAR(128) PRIMARY KEY,
-    canonical_name TEXT,
+    canonical_name TEXT NOT NULL,
     brand VARCHAR(256),
     barcode VARCHAR(64),
     size_norm VARCHAR(32),
@@ -213,7 +245,24 @@ CREATE TABLE IF NOT EXISTS silver.dim_items (
     avg_match_confidence NUMERIC(5,4),
     first_seen DATE,
     last_seen DATE,
-    is_active BOOLEAN DEFAULT TRUE
+    is_active BOOLEAN DEFAULT TRUE,
+    lifecycle_status VARCHAR(32),
+    days_since_last_seen INT
+);
+
+-- Gold Conformed Store Dimension
+CREATE TABLE IF NOT EXISTS gold.dim_stores (
+    store_slug VARCHAR(64) PRIMARY KEY,
+    store_name TEXT NOT NULL,
+    source_type VARCHAR(32),
+    channel VARCHAR(32),
+    default_currency VARCHAR(8),
+    default_coicop_division VARCHAR(16),
+    is_active BOOLEAN DEFAULT TRUE,
+    total_observations INT DEFAULT 0,
+    distinct_products_count INT DEFAULT 0,
+    first_scraped_at DATE,
+    last_scraped_at DATE
 );
 
 -- Store Product Link Mapping
@@ -231,12 +280,9 @@ CREATE TABLE IF NOT EXISTS silver.coicop_override (
 );
 CREATE INDEX IF NOT EXISTS idx_override_match ON silver.coicop_override(match_type, match_value);
 
--- Manual Overrides from Labeling App
--- The Streamlit triage UI (apps/labeling_app.py) writes HERE, not into
--- silver.coicop_override: that name is owned by the dbt seed
--- dbt/seeds/coicop_override.csv, which is fully recreated on every
--- `dbt seed` run and would wipe any manually inserted rows.
--- int_coicop_classified UNIONs this table with the seed at query time.
+-- Persistent Manual Overrides Table
+-- Stores custom operator overrides without risk of being overwritten by seed refreshes.
+-- int_coicop_classified can UNION this table with the seed at query time.
 CREATE TABLE IF NOT EXISTS silver.coicop_override_manual (
     id SERIAL PRIMARY KEY,
     match_type VARCHAR(32) NOT NULL, -- 'product_key', 'barcode', 'name'
@@ -246,6 +292,7 @@ CREATE TABLE IF NOT EXISTS silver.coicop_override_manual (
     reason TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE UNIQUE INDEX IF NOT EXISTS uq_coicop_override_manual ON silver.coicop_override_manual(match_type, match_value, (coalesce(store_slug, 'ALL')));
 CREATE INDEX IF NOT EXISTS idx_override_manual_match ON silver.coicop_override_manual(match_type, match_value);
 
 -- Store Native Category Mapping Table
@@ -306,7 +353,14 @@ CREATE TABLE IF NOT EXISTS silver.hedonic_adjusted_prices (
 CREATE INDEX IF NOT EXISTS idx_hedonic_date_div ON silver.hedonic_adjusted_prices(scrape_date, coicop_division);
 
 -- ============================================================================
--- 3. GOLD (Aggregates, Base Prices, Indices, Anomalies, Forecasts)
+-- 3. GOLD (Star Schema, Official Weights & Anomaly Tables)
+--
+-- NOTE: Index-computation objects (base_prices, fct_daily_price_stats,
+--       cpi_category_daily, cpi_headline_daily, cpi_geks_multilateral,
+--       cpi_fisher_superlative, mart_cpi_daily, mart_cpi_division_daily)
+--       are intentionally NOT created here. The Jevons/Laspeyres/GEKS/Fisher
+--       calculation layer is planned but not implemented yet; re-add DDL when
+--       that work lands.
 -- ============================================================================
 
 -- Official COICOP Division Weights
@@ -317,58 +371,6 @@ CREATE TABLE IF NOT EXISTS gold.coicop_weights (
     source TEXT NOT NULL,
     effective_date DATE NOT NULL DEFAULT '2026-08-01'
 );
-
--- Base Period Prices (Base Period = '2026-08')
-CREATE TABLE IF NOT EXISTS gold.base_prices (
-    product_key VARCHAR(128) NOT NULL,
-    base_period VARCHAR(7) NOT NULL, -- 'YYYY-MM' e.g. '2026-08'
-    base_price_khr NUMERIC(14, 2) NOT NULL,
-    n_obs INT NOT NULL,
-    std_dev NUMERIC(14, 2),
-    coicop_division VARCHAR(16) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (product_key, base_period)
-);
-CREATE INDEX IF NOT EXISTS idx_base_prices_period ON gold.base_prices(base_period);
-
--- Daily COICOP Category Indices (Division level relative to Base Period = 100.0)
-CREATE TABLE IF NOT EXISTS gold.cpi_category_daily (
-    scrape_date DATE NOT NULL,
-    coicop_division VARCHAR(16) NOT NULL REFERENCES gold.coicop_weights(coicop_division),
-    index_value NUMERIC(10, 4) NOT NULL,
-    base_period VARCHAR(7) NOT NULL,
-    n_items INT NOT NULL,
-    weight_pct NUMERIC(6, 3) NOT NULL,
-    PRIMARY KEY (scrape_date, coicop_division)
-);
-
--- Daily Headline CPI Index (Laspeyres / GEKS-Törnqvist)
-CREATE TABLE IF NOT EXISTS gold.cpi_headline_daily (
-    scrape_date DATE NOT NULL,
-    base_period VARCHAR(7) NOT NULL,
-    index_value NUMERIC(10, 4) NOT NULL,
-    formula VARCHAR(32) NOT NULL DEFAULT 'Laspeyres',
-    divisions_present INT NOT NULL,
-    total_weight_present NUMERIC(6, 3) NOT NULL,
-    PRIMARY KEY (scrape_date, formula)
-);
-
--- Daily Elementary Aggregations (Jevons Geometric Mean per item)
-CREATE TABLE IF NOT EXISTS gold.fct_daily_price_stats (
-    scrape_date DATE NOT NULL,
-    item_id VARCHAR(128) NOT NULL,
-    coicop_division VARCHAR(16),
-    p_khr_jevons NUMERIC(14, 2) NOT NULL,
-    p_khr_unit NUMERIC(14, 2),
-    n_quotes INT NOT NULL DEFAULT 1,
-    n_stores INT NOT NULL DEFAULT 1,
-    is_imputed BOOLEAN NOT NULL DEFAULT FALSE,
-    gap_days INT NOT NULL DEFAULT 0,
-    PRIMARY KEY (scrape_date, item_id)
-);
-CREATE INDEX IF NOT EXISTS idx_fct_stats_date ON gold.fct_daily_price_stats(scrape_date);
-CREATE INDEX IF NOT EXISTS idx_fct_stats_coicop ON gold.fct_daily_price_stats(coicop_division);
-CREATE INDEX IF NOT EXISTS idx_fct_stats_date_div ON gold.fct_daily_price_stats(scrape_date, coicop_division);
 
 -- Daily Price Anomaly Detection (> 15% day-on-day shift)
 CREATE TABLE IF NOT EXISTS gold.price_anomalies (
@@ -386,71 +388,6 @@ CREATE TABLE IF NOT EXISTS gold.price_anomalies (
 ALTER TABLE gold.price_anomalies ADD COLUMN IF NOT EXISTS item_id VARCHAR(128);
 CREATE INDEX IF NOT EXISTS idx_anomalies_date ON gold.price_anomalies(scrape_date);
 CREATE INDEX IF NOT EXISTS idx_anomalies_product_key ON gold.price_anomalies(product_key);
-
--- Multilateral GEKS-Törnqvist Price Index Storage
-CREATE TABLE IF NOT EXISTS gold.cpi_geks_multilateral (
-    id SERIAL PRIMARY KEY,
-    scrape_date DATE NOT NULL,
-    base_period VARCHAR(16) NOT NULL DEFAULT '2026-08',
-    window_size INT NOT NULL DEFAULT 13,
-    formula VARCHAR(32) NOT NULL DEFAULT 'GEKS-Törnqvist',
-    index_value NUMERIC(10, 4) NOT NULL,
-    matched_items_count INT NOT NULL DEFAULT 0,
-    calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_geks_date_window UNIQUE (scrape_date, base_period, window_size)
-);
-CREATE INDEX IF NOT EXISTS idx_gold_geks_date ON gold.cpi_geks_multilateral (scrape_date);
-
--- Superlative Fisher Ideal Index Storage
-CREATE TABLE IF NOT EXISTS gold.cpi_fisher_superlative (
-    scrape_date DATE NOT NULL,
-    base_period VARCHAR(16) NOT NULL DEFAULT '2026-08',
-    formula VARCHAR(32) NOT NULL DEFAULT 'Fisher-Superlative',
-    laspeyres_index NUMERIC(10, 4) NOT NULL,
-    paasche_index NUMERIC(10, 4) NOT NULL,
-    fisher_index NUMERIC(10, 4) NOT NULL,
-    substitution_bias_pct NUMERIC(6, 3) NOT NULL,
-    matched_items_count INT NOT NULL DEFAULT 0,
-    calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (scrape_date, base_period)
-);
-CREATE INDEX IF NOT EXISTS idx_gold_fisher_date ON gold.cpi_fisher_superlative(scrape_date DESC);
-
--- Unified National Headline & Core CPI Mart (Reporting & Metabase Ready)
-CREATE TABLE IF NOT EXISTS gold.mart_cpi_daily (
-    scrape_date DATE PRIMARY KEY,
-    base_period VARCHAR(7) NOT NULL DEFAULT '2026-08',
-    cpi_headline_khr NUMERIC(10, 4) NOT NULL,
-    cpi_headline_usd NUMERIC(10, 4) NOT NULL,
-    cpi_geks_multilateral NUMERIC(10, 4),
-    cpi_core_khr NUMERIC(10, 4) NOT NULL,
-    inflation_dod_pct NUMERIC(6, 3),
-    inflation_mom_pct NUMERIC(6, 3),
-    divisions_present INT NOT NULL,
-    total_weight_covered NUMERIC(6, 3) NOT NULL,
-    active_quotes_count INT NOT NULL DEFAULT 0,
-    imputed_quote_pct NUMERIC(5, 2) NOT NULL DEFAULT 0.00,
-    calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_mart_cpi_date ON gold.mart_cpi_daily(scrape_date DESC);
-
--- Unified 12 COICOP Division Mart (One table for all 12 divisions with dropdown filter)
-CREATE TABLE IF NOT EXISTS gold.mart_cpi_division_daily (
-    scrape_date DATE NOT NULL,
-    coicop_division VARCHAR(16) NOT NULL REFERENCES gold.coicop_weights(coicop_division),
-    division_name TEXT NOT NULL,
-    weight_pct NUMERIC(6, 3) NOT NULL,
-    division_index_khr NUMERIC(10, 4) NOT NULL,
-    division_index_usd NUMERIC(10, 4) NOT NULL,
-    dod_change_pct NUMERIC(6, 3),
-    mom_change_pct NUMERIC(6, 3),
-    active_items_count INT NOT NULL DEFAULT 0,
-    stores_count INT NOT NULL DEFAULT 0,
-    promo_share_pct NUMERIC(5, 2) DEFAULT 0.00,
-    calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (scrape_date, coicop_division)
-);
-CREATE INDEX IF NOT EXISTS idx_mart_division_date ON gold.mart_cpi_division_daily(scrape_date DESC, coicop_division);
 
 -- Operational Price Anomalies Mart
 CREATE TABLE IF NOT EXISTS gold.mart_price_anomalies (
@@ -472,11 +409,14 @@ CREATE TABLE IF NOT EXISTS gold.mart_price_anomalies (
 CREATE INDEX IF NOT EXISTS idx_mart_anomalies_unreviewed ON gold.mart_price_anomalies(is_reviewed, scrape_date DESC);
 
 -- Performance Indexes for Silver Fact & Bronze Tables
-CREATE INDEX IF NOT EXISTS idx_fct_daily_prices_date_item ON silver.fct_daily_prices(scrape_date, item_id);
-CREATE INDEX IF NOT EXISTS idx_fct_daily_prices_item_store_date ON silver.fct_daily_prices(item_id, store_slug, scrape_date);
-CREATE INDEX IF NOT EXISTS idx_fct_daily_prices_scrape_date ON silver.fct_daily_prices(scrape_date);
-CREATE INDEX IF NOT EXISTS idx_fct_daily_prices_store_item ON silver.fct_daily_prices(store_slug, item_id);
-CREATE INDEX IF NOT EXISTS idx_silver_dim_items_id ON silver.dim_items(item_id);
+-- Performance Indexes for Gold Fact & Dimensions, Silver Store Prices, and Bronze Tables
+CREATE INDEX IF NOT EXISTS idx_fct_daily_prices_date_item ON gold.fct_daily_prices(scrape_date, item_id);
+CREATE INDEX IF NOT EXISTS idx_fct_daily_prices_item_store_date ON gold.fct_daily_prices(item_id, store_slug, scrape_date);
+CREATE INDEX IF NOT EXISTS idx_fct_daily_prices_scrape_date ON gold.fct_daily_prices(scrape_date);
+CREATE INDEX IF NOT EXISTS idx_fct_daily_prices_store_item ON gold.fct_daily_prices(store_slug, item_id);
+CREATE INDEX IF NOT EXISTS idx_gold_dim_items_id ON gold.dim_items(item_id);
+CREATE INDEX IF NOT EXISTS idx_silver_clean_store_prices_store_date ON silver.clean_store_prices(store_slug, scrape_date);
+CREATE INDEX IF NOT EXISTS idx_silver_clean_store_prices_item ON silver.clean_store_prices(item_id);
 CREATE INDEX IF NOT EXISTS idx_raw_prices_scraped_at ON bronze.raw_prices(scraped_at);
 CREATE INDEX IF NOT EXISTS idx_item_match_log_raw_price ON silver.item_match_log(raw_price_id);
 CREATE INDEX IF NOT EXISTS idx_canonical_items_name ON silver.canonical_items(canonical_name);

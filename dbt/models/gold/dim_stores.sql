@@ -1,5 +1,5 @@
 -- dim_stores
--- Conformed store & source master dimension — one row per store_slug with source metadata,
+-- Gold Layer: Store & source master dimension — one row per store_slug with source metadata,
 -- channel classification, default COICOP division, and lifecycle scrape stats.
 {{ config(
     materialized='table'

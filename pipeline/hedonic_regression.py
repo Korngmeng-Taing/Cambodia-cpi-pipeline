@@ -54,9 +54,10 @@ _STORAGE_RE = re.compile(r"(\d{1,4})\s*GB\s*(?:storage|rom|ssd)?", re.IGNORECASE
 
 
 def get_engine():
-    conn_str = os.getenv(
-        "CPI_DATABASE_URL",
-        "postgresql+psycopg2://cpi_user:cpi_pass@postgres:5432/cpi_db",
+    from pipeline.config import get_database_url
+
+    conn_str = get_database_url().replace(
+        "postgresql://", "postgresql+psycopg2://", 1
     )
     return create_engine(conn_str)
 
@@ -88,43 +89,75 @@ def extract_specs(name: str) -> dict[str, int]:
     )
     if storage_explicit:
         storage_val = int(storage_explicit.group(1))
-    elif not ram_val:
-        standalone = re.search(r"\b(\d{2,4})\s*GB\b", name, re.IGNORECASE)
-        if standalone:
-            val = int(standalone.group(1))
-            if val in (16, 32, 64, 128, 256, 512, 1024):
+    else:
+        # Find standalone storage tiers not matching ram_val
+        for m in re.finditer(r"\b(\d{1,4})\s*GB\b", name, re.IGNORECASE):
+            val = int(m.group(1))
+            if val != ram_val and val in (16, 32, 64, 128, 256, 512, 1024):
                 storage_val = val
+                break
 
     return {"RAM_GB": ram_val, "Storage_GB": storage_val}
 
 
 def fetch_hedonic_items(
-    engine, coicop_prefix: str = COICOP_ELECTRONICS_PREFIX
+    engine,
+    scrape_date: str | None = None,
+    coicop_prefix: str = COICOP_ELECTRONICS_PREFIX,
 ) -> pd.DataFrame:
-    """Returns 08/09* mapped items from the last HISTORY_MONTHS months (training + current)."""
-    cutoff = (date.today() - timedelta(days=30 * HISTORY_MONTHS)).isoformat()
+    """Returns 08/09* mapped items from the trailing HISTORY_MONTHS months up to scrape_date."""
+    as_of = pd.to_datetime(scrape_date).date() if scrape_date else date.today()
+    cutoff = (as_of - timedelta(days=30 * HISTORY_MONTHS)).isoformat()
+    as_of_str = as_of.isoformat()
     query = text(
         """
-        SELECT f.scrape_date, f.item_id AS raw_item_id, f.store_slug AS source_name,
-               f.name_clean AS raw_product_name, f.price_khr AS raw_price, f.item_id AS canonical_item_id,
+        SELECT f.scrape_date, f.item_id::text AS item_id, f.store_slug,
+               f.name_clean AS canonical_name, f.price_khr AS raw_price,
                f.coicop_division AS coicop_code
-        FROM silver.fct_daily_prices f
+        FROM silver.clean_store_prices f
         WHERE (f.coicop_division = '08' OR f.coicop_division = '09' OR f.coicop_division LIKE :prefix)
           AND f.price_khr > 0
           AND f.scrape_date >= :cutoff::DATE
+          AND f.scrape_date <= :as_of::DATE
         """
     )
     with engine.connect() as conn:
         try:
             df = pd.read_sql(
-                query, conn, params={"prefix": f"{coicop_prefix}%", "cutoff": cutoff}
+                query,
+                conn,
+                params={
+                    "prefix": f"{coicop_prefix}%",
+                    "cutoff": cutoff,
+                    "as_of": as_of_str,
+                },
             )
         except Exception:
-            df = pd.DataFrame()
+            try:
+                # Fallback to int_prices_cleaned in staging if silver table is building
+                fallback_query = text(
+                    """
+                    SELECT f.scrape_date, f.item_id::text AS item_id, f.store_slug,
+                           f.name_clean AS canonical_name, f.price_khr AS raw_price,
+                           coalesce(c.coicop_division, '08') AS coicop_code
+                    FROM staging.int_prices_cleaned f
+                    LEFT JOIN silver.clean_store_prices c ON c.raw_price_id = f.raw_price_id
+                    WHERE f.price_khr > 0
+                      AND f.scrape_date >= :cutoff::DATE
+                      AND f.scrape_date <= :as_of::DATE
+                    """
+                )
+                df = pd.read_sql(
+                    fallback_query,
+                    conn,
+                    params={"cutoff": cutoff, "as_of": as_of_str},
+                )
+            except Exception:
+                df = pd.DataFrame()
     if df.empty:
         return df
 
-    specs = df["raw_product_name"].apply(extract_specs)
+    specs = df["canonical_name"].apply(extract_specs)
     df["RAM_GB"] = [s["RAM_GB"] for s in specs]
     df["Storage_GB"] = [s["Storage_GB"] for s in specs]
     return df
@@ -150,6 +183,10 @@ def fit_ols(df: pd.DataFrame) -> dict[str, Any]:
     X = sm.add_constant(
         train[["RAM_GB", "Storage_GB"]].astype(float), has_constant="add"
     )
+    # Rank-deficiency guard
+    if np.linalg.matrix_rank(X) < X.shape[1]:
+        raise ValueError("Hedonic feature matrix X is rank-deficient (collinear RAM/Storage or constant specs)")
+
     y_log = np.log(train["raw_price"].astype(float))
     model = sm.OLS(y_log, X).fit()
 
@@ -243,13 +280,14 @@ def persist_hedonic_adjusted(
         adj_price = float(adjusted.loc[idx])
         raw_price = float(row["raw_price"])
         ratio = round(adj_price / raw_price, 4) if raw_price > 0 else 1.0
+        div = str(row.get("coicop_code") or row.get("coicop_division") or "08")
         records.append(
             {
                 "scrape_date": scrape_date,
                 "item_id": str(row["item_id"]),
                 "store_slug": str(row["store_slug"]),
                 "canonical_name": str(row["canonical_name"]),
-                "coicop_division": "09",
+                "coicop_division": div,
                 "raw_price_khr": raw_price,
                 "ram_gb": int(row["RAM_GB"]),
                 "storage_gb": int(row["Storage_GB"]),
@@ -275,7 +313,7 @@ def run_hedonic_regression(scrape_date: str) -> dict[str, Any]:
     previous-month baseline, and persists adjusted values into PostgreSQL.
     """
     engine = get_engine()
-    df = fetch_hedonic_items(engine)
+    df = fetch_hedonic_items(engine, scrape_date=scrape_date)
     if df.empty:
         log.warning(
             "No COICOP 09 items in history; skipping hedonic regression for %s",

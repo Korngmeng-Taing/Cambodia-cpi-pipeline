@@ -12,8 +12,6 @@ sources:
         description: Canonical product identity (ItemMatcher path).
       - name: item_match_log
         description: Full audit trail of raw-price -> canonical item matches.
-      - name: needs_review
-        description: Low-confidence matches awaiting human triage.
       - name: dim_canonical_products
         description: Canonical products created by the canonicalizer (dim_canonical_products).
       - name: dim_coicop_ai_cache
@@ -21,8 +19,8 @@ sources:
       - name: coicop_category_map
         description: Store native category -> COICOP division mapping.
       - name: coicop_override_manual
-        description: Manual COICOP overrides saved by the labeling app (kept separate from the dbt-owned coicop_override seed table).
+        description: Manual COICOP overrides (kept separate from the dbt-owned coicop_override seed table).
       - name: classification_queue
-        description: REVIEW/UNCLASSIFIED rows awaiting human triage.
+        description: Operational triage queue for unclassified items.
       - name: hedonic_adjusted_prices
         description: Quality-adjusted constant-specification prices for Division 09/08 electronics.

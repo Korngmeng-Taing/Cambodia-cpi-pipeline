@@ -24,6 +24,7 @@ from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 
 from pipeline.gemini_coicop_classifier import classify_unclassified_with_gemini
+from pipeline.gemini_item_reviewer import auto_review_pending_items
 from pipeline.hedonic_regression import run_hedonic_regression
 from pipeline.item_matcher import ItemMatcher
 
@@ -48,6 +49,26 @@ def _run_item_matching(**context) -> dict:
     matched_stats = matcher.process_unmatched_batch(limit=100000, scrape_date=ds)
     log.info("ItemMatcher mapped batch stats: %s", matched_stats)
     return matched_stats
+
+
+def _run_item_auto_review(**context) -> dict:
+    """Executes Gemini AI + deterministic rule guards on pending item match reviews."""
+    log.info("Executing Gemini AI Item Match Auto-Reviewer on silver.needs_review...")
+    stats = auto_review_pending_items(
+        limit=20000,
+        use_rules_only=not bool(os.getenv("GEMINI_API_KEY")),
+    )
+    log.info("Gemini Item Match Reviewer completed: %s", stats)
+    return stats
+
+
+def _safe_run_item_auto_review(**context) -> dict:
+    """Graceful-degradation wrapper around Gemini item match reviewer."""
+    try:
+        return _run_item_auto_review(**context)
+    except Exception as e:  # noqa: BLE001 - AI review must never block the Silver layer
+        log.warning("Gemini item auto-review encountered error (non-blocking): %s", e)
+        return {"status": "SKIPPED_ERROR", "error": str(e)}
 
 
 def _run_coicop_ai_classification(**context) -> dict:
@@ -93,10 +114,11 @@ def _run_hedonic_adjustment(**context) -> dict:
 
 with DAG(
     dag_id=DAG_ID,
-    description="Silver Layer ETL: Item Matching -> COICOP AI -> Hedonic -> dbt Incremental (Bronze -> Silver)",
+    description="Silver Layer ETL: Item Matching -> AI Item Review -> COICOP AI -> Hedonic -> dbt Incremental (Bronze -> Silver)",
     start_date=pendulum.datetime(2024, 1, 1, tz=local_tz),
     schedule=None,  # Orchestrated by cpi_master_dag
     catchup=False,
+    max_active_runs=1,
     default_args=DEFAULT_ARGS,
     tags=["silver", "dbt", "rapidfuzz", "coicop", "gemini", "hedonic"],
 ) as dag:
@@ -104,6 +126,14 @@ with DAG(
     t_item_matching = PythonOperator(
         task_id="silver_item_matching_service",
         python_callable=_run_item_matching,
+        execution_timeout=timedelta(minutes=45),
+    )
+
+    t_item_auto_review = PythonOperator(
+        task_id="gemini_item_match_auto_reviewer",
+        python_callable=_safe_run_item_auto_review,
+        execution_timeout=timedelta(minutes=30),
+        trigger_rule="all_done",
     )
 
     t_coicop_ai = PythonOperator(
@@ -122,31 +152,34 @@ with DAG(
     )
 
     _dbt_vars = '{"ds": "{{ ds }}"}'
+    _dbt_flags = f"--project-dir {DBT_PROJECT_DIR} --target-path /tmp/dbt/target --log-path /tmp/dbt/logs"
     # Idempotent: loads/refreshes dbt seeds (incl. coicop_classification_seed,
     # whose post-hook upserts bootstrap rows into silver.dim_coicop_ai_cache).
     # Runs BEFORE the AI step so seeded names never trigger Gemini API calls.
     t_dbt_seed = BashOperator(
         task_id="dbt_seed",
-        bash_command=f"dbt seed --full-refresh --project-dir {DBT_PROJECT_DIR}",
+        bash_command=f"dbt seed {_dbt_flags}",
         execution_timeout=timedelta(minutes=15),
     )
 
     t_dbt_silver_run = BashOperator(
         task_id="dbt_silver_run",
-        bash_command=f"dbt run --select silver --threads 4 --project-dir {DBT_PROJECT_DIR} --vars '{_dbt_vars}'",
+        bash_command=f"dbt run --select silver --threads 4 {_dbt_flags} --vars '{_dbt_vars}'",
         execution_timeout=timedelta(minutes=30),
     )
 
     t_dbt_silver_test = BashOperator(
         task_id="dbt_silver_test",
-        bash_command=f"dbt test --select silver --threads 4 --project-dir {DBT_PROJECT_DIR}",
+        bash_command=f"dbt test --select silver --threads 4 {_dbt_flags}",
         execution_timeout=timedelta(minutes=15),
     )
 
     (
         t_item_matching
+        >> t_item_auto_review
         >> t_dbt_seed
         >> [t_coicop_ai, t_hedonic]
         >> t_dbt_silver_run
         >> t_dbt_silver_test
     )
+

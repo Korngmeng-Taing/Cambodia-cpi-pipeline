@@ -3,6 +3,8 @@
 
 ![Cambodia CPI Architecture Diagram](docs/cpi_simple_architecture.jpg)
 
+> **⚠️ Implementation Status:** The **data pipeline is live** end-to-end — scraping → Bronze ingestion → Silver cleaning / item matching / AI classification → Gold star schema. However, the **CPI index-computation layer** (Jevons elementary aggregates, imputation, Laspeyres category & headline roll-ups, GEKS-Törnqvist, Fisher Ideal) is **planned but not implemented yet**; its calculators, dbt models, and gold tables were deliberately removed until that work lands. Documents describing the full econometric methodology carry a status banner.
+
 ---
 
 ## 1. Architectural Blueprint & Tooling Matrix
@@ -10,40 +12,35 @@
 | Layer | Tool | Why |
 |:---|:---|:---|
 | **Orchestration** | **Apache Airflow 2.9.3** | Schedules the daily `cpi_master_dag` (20 per-source scraper DAGs → `silver_dag` → `gold_dag`), handles retries, and provides automated end-to-end Medallion execution. |
-| **Storage & Warehouse** | **PostgreSQL 16** (`bronze`/`staging`/`silver`/`gold` schemas) | Pure relational data warehouse hosting typed atomic raw listings, item-matching state, cleaned facts, and analytical CPI marts. |
-| **Transformation** | **dbt-core** (Silver & Gold) | Turns raw price records, entity-matching outputs, Jevons calculations, pack-size conversions, and COICOP weighted roll-ups into version-controlled, testable SQL models. |
+| **Storage & Warehouse** | **PostgreSQL 16** (`bronze`/`staging`/`silver`/`gold` schemas) | Pure relational data warehouse hosting typed atomic raw listings, item-matching state, cleaned facts, and the analytical star schema. |
+| **Transformation** | **dbt-core** (Silver & Gold) | Turns raw price records, entity-matching outputs, pack-size conversions, and COICOP classification into version-controlled, testable SQL models. |
 | **Item Matching (Silver)** | **Python Service** (`ItemMatcher` with `RapidFuzz`) | Exact barcode & SKU matching with fallback token-sort fuzzy matching in Python, landing structured mappings (`silver.canonical_items`, `silver.item_match_log`). |
 | **Hybrid Classification** | **AI-First Engine (dbt SQL + Gemini AI)** (`gemini-3.1-flash-lite` / `gemini-2.5-flash`) | Streamlined 4-tier ladder: human overrides (`coicop_override`), store domain purity, high-throughput Gemini cache (`silver.dim_coicop_ai_cache`, functional expression index `idx_coicop_ai_norm`), and category fallback. |
-| **Index Math (Silver & Gold)** | **dbt SQL** + **Python** (`GEKSCalculator`, `FisherCalculator`) | Elementary Jevons prices (`silver.fct_jevons_daily`), Laspeyres category & headline aggregations (`gold.cpi_category_daily`, `gold.cpi_headline_daily`), 12 dedicated Gold COICOP division tables, rolling 13-period multilateral GEKS-Törnqvist indices (`gold.cpi_geks_multilateral`), and Superlative Fisher Ideal indices (`gold.cpi_fisher_superlative`). |
+| **Index Math (Planned)** | *Not yet implemented* | The CPI computation layer — Jevons elementary aggregates, class-mean imputation, Laspeyres category & headline roll-ups, GEKS-Törnqvist multilateral splicing, Fisher Ideal substitution bias — is designed in `docs/CPI_METHODOLOGY.md` / `docs/GOLD_LAYER_IMPLEMENTATION_PLAN.md` but intentionally not built yet. Gold currently delivers the star schema only. |
 | **Scraper Observability** | **Metabase v0.49** | Real-time operational monitoring: 20-Source Live Health Matrix, daily ingestion volume trends, and price anomaly alerts. |
-| **Interactive Analytics** | **Microsoft Power BI** | Executive BI dashboards: National headline CPI, 12 COICOP division time-series, month-on-month inflation, substitution bias, and item-level price trends. |
+| **Interactive Analytics** | **Microsoft Power BI** | Executive BI dashboards over the gold star schema: retailer and item-level price trends, promo analytics. Headline CPI / division index time-series are pending the index-math layer. |
 
 ---
 
 ## 2. Medallion Layer Overview
 
 ```
-┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                         PURE STRUCTURED MEDALLION ARCHITECTURE                                         │
-├─────────────────┬───────────────────┬───────────────────────────┬──────────────────────┬───────────────────────────────┤
+┌─────────────────┬───────────────────┬───────────────────────────┬──────────────────────┬───────────────────────────────┐
 │   20 SOURCES    │      BRONZE       │          SILVER           │         GOLD         │         SERVING & BI          │
-│                 │  (Raw Ingestion)  │     (Clean & Resolve)     │    (CPI Indices)     │     (Observability & BI)      │
+│                 │  (Raw Ingestion)  │     (Clean & Resolve)     │    (Star Schema)     │     (Observability & BI)      │
 ├─────────────────┼───────────────────┼───────────────────────────┼──────────────────────┼───────────────────────────────┤
 │ AEON 1 & AEON 3 │                   │                           │                      │                               │
-│ Delishop Asia   │ bronze.raw_prices │ silver.canonical_items    │ gold.base_prices     │ METABASE (Port 3000):         │
+│ Delishop Asia   │ bronze.raw_prices │ silver.canonical_items    │ gold.dim_items       │ METABASE (Port 3000):         │
 │ Ary & Samnang   ├──────────────────►│ silver.item_match_log     ├─────────────────────►│ • Executive Macro Observatory │
-│ Community Pharma│ staging.exchange_ │ silver.dim_items          │ gold.fct_daily_price │ • 12 COICOP Division Trends   │
-│ Cellcard & Smart│   rates           │ silver.fct_daily_prices   │   _stats (Jevons)    │ • Retailer Price & Promo BI   │
-│ redBus &        │                   │ silver.fct_jevons_daily   │ gold.cpi_category    │ • 20-Source Health & Ops Grid │
-│  BookMeBus      │ staging.raw_      │   (Elementary Relatives)  │   _daily (COICOP)    │ • Price Anomaly Triage Feed   │
-│ Sokha & Hyatt   │   scrapes         │ silver.fct_laspeyres      │ gold.cpi_headline    │ • Headline CPI Time-Series    │
-│ MOC Fuel (Gas)  │ (Typed Ingestion) │   _daily (12 Divisions)   │   _daily (Laspeyres) │ • 12 COICOP Division Charts   │
-│ MEF FX Daily    │                   │ silver.fct_laspeyres      │ gold.cpi_div01_food  │ • MoM / DoD Inflation Rate    │
-│ ... (20 total)  │ Atomic & Typed    │   _headline_daily         │   ... to div12_misc  │ • Spliced Multilateral GEKS   │
-│                 │ Rows in Postgres  │ Python RapidFuzz matching │ gold.cpi_geks        │ • Superlative Fisher Index    │
-│                 │                   │ AI-First Gemini Flash     │   _multilateral      │ • Consumer Substitution Bias  │
-│                 │                   │ Memoized Cache Pipeline   │ gold.cpi_fisher      │                               │
-│                 │                   │                           │   _superlative       │                               │
+│ Community Pharma│ staging.exchange_ │ silver.clean_store_prices │ gold.dim_stores      │ • 12 COICOP Division Trends   │
+│ Cellcard & Smart│   rates           │   (Cleaned Append / Dedup)│ gold.fct_daily_prices│ • Retailer Price & Promo BI   │
+│ redBus &        │                   │ silver.classification_    │   (Conformed Fact)   │ • 20-Source Health & Ops Grid │
+│  BookMeBus      │ staging.raw_      │   queue (AI triage)       │                      │ • Price Anomaly Triage Feed   │
+│ Sokha & Hyatt   │   scrapes         │ staging.int_prices_cleaned│   Kimball Star       │ • Coverage & Barcode Monitors │
+│ MOC Fuel (Gas)  │                   │                           │   Schema — index     │ • Scraper Health Matrix       │
+│ MEF FX Daily    │ (Typed Ingestion) │ Python RapidFuzz matching │   math layer is      │                               │
+│ ... (20 total)  │ Atomic & Typed    │ AI-First Gemini Flash     │   planned, not yet   │                               │
+│                 │ Rows in Postgres  │ Memoized Cache Pipeline   │   implemented        │                               │
 └─────────────────┴───────────────────┴───────────────────────────┴──────────────────────┴───────────────────────────────┘
 ```
 
@@ -51,17 +48,30 @@
 - **Tables**: `bronze.raw_prices` (atomic typed listings with barcodes, brands, sizes, and prices), `staging.exchange_rates` (MEF USD/KHR official daily rate), `staging.raw_scrapes`.
 - **Scraper Registry**: 20 production scrapers (`scrapers/sources.py`) extracting native categories, automated fallbacks, and zero-product quality gates.
 
-### Silver (Clean, Resolve & Elementary Aggregation)
-- **Item Matching Service**: Python (`pipeline/item_matcher.py`) executing Barcode exact → SKU exact → RapidFuzz token sort ratio with 100% automated canonical UUID creation (`silver.canonical_items`, `silver.item_match_log`).
-- **AI-First COICOP Engine**: Streamlined 4-tier daily-scoped ladder (`int_coicop_classified.sql`): human overrides -> store purity -> Gemini AI cache (`silver.dim_coicop_ai_cache`) -> native category map / fallback.
-- **Elementary Jevons Geometric Mean**:
-  - `silver.fct_jevons_daily`: Computes store-unweighted elementary geometric mean prices ($P_{\text{Jevons}}$) per canonical item, standardized unit prices, quote counts, and store density metrics.
+### Silver (Clean, Standardize & Resolve Observations)
+- **Clean Store Observations**: `silver.clean_store_prices` — unified daily appended table containing cleaned, standardized prices across all stores with exchange rates applied (KHR), unit normalization, and promo clamping.
+- **Item Matching Service**: Python (`pipeline/item_matcher.py`) executing Barcode exact → SKU exact → RapidFuzz token sort ratio with automated canonical UUID creation (`silver.canonical_items`, `silver.item_match_log`).
+- **AI-First COICOP Engine**: Streamlined 4-tier daily-scoped ladder (`staging.int_coicop_classified`): human overrides -> store purity -> Gemini AI cache (`silver.dim_coicop_ai_cache`) -> native category map / fallback.
+- **Operational Triage Queue**: `silver.classification_queue` captures unclassified or low-confidence items for automated Gemini re-runs or human labeling.
 
+### Gold (Kimball Star Schema & Serving)
+- **Dimensional Modeling (Star Schema)**:
+  - `gold.dim_items`: Curated canonical product master dimension.
+  - `gold.dim_stores`: Store & retailer master dimension.
+  - `gold.fct_daily_prices`: Conformed daily price fact table at grain `(scrape_date, store_slug, item_id)` with KHR prices, unit prices, promo/outlier/fallback flags, and COICOP attribution.
+- **Official Reference Data**: `gold.coicop_weights` (NIS Cambodia 12-division expenditure weights), plus anomaly tables (`gold.price_anomalies`, `gold.mart_price_anomalies`).
+- **Hedonic Quality Adjustment**: Python (`pipeline/hedonic_regression.py`) fits a log-linear model for Division-09 electronics and writes adjusted prices to `silver.hedonic_adjusted_prices`.
+- **Serving Views** (`sql/views.sql`): operational monitoring for Metabase/Airflow FDW — `gold.v_coverage`, `gold.v_monitor_scraper_daily`, `gold.v_monitor_source_health_matrix`, `gold.v_monitor_price_alerts`, `gold.v_monitor_fx_health`.
 
-### Gold (Serving, 12 Division Tables & Multilateral Aggregation)
-- **12 Dedicated Division Tables**: `gold.cpi_div01_food` through `gold.cpi_div12_misc` exposing granular product price trends, base indices, and metrics per COICOP division.
-- **Headline CPI & Elementary Stats**: `gold.base_prices` (August 2026 reference prices), `gold.fct_daily_price_stats` (Class-Mean Imputed geometric mean prices, ILO standard), `gold.cpi_category_daily`, and `gold.cpi_headline_daily`.
-- **Advanced Econometrics**: Multilateral GEKS-Törnqvist service (`pipeline/geks_calculator.py`) with Movement Splicing, Superlative Fisher Ideal Index (`pipeline/fisher_calculator.py`) measuring consumer substitution bias, and log-linear Hedonic Quality Adjustment (`pipeline/hedonic_regression.py`) for Division 09 electronics.
+### Gold Index Layer (Planned — Not Implemented)
+The CPI computation layer is designed but deliberately removed until implemented:
+- Jevons elementary geometric-mean aggregates (`fct_jevons_daily` / class-mean imputation)
+- Laspeyres category roll-ups (`gold.cpi_category_daily`) and headline CPI (`gold.cpi_headline_daily`)
+- Multilateral GEKS-Törnqvist with movement splicing (`gold.cpi_geks_multilateral`)
+- Fisher Ideal index & substitution bias (`gold.cpi_fisher_superlative`)
+- 12 per-division tables and dual-currency marts (`mart_cpi_daily`, `mart_cpi_division_daily`)
+
+Design reference: `docs/GOLD_LAYER_IMPLEMENTATION_PLAN.md` and `docs/CPI_METHODOLOGY.md`. No gold CPI index tables exist today; do not query them in dashboards.
 
 ---
 
@@ -79,12 +89,9 @@ CPI PIPELINE/
 │   ├── item_matcher.py    # Silver item matching service (RapidFuzz)
 │   ├── text_clean.py      # Text normalization for item matching
 │   ├── gemini_coicop_classifier.py # Gemini AI batch classifier & cache
-│   ├── geks_calculator.py # Gold multilateral GEKS-Törnqvist service (Movement Splice)
-│   ├── fisher_calculator.py # Superlative Fisher Ideal index & bias
 │   └── hedonic_regression.py # Log-linear hedonic quality adjustment
 ├── scripts/               # Maintenance & operational CLI utilities
 │   ├── warm_coicop_ai_cache.py # Pre-warms Gemini AI classification cache
-│   ├── recalculate_gold.py # Re-runs Gold stored procedures over date ranges
 │   ├── setup_metabase_dashboards.py # Provisions Metabase analytics dashboards
 │   └── clear_db_locks.py  # Clears stale PostgreSQL locks
 ├── dbt/                   # dbt-core transformation project
@@ -102,10 +109,9 @@ CPI PIPELINE/
 │   ├── CPI_METHODOLOGY.md # 6-Layer CPI econometric methodology reference
 │   ├── METABASE_DASHBOARD_BLUEPRINT.md # Metabase cards & dashboard specs
 │   └── POWER_BI_SETUP_GUIDE.md # Power BI data model & DAX guide
-├── sql/                   # Database DDL: schema.sql, views.sql, gold_procedures.sql
+├── sql/                   # Database DDL: schema.sql, views.sql
 ├── postgres-init/         # Container bootstrap (databases + \i sql/*.sql)
-├── apps/                  # Streamlit labeling app (classification review UI)
-├── tests/                 # Full pytest suite (100% passing)
+├── tests/                 # Full pytest suite
 ├── thesis/                # Academic LaTeX manuscript and chapters
 ├── docker-compose.yml     # Multi-service stack (PostgreSQL, Airflow, Metabase)
 └── pyproject.toml         # Python dependency management & pytest configuration
@@ -128,7 +134,6 @@ docker compose up -d
 |:---|:---|:---|
 | **Airflow UI** | [http://localhost:8085](http://localhost:8085) | DAG scheduling & visual pipeline monitoring (`admin`/`admin`) |
 | **Metabase Monitoring** | [http://localhost:3000](http://localhost:3000) | Scraper Observability: 20-Source Health Matrix & Ingestion Alerts |
-| **Streamlit Review App** | [http://localhost:8501](http://localhost:8501) | Human-in-the-loop classification review & override UI |
 | **Power BI Analytics** | `localhost:5432` (`cpi_db`) | Interactive CPI Inflation Dashboards (DirectQuery / Import) |
 | **PostgreSQL 16** | `localhost:5432` (`cpi_db`) | Core Warehouse hosting `bronze`, `silver`, and `gold` schemas |
 

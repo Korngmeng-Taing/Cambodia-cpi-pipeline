@@ -1,8 +1,6 @@
 -- dim_items
--- Unified canonical item dimension — one row per item_id with canonical metadata,
--- brand, barcode, size, unit of measure, store coverage, and COICOP division.
--- The post-hook restores the item_id primary key declared in sql/schema.sql, which
--- dbt drops when it rebuilds the table (see fct_daily_prices).
+-- Gold Layer: Canonical item master dimension — one row per unique product across all stores.
+-- Metadata, brand, barcode, size, unit of measure, store coverage, and COICOP division.
 {{ config(
     materialized='incremental',
     incremental_strategy='delete+insert',

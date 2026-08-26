@@ -205,9 +205,10 @@ Response format (strict JSON array, no markdown fences, no extra text):
 
 
 def get_engine():
-    conn_str = os.getenv(
-        "CPI_DATABASE_URL",
-        "postgresql+psycopg2://cpi_user:cpi_pass@localhost:5432/cpi_db",
+    from pipeline.config import alternate_host_url, get_database_url
+
+    conn_str = get_database_url().replace(
+        "postgresql://", "postgresql+psycopg2://", 1
     )
     try:
         eng = create_engine(conn_str)
@@ -215,11 +216,7 @@ def get_engine():
             pass
         return eng
     except Exception:
-        if "postgres" in conn_str:
-            alt = conn_str.replace("postgres:5432", "localhost:5432")
-        else:
-            alt = conn_str.replace("localhost:5432", "postgres:5432")
-        return create_engine(alt)
+        return create_engine(alternate_host_url(conn_str))
 
 
 
@@ -529,8 +526,8 @@ def fetch_unclassified(engine, scrape_date: str | None = None) -> list[dict[str,
                 items.append(
                     {"canonical_item_id": str(r[0]), "canonical_name": str(r[1])}
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning("Could not read silver.classification_queue: %s", e)
 
         # Tier 2: Sweep every uncached product scraped on this specific scrape_date
         if not items:
@@ -672,8 +669,7 @@ def persist_classifications(
 
     High-confidence matches (>= 0.50) flip the queue row to RESOLVED with the
     derived 2-digit division; low-confidence matches (< 0.50) stay PENDING with
-    a 'low confidence AI classification' reason so they keep surfacing in the
-    Streamlit labeling app for human triage.
+    a 'low confidence AI classification' reason for future AI sweep re-evaluation.
 
     Note: the COICOP code itself is NOT written here — it lives in
     silver.dim_coicop_ai_cache (see update_cache), which is what
@@ -717,13 +713,13 @@ def persist_classifications(
     )
 
     n_queue = 0
-    for row in updates:
-        is_low_conf = row["confidence_score"] < 0.50
-        division = row["coicop_code"].split(".")[0].zfill(2)
-        if division == "13":
-            division = "12"
-        try:
-            with engine.begin() as conn:
+    try:
+        with engine.begin() as conn:
+            for row in updates:
+                is_low_conf = row["confidence_score"] < 0.50
+                division = row["coicop_code"].split(".")[0].zfill(2)
+                if division == "13":
+                    division = "12"
                 if is_low_conf:
                     res_q = conn.execute(
                         update_queue_pending_sql,
@@ -738,12 +734,8 @@ def persist_classifications(
                         },
                     )
                 n_queue += res_q.rowcount or 0
-        except Exception as exc:  # noqa: BLE001 - one bad row must not kill the run
-            log.warning(
-                "classification_queue update failed for %s: %s",
-                row["canonical_item_id"],
-                exc,
-            )
+    except Exception as exc:
+        log.warning("classification_queue batch update failed: %s", exc)
     log.info(
         "Persisted Gemini COICOP queue state: %d row(s) updated (cache writes happen via update_cache)",
         n_queue,

@@ -1,4 +1,8 @@
 # 🇰🇭 Cambodia Daily Consumer Price Index (CPI): End-to-End Calculation Walkthrough
+
+> **[!WARNING]**
+> **IMPLEMENTATION STATUS (2026-08):** The Gold-layer index computation described in parts of this document - Jevons elementary aggregates, imputation, Laspeyres category/headline roll-ups, GEKS-Tornqvist, Fisher Ideal - is **planned but NOT implemented yet**. Its calculators, dbt models, and gold tables were removed from the codebase.
+> Currently live: Bronze ingestion; Silver cleaning / item matching / AI classification / hedonic adjustment; Gold star schema (dim_items, dim_stores, fct_daily_prices); monitoring views. See README "Implementation Status".
 *A Complete Step-by-Step Architectural & Mathematical Guide: From Raw Web-Scraped Data to Published National Inflation*
 
 ---
@@ -30,7 +34,7 @@ flowchart TD
         B2 --> S1["int_prices_cleaned.sql\n• Strip promo spam\n• MEF FX conversion to KHR\n• Standardize Unit (KHR/kg, KHR/L)"]
         S1 --> S2["item_matcher.py (RapidFuzz)\n• Exact Barcode / SKU matching\n• Normalized token-sort deduplication\n• Assigns canonical UUID"]
         S2 --> S3["int_coicop_classified.sql\n• Streamlined 4-tier AI-First ladder\n• Store purity + Human overrides\n• Google Gemini AI Cache"]
-        S3 --> S4[("silver.fct_daily_prices\nClean Observation Rows")]
+        S3 --> S4[("silver.clean_store_prices\nClean Observation Rows")]
 
     end
 
@@ -42,7 +46,7 @@ flowchart TD
     end
 
     subgraph Serving["📊 SERVING & OBSERVABILITY"]
-        G3 --> V1["Metabase Dashboards (:3000)\nPower BI Executive Reports\nStreamlit Human Review UI (:8501)"]
+        G3 --> V1["Metabase Dashboards (:3000)\nPower BI Executive Reports\nOperational Health Matrix (:3000)"]
         G4 --> V1
     end
 ```
@@ -172,7 +176,7 @@ The item is matched against the hierarchy:
   * **Method:** `gemini_ai` (Confidence: `0.950`)
 
 
-### Resulting Silver Fact Rows (`silver.fct_daily_prices`):
+### Resulting Silver Fact Rows (`silver.clean_store_prices`):
 
 | scrape_date | store_slug | item_id (Canonical) | name_clean | price_khr | unit_price_khr | coicop_division | cpi_eligible |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -333,7 +337,7 @@ Alongside the official Laspeyres Headline CPI, the pipeline executes two econome
 ├───────────────┼───────────────────────────────────┼─────────────────────────────────────────────────────────────┤
 │ **Silver**    │ `int_prices_cleaned.sql`          │ Strips promo words, MEF USD->KHR FX conversion, unit parses │
 │               │ `pipeline/item_matcher.py`        │ RapidFuzz deduplication ──► `silver.canonical_items`        │
-│               │ `int_coicop_classified.sql`       │ AI-First 4-tier classification ──► `silver.fct_daily_prices` │
+│               │ `int_coicop_classified.sql`       │ AI-First 4-tier classification ──► `silver.clean_store_prices` │
 
 ├───────────────┼───────────────────────────────────┼─────────────────────────────────────────────────────────────┤
 │ **Gold 1**    │ `gold.sp_calculate_daily_cpi`     │ Unweighted Jevons geometric mean ($P_t$), base compare     │

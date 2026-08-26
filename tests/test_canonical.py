@@ -99,6 +99,31 @@ def test_validate_record_missing_required():
     assert any("discount_pct" in i for i in validate_record(bad_discount))
 
 
+def test_normalize_record_rejects_missing_slug():
+    with pytest.raises(ValueError, match="missing required source_slug"):
+        normalize_record({"name": "Item", "price": 1.0})
+
+
+def test_normalize_record_rejects_zero_price():
+    with pytest.raises(ValueError, match="missing valid positive price"):
+        normalize_record({"name": "Free Item", "price": 0.0, "source_slug": "store_a"})
+
+
+def test_normalize_record_boolean_string_parsing():
+    rec = normalize_record(
+        {"name": "Item", "price": 5.0, "source_slug": "store_a", "is_fallback": "false", "on_promo": "False"}
+    )
+    assert rec["is_fallback"] is False
+    assert rec["on_promo"] is False
+
+
+def test_normalize_record_currency_normalization():
+    rec = normalize_record(
+        {"name": "Item", "price": 5000.0, "source_slug": "store_a", "currency": "khr"}
+    )
+    assert rec["currency"] == "KHR"
+
+
 def test_validate_record_promo_requires_payload():
     rec = normalize_record({"name": "A", "price": 1.0, "source_slug": "x"})
     rec["on_promo"] = True

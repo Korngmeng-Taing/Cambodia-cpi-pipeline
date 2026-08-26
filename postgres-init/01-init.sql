@@ -7,19 +7,28 @@
 -- which also applies to the \i includes below: a DDL error aborts container
 -- bootstrap instead of leaving the warehouse half-initialized.
 
--- 1. Airflow Metadata Database
-CREATE USER airflow WITH PASSWORD 'airflow';
-CREATE DATABASE airflow OWNER airflow;
+-- 1-3. Databases & Roles (idempotent)
+-- Dev-only default passwords live here because the entrypoint's psql cannot
+-- read compose env vars; rotate them for any shared/prod deployment.
+-- Guarded execution: skip roles/databases that already exist instead of
+-- aborting bootstrap via ON_ERROR_STOP (fixes first-boot trap when
+-- POSTGRES_USER/POSTGRES_DB collide with these names).
+SELECT 'CREATE ROLE airflow WITH LOGIN PASSWORD ''airflow'''
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'airflow')\gexec
+SELECT 'CREATE ROLE cpi_user WITH LOGIN PASSWORD ''cpi_pass'''
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'cpi_user')\gexec
+SELECT 'CREATE ROLE metabase WITH LOGIN PASSWORD ''metabase'''
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'metabase')\gexec
+
+SELECT 'CREATE DATABASE airflow OWNER airflow'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'airflow')\gexec
+SELECT 'CREATE DATABASE cpi_db OWNER cpi_user'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'cpi_db')\gexec
+SELECT 'CREATE DATABASE metabase OWNER metabase'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'metabase')\gexec
+
 GRANT ALL PRIVILEGES ON DATABASE airflow TO airflow;
-
--- 2. CPI Pipeline Application Database
-CREATE USER cpi_user WITH PASSWORD 'cpi_pass';
-CREATE DATABASE cpi_db OWNER cpi_user;
 GRANT ALL PRIVILEGES ON DATABASE cpi_db TO cpi_user;
-
--- 3. Metabase Application Database
-CREATE USER metabase WITH PASSWORD 'metabase';
-CREATE DATABASE metabase OWNER metabase;
 GRANT ALL PRIVILEGES ON DATABASE metabase TO metabase;
 
 -- Connect to cpi_db to initialize CPI schemas, procedures, and views
@@ -34,7 +43,6 @@ GRANT ALL ON SCHEMA public TO cpi_user;
 -- pre-creating them makes dbt's view replacement CASCADE-drop them. They are
 -- (re)created by gold_dag's refresh_serving_views task after dbt.
 \i /sql/schema.sql
-\i /sql/gold_procedures.sql
 
 -- Transfer ownership of all pipeline objects to cpi_user so DDL run by the
 -- application user (e.g. DROP VIEW / ALTER COLUMN TYPE) is permitted.

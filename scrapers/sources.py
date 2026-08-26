@@ -777,10 +777,9 @@ class L192Scraper(BaseScraper):
 # 5. Community Pharmacy — Supabase PostgREST API (Pharmacy)
 # ═══════════════════════════════════════════════════════════════════════════
 PHARMA_SUPABASE_URL = "https://nceojvynlpcxarizntsk.supabase.co/rest/v1/products"
-PHARMA_SUPABASE_ANON = os.environ.get(
-    "PHARMA_SUPABASE_ANON_KEY",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZW9qdnlubHB4YXJpem50c2siLCJyb2xlIjoiYW5vbiIsImlhdCI6MTY5OTIwMDAwMH0.placeholder",
-)
+# No embedded credential default: without the env var the scraper logs a clear
+# error and degrades to the flagged baseline catalog instead of failing auth.
+PHARMA_SUPABASE_ANON = os.environ.get("PHARMA_SUPABASE_ANON_KEY", "")
 
 
 COMMUNITY_PHARMA_BASELINE = [
@@ -854,6 +853,11 @@ class CommunityPharmaScraper(BaseScraper):
                                 return match.group(0)
         except Exception as exc:
             log.warning("CommunityPharma dynamic key extraction failed: %s", exc)
+        if not PHARMA_SUPABASE_ANON:
+            log.warning(
+                "CommunityPharma: no anon key available (set "
+                "PHARMA_SUPABASE_ANON_KEY); using flagged baseline catalog."
+            )
         return PHARMA_SUPABASE_ANON
 
     def fetch_records(
@@ -2497,6 +2501,7 @@ class RedBusKhScraper(BaseScraper):
             duration = item["dur"]
             url = f"{REDBUS_BASE_URL}/{slug}"
             is_fallback = False
+            fallback_reason = None
 
             if op_slug and op_slug not in op_fare_cache:
                 try:
@@ -2514,6 +2519,9 @@ class RedBusKhScraper(BaseScraper):
                 live_base = op_fare_cache[op_slug]
                 if live_base > 0 and abs(live_base - price) < 15:
                     price = round(max(live_base, price), 2)
+            else:
+                is_fallback = True
+                fallback_reason = "redBus static route baseline tariff (operator fetch unavailable)"
 
             records.append(
                 build_canonical_record(
@@ -2528,6 +2536,7 @@ class RedBusKhScraper(BaseScraper):
                     url=url,
                     scrape_date=ds,
                     is_fallback=is_fallback,
+                    fallback_reason=fallback_reason,
                     attrs={
                         "origin": "Phnom Penh",
                         "destination": dest,
@@ -3795,6 +3804,8 @@ class HyattHotelScraper(BaseScraper):
                     },
                     url="https://www.hyatt.com/hyatt-regency/en-US/pnhrp-hyatt-regency-phnom-penh",
                     scrape_date=ds,
+                    is_fallback=True,
+                    fallback_reason="Static ratecard tariff (live API unavailable)",
                 )
             )
         return records
@@ -4103,11 +4114,14 @@ class MefExchangeRateScraper(BaseScraper):
     ) -> list[dict[str, Any]]:
         ds = str(scrape_date or pendulum.today().date())
         rate = DEFAULT_USD_KHR
+        is_fallback = False
+        fallback_reason = None
         try:
             resp = requests.get(MEF_FX_URL, timeout=15)
             resp.raise_for_status()
             body = resp.json()
             items = body.get("data") if isinstance(body, dict) else body
+            found = False
             if isinstance(items, list):
                 for item in items:
                     if isinstance(item, dict):
@@ -4118,13 +4132,19 @@ class MefExchangeRateScraper(BaseScraper):
                             parsed = _to_float(val)
                             if parsed and parsed > 0:
                                 rate = parsed
+                                found = True
                                 break
             elif isinstance(body, dict):
-                rate = (
-                    _to_float(body.get("rate") or body.get("usd_khr") or body.get("value"))
-                    or DEFAULT_USD_KHR
-                )
+                parsed = _to_float(body.get("rate") or body.get("usd_khr") or body.get("value"))
+                if parsed and parsed > 0:
+                    rate = parsed
+                    found = True
+            if not found:
+                is_fallback = True
+                fallback_reason = "MEF FX API response lacked valid USD rate; used default"
         except Exception as exc:
+            is_fallback = True
+            fallback_reason = f"MEF FX API failed ({exc}); used default rate"
             log.warning("MEF FX API failed, using default %s: %s", DEFAULT_USD_KHR, exc)
         return [
             {
@@ -4134,6 +4154,8 @@ class MefExchangeRateScraper(BaseScraper):
                 "store": "Ministry of Economy and Finance (MEF)",
                 "currency_pair": "USD/KHR",
                 "rate": rate,
+                "is_fallback": is_fallback,
+                "fallback_reason": fallback_reason,
                 "scraped_at": datetime.now(UTC).isoformat(),
             }
         ]
@@ -4203,18 +4225,32 @@ class MocGasolineScraper(BaseScraper):
 
     def fetch_records(self, scrape_date=None) -> list[dict[str, Any]]:
         ds = scrape_date or pendulum.today("Asia/Phnom_Penh").date()
+        target = ds.date() if isinstance(ds, datetime) else ds
         product_ids = [pid for pid, _ in MOC_FUEL_PRODUCTS]
+
+        # Query fuel products from GraphQL
         items = self._query_line_report(
             ds.subtract(days=14), ds, MOC_FUEL_PROVINCE, product_ids
         )
-        if len(items) < len(MOC_FUEL_PRODUCTS):
-            raise RuntimeError(
-                f"MOC: expected {len(MOC_FUEL_PRODUCTS)} series, got {len(items)}"
-            )
-        target = ds.date() if isinstance(ds, datetime) else ds
+        items_by_pid: dict[int, Any] = {}
+        if items and len(items) >= len(MOC_FUEL_PRODUCTS):
+            for idx, (pid, _) in enumerate(MOC_FUEL_PRODUCTS):
+                items_by_pid[pid] = items[idx]
+        else:
+            # Per-product fallback query
+            for pid, _ in MOC_FUEL_PRODUCTS:
+                res = self._query_line_report(
+                    ds.subtract(days=14), ds, MOC_FUEL_PROVINCE, [pid]
+                )
+                if res:
+                    items_by_pid[pid] = res[0]
+
         records: list[dict[str, Any]] = []
-        for idx, (product_id, product_name) in enumerate(MOC_FUEL_PRODUCTS):
-            points = items[idx].get("data") or []
+        for product_id, product_name in MOC_FUEL_PRODUCTS:
+            item_data = items_by_pid.get(product_id)
+            if not item_data:
+                continue
+            points = item_data.get("data") or []
             best: tuple[datetime, float] | None = None
             for point in points:
                 parsed = _parse_moc_date(point.get("x"))
@@ -4244,7 +4280,8 @@ class MocGasolineScraper(BaseScraper):
                     is_fallback=price_date.date() != target,
                     attrs={
                         "price_date": price_date.strftime("%Y-%m-%d"),
-                        "source_api": "moc-graphql",
+                        "product_id": product_id,
+                        "province_id": MOC_FUEL_PROVINCE,
                     },
                 )
             )

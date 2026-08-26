@@ -17,11 +17,12 @@
 
 with cleaned_prices as (
     select * from {{ ref('int_prices_cleaned') }}
+    where price_khr > 0
     {% if is_incremental() %}
         {% if var('ds', '') and var('ds') != 'None' and var('ds') != 'null' and var('ds') != 'none' %}
-            where scrape_date = '{{ var("ds") }}'::date
+            and scrape_date = '{{ var("ds") }}'::date
         {% else %}
-            where scrape_date >= (select coalesce(max(scrape_date) - interval '2 days', '2020-01-01'::date) from {{ this }})
+            and scrape_date >= (select coalesce(max(scrape_date) - interval '2 days', '2020-01-01'::date) from {{ this }})
         {% endif %}
     {% endif %}
 ),

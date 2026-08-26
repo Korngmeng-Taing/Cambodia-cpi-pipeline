@@ -261,13 +261,20 @@ def normalize_record(
     elif fallback_reason is None or not str(fallback_reason).strip():
         fallback_reason = DEFAULT_FALLBACK_REASON
 
+    cpi_eligible = _to_bool(_first(raw.get("cpi_eligible"), True), default=True)
+    # Circuit breaker: guard against 1000x scaling glitch or extreme price typos in retail goods
+    if curr == "KHR" and price > 50_000_000.0 and stype not in ("housing", "hotel"):
+        cpi_eligible = False
+    elif curr == "USD" and price > 15_000.0 and stype not in ("housing", "hotel"):
+        cpi_eligible = False
+
     return {
         "scrape_date": str(ds),
         "source_slug": str(slug),
         "source_type": str(stype),
         "store": str(store_name),
         "currency": str(curr),
-        "cpi_eligible": _to_bool(_first(raw.get("cpi_eligible"), True), default=True),
+        "cpi_eligible": cpi_eligible,
         "item_id": str(item_id),
         "barcode": str(barcode) if barcode is not None else None,
         "name": str(name),

@@ -45,11 +45,12 @@ raw as (
     from {{ source('bronze', 'raw_prices') }} rp
     left join {{ source('silver', 'item_match_log') }} iml
         on iml.raw_price_id = rp.raw_price_id
+    where rp.price > 0
     {% if is_incremental() %}
         {% if var('ds', '') != '' %}
-            where rp.scraped_at::date = '{{ var("ds") }}'::date
+            and rp.scraped_at::date = '{{ var("ds") }}'::date
         {% else %}
-            where rp.scraped_at::date >= (select coalesce(max(scrape_date) - interval '2 days', '2020-01-01'::date) from {{ this }})
+            and rp.scraped_at::date >= (select coalesce(max(scrape_date) - interval '2 days', '2020-01-01'::date) from {{ this }})
         {% endif %}
     {% endif %}
 ),

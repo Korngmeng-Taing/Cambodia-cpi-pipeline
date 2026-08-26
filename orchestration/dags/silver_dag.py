@@ -29,6 +29,14 @@ from pipeline.hedonic_regression import run_hedonic_regression
 from pipeline.item_matcher import ItemMatcher
 from pipeline.key_pool import get_key_pool
 
+try:
+    from orchestration.dags.alerts import airflow_task_failure_callback
+except ImportError:
+    try:
+        from dags.alerts import airflow_task_failure_callback
+    except ImportError:
+        from alerts import airflow_task_failure_callback
+
 log = logging.getLogger(__name__)
 
 DAG_ID = "silver_dag"
@@ -41,6 +49,7 @@ DEFAULT_ARGS = {
     "retry_delay": timedelta(minutes=5),
     "email_on_failure": False,
     "email_on_retry": False,
+    "on_failure_callback": airflow_task_failure_callback,
 }
 
 
@@ -133,10 +142,12 @@ with DAG(
         provide_context=True,
     )
 
+    _dbt_flags = f"--project-dir {DBT_PROJECT_DIR} --target-path /tmp/dbt/target --log-path /tmp/dbt/logs"
+
     # 3. Seed Reference Data
     task_dbt_seed = BashOperator(
         task_id="dbt_seed",
-        bash_command=f"dbt seed --project-dir {DBT_PROJECT_DIR} --full-refresh",
+        bash_command=f"dbt seed {_dbt_flags} --full-refresh",
     )
 
     # 4. Hybrid Vector + Gemini COICOP Classification
@@ -157,9 +168,9 @@ with DAG(
     task_dbt_silver_run = BashOperator(
         task_id="dbt_silver_run",
         bash_command=(
-            f"dbt run --project-dir {DBT_PROJECT_DIR} "
+            f"dbt run {_dbt_flags} "
             "--select models/silver models/staging "
-            '--vars \'{{"ds": "{{ ds }}"}}\''
+            '--vars \'{"ds": "{{ ds }}"}\''
         ),
     )
 
@@ -167,7 +178,7 @@ with DAG(
     task_dbt_silver_test = BashOperator(
         task_id="dbt_silver_test",
         bash_command=(
-            f"dbt test --project-dir {DBT_PROJECT_DIR} "
+            f"dbt test {_dbt_flags} "
             "--select models/silver models/staging"
         ),
     )

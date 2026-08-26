@@ -192,32 +192,49 @@ class VectorItemMatcher:
 
         cand_vec = self.embed_text(candidate_name)
         cand_norm = np.linalg.norm(cand_vec)
-        if cand_norm == 0:
-            cand_norm = 1.0
+        if cand_norm > 0:
+            cand_unit = cand_vec / cand_norm
+        else:
+            cand_unit = cand_vec
+
+        # Pre-ensure all catalog items have unit vectors
+        vectors = []
+        for item in catalog:
+            ivec = item.get("vector")
+            if ivec is None:
+                ivec = self.embed_text(item.get("canonical_name", ""))
+                inorm = np.linalg.norm(ivec)
+                if inorm > 0:
+                    ivec = ivec / inorm
+                item["vector"] = ivec
+            vectors.append(ivec)
+
+        # Batch vector dot-product cosine similarity across all catalog items
+        if vectors:
+            mat = np.vstack(vectors)
+            cos_sims = np.dot(mat, cand_unit)
+        else:
+            cos_sims = np.zeros(len(catalog), dtype=np.float32)
 
         best_item = None
         highest_sim = -1.0
+        cand_lower = candidate_name.lower()
 
-        for item in catalog:
+        # Fast filtering: evaluate spec compatibility and fuzzy booster
+        for idx, item in enumerate(catalog):
+            vec_sim = float(cos_sims[idx]) if idx < len(cos_sims) else 0.0
+            
+            # Fast prune if vector similarity is too low
+            if vec_sim < 0.40 and highest_sim > 0.60:
+                continue
+
             base_name = item.get("canonical_name", "")
             # Deterministic spec guard
             if not is_spec_compatible(candidate_name, base_name):
                 continue
 
-            item_vec = item.get("vector")
-            if item_vec is None:
-                item_vec = self.embed_text(base_name)
-                item["vector"] = item_vec
-
-            item_norm = np.linalg.norm(item_vec)
-            if item_norm == 0:
-                item_norm = 1.0
-
-            # Vector cosine similarity
-            vec_sim = float(np.dot(cand_vec, item_vec) / (cand_norm * item_norm))
-
             # String token-sort fuzzy ratio fallback/booster
-            fuzz_sim = fuzz.token_sort_ratio(candidate_name.lower(), base_name.lower()) / 100.0
+            fuzz_sim = fuzz.token_sort_ratio(cand_lower, base_name.lower()) / 100.0
             combined_sim = max(vec_sim, fuzz_sim)
 
             if combined_sim > highest_sim:

@@ -1,0 +1,33 @@
+flowchart TD
+    subgraph StarSchema["1. Kimball Star Schema Dimensional Model (gold.*)"]
+        G_DIM1[("gold.dim_items\n• item_id (PK UUID)\n• canonical_name & brand\n• coicop_division & code\n• first_seen / last_seen")]
+        G_DIM2[("gold.dim_stores\n• store_slug (PK)\n• store_name & channel\n• default_coicop_division")]
+        G_FACT[("gold.fct_daily_prices\n• (scrape_date, store_slug, item_id) [PK]\n• price_khr & unit_price_khr\n• discount_pct & on_promo\n• is_outlier & cpi_eligible")]
+        
+        G_DIM1 --> G_FACT
+        G_DIM2 --> G_FACT
+    end
+
+    subgraph IndexEngine["2. CPI Index Math & Econometric Engine"]
+        G_FACT --> M1["Jevons Geometric Mean Elementary Aggregation\nP_Jevons = exp( 1/N * sum( ln(P_i,t) ) )"]
+        M1 --> M2["ILO/IMF 7-Day Missing Price Imputation\n(Class-mean relative carry-forward)"]
+        M2 --> M3["Base Period Anchoring (P0 = August 2026 = 100.00)\ngold.base_prices"]
+        M3 --> M4["12-Division Weighted Laspeyres Aggregation\ngold.cpi_category_daily (w_d from NIS weights)"]
+        M4 --> M5["National Headline & Core CPI Compilation\ngold.cpi_headline_daily"]
+    end
+
+    subgraph FeatureStore["3. ML Nowcasting Feature Mart (gold.fct_ml_nowcast_features)"]
+        M4 & M5 --> F1["Feature Engineering Table\n• 7d, 14d, 30d Momentum for Food (01) & Fuel (07)\n• USD/KHR Volatility & Promo Share\n• Historical CPI Lag Regressors"]
+        F1 --> F2["Machine Learning Models\n(LightGBM / XGBoost Regressors)"]
+        F2 --> F3["T+0 Real-Time Flash CPI Nowcast\n(Weeks ahead of official NIS release)"]
+    end
+
+    subgraph Serving["4. Executive BI & Operational Observability"]
+        M4 & M5 --> B1["Power BI Analytics\n• Real-Time Inflation Tracking\n• Category Price Elasticity\n• Promo Impact BI"]
+        StarSchema --> B2["Metabase v0.49\n• 20-Source Health Matrix\n• Price Anomaly Triage Feed\n• Coverage & Barcode Monitors"]
+    end
+
+    classDef gldBox fill:#fffde7,stroke:#f57f17,stroke-width:2px,color:#e65100;
+    classDef gldTable fill:#ffffff,stroke:#f57f17,stroke-width:2px,stroke-dasharray: 5 5,color:#e65100;
+    class M1,M2,M3,M4,M5,F1,F2,F3,B1,B2 gldBox;
+    class G_DIM1,G_DIM2,G_FACT gldTable;

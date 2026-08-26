@@ -235,9 +235,43 @@ CREATE TABLE IF NOT EXISTS gold.fct_daily_prices (
     PRIMARY KEY (scrape_date, store_slug, item_id)
 );
 
+-- Gold Jevons Micro-Index Facts
+CREATE TABLE IF NOT EXISTS gold.fct_elementary_indices (
+    calculation_date DATE NOT NULL,
+    item_id UUID NOT NULL,
+    coicop_division VARCHAR(10) NOT NULL,
+    coicop_code VARCHAR(20),
+    base_price_khr NUMERIC(14, 4),
+    current_price_khr NUMERIC(14, 4),
+    price_ratio NUMERIC(10, 6),
+    elementary_index NUMERIC(10, 4),
+    is_imputed BOOLEAN DEFAULT FALSE,
+    observation_count INTEGER,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (calculation_date, item_id)
+);
+CREATE INDEX IF NOT EXISTS idx_fct_elem_indices_date ON gold.fct_elementary_indices(calculation_date);
+CREATE INDEX IF NOT EXISTS idx_fct_elem_indices_division ON gold.fct_elementary_indices(coicop_division);
+
+-- Gold Daily Laspeyres 12-Division & Headline CPI Facts
+CREATE TABLE IF NOT EXISTS gold.fct_cpi_daily (
+    calculation_date DATE NOT NULL,
+    coicop_division VARCHAR(10) NOT NULL,
+    division_name VARCHAR(150),
+    weight NUMERIC(8, 5),
+    division_index NUMERIC(10, 4),
+    headline_cpi NUMERIC(10, 4),
+    core_cpi NUMERIC(10, 4),
+    item_count INTEGER,
+    observation_count INTEGER,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (calculation_date, coicop_division)
+);
+CREATE INDEX IF NOT EXISTS idx_fct_cpi_daily_date ON gold.fct_cpi_daily(calculation_date);
+
 -- Gold Conformed Item Dimension (Master Catalog)
 CREATE TABLE IF NOT EXISTS gold.dim_items (
-    item_id VARCHAR(128) PRIMARY KEY,
+    item_id TEXT PRIMARY KEY,
     canonical_name TEXT NOT NULL,
     brand VARCHAR(256),
     barcode VARCHAR(64),

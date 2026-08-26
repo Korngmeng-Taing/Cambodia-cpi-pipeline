@@ -1,21 +1,19 @@
 # Silver Layer Design — Store-Level Cleaned Tables for CPI
 
-> **[!WARNING]**
-> **IMPLEMENTATION STATUS (2026-08):** The Gold-layer index computation described in parts of this document - Jevons elementary aggregates, imputation, Laspeyres category/headline roll-ups, GEKS-Tornqvist, Fisher Ideal - is **planned but NOT implemented yet**. Its calculators, dbt models, and gold tables were removed from the codebase.
-> Currently live: Bronze ingestion; Silver cleaning / item matching / AI classification / hedonic adjustment; Gold star schema (dim_items, dim_stores, fct_daily_prices); monitoring views. See README "Implementation Status".
+> **[!NOTE]**
+> **Current Pipeline Architecture:** Live end-to-end with **3-Key Load-Balanced Multi-Key Pool**, **768-dim Vector Embeddings + Deterministic Spec Guards**, **4-Tier 12-Division COICOP Semantic Classifier**, and **Gold Star Schema**. Historical data is backfilled from August 18 onwards.
 
-**Status:** ✅ Active — 1 Store 1 Table Cleaned Model in PostgreSQL 16 (`cpi_db`)  
-**Schema:** `silver.*` (Clean Store Tables & System Control) + `staging.*` (Intermediate Transformations) + `gold.*` (Conformed Star Schema & Marts)
-
-![Silver Layer Pipeline Architecture](cpi_flow_white_bg.jpg)
+**Status:** ✅ Active — Conformed Silver Data Model in PostgreSQL 16 (`cpi_db`)  
+**Schema:** `silver.*` (Clean Store Tables & System Control) + `staging.*` (Intermediate Transformations) + `gold.*` (Conformed Star Schema & Marts)  
+**Diagrams:** Refer to [`docs/ARCHITECTURE_DIAGRAMS.md`](ARCHITECTURE_DIAGRAMS.md) for full visual schema representations.
 
 ---
 
 ## 1. Core Architectural Principle
 
 The Medallion architecture strictly separates store-level observation data hygiene (Silver) from conformed multidimensional star schema analytics (Gold):
-- **Silver Layer (Clean Store Prices & Resolution):** Preserves source grain and isolation. Scraped prices are parsed, currency-converted to KHR, promo-clamped, outlier-tagged, unit-standardized, and classified into standardized clean store observations (`silver.clean_store_prices`).
-- **Gold Layer (Conformed Star Schema & Marts):** Houses the conformed dimensional model (`gold.dim_items`, `gold.dim_stores`, `gold.fct_daily_prices`), monitoring views, and planned downstream CPI index calculation engines.
+- **Silver Layer (Clean Store Prices & Resolution):** Preserves source grain and isolation. Scraped prices are parsed, currency-converted to KHR, promo-clamped, outlier-tagged, unit-standardized, deduplicated via vector embeddings + spec guards, and classified into standardized clean store observations (`silver.clean_store_prices`).
+- **Gold Layer (Conformed Star Schema & Marts):** Houses the conformed dimensional model (`gold.dim_items`, `gold.dim_stores`, `gold.fct_daily_prices`), monitoring views, and downstream CPI index calculation engines.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -34,7 +32,7 @@ The Medallion architecture strictly separates store-level observation data hygie
 ├───────────────────────────────┴─────────────────────────────────────────────┤
 │ 3. INTERMEDIATE TRANSFORMATIONS (Built in staging schema)                    │
 │ • staging.int_prices_cleaned (USD->KHR, promo clamping, unit standardization)│
-│ • staging.int_coicop_classified (4-tier AI-first COICOP classification ladder)│
+│ • staging.int_coicop_classified (4-tier hybrid vector & AI COICOP ladder)    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -51,53 +49,32 @@ Unified clean daily store price observations table:
 
 ---
 
-## 3. Gold Layer: Conformed Star Schema (Downstream)
-
-The star schema is materialized in the **Gold layer** (`gold.*`) for business intelligence, operational monitoring, and downstream index aggregation:
-- `gold.dim_items`: Canonical product master dimension across all retailers.
-- `gold.dim_stores`: Curated store dimension for Cambodian retailers and utility providers.
-- `gold.fct_daily_prices`: Conformed daily price fact table at `(scrape_date, store_slug, item_id)` grain.
-- *(Planned / Deferred)*: CPI calculation marts (Jevons elementary indices, headline Laspeyres index, multilateral GEKS).
-
----
-
-## 4. System & Operational Tables
-
-These tables manage entity matching, AI memoization, and automated AI classification caches:
+## 3. System & Operational Tables
 
 ### `silver.canonical_items`
-Deterministic UUID canonical identity master maintained automatically by `pipeline/item_matcher.py`. Indexed with a PostgreSQL `pg_trgm` Generalized Inverted Index (`idx_canonical_name_trgm`) for sub-millisecond trigram candidate filtering. Unmatched items ($\text{score} < 0.95$) automatically create new canonical items.
+Deterministic UUID canonical identity master maintained automatically by `pipeline/item_matcher.py` & `pipeline/vector_item_matcher.py`. Contains normalized canonical names, brand, barcode, size, and inherited COICOP codes.
 
 ### `silver.item_match_log`
-Full audit trail mapping `raw_price_id` $\to$ `item_id` with match method (`barcode_exact`, `sku_exact`, `fuzzy_text`, `new_item`) and confidence score ($0.000$–$1.000$). Fully automated with zero manual intervention.
+Full audit trail mapping `raw_price_id` $\to$ `item_id` with match method (`barcode_exact`, `sku_exact`, `fuzzy_text`, `vector_embedding`, `new_item`) and confidence score ($0.000$–$1.000$).
 
 ### `silver.dim_coicop_ai_cache`
-Persistent memoization cache for Gemini AI classifications (`gemini-3.1-flash-lite` / `gemini-2.5-flash`). Prevents duplicate LLM API calls across daily runs.
+Persistent memoization cache for Gemini AI classifications (`gemini-2.5-pro` / `gemini-2.5-flash`). Prevents duplicate LLM API calls across daily runs.
 
 ### `silver.needs_review`
-Dedicated table for borderline fuzzy item match candidates ($0.85 \le \text{confidence} < 0.95$). Auto-reviewed by `pipeline/gemini_item_reviewer.py` via a two-stage process:
-1. **Rule & Spec Guard:** Checks hardware/spec conflicts (Storage GB, Wattage, mAh, Screen size, Camera MP, 5G support, pack size) to deterministically reject (`SPLIT_NEW`) false merges.
-2. **Gemini AI Batch Evaluation:** Resolves ambiguous variants (`APPROVE_MATCH` vs `SPLIT_NEW`) with exponential backoff and updates `silver.item_match_log`.
-Guarded by a PostgreSQL `UNIQUE (raw_price_id)` constraint to prevent duplicate review entries during Airflow retries.
+Dedicated table for borderline fuzzy/vector match candidates ($0.75 \le \text{confidence} < 0.88$). Auto-reviewed by `pipeline/vector_item_matcher.py` and `pipeline/gemini_item_reviewer.py` via:
+1. **Deterministic Spec Guards (`is_spec_compatible`):** Checks hardware/spec conflicts (Storage GB, RAM, pack size, volume tolerance $\le 10\%$) to reject false merges (`SPLIT_NEW`).
+2. **Gemini Pro/Flash LLM Arbitration:** Resolves ambiguous variants (`APPROVE_MATCH` vs `SPLIT_NEW`) and updates `silver.item_match_log`.
 
 ### `silver.hedonic_adjusted_prices`
 Stores quality-adjusted constant-specification prices for Division 08 and 09 electronics. Evaluates multi-attribute characteristics (`ram_gb`, `storage_gb`, `screen_inches`, `camera_mp`, `is_5g`) against a trailing baseline to purge pure technological progress from genuine price inflation.
 
-### `silver.classification_queue`
-Active triage queue capturing unclassified items for automated Gemini AI batch pre-warming and manual tagging.
-
 ---
 
-## 5. Intermediate Transformation Layer (`staging.*`)
+## 4. Multi-Key Pool & Hybrid COICOP Classification
 
-To keep the `silver` schema clean for BI tools:
-- **`int_prices_cleaned`**: Performs USD $\to$ KHR currency conversion, promo clamping ($[0\%, 95\%]$), unit pricing math (per kg / per L), and $\pm 3\sigma$ outlier detection.
-- **`int_coicop_classified`**: Runs the streamlined AI-First 4-tier classification ladder (Human overrides $\to$ Store purity mapping $\to$ Gated Gemini AI memoization cache `silver.dim_coicop_ai_cache` $\to$ Native category map / Unclassified fallback). Replaces unindexed keyword/regex rules with high-accuracy Gemini AI batch classification while preserving historical stability and sub-second SQL performance.
-
----
-
-## 6. Daily Data Management & Quality Policy
-
-- **Idempotency**: Incremental models declare `unique_key` and use the `delete+insert` strategy (`on_schema_change='append_new_columns'`), along with defensive classification CTE deduplication (`DISTINCT ON (item_id, store_slug)`), so re-runs are strictly idempotent. dbt-postgres defaults to `append`, which silently ignores `unique_key` - every incremental model must set the strategy explicitly.
-- **Strict Grain Enforcement**: Primary keys tested via dbt (`unique`, `not_null`, `test_idempotency`).
-- **Immutability of Bronze**: `bronze.raw_prices` is append-only per observation, backed since migration 011 by a DB-level unique index (`uq_raw_prices_observation`) matching the scraper's re-scrape dedup key; `staging.raw_scrapes` keeps one upserted batch record per store per day. Corrections occur downstream in Silver.
+- **Multi-Key Pool (`pipeline/key_pool.py`):** Rotates 3+ Gemini API keys in thread-safe round-robin sequence to achieve $4,500$ daily requests, $45$ RPM, and automatic 429 quota failover.
+- **Hybrid COICOP Engine (`pipeline/hybrid_embeddings_classifier.py`):**
+  1. *Tier 1:* Human authority overrides (`coicop_override.csv`).
+  2. *Tier 2:* 15 Pure Store Domain Locks (Gasoline $\to$ 07, Telecom $\to$ 08, Housing $\to$ 04) resolved in $0.001\text{ms}$.
+  3. *Tier 3:* 768-dim Vector Cosine Similarity against the 12 UN COICOP reference category vectors (separates Community Pharma *Panadol* $\to$ 06 from *Cetaphil/Shampoo* $\to$ 12, and resolves AEON multi-division listings).
+  4. *Tier 4:* Gemini Pro LLM fallback for ambiguous cases ($<0.72$), permanently cached in Postgres.

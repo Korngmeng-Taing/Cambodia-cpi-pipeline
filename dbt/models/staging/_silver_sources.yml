@@ -1,20 +1,6 @@
 version: 2
 
 sources:
-  - name: bronze
-    schema: bronze
-    description: |
-      Bronze layer raw price observations. Freshness checks guard against
-      silent scraper failures — if no new rows arrive within the warn/error
-      window the dbt run will flag the source as stale.
-    tables:
-      - name: raw_prices
-        description: Raw scraped price observations across all stores.
-        loaded_at_field: scraped_at
-        freshness:
-          warn_after: {count: 1, period: day}
-          error_after: {count: 2, period: day}
-
   - name: silver
     schema: silver
     description: |

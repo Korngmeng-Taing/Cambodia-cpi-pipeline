@@ -12,18 +12,33 @@ from pipeline import hedonic_regression as hr
 
 
 def test_extract_specs_ram_and_storage():
-    specs = hr.extract_specs("Samsung Galaxy S24 8GB RAM 256GB Storage")
-    assert specs == {"RAM_GB": 8, "Storage_GB": 256}
+    specs = hr.extract_specs("Samsung Galaxy S24 8GB RAM 256GB Storage 6.2\" 50MP 5G")
+    assert specs == {
+        "RAM_GB": 8,
+        "Storage_GB": 256,
+        "Screen_Inches": 6.2,
+        "Camera_MP": 50,
+        "Is_5G": 1,
+    }
 
 
 def test_extract_specs_explicit_ram_with_standalone_storage():
     specs = hr.extract_specs("Samsung Galaxy A55 8GB RAM 128GB")
-    assert specs == {"RAM_GB": 8, "Storage_GB": 128}
+    assert specs["RAM_GB"] == 8
+    assert specs["Storage_GB"] == 128
+    assert specs["Screen_Inches"] == 0.0
+    assert specs["Is_5G"] == 0
 
 
 def test_extract_specs_missing_features_default_zero():
     specs = hr.extract_specs("Generic cable")
-    assert specs == {"RAM_GB": 0, "Storage_GB": 0}
+    assert specs == {
+        "RAM_GB": 0,
+        "Storage_GB": 0,
+        "Screen_Inches": 0.0,
+        "Camera_MP": 0,
+        "Is_5G": 0,
+    }
 
 
 def test_fit_ols_rejects_tiny_sample():
@@ -84,7 +99,11 @@ def test_baseline_specs_uses_prior_month():
         }
     )
     base = hr.baseline_specs(df, "2026-08-18")
-    assert base == {"RAM_GB": pytest.approx(6.0), "Storage_GB": pytest.approx(96.0)}
+    assert base["RAM_GB"] == pytest.approx(6.0)
+    assert base["Storage_GB"] == pytest.approx(96.0)
+    assert base["Screen_Inches"] == 0.0
+    assert base["Camera_MP"] == 0.0
+    assert base["Is_5G"] == 0.0
 
 
 def test_persist_hedonic_adjusted_record_construction():

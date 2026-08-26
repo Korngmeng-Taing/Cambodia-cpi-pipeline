@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS silver.canonical_items (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_canonical_items_barcode ON silver.canonical_items(barcode) WHERE barcode IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_canonical_items_name ON silver.canonical_items(canonical_name);
+CREATE INDEX IF NOT EXISTS idx_canonical_name_trgm ON silver.canonical_items USING gin (canonical_name gin_trgm_ops);
 
 -- Item matching audit log
 CREATE TABLE IF NOT EXISTS silver.item_match_log (
@@ -348,6 +349,9 @@ CREATE TABLE IF NOT EXISTS silver.hedonic_adjusted_prices (
     raw_price_khr NUMERIC(14, 2) NOT NULL,
     ram_gb INT NOT NULL DEFAULT 0,
     storage_gb INT NOT NULL DEFAULT 0,
+    screen_inches NUMERIC(4, 2) DEFAULT 0.0,
+    camera_mp INT DEFAULT 0,
+    is_5g INT DEFAULT 0,
     hedonic_adjusted_price_khr NUMERIC(14, 2) NOT NULL,
     adjustment_ratio NUMERIC(8, 4) NOT NULL DEFAULT 1.0000,
     model_r2 NUMERIC(6, 4),

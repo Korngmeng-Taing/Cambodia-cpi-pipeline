@@ -45,12 +45,15 @@ HISTORY_MONTHS = 3
 MIN_SAMPLE_SIZE = 20  # refuse to fit a model on a tiny sample
 
 # Regexes for hedonic characteristics embedded in product names, e.g.
-# "Samsung Galaxy S24 8GB/256GB", "iPhone 15 Pro 128GB".
+# "Samsung Galaxy S24 8GB/256GB 6.2" 50MP 5G", "iPhone 15 Pro 128GB".
 _COMPOUND_SPEC_RE = re.compile(
     r"\b(\d{1,2})\s*(?:GB)?\s*/\s*(\d{2,4})\s*GB\b", re.IGNORECASE
 )
 _RAM_RE = re.compile(r"(\d{1,3})\s*GB\s*(?:RAM|memory)", re.IGNORECASE)
 _STORAGE_RE = re.compile(r"(\d{1,4})\s*GB\s*(?:storage|rom|ssd)?", re.IGNORECASE)
+_SCREEN_RE = re.compile(r"(\d{1,2}(?:\.\d{1,2})?)\s*(?:\"|INCH(?:ES)?)\b|\b(\d{1,2}(?:\.\d{1,2})?)\"", re.IGNORECASE)
+_CAMERA_RE = re.compile(r"\b(\d{2,3})\s*MP\b", re.IGNORECASE)
+_5G_RE = re.compile(r"\b5G\b", re.IGNORECASE)
 
 
 def get_engine():
@@ -62,42 +65,75 @@ def get_engine():
     return create_engine(conn_str)
 
 
-def extract_specs(name: str) -> dict[str, int]:
+def extract_specs(name: str) -> dict[str, float | int]:
     """
-    Extracts (RAM_GB, Storage_GB) from a raw product name using regex.
-    Returns both as 0 when a characteristic is not present (0 = base level).
+    Extracts (RAM_GB, Storage_GB, Screen_Inches, Camera_MP, Is_5G) from a raw product name using regex.
+    Returns 0 when a characteristic is not present (0 = base level).
     """
     name = str(name)
     ram_val = 0
     storage_val = 0
+    screen_val = 0.0
+    camera_val = 0
+    is_5g_val = 1 if _5G_RE.search(name) else 0
 
     # 1. Check compound pattern e.g. "8GB/256GB" or "8/128GB"
     compound = _COMPOUND_SPEC_RE.search(name)
     if compound:
         ram_val = int(compound.group(1))
         storage_val = int(compound.group(2))
-        return {"RAM_GB": ram_val, "Storage_GB": storage_val}
-
-    # 2. Check explicit RAM
-    ram = _RAM_RE.search(name)
-    if ram:
-        ram_val = int(ram.group(1))
-
-    # 3. Check Storage / ROM / SSD
-    storage_explicit = re.search(
-        r"(\d{1,4})\s*GB\s*(?:storage|rom|ssd)", name, re.IGNORECASE
-    )
-    if storage_explicit:
-        storage_val = int(storage_explicit.group(1))
     else:
-        # Find standalone storage tiers not matching ram_val
-        for m in re.finditer(r"\b(\d{1,4})\s*GB\b", name, re.IGNORECASE):
-            val = int(m.group(1))
-            if val != ram_val and val in (16, 32, 64, 128, 256, 512, 1024):
-                storage_val = val
-                break
+        # 2. Check explicit RAM
+        ram = _RAM_RE.search(name)
+        if ram:
+            ram_val = int(ram.group(1))
 
-    return {"RAM_GB": ram_val, "Storage_GB": storage_val}
+        # 3. Check Storage / ROM / SSD
+        storage_explicit = re.search(
+            r"(\d{1,4})\s*GB\s*(?:storage|rom|ssd)", name, re.IGNORECASE
+        )
+        if storage_explicit:
+            storage_val = int(storage_explicit.group(1))
+        else:
+            # Find standalone storage tiers not matching ram_val
+            for m in re.finditer(r"\b(\d{1,4})\s*GB\b", name, re.IGNORECASE):
+                val = int(m.group(1))
+                if val != ram_val and val in (16, 32, 64, 128, 256, 512, 1024):
+                    storage_val = val
+                    break
+
+    # 4. Check Screen size
+    screen = _SCREEN_RE.search(name)
+    if screen:
+        try:
+            val_str = screen.group(1) or screen.group(2)
+            if val_str:
+                s_num = float(val_str)
+                if 4.0 <= s_num <= 85.0:  # covers phones, tablets, monitors, and TVs
+                    screen_val = s_num
+        except ValueError:
+            pass
+
+    # 5. Check Camera MP
+    cam = _CAMERA_RE.search(name)
+    if cam:
+        try:
+            c_num = int(cam.group(1))
+            if 8 <= c_num <= 250:
+                camera_val = c_num
+        except ValueError:
+            pass
+
+    return {
+        "RAM_GB": ram_val,
+        "Storage_GB": storage_val,
+        "Screen_Inches": screen_val,
+        "Camera_MP": camera_val,
+        "Is_5G": is_5g_val,
+    }
+
+
+HEDONIC_FEATURES = ["RAM_GB", "Storage_GB", "Screen_Inches", "Camera_MP", "Is_5G"]
 
 
 def fetch_hedonic_items(
@@ -158,15 +194,15 @@ def fetch_hedonic_items(
         return df
 
     specs = df["canonical_name"].apply(extract_specs)
-    df["RAM_GB"] = [s["RAM_GB"] for s in specs]
-    df["Storage_GB"] = [s["Storage_GB"] for s in specs]
+    for feat in HEDONIC_FEATURES:
+        df[feat] = [s[feat] for s in specs]
     return df
 
 
 def fit_ols(df: pd.DataFrame) -> dict[str, Any]:
     """
-    Fits log-linear model ``ln(raw_price) ~ RAM_GB + Storage_GB`` via statsmodels OLS.
-    Standard econometric semi-log specification for quality adjustment.
+    Fits log-linear model ``ln(raw_price) ~ RAM_GB + Storage_GB + Screen_Inches + Camera_MP + Is_5G`` via statsmodels OLS.
+    Dynamically prunes non-varying features to avoid collinearity and rank-deficiency.
     """
     if sm is None:
         raise ImportError(
@@ -180,44 +216,57 @@ def fit_ols(df: pd.DataFrame) -> dict[str, Any]:
             f"Hedonic model needs >= {MIN_SAMPLE_SIZE} positive-price rows; got {len(train)}"
         )
 
-    X = sm.add_constant(
-        train[["RAM_GB", "Storage_GB"]].astype(float), has_constant="add"
-    )
-    # Rank-deficiency guard
+    # Include core features (RAM + Storage) plus any active features with non-zero variance
+    active_features = []
+    for feat in HEDONIC_FEATURES:
+        if feat in ("RAM_GB", "Storage_GB"):
+            active_features.append(feat)
+        elif feat in train.columns and train[feat].nunique() > 1:
+            active_features.append(feat)
+
+    X_raw = train[active_features].astype(float)
+    X = sm.add_constant(X_raw, has_constant="add")
+    
+    # Rank-deficiency guard: fall back to core features if expanded set is rank-deficient
     if np.linalg.matrix_rank(X) < X.shape[1]:
-        raise ValueError("Hedonic feature matrix X is rank-deficient (collinear RAM/Storage or constant specs)")
+        active_features = ["RAM_GB", "Storage_GB"]
+        X_raw = train[active_features].astype(float)
+        X = sm.add_constant(X_raw, has_constant="add")
+        if np.linalg.matrix_rank(X) < X.shape[1]:
+            raise ValueError("Hedonic feature matrix X is rank-deficient (collinear RAM/Storage or constant specs)")
 
     y_log = np.log(train["raw_price"].astype(float))
     model = sm.OLS(y_log, X).fit()
 
     log.info(
-        "Hedonic Log-Linear OLS fit: n=%d R2=%.4f RAM=%.6f Storage=%.6f const=%.4f",
+        "Hedonic Log-Linear OLS fit: n=%d R2=%.4f features=%s const=%.4f",
         int(model.nobs),
         model.rsquared,
-        model.params.get("RAM_GB", 0),
-        model.params.get("Storage_GB", 0),
+        active_features,
         model.params.get("const", 0),
     )
     return {
         "model": model,
+        "features": active_features,
         "params": model.params.to_dict(),
         "r2": float(model.rsquared),
         "n": int(model.nobs),
         "fitted": model.fittedvalues,
-        "specs": train[["RAM_GB", "Storage_GB"]],
+        "specs": train[active_features],
     }
 
 
 def baseline_specs(df: pd.DataFrame, current_scrape_date: str) -> dict[str, float]:
-    """Average RAM/Storage of items from the previous calendar month (the baseline)."""
+    """Average characteristics of items from the previous calendar month (the baseline)."""
     current_month = pd.to_datetime(current_scrape_date).to_period("M")
     prior = df[pd.to_datetime(df["scrape_date"]).dt.to_period("M") < current_month]
-    if prior.empty:
-        return {"RAM_GB": 0.0, "Storage_GB": 0.0}
-    return {
-        "RAM_GB": float(prior["RAM_GB"].mean()),
-        "Storage_GB": float(prior["Storage_GB"].mean()),
-    }
+    base = {}
+    for feat in HEDONIC_FEATURES:
+        if prior.empty or feat not in prior.columns:
+            base[feat] = 0.0
+        else:
+            base[feat] = float(prior[feat].mean())
+    return base
 
 
 def compute_hedonic_adjusted(
@@ -230,9 +279,10 @@ def compute_hedonic_adjusted(
     Prices items at the baseline specification, holding quality constant.
     """
     model = fit["model"]
-    X = sm.add_constant(df[["RAM_GB", "Storage_GB"]].astype(float), has_constant="add")
+    features = fit.get("features", ["RAM_GB", "Storage_GB"])
+    X = sm.add_constant(df[features].astype(float), has_constant="add")
     log_pred_item = np.asarray(model.predict(X), dtype=float)
-    base_frame = pd.DataFrame([base] * len(df), columns=["RAM_GB", "Storage_GB"])
+    base_frame = pd.DataFrame([{f: base.get(f, 0.0) for f in features}] * len(df), columns=features)
     log_pred_base = np.asarray(
         model.predict(sm.add_constant(base_frame, has_constant="add")),
         dtype=float,
@@ -258,16 +308,19 @@ def persist_hedonic_adjusted(
         """
         INSERT INTO silver.hedonic_adjusted_prices
             (scrape_date, item_id, store_slug, canonical_name, coicop_division,
-             raw_price_khr, ram_gb, storage_gb, hedonic_adjusted_price_khr,
-             adjustment_ratio, model_r2, created_at)
+             raw_price_khr, ram_gb, storage_gb, screen_inches, camera_mp, is_5g,
+             hedonic_adjusted_price_khr, adjustment_ratio, model_r2, created_at)
         VALUES
             (:scrape_date, :item_id, :store_slug, :canonical_name, :coicop_division,
-             :raw_price_khr, :ram_gb, :storage_gb, :hedonic_adjusted_price_khr,
-             :adjustment_ratio, :model_r2, CURRENT_TIMESTAMP)
+             :raw_price_khr, :ram_gb, :storage_gb, :screen_inches, :camera_mp, :is_5g,
+             :hedonic_adjusted_price_khr, :adjustment_ratio, :model_r2, CURRENT_TIMESTAMP)
         ON CONFLICT (scrape_date, item_id, store_slug) DO UPDATE
         SET raw_price_khr = EXCLUDED.raw_price_khr,
             ram_gb = EXCLUDED.ram_gb,
             storage_gb = EXCLUDED.storage_gb,
+            screen_inches = EXCLUDED.screen_inches,
+            camera_mp = EXCLUDED.camera_mp,
+            is_5g = EXCLUDED.is_5g,
             hedonic_adjusted_price_khr = EXCLUDED.hedonic_adjusted_price_khr,
             adjustment_ratio = EXCLUDED.adjustment_ratio,
             model_r2 = EXCLUDED.model_r2,
@@ -289,8 +342,11 @@ def persist_hedonic_adjusted(
                 "canonical_name": str(row["canonical_name"]),
                 "coicop_division": div,
                 "raw_price_khr": raw_price,
-                "ram_gb": int(row["RAM_GB"]),
-                "storage_gb": int(row["Storage_GB"]),
+                "ram_gb": int(row.get("RAM_GB", 0)),
+                "storage_gb": int(row.get("Storage_GB", 0)),
+                "screen_inches": float(row.get("Screen_Inches", 0.0)),
+                "camera_mp": int(row.get("Camera_MP", 0)),
+                "is_5g": int(row.get("Is_5G", 0)),
                 "hedonic_adjusted_price_khr": adj_price,
                 "adjustment_ratio": ratio,
                 "model_r2": round(float(fit["r2"]), 4),

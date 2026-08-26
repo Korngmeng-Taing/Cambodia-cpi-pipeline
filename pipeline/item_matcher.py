@@ -10,6 +10,8 @@ from rapidfuzz import fuzz
 
 from pipeline.config import get_database_url
 from pipeline.text_clean import clean_name_for_matching
+from pipeline.vector_item_matcher import VectorItemMatcher, is_spec_compatible
+from pipeline.hybrid_embeddings_classifier import get_hybrid_classifier
 
 log = logging.getLogger(__name__)
 
@@ -20,15 +22,24 @@ class ItemMatcher:
         auto_accept_threshold: float = 0.95,
         review_threshold: float = 0.85,
         db_conn_str: str | None = None,
+        use_vector_matcher: bool = True,
     ):
         psycopg2.extras.register_uuid()
         self.auto_accept_threshold = auto_accept_threshold
         self.review_threshold = review_threshold
         self.db_conn_str = db_conn_str or get_database_url()
+        self.use_vector_matcher = use_vector_matcher
         self.barcode_cache: dict[str, uuid.UUID] = {}
         self.exact_name_cache: dict[str, uuid.UUID] = {}
         self.sku_cache: dict[tuple[str, str], uuid.UUID] = {}
         self.items_cache: list[tuple[uuid.UUID, str, str | None]] = []
+        self._vector_matcher: VectorItemMatcher | None = None
+
+    @property
+    def vector_matcher(self) -> VectorItemMatcher:
+        if self._vector_matcher is None:
+            self._vector_matcher = VectorItemMatcher()
+        return self._vector_matcher
 
     def _get_connection(self):
         conn_str = self.db_conn_str.replace("postgresql+psycopg2://", "postgresql://")
@@ -59,9 +70,7 @@ class ItemMatcher:
                 if name:
                     self.exact_name_cache[name.strip().upper()] = item_id
                 self.items_cache.append((item_id, name, size_norm))
-            # SKU cache: process_batch() only consults the in-memory cache, so
-            # without this preload every pre-existing SKU was invisible to the
-            # batch path and fell through to fuzzy/new_item matching.
+
             try:
                 cur.execute("SAVEPOINT load_sku_cache_sp")
                 cur.execute(
@@ -161,8 +170,6 @@ class ItemMatcher:
             v1, u1 = float(m1.group(1)), m1.group(2)
             v2, u2 = float(m2.group(1)), m2.group(2)
             if v1 > 0 and v2 > 0:
-                # Normalize equivalent units so e.g. "330ml" matches "0.33L"
-                # (previously any unit mismatch rejected the candidate).
                 factors = {"ml": 0.001, "l": 1.0, "g": 0.001, "kg": 1.0}
                 f1, f2 = factors.get(u1), factors.get(u2)
                 if (
@@ -210,11 +217,13 @@ class ItemMatcher:
             if not canonical_name:
                 continue
             cand_len = len(canonical_name)
-            # Length filter: skip if strings differ in length by more than 35%
             if abs(target_len - cand_len) > max(target_len, cand_len) * 0.35:
                 continue
 
             if not self._is_size_compatible(size_norm, cand_size):
+                continue
+
+            if not is_spec_compatible(name_clean, canonical_name):
                 continue
 
             score = fuzz.token_sort_ratio(name_clean, canonical_name, score_cutoff=int(best_score * 100)) / 100.0
@@ -222,9 +231,6 @@ class ItemMatcher:
                 best_score = score
                 best_match_id = item_id
                 best_name = canonical_name
-                # NOTE: No early-exit at 0.96 — items_cache is insertion-ordered
-                # (oldest first), so a newer perfect match could exist later in
-                # the list. Scan all candidates to guarantee the global best.
 
         if best_match_id:
             return best_match_id, best_score, best_name
@@ -237,16 +243,28 @@ class ItemMatcher:
         barcode: str | None,
         size_norm: str | None,
         conn,
+        store_slug: str = "",
     ) -> uuid.UUID:
         item_id = uuid.uuid4()
+        
+        # Auto-classify new canonical item into UN COICOP
+        coicop_div, coicop_code = None, None
+        try:
+            classifier = get_hybrid_classifier()
+            res = classifier.classify_product(name, store_slug=store_slug)
+            coicop_div = res.get("coicop_division")
+            coicop_code = res.get("coicop_code")
+        except Exception as e:
+            log.warning("COICOP classification on create_canonical_item failed: %s", e)
+
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO silver.canonical_items (item_id, canonical_name, brand, barcode, size_norm)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO silver.canonical_items (item_id, canonical_name, brand, barcode, size_norm, coicop_division, coicop_code)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (item_id) DO NOTHING
                 """,
-                (item_id, name, brand, barcode, size_norm),
+                (item_id, name, brand, barcode, size_norm, coicop_div, coicop_code),
             )
         if barcode:
             self.barcode_cache[barcode.strip()] = item_id
@@ -301,7 +319,7 @@ class ItemMatcher:
             stats["matched_exact"] += 1
             return stats
 
-        # 3. Fuzzy text match
+        # 3. Fuzzy text match with Spec Guard
         name_clean = clean_name_for_matching(item_description_raw)
         match = self.match_by_fuzzy_text(name_clean, size_norm, actual_conn)
 
@@ -323,9 +341,9 @@ class ItemMatcher:
                 stats["sent_to_review"] += 1
                 return stats
 
-        # 4. Create new canonical item for all unmatched items
+        # 4. Create new canonical item with auto-classification
         item_id = self.create_canonical_item(
-            name_clean, actual_brand, barcode, size_norm, actual_conn
+            name_clean, actual_brand, barcode, size_norm, actual_conn, store_slug=store_id
         )
         self._log_match(raw_price_id, item_id, "new_item", 1.0, actual_conn)
         stats["new_items_created"] += 1
@@ -455,7 +473,7 @@ class ItemMatcher:
                     totals["sent_to_review"] += 1
                     continue
 
-            # 5. Create new canonical item (all other unmatched items)
+            # 5. Create new canonical item
             new_id = uuid.uuid4()
             new_items.append((str(new_id), name_clean, brand, barcode, package_size))
             if barcode:
@@ -473,7 +491,6 @@ class ItemMatcher:
             match_logs.append((raw_price_id, str(new_id), "new_item", 1.0))
             totals["new_items_created"] += 1
 
-        # Bulk write to PostgreSQL
         with conn.cursor() as cur:
             if new_items:
                 execute_batch(

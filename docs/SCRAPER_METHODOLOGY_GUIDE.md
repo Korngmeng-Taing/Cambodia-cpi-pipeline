@@ -38,21 +38,21 @@ Every night at 07:00, Airflow orchestrates daily data extraction across **19 Cam
                                                    ▼
                       ┌──────────────────────────────────────────────────────────┐
                       │                Silver Layer (silver_dag)                 │
-                      │   pipeline.item_matcher (RapidFuzz)                      │
-                      │   → silver.canonical_items / item_match_log              │
+                      │   pipeline.item_matcher (RapidFuzz / Barcode)            │
+                      │   pipeline.gemini_item_reviewer (Auto-Review)            │
                       │   pipeline.gemini_coicop_classifier (AI Memoization)     │
-                      │   dbt models: int_prices_cleaned, dim_items, dim_stores, │
-                      │   int_coicop_classified, fct_daily_prices                │
+                      │   pipeline.hedonic_regression (Log-linear electronics)   │
+                      │   dbt models: int_prices_cleaned, int_coicop_classified, │
+                      │   clean_store_prices, classification_queue               │
                       └────────────────────────────┬─────────────────────────────┘
                                                    │
                                                    ▼
                       ┌──────────────────────────────────────────────────────────┐
                       │                  Gold Layer (gold_dag)                   │
-                      │   dbt: base_prices, fct_daily_price_stats,               │
-                      │        cpi_category_daily, cpi_headline_daily,           │
-                      │        12 Dedicated COICOP Division Tables               │
-                      │   Python: pipeline.geks_calculator (13-period GEKS-      │
-                      │        Törnqvist) & pipeline.fisher_calculator           │
+                      │   dbt models: dim_items, dim_stores, fct_daily_prices    │
+                      │   Serving views: v_coverage, v_monitor_scraper_daily,    │
+                      │   v_monitor_source_health_matrix, v_monitor_price_alerts │
+                      │   (Planned: Jevons, Laspeyres, GEKS-Törnqvist, Fisher)   │
                       └────────────────────────────┬─────────────────────────────┘
                                                    │
                                                    ▼
@@ -293,7 +293,7 @@ Every night at 07:00, Airflow orchestrates daily data extraction across **19 Cam
 - **Category / Source Type**: Macroeconomic Currency Conversion (`fx`)
 - **Target Source**: Ministry of Economy and Finance (MEF) / National Bank of Cambodia (NBC)
 - **Best Scraping Method**: **Official Central Bank / MEF Rate Fetcher**
-  - **Pipeline Integration**: Implemented in `scrapers/sources.py` (MEF FX fetcher) and routed through `pipeline/bronze_ingestion.py::_ingest_fx`. Writes the official daily rate to `staging.exchange_rates` and the raw snapshot to MinIO.
+  - **Pipeline Integration**: Implemented in `scrapers/sources.py` (MEF FX fetcher) and routed through `pipeline/bronze_ingestion.py::_ingest_fx`. Writes the official daily rate to `staging.exchange_rates` and raw execution records to `staging.raw_scrapes`.
   - **Role in CPI**: USD price observations are converted to KHR (`price_khr`) during the Silver transformation so all elementary price relatives are calculated on a unified national currency basis.
 
 ---
@@ -324,7 +324,7 @@ Every night at 07:00, Airflow orchestrates daily data extraction across **19 Cam
 
 ## 3. Canonical Bronze Contract (Schema v1.0)
 
-Every scraper normalizes its output via `pipeline.canonical.normalize_record()` to strictly conform to the following schema before MinIO storage:
+Every scraper normalizes its output via `pipeline.canonical.normalize_record()` to strictly conform to the following schema before storage in `bronze.raw_prices`:
 
 ```json
 {
@@ -386,14 +386,14 @@ print(f'Ingested {result[\"records\"]} products for {result[\"source_slug\"]}.')
 ```bash
 pytest tests/ -v
 # dbt data quality gates:
-docker compose exec airflow-webserver dbt test --project-dir /opt/airflow/dbt
+docker compose exec airflow-scheduler dbt test --project-dir /opt/airflow/dbt
 ```
 
 ### Triggering Full Pipeline in Airflow
 
 ```bash
 docker exec airflow-scheduler airflow dags trigger cpi_master_dag
-# (fans out to 20 scraper DAGs → silver_dag → coicop_classification_dag)
+# (fans out to 20 scraper DAGs → silver_dag → gold_dag)
 ```
 
 ---

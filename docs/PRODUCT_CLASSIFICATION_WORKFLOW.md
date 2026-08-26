@@ -256,7 +256,7 @@ Gemini responds with strict JSON adherence:
 
 ---
 
-## 8. Stage 7: Fact Table & Gold CPI Aggregation
+## 8. Stage 7: Fact Table & Star Schema Materialization
 
 ### Implementation Files:
 - [`dbt/models/gold/fct_daily_prices.sql`](file:///D:/CPI%20PIPELINE/dbt/models/gold/fct_daily_prices.sql)
@@ -264,34 +264,42 @@ Gemini responds with strict JSON adherence:
 - [`dbt/models/gold/dim_stores.sql`](file:///D:/CPI%20PIPELINE/dbt/models/gold/dim_stores.sql)
 - Seed: [`dbt/seeds/category_weights.csv`](file:///D:/CPI%20PIPELINE/dbt/seeds/category_weights.csv)
 
-### Index Calculation Hierarchy:
+### Active Gold Star Schema:
+1. **Daily Price Fact Table (`gold.fct_daily_prices`)**:
+   Combines canonical items with confirmed COICOP division, converted KHR price, unit price, promo status, fallback status, and outlier flags at `(scrape_date, store_slug, item_id)` grain.
+2. **Item Master Dimension (`gold.dim_items`)**:
+   Canonical item catalog across all retail and service sources with normalized names and COICOP attributes.
+3. **Store Master Dimension (`gold.dim_stores`)**:
+   Retailers, utilities, and telecom service providers with source category attribution.
 
-1. **Daily Fact Table (`silver.fct_daily_prices`)**:
-   Combines canonical items with confirmed COICOP division, converted KHR price, unit price, promo status, and quality flags.
+---
 
-2. **Elementary Price Relatives (Jevons Formula)**:
-   In `gold.sp_calculate_daily_cpi`, elementary prices are calculated per canonical item using the geometric mean:
+## 9. Planned Econometric Index Layer (Designed)
+
+> Note: The mathematical formulation below is designed in `docs/GOLD_LAYER_IMPLEMENTATION_PLAN.md` and will be activated in the next development phase:
+
+1. **Elementary Price Relatives (Jevons Formula)**:
+   Elementary geometric mean prices calculated per canonical item:
    $$\bar{P}_{i, t} = \exp\left( \frac{1}{K} \sum_{k=1}^K \ln(P_{i, k, t}) \right)$$
 
-3. **Division Price Index**:
-   For each division $d \in \{01, \dots, 12\}$, the price index relative to base period $0$ is computed:
+2. **Division Price Index**:
+   For each division $d \in \{01, \dots, 12\}$, the price index relative to base period $0$:
    $$I_{d, t} = \exp\left( \frac{1}{N_d} \sum_{i \in d} \ln\left(\frac{\bar{P}_{i, t}}{\bar{P}_{i, 0}}\right) \right) \times 100$$
 
-4. **Headline CPI (Laspeyres Weighted Aggregate)**:
+3. **Headline CPI (Laspeyres Weighted Aggregate)**:
    Aggregated across all 12 divisions using the exact NIS weights:
    $$\text{CPI}_t = \sum_{d=1}^{12} I_{d, t} \times \left( \frac{w_d}{100.0} \right)$$
    Where $\sum_{d=1}^{12} w_d = 100.000\%$.
 
-5. **Rolling Multilateral GEKS-Törnqvist Index**:
-   For churn-heavy e-commerce categories, `pipeline/geks_calculator.py` computes multilateral GEKS:
+4. **Rolling Multilateral GEKS-Törnqvist Index**:
+   For churn-heavy e-commerce categories, multilateral GEKS with movement splicing:
    $$\ln \text{GEKS}(t) = \frac{1}{M} \sum_{j=1}^M \ln T(j, t) - \frac{1}{M} \sum_{j=1}^M \ln T(j, \text{base})$$
-   Eliminates chain drift and guarantees transitivity across the estimation window.
 
 ---
 
-## 9. Quality Assurance, Anomaly Detection & Monitoring
+## 10. Quality Assurance, Anomaly Detection & Monitoring
 
 1. **Outlier Detection**: Flagged in `int_prices_cleaned.sql` if price deviates $> 3\sigma$ from the store-level mean.
-2. **Price Anomalies ($> 15\%$ Day-on-Day)**: Stored in `gold.price_anomalies` matching on `curr.item_id = prev.item_id`.
-3. **Data Quality View (`gold.v_coverage`)**: Monitors daily quote count, unique product count, classification rate $\%$, and review queue size.
-4. **Automated Test Suite**: 95 unit and integration tests executed via `pytest` validating parsing, matching, classification, and index math.
+2. **Daily Price Shifts & Alerts**: Monitored via serving views `gold.v_monitor_price_alerts` and `gold.v_monitor_scraper_daily`.
+3. **Data Quality View (`gold.v_coverage`)**: Monitors daily quote count, unique product count, classification rate $\%$, barcode coverage, and review queue size.
+4. **Automated Test Suite**: Pytest suite executing unit and integration tests across scrapers, normalization, item matching, AI review, and dbt data quality models.

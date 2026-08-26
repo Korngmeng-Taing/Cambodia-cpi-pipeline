@@ -2,7 +2,7 @@
 orchestration/dags/silver_dag.py
 ────────────────────────────────
 Silver Layer DAG — transforms Bronze staging records into Silver clean
-observations (item matching + dbt).
+observations (item matching + hybrid vector embeddings + dbt).
 
 Workflow:
     silver_item_matching_service ─► dbt_seed ─► [gemini_coicop_classification (non-blocking),
@@ -27,6 +27,7 @@ from pipeline.gemini_coicop_classifier import classify_unclassified_with_gemini
 from pipeline.gemini_item_reviewer import auto_review_pending_items
 from pipeline.hedonic_regression import run_hedonic_regression
 from pipeline.item_matcher import ItemMatcher
+from pipeline.key_pool import get_key_pool
 
 log = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ DEFAULT_ARGS = {
 
 def _run_item_matching(**context) -> dict:
     ds = context["ds"]
-    log.info("Executing Silver Item Matching service (RapidFuzz / Barcode) for %s", ds)
+    log.info("Executing Silver Item Matching service (Vector + RapidFuzz + Spec Guard) for %s", ds)
     matcher = ItemMatcher()
     matched_stats = matcher.process_unmatched_batch(limit=100000, scrape_date=ds)
     log.info("ItemMatcher mapped batch stats: %s", matched_stats)
@@ -55,9 +56,10 @@ def _run_item_matching(**context) -> dict:
 def _run_item_auto_review(**context) -> dict:
     """Executes Gemini AI + deterministic rule guards on pending item match reviews."""
     log.info("Executing Gemini AI Item Match Auto-Reviewer on silver.needs_review...")
+    pool = get_key_pool()
     stats = auto_review_pending_items(
         limit=20000,
-        use_rules_only=not bool(os.getenv("GEMINI_API_KEY")),
+        use_rules_only=(pool.get_key_count() == 0),
     )
     log.info("Gemini Item Match Reviewer completed: %s", stats)
     return stats
@@ -74,24 +76,18 @@ def _safe_run_item_auto_review(**context) -> dict:
 
 def _run_coicop_ai_classification(**context) -> dict:
     ds = context["ds"]
-    log.info("Executing Gemini AI COICOP Classification for %s", ds)
+    log.info("Executing Hybrid Vector & Gemini AI COICOP Classification for %s", ds)
     res = classify_unclassified_with_gemini(scrape_date=ds)
     log.info("COICOP AI Classification stats: %s", res)
     return res
 
 
 def _safe_run_gemini(**context) -> dict:
-    """Graceful-degradation wrapper around the Gemini COICOP classifier.
-
-    The rule ladder in int_coicop_classified.sql is the authoritative
-    classifier — the AI step is a cache-warming optimization, never a
-    hard dependency:
-      - GEMINI_API_KEY missing  -> SKIPPED_NO_KEY (rule ladder only).
-      - Any runtime failure     -> SKIPPED_ERROR (never fails Silver).
-    """
-    if not os.getenv("GEMINI_API_KEY"):
+    """Graceful-degradation wrapper around the Gemini COICOP classifier."""
+    pool = get_key_pool()
+    if pool.get_key_count() == 0 and not os.getenv("GEMINI_API_KEY"):
         log.warning(
-            "GEMINI_API_KEY missing — skipping AI classification; rule ladder only."
+            "No Gemini API keys detected — running vector/rule ladder only without external LLM."
         )
         return {"status": "SKIPPED_NO_KEY", "candidates": 0, "classified": 0}
     try:
@@ -115,72 +111,73 @@ def _run_hedonic_adjustment(**context) -> dict:
 
 with DAG(
     dag_id=DAG_ID,
-    description="Silver Layer ETL: Item Matching -> AI Item Review -> COICOP AI -> Hedonic -> dbt Incremental (Bronze -> Silver)",
+    description="Silver Layer ETL: Item Matching -> Vector & AI Item Review -> COICOP AI -> Hedonic -> dbt Incremental (Bronze -> Silver)",
     start_date=pendulum.datetime(2024, 1, 1, tz=local_tz),
     schedule=None,  # Orchestrated by cpi_master_dag
     catchup=False,
-    max_active_runs=1,
     default_args=DEFAULT_ARGS,
-    tags=["silver", "dbt", "rapidfuzz", "coicop", "gemini", "hedonic"],
+    tags=["cpi", "silver", "dbt", "matching", "classification", "vectors"],
 ) as dag:
 
-    t_item_matching = PythonOperator(
+    # 1. Python Item Matching service
+    task_item_matching = PythonOperator(
         task_id="silver_item_matching_service",
         python_callable=_run_item_matching,
-        execution_timeout=timedelta(minutes=45),
+        provide_context=True,
     )
 
-    t_item_auto_review = PythonOperator(
-        task_id="gemini_item_match_auto_reviewer",
+    # 2. Automated Item Review (Gemini Flash + Spec Guards on silver.needs_review)
+    task_item_auto_review = PythonOperator(
+        task_id="gemini_item_auto_review",
         python_callable=_safe_run_item_auto_review,
-        execution_timeout=timedelta(minutes=30),
-        trigger_rule="all_done",
+        provide_context=True,
     )
 
-    t_coicop_ai = PythonOperator(
+    # 3. Seed Reference Data
+    task_dbt_seed = BashOperator(
+        task_id="dbt_seed",
+        bash_command=f"dbt seed --project-dir {DBT_PROJECT_DIR} --full-refresh",
+    )
+
+    # 4. Hybrid Vector + Gemini COICOP Classification
+    task_gemini_coicop = PythonOperator(
         task_id="gemini_coicop_classification",
         python_callable=_safe_run_gemini,
-        execution_timeout=timedelta(minutes=30),
-        # all_done: run even if item matching upstream had issues, and the
-        # callable itself never raises — a Gemini outage cannot fail Silver.
-        trigger_rule="all_done",
+        provide_context=True,
     )
 
-    t_hedonic = PythonOperator(
+    # 5. Hedonic Quality Adjustment
+    task_hedonic_adjustment = PythonOperator(
         task_id="hedonic_quality_adjustment",
         python_callable=_run_hedonic_adjustment,
-        execution_timeout=timedelta(minutes=15),
+        provide_context=True,
     )
 
-    _dbt_vars = '{"ds": "{{ ds }}"}'
-    _dbt_flags = f"--project-dir {DBT_PROJECT_DIR} --target-path /tmp/dbt/target --log-path /tmp/dbt/logs"
-    # Idempotent: loads/refreshes dbt seeds (incl. coicop_classification_seed,
-    # whose post-hook upserts bootstrap rows into silver.dim_coicop_ai_cache).
-    # Runs BEFORE the AI step so seeded names never trigger Gemini API calls.
-    t_dbt_seed = BashOperator(
-        task_id="dbt_seed",
-        bash_command=f"dbt seed {_dbt_flags}",
-        execution_timeout=timedelta(minutes=15),
-    )
-
-    t_dbt_silver_run = BashOperator(
+    # 6. dbt Run
+    task_dbt_silver_run = BashOperator(
         task_id="dbt_silver_run",
-        bash_command=f"dbt run --select silver --threads 4 {_dbt_flags} --vars '{_dbt_vars}'",
-        execution_timeout=timedelta(minutes=30),
+        bash_command=(
+            f"dbt run --project-dir {DBT_PROJECT_DIR} "
+            "--select models/silver models/staging "
+            '--vars \'{{"ds": "{{ ds }}"}}\''
+        ),
     )
 
-    t_dbt_silver_test = BashOperator(
+    # 7. dbt Test
+    task_dbt_silver_test = BashOperator(
         task_id="dbt_silver_test",
-        bash_command=f"dbt test --select silver --threads 4 {_dbt_flags}",
-        execution_timeout=timedelta(minutes=15),
+        bash_command=(
+            f"dbt test --project-dir {DBT_PROJECT_DIR} "
+            "--select models/silver models/staging"
+        ),
     )
 
+    # DAG Dependency Graph
     (
-        t_item_matching
-        >> t_item_auto_review
-        >> t_dbt_seed
-        >> [t_coicop_ai, t_hedonic]
-        >> t_dbt_silver_run
-        >> t_dbt_silver_test
+        task_item_matching
+        >> task_item_auto_review
+        >> task_dbt_seed
+        >> [task_gemini_coicop, task_hedonic_adjustment]
+        >> task_dbt_silver_run
+        >> task_dbt_silver_test
     )
-

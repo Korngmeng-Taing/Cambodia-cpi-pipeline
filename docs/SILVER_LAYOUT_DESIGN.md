@@ -7,27 +7,30 @@
 **Status:** ✅ Active — 1 Store 1 Table Cleaned Model in PostgreSQL 16 (`cpi_db`)  
 **Schema:** `silver.*` (Clean Store Tables & System Control) + `staging.*` (Intermediate Transformations) + `gold.*` (Conformed Star Schema & Marts)
 
-![Silver Layer Pipeline Architecture](./silver_layer_diagram.jpg)
+![Silver Layer Pipeline Architecture](cpi_flow_white_bg.jpg)
 
 ---
 
 ## 1. Core Architectural Principle
 
 The Medallion architecture strictly separates store-level observation data hygiene (Silver) from conformed multidimensional star schema analytics (Gold):
-- **Silver Layer (1 Store 1 Table / Clean Store Prices):** Preserves source grain and isolation. Scraped prices are parsed, currency-converted to KHR, promo-clamped, outlier-tagged, unit-standardized, and classified into standardized per-store / unified store observation tables (`silver.clean_store_prices`).
-- **Gold Layer (Conformed Star Schema & Marts):** Houses the conformed dimensional model (`gold.dim_items`, `gold.dim_stores`, `gold.fct_daily_prices`, `gold.fct_daily_prices_imputed`, `gold.fct_jevons_daily`) and downstream CPI index calculation engines.
+- **Silver Layer (Clean Store Prices & Resolution):** Preserves source grain and isolation. Scraped prices are parsed, currency-converted to KHR, promo-clamped, outlier-tagged, unit-standardized, and classified into standardized clean store observations (`silver.clean_store_prices`).
+- **Gold Layer (Conformed Star Schema & Marts):** Houses the conformed dimensional model (`gold.dim_items`, `gold.dim_stores`, `gold.fct_daily_prices`), monitoring views, and planned downstream CPI index calculation engines.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                             SILVER ARCHITECTURE                             │
 ├───────────────────────────────┬─────────────────────────────────────────────┤
 │ 1. SYSTEM & OPERATIONAL       │ 2. CLEAN STORE-LEVEL PRICE TABLES           │
-│    (Audit & Control Tables)   │    (1 Store 1 Table / Clean Store Quotes)   │
+│    (Audit & Control Tables)   │    (Clean Store Quotes & Observations)      │
 ├───────────────────────────────┼─────────────────────────────────────────────┤
 │ • silver.canonical_items      │ ──► silver.clean_store_prices               │
 │ • silver.item_match_log       │     (Per-store clean quotes & observations) │
 │ • silver.dim_coicop_ai_cache  │                                             │
 │ • silver.classification_queue │ ──► Feeds Gold Star Schema (gold.*)         │
+│ • silver.needs_review         │                                             │
+│ • silver.hedonic_adjusted_    │                                             │
+│   prices                      │                                             │
 ├───────────────────────────────┴─────────────────────────────────────────────┤
 │ 3. INTERMEDIATE TRANSFORMATIONS (Built in staging schema)                    │
 │ • staging.int_prices_cleaned (USD->KHR, promo clamping, unit standardization)│
@@ -37,10 +40,10 @@ The Medallion architecture strictly separates store-level observation data hygie
 
 ---
 
-## 2. Silver Layer Clean Price Tables (1 Store 1 Table)
+## 2. Silver Layer Clean Price Tables
 
 ### `silver.clean_store_prices`
-Unified and store-partitioned clean daily store price observations table:
+Unified clean daily store price observations table:
 - Preserves raw observation granularity (`raw_price_id`, `store_slug`, `scrape_date`, `item_id`).
 - Standardized KHR pricing via official daily MEF exchange rates.
 - Promotion indicators (`discount_pct`, `on_promo`), standardized package units (`size_value`, `size_unit`, `unit_price_khr`), and quality flags (`is_outlier`, `cpi_eligible`).
@@ -50,15 +53,15 @@ Unified and store-partitioned clean daily store price observations table:
 
 ## 3. Gold Layer: Conformed Star Schema (Downstream)
 
-The star schema is materialized in the **Gold layer** (`gold.*`) for business intelligence, econometric models, and downstream index aggregation:
+The star schema is materialized in the **Gold layer** (`gold.*`) for business intelligence, operational monitoring, and downstream index aggregation:
 - `gold.dim_items`: Canonical product master dimension across all retailers.
 - `gold.dim_stores`: Curated store dimension for Cambodian retailers and utility providers.
 - `gold.fct_daily_prices`: Conformed daily price fact table at `(scrape_date, store_slug, item_id)` grain.
-- *(Planned / Deferred)*: CPI calculation marts (Jevons elementary indices, headline Laspeyres index).
+- *(Planned / Deferred)*: CPI calculation marts (Jevons elementary indices, headline Laspeyres index, multilateral GEKS).
 
 ---
 
-## 3. System & Operational Tables
+## 4. System & Operational Tables
 
 These tables manage entity matching, AI memoization, and automated AI classification caches:
 
@@ -85,7 +88,7 @@ Active triage queue capturing unclassified items for automated Gemini AI batch p
 
 ---
 
-## 4. Intermediate Transformation Layer (`staging.*`)
+## 5. Intermediate Transformation Layer (`staging.*`)
 
 To keep the `silver` schema clean for BI tools:
 - **`int_prices_cleaned`**: Performs USD $\to$ KHR currency conversion, promo clamping ($[0\%, 95\%]$), unit pricing math (per kg / per L), and $\pm 3\sigma$ outlier detection.
@@ -93,7 +96,7 @@ To keep the `silver` schema clean for BI tools:
 
 ---
 
-## 5. Daily Data Management & Quality Policy
+## 6. Daily Data Management & Quality Policy
 
 - **Idempotency**: Incremental models declare `unique_key` and use the `delete+insert` strategy (`on_schema_change='append_new_columns'`), along with defensive classification CTE deduplication (`DISTINCT ON (item_id, store_slug)`), so re-runs are strictly idempotent. dbt-postgres defaults to `append`, which silently ignores `unique_key` - every incremental model must set the strategy explicitly.
 - **Strict Grain Enforcement**: Primary keys tested via dbt (`unique`, `not_null`, `test_idempotency`).

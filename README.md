@@ -1,7 +1,7 @@
 # Cambodia Daily Consumer Price Index (CPI) Medallion Pipeline
 *Automated Daily Web-Scraped Inflation Tracking across 12 UN COICOP Divisions (PostgreSQL 16 · dbt · Airflow · Metabase)*
 
-![Cambodia CPI Architecture Diagram](docs/cpi_simple_architecture.jpg)
+![Cambodia CPI Architecture Diagram](docs/cpi_end_to_end_architecture_diagram.jpg)
 
 > **⚠️ Implementation Status:** The **data pipeline is live** end-to-end — scraping → Bronze ingestion → Silver cleaning / item matching / AI classification → Gold star schema. However, the **CPI index-computation layer** (Jevons elementary aggregates, imputation, Laspeyres category & headline roll-ups, GEKS-Törnqvist, Fisher Ideal) is **planned but not implemented yet**; its calculators, dbt models, and gold tables were deliberately removed until that work lands. Documents describing the full econometric methodology carry a status banner.
 
@@ -16,7 +16,7 @@
 | **Transformation** | **dbt-core** (Silver & Gold) | Turns raw price records, entity-matching outputs, pack-size conversions, and COICOP classification into version-controlled, testable SQL models. |
 | **Item Matching (Silver)** | **Python Service** (`ItemMatcher` with `RapidFuzz`) | Exact barcode & SKU matching with fallback token-sort fuzzy matching in Python, landing structured mappings (`silver.canonical_items`, `silver.item_match_log`). |
 | **Hybrid Classification** | **AI-First Engine (dbt SQL + Gemini AI)** (`gemini-3.1-flash-lite` / `gemini-2.5-flash`) | Streamlined 4-tier ladder: human overrides (`coicop_override`), store domain purity, high-throughput Gemini cache (`silver.dim_coicop_ai_cache`, functional expression index `idx_coicop_ai_norm`), and category fallback. |
-| **Index Math (Planned)** | *Not yet implemented* | The CPI computation layer — Jevons elementary aggregates, class-mean imputation, Laspeyres category & headline roll-ups, GEKS-Törnqvist multilateral splicing, Fisher Ideal substitution bias — is designed in `docs/CPI_METHODOLOGY.md` / `docs/GOLD_LAYER_IMPLEMENTATION_PLAN.md` but intentionally not built yet. Gold currently delivers the star schema only. |
+| **Index Math (Planned)** | *Not yet implemented* | The CPI computation layer — Jevons elementary aggregates, class-mean imputation, Laspeyres category & headline roll-ups, GEKS-Törnqvist multilateral splicing, Fisher Ideal substitution bias — is designed in `docs/GOLD_LAYER_IMPLEMENTATION_PLAN.md` but intentionally not built yet. Gold currently delivers the star schema only. |
 | **Scraper Observability** | **Metabase v0.49** | Real-time operational monitoring: 20-Source Live Health Matrix, daily ingestion volume trends, and price anomaly alerts. |
 | **Interactive Analytics** | **Microsoft Power BI** | Executive BI dashboards over the gold star schema: retailer and item-level price trends, promo analytics. Headline CPI / division index time-series are pending the index-math layer. |
 
@@ -71,7 +71,7 @@ The CPI computation layer is designed but deliberately removed until implemented
 - Fisher Ideal index & substitution bias (`gold.cpi_fisher_superlative`)
 - 12 per-division tables and dual-currency marts (`mart_cpi_daily`, `mart_cpi_division_daily`)
 
-Design reference: `docs/GOLD_LAYER_IMPLEMENTATION_PLAN.md` and `docs/CPI_METHODOLOGY.md`. No gold CPI index tables exist today; do not query them in dashboards.
+Design reference: `docs/GOLD_LAYER_IMPLEMENTATION_PLAN.md`. No gold CPI index tables exist today; do not query them in dashboards.
 
 ---
 
@@ -106,11 +106,12 @@ CPI PIPELINE/
 │   ├── Dockerfile         # Unified container image (Airflow 2.9.3 + deps)
 │   └── dags/              # cpi_master_dag, scraper_dags, silver_dag, gold_dag
 ├── docs/                  # Centralized technical documentation & architectural guides
-│   ├── CPI_END_TO_END_CALCULATION_GUIDE.md # Comprehensive math & data walkthrough
-│   ├── ARCHITECTURE.md    # System architecture & Medallion specifications
-│   ├── CPI_METHODOLOGY.md # 6-Layer CPI econometric methodology reference
-│   ├── METABASE_DASHBOARD_BLUEPRINT.md # Metabase cards & dashboard specs
-│   └── POWER_BI_SETUP_GUIDE.md # Power BI data model & DAX guide
+│   ├── COICOP_MAPPING.md  # 12-Division hierarchy, store purity & classification ladder
+│   ├── GOLD_LAYER_IMPLEMENTATION_PLAN.md # Econometric index formulas & gold plan
+│   ├── LITERATURE_REVIEW.md # Academic foundation & comparative matrix
+│   ├── PRODUCT_CLASSIFICATION_WORKFLOW.md # Pipeline lifecycle from scrape to gold
+│   ├── SCRAPER_METHODOLOGY_GUIDE.md # 20 Source scraping specifications & tariffs
+│   └── SILVER_LAYOUT_DESIGN.md # Silver cleaned tables & operational data model
 ├── sql/                   # Database DDL: schema.sql, views.sql
 ├── postgres-init/         # Container bootstrap (databases + \i sql/*.sql)
 ├── tests/                 # Full pytest suite

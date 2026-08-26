@@ -7,17 +7,17 @@ each observation to a **base metric unit price** (`KHR / kg` or `KHR / l`).
 ## Where this happens
 
 - `int_prices_cleaned.sql` parses the raw `package_size` into `size_value` +
-  `size_unit` using a regex, normalises the unit to a canonical code
+  `size_unit` using regex patterns, normalises the unit to a canonical code
   (`kg`, `g`, `l`, `ml`), and computes `unit_price_khr`:
 
   ```
   unit_price_khr =
-      price_khr / size_value            when size_unit = 'kg' or 'l'
-      price_khr / (size_value / 1000)   when size_unit = 'g'  or 'ml'
+      price_khr / size_value            when size_unit in ('kg', 'l')
+      price_khr / (size_value / 1000)   when size_unit in ('g', 'ml')
   ```
 
-- `items_normalized.sql` carries the median `unit_price_khr` forward per
-  (item, store, month) and records `unit_of_measure` + `has_unparsed_size`.
+- `clean_store_prices.sql` and `gold.fct_daily_prices` carry `size_value`,
+  `size_unit`, and `unit_price_khr` forward for metric unit price comparisons.
 
 ## Guarantees enforced by tests
 

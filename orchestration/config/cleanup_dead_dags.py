@@ -36,12 +36,16 @@ DEAD_DAG_IDS = [
 def cleanup_dead_dags():
     print("Connecting to Airflow metadata database...")
     with create_session() as session:
-        for dag_id in DEAD_DAG_IDS:
+        # Find all inactive DAGs or explicitly dead DAGs
+        inactive_dags = session.query(DagModel).filter(DagModel.is_active == False).all()
+        dead_dag_ids = list(set([d.dag_id for d in inactive_dags] + DEAD_DAG_IDS))
+        
+        print(f"Found {len(dead_dag_ids)} dead/inactive DAGs to purge.")
+        for dag_id in sorted(dead_dag_ids):
             dag_model = (
                 session.query(DagModel).filter(DagModel.dag_id == dag_id).first()
             )
             if dag_model is None:
-                print(f"  - {dag_id}: not present, skipping")
                 continue
 
             session.query(DagRun).filter(DagRun.dag_id == dag_id).delete(
@@ -78,7 +82,7 @@ def cleanup_dead_dags():
                 pass
 
             session.delete(dag_model)
-            print(f"  - {dag_id}: removed (runs, task instances, xcoms, logs, model)")
+            print(f"  - {dag_id}: purged successfully")
 
         session.commit()
         print("Cleanup complete.")

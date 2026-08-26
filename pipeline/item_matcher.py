@@ -70,7 +70,12 @@ class ItemMatcher:
                 for source_name, raw_item_id, canonical_item_id in cur.fetchall():
                     self.sku_cache[(source_name, raw_item_id.strip())] = canonical_item_id
                 cur.execute("RELEASE SAVEPOINT load_sku_cache_sp")
-            except Exception:
+            except Exception as e:
+                log.warning(
+                    "SKU cache load failed — SKU matching disabled for this run: %s. "
+                    "Items will fall through to fuzzy/new_item matching.",
+                    e,
+                )
                 try:
                     cur.execute("ROLLBACK TO SAVEPOINT load_sku_cache_sp")
                 except Exception:
@@ -217,8 +222,9 @@ class ItemMatcher:
                 best_score = score
                 best_match_id = item_id
                 best_name = canonical_name
-                if best_score >= 0.96:
-                    break
+                # NOTE: No early-exit at 0.96 — items_cache is insertion-ordered
+                # (oldest first), so a newer perfect match could exist later in
+                # the list. Scan all candidates to guarantee the global best.
 
         if best_match_id:
             return best_match_id, best_score, best_name
@@ -357,6 +363,7 @@ class ItemMatcher:
                 """
                 INSERT INTO silver.needs_review (raw_price_id, item_description_raw, best_match_item_id, best_match_name, confidence)
                 VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (raw_price_id) DO NOTHING
                 """,
                 (raw_price_id, raw_desc, item_id, best_name, confidence),
             )
@@ -508,6 +515,7 @@ class ItemMatcher:
                     """
                     INSERT INTO silver.needs_review (raw_price_id, item_description_raw, best_match_item_id, best_match_name, confidence)
                     VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (raw_price_id) DO NOTHING
                     """,
                     reviews,
                     page_size=1000,

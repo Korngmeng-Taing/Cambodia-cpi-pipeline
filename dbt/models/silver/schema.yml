@@ -42,6 +42,16 @@ models:
       - name: coicop_method
         tests:
           - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - "override"
+                  - "store_purity"
+                  - "store_default"
+                  - "gemini_ai"
+                  - "gemini_ai_low_conf"
+                  - "category_map"
+                  - "unclassified"
 
   - name: clean_store_prices
     description: Unified Silver store prices observation table — clean, standardized daily appended rows from all stores.
@@ -57,8 +67,11 @@ models:
         tests:
           - not_null
       - name: price_khr
+        description: Price converted to KHR. Must be positive (C2 fix — zero-price rows excluded at query level).
         tests:
           - not_null
+          - dbt_utils.expression_is_true:
+              expression: "> 0"
 
   - name: classification_queue
     description: Operational triage queue capturing unclassified items for Gemini AI batch processing or manual tagging.

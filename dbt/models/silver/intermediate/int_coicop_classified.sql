@@ -51,7 +51,7 @@ with items as materialized (
         select 1 from {{ this }} t
         where t.item_id = p.item_id::text
           and t.store_slug = p.store_slug
-          and t.coicop_method = 'override'
+          and t.coicop_method not in ('unclassified', 'gemini_ai_low_conf')
     )
     {% endif %}
 ),
@@ -308,12 +308,12 @@ select
     ) as coicop_code,
     case
         when f.ov_exact_div is not null then 'override'
-        when f.purity_division is not null then 'store_default'
+        when f.purity_division is not null then 'store_purity'
         when f.ov_global_div is not null then 'override'
         when f.ai_div is not null and coalesce(f.ai_conf, 0.90) >= 0.50 then 'gemini_ai'
         when f.ai_div is not null and coalesce(f.ai_conf, 0.90) < 0.50 then 'gemini_ai_low_conf'
         when f.cat_map_div is not null then 'category_map'
-        when f.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk', 'bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then 'store_default'
+        when f.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk', 'bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then 'store_purity'
         when f.store_default_div is not null then 'store_default'
         else 'unclassified'
     end as coicop_method,

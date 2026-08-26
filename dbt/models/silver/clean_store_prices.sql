@@ -251,3 +251,5 @@ left join ai_match ai
     on ai.raw_price_id = p.raw_price_id
 left join cat_map_prejoined cm
     on cm.store_slug = p.store_slug and cm.cat_key = lower(trim(coalesce(p.category_native, '')))
+-- C2 fix: exclude NULL/zero prices to prevent corrupting Jevons index calculations
+where p.price_khr is not null and p.price_khr > 0

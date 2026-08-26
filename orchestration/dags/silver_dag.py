@@ -37,8 +37,9 @@ DBT_PROJECT_DIR = os.getenv("DBT_PROJECT_DIR", "/opt/airflow/dbt")
 DEFAULT_ARGS = {
     "owner": "cpi-team",
     "retries": 2,
-    "retry_delay": timedelta(minutes=2),
+    "retry_delay": timedelta(minutes=5),
     "email_on_failure": False,
+    "email_on_retry": False,
 }
 
 

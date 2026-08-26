@@ -27,6 +27,19 @@ import psycopg2
 
 DEFAULT_USD_KHR_RATE = float(os.getenv("DEFAULT_USD_KHR_RATE", "4044"))
 
+# S2 fix: Sanity check the fallback FX rate. The KHR/USD rate has been in the
+# 4000-4200 range since 2010. Warn loudly if the env variable looks wrong.
+_EXPECTED_KHR_RANGE = (3500.0, 4500.0)
+if not (_EXPECTED_KHR_RANGE[0] <= DEFAULT_USD_KHR_RATE <= _EXPECTED_KHR_RANGE[1]):
+    import warnings
+    warnings.warn(
+        f"DEFAULT_USD_KHR_RATE={DEFAULT_USD_KHR_RATE} is outside the expected "
+        f"range {_EXPECTED_KHR_RANGE}. All USD→KHR conversions using this fallback "
+        "will be systematically wrong. Update DEFAULT_USD_KHR_RATE in .env.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+
 # Official NIS Cambodia 12 COICOP Divisions and Consumer Basket Weights
 COICOP_WEIGHTS: dict[str, dict[str, Any]] = {
     "01": {"name": "Food and non-alcoholic beverages", "weight": 0.44800},

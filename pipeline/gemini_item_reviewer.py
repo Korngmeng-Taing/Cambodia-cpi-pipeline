@@ -329,8 +329,21 @@ class GeminiItemReviewer:
         split_review_ids: list[int] = []
 
         with conn.cursor() as cur:
-            cur.execute("SELECT barcode, item_id FROM silver.canonical_items WHERE barcode IS NOT NULL;")
-            existing_barcodes = {b.strip(): iid for b, iid in cur.fetchall() if b}
+            # Collect barcodes only from the current review batch (not the whole table).
+            # Loading all canonical_items barcodes into RAM is a memory bomb at scale.
+            batch_barcodes = {
+                row.get("barcode", "").strip()
+                for dec_info in pair_decisions.values()
+                for row in dec_info.get("rows", [])
+                if row.get("barcode")
+            }
+            existing_barcodes: dict[str, uuid.UUID] = {}
+            if batch_barcodes:
+                cur.execute(
+                    "SELECT barcode, item_id FROM silver.canonical_items WHERE barcode = ANY(%s);",
+                    (list(batch_barcodes),),
+                )
+                existing_barcodes = {b.strip(): iid for b, iid in cur.fetchall() if b}
 
         seen_new_barcodes: set[str] = set()
 

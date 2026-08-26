@@ -27,7 +27,9 @@ fact_stats as (
         mode() within group (order by size_unit) as unit_of_measure,
         min(scrape_date) as first_seen,
         max(scrape_date) as last_seen,
-        bool_and(cpi_eligible) as is_active
+        -- Use bool_or: if the item was EVER cpi_eligible it's potentially active.
+        -- bool_and would permanently deactivate items after a single bad anomaly.
+        bool_or(cpi_eligible) as is_active
     from {{ ref('fct_daily_prices') }}
     group by item_id
 ),

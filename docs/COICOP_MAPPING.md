@@ -76,8 +76,14 @@ Observations are resolved in order (first match wins). The model is **daily-scop
 7. UNCLASSIFIED  → Fallback queue for subsequent AI batch pre-warming.
 ```
 
-`coicop_method` records the winning tier (`override` / `store_default` / `gemini_ai` / `category_map` / `unclassified`);
-`coicop_confidence`: 1.00 overrides · 0.85 purity · AI score (~0.90–1.00) · 0.90 category map · 0.00 unclassified.
+`coicop_method` records the winning tier:
+- `override` (1.000 confidence) — exact manual/seed barcode or name rules
+- `store_purity` (0.850 confidence) — domain purity pinning (pharmacies, hotels, transit, fuel, telecoms)
+- `gemini_ai` (0.500–1.000 confidence) — pre-warmed AI cache hits with confidence >= 0.50
+- `gemini_ai_low_conf` (0.400 confidence) — low-confidence AI classifications requiring review
+- `category_map` (0.900 confidence) — native store taxonomy mapping
+- `store_default` (0.800 confidence) — generic store prior default
+- `unclassified` (0.000 confidence) — unmapped items falling into the triage queue
 
 ---
 

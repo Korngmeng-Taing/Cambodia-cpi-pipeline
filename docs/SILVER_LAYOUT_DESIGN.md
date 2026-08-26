@@ -71,6 +71,12 @@ Full audit trail mapping `raw_price_id` $\to$ `item_id` with match method (`barc
 ### `silver.dim_coicop_ai_cache`
 Persistent memoization cache for Gemini AI classifications (`gemini-3.1-flash-lite` / `gemini-2.5-flash`). Prevents duplicate LLM API calls across daily runs.
 
+### `silver.needs_review`
+Dedicated table for borderline fuzzy item match candidates ($0.85 \le \text{confidence} < 0.95$). Auto-reviewed by `pipeline/gemini_item_reviewer.py` via a two-stage process:
+1. **Rule & Spec Guard:** Checks hardware/spec conflicts (Storage GB, Wattage, mAh, pack size) to deterministically reject (`SPLIT_NEW`) false merges.
+2. **Gemini AI Batch Evaluation:** Resolves ambiguous variants (`APPROVE_MATCH` vs `SPLIT_NEW`) with exponential backoff and updates `silver.item_match_log`.
+Guarded by a PostgreSQL `UNIQUE (raw_price_id)` constraint to prevent duplicate review entries during Airflow retries.
+
 ### `silver.classification_queue`
 Active triage queue capturing unclassified items for automated Gemini AI batch pre-warming and manual tagging.
 

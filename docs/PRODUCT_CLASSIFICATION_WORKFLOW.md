@@ -140,9 +140,12 @@ flowchart TD
 ```
 
 ### Key Technical Details:
-- **Token-Sort Fuzzy Ratio (`rapidfuzz.fuzz.token_sort_ratio`)**: Splits long, word-reordered titles into sorted word tokens before comparing, making it invariant to word order changes.
-- **Relative Size Tolerance**: Package sizes are checked with `_is_size_compatible()`, allowing $\le 10\%$ numeric tolerance for same-unit variations while rejecting cross-unit mismatches (e.g. 500g vs 5kg).
-- **Automated Ingestion**: Items scoring $< 0.95$ immediately create a new canonical product identity in `silver.canonical_items` with full audit logging in `silver.item_match_log`, removing manual labeling bottlenecks.
+- **Token-Sort Fuzzy Ratio (`rapidfuzz.fuzz.token_sort_ratio`)**: Splits long, word-reordered titles into sorted word tokens before comparing, making it invariant to word order changes. Scans all candidates globally without greedy early-exits.
+- **Relative Size Tolerance & Unit Equivalence**: Package sizes are verified with `_is_size_compatible()`, allowing $\le 10\%$ numeric tolerance and normalizing metric volume/mass equivalents (`330ml ↔ 0.33L`, `500g ↔ 0.5kg`) while strictly rejecting cross-dimension mismatches (volume vs mass).
+- **Automated AI Item Reviewer (`pipeline/gemini_item_reviewer.py`)**: Borderline candidates ($0.85 \le \text{confidence} < 0.95$) are routed to `silver.needs_review` and resolved via a two-stage process:
+  1. *Rule & Spec Guard:* Catches storage capacity (128GB vs 256GB), wattage (1000W vs 2000W), and hardware differences to automatically trigger `SPLIT_NEW`.
+  2. *Gemini Flash Batch Evaluation:* Uses LLM semantic analysis with exponential backoff (`2s, 4s, 8s`) to decide `APPROVE_MATCH` vs `SPLIT_NEW`.
+- **Automated Ingestion**: Items scoring $< 0.85$ immediately create a new canonical product identity in `silver.canonical_items` with full audit logging in `silver.item_match_log`.
 
 ---
 

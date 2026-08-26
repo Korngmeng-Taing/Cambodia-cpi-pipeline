@@ -87,10 +87,12 @@ CPI PIPELINE/
 │   ├── bronze_scraper.py  # BronzeScraper batch writer & FX store
 │   ├── canonical.py       # Canonical Bronze Schema v1.0 normalize/validate
 │   ├── item_matcher.py    # Silver item matching service (RapidFuzz)
+│   ├── gemini_item_reviewer.py # AI & Rule-based auto-reviewer for borderline match pairs
 │   ├── text_clean.py      # Text normalization for item matching
 │   ├── gemini_coicop_classifier.py # Gemini AI batch classifier & cache
 │   └── hedonic_regression.py # Log-linear hedonic quality adjustment
 ├── scripts/               # Maintenance & operational CLI utilities
+│   ├── auto_review_items.py # CLI for running AI item match review queue
 │   ├── warm_coicop_ai_cache.py # Pre-warms Gemini AI classification cache
 │   ├── setup_metabase_dashboards.py # Provisions Metabase analytics dashboards
 │   └── clear_db_locks.py  # Clears stale PostgreSQL locks

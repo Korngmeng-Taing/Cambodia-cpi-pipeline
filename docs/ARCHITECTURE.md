@@ -28,14 +28,15 @@ The pipeline executes daily across 5 interconnected layers:
 - **dbt Staging Views (`stg_raw_scrapes`):** Unpacks JSONB into structured columns with zero-product quality gates.
 
 ### 3. Silver Layer: Store-Level Cleaned Tables (1 Store 1 Table)
-- **Python RapidFuzz Entity Matching:** Deduplicates products across stores into canonical UUID5 identities (`silver.canonical_items`, `silver.item_match_log`).
+- **Python RapidFuzz & Trigram Entity Matching:** Deduplicates products across stores into canonical UUID identities (`silver.canonical_items`, `silver.item_match_log`) backed by a PostgreSQL `pg_trgm` GIN index (`idx_canonical_name_trgm`) and automated Rule Guard spec evaluation.
 - **dbt Price Cleaning & Unit Standardization:** Converts USD $\to$ KHR via MEF rates, clamps discounts ($0\%$–$95\%$), standardizes unit prices (`KHR/kg`, `KHR/L`), and flags outliers.
 - **Gemini AI COICOP Classifier:** Streamlined 4-tier daily-scoped division ladder (Exact/per-store overrides $\to$ Store domain purity $\to$ Global overrides $\to$ High-throughput Gemini AI memoized cache in `silver.dim_coicop_ai_cache` $\to$ Native category map / Fallback queue). Over 99% of daily products resolve from cache in 0ms with >98% semantic accuracy.
-- **Hedonic Quality Adjustments:** Constant-specification regression (`silver.hedonic_adjusted_prices`) holding RAM/Storage constant for Division 09/08 consumer electronics.
+- **Multi-Feature Hedonic Quality Adjustments:** Constant-specification regression (`silver.hedonic_adjusted_prices`) holding RAM, Storage, Screen Size, Camera MP, and 5G connectivity constant for Division 09/08 consumer electronics.
 - **Clean Store Observations & Operational Tables (1 Store 1 Table Paradigm):**
   - `silver.clean_store_prices` (Standardized daily price quotes partitioned per store and source)
-  - `silver.canonical_items` (Canonical identity registry)
+  - `silver.canonical_items` (Canonical identity registry with GIN trigram index)
   - `silver.item_match_log` (Automated item matching audit log)
+  - `silver.needs_review` (Borderline matching review queue evaluated by Rule Guard + Gemini AI)
   - `silver.dim_coicop_ai_cache` (Persistent classification cache)
   - `silver.classification_queue` (Active triage queue for unclassified products)
 

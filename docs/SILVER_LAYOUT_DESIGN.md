@@ -63,7 +63,7 @@ The star schema is materialized in the **Gold layer** (`gold.*`) for business in
 These tables manage entity matching, AI memoization, and automated AI classification caches:
 
 ### `silver.canonical_items`
-Deterministic UUID canonical identity master maintained automatically by `pipeline/item_matcher.py`. Unmatched items ($\text{score} < 0.95$) automatically create new canonical items.
+Deterministic UUID canonical identity master maintained automatically by `pipeline/item_matcher.py`. Indexed with a PostgreSQL `pg_trgm` Generalized Inverted Index (`idx_canonical_name_trgm`) for sub-millisecond trigram candidate filtering. Unmatched items ($\text{score} < 0.95$) automatically create new canonical items.
 
 ### `silver.item_match_log`
 Full audit trail mapping `raw_price_id` $\to$ `item_id` with match method (`barcode_exact`, `sku_exact`, `fuzzy_text`, `new_item`) and confidence score ($0.000$–$1.000$). Fully automated with zero manual intervention.
@@ -73,9 +73,12 @@ Persistent memoization cache for Gemini AI classifications (`gemini-3.1-flash-li
 
 ### `silver.needs_review`
 Dedicated table for borderline fuzzy item match candidates ($0.85 \le \text{confidence} < 0.95$). Auto-reviewed by `pipeline/gemini_item_reviewer.py` via a two-stage process:
-1. **Rule & Spec Guard:** Checks hardware/spec conflicts (Storage GB, Wattage, mAh, pack size) to deterministically reject (`SPLIT_NEW`) false merges.
+1. **Rule & Spec Guard:** Checks hardware/spec conflicts (Storage GB, Wattage, mAh, Screen size, Camera MP, 5G support, pack size) to deterministically reject (`SPLIT_NEW`) false merges.
 2. **Gemini AI Batch Evaluation:** Resolves ambiguous variants (`APPROVE_MATCH` vs `SPLIT_NEW`) with exponential backoff and updates `silver.item_match_log`.
 Guarded by a PostgreSQL `UNIQUE (raw_price_id)` constraint to prevent duplicate review entries during Airflow retries.
+
+### `silver.hedonic_adjusted_prices`
+Stores quality-adjusted constant-specification prices for Division 08 and 09 electronics. Evaluates multi-attribute characteristics (`ram_gb`, `storage_gb`, `screen_inches`, `camera_mp`, `is_5g`) against a trailing baseline to purge pure technological progress from genuine price inflation.
 
 ### `silver.classification_queue`
 Active triage queue capturing unclassified items for automated Gemini AI batch pre-warming and manual tagging.

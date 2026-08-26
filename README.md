@@ -50,7 +50,7 @@
 
 ### Silver (Clean, Standardize & Resolve Observations)
 - **Clean Store Observations**: `silver.clean_store_prices` — unified daily appended table containing cleaned, standardized prices across all stores with exchange rates applied (KHR), unit normalization, and promo clamping.
-- **Item Matching Service**: Python (`pipeline/item_matcher.py`) executing Barcode exact → SKU exact → RapidFuzz token sort ratio with automated canonical UUID creation (`silver.canonical_items`, `silver.item_match_log`).
+- **Item Matching Service**: Python (`pipeline/item_matcher.py`) executing Barcode exact → SKU exact → RapidFuzz token sort ratio backed by a PostgreSQL `pg_trgm` GIN index with automated canonical UUID creation (`silver.canonical_items`, `silver.item_match_log`, `silver.needs_review`).
 - **AI-First COICOP Engine**: Streamlined 4-tier daily-scoped ladder (`staging.int_coicop_classified`): human overrides -> store purity -> Gemini AI cache (`silver.dim_coicop_ai_cache`) -> native category map / fallback.
 - **Operational Triage Queue**: `silver.classification_queue` captures unclassified or low-confidence items for automated Gemini re-runs or human labeling.
 
@@ -60,7 +60,7 @@
   - `gold.dim_stores`: Store & retailer master dimension.
   - `gold.fct_daily_prices`: Conformed daily price fact table at grain `(scrape_date, store_slug, item_id)` with KHR prices, unit prices, promo/outlier/fallback flags, and COICOP attribution.
 - **Official Reference Data**: `gold.coicop_weights` (NIS Cambodia 12-division expenditure weights), plus anomaly tables (`gold.price_anomalies`, `gold.mart_price_anomalies`).
-- **Hedonic Quality Adjustment**: Python (`pipeline/hedonic_regression.py`) fits a log-linear model for Division-09 electronics and writes adjusted prices to `silver.hedonic_adjusted_prices`.
+- **Hedonic Quality Adjustment**: Python (`pipeline/hedonic_regression.py`) fits a multi-characteristic log-linear model (RAM, Storage, Screen, Camera, 5G) for Division 08/09 electronics and writes adjusted prices to `silver.hedonic_adjusted_prices`.
 - **Serving Views** (`sql/views.sql`): operational monitoring for Metabase/Airflow FDW — `gold.v_coverage`, `gold.v_monitor_scraper_daily`, `gold.v_monitor_source_health_matrix`, `gold.v_monitor_price_alerts`, `gold.v_monitor_fx_health`.
 
 ### Gold Index Layer (Planned — Not Implemented)

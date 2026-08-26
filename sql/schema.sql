@@ -140,8 +140,12 @@ CREATE TABLE IF NOT EXISTS silver.needs_review (
     status VARCHAR(16) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','skipped')),
     reviewed_at TIMESTAMPTZ,
     reviewed_by VARCHAR(64),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    -- C3 fix: UNIQUE on raw_price_id prevents duplicate review rows on Airflow retries
+    CONSTRAINT uq_needs_review_raw_price_id UNIQUE (raw_price_id)
 );
+CREATE INDEX IF NOT EXISTS idx_needs_review_status ON silver.needs_review (status);
+CREATE INDEX IF NOT EXISTS idx_needs_review_confidence ON silver.needs_review (confidence DESC);
 
 -- AI COICOP Memoization Cache
 CREATE TABLE IF NOT EXISTS silver.dim_coicop_ai_cache (

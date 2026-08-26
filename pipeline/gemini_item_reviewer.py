@@ -163,7 +163,9 @@ class GeminiItemReviewer:
             return [dict(zip(cols, row)) for row in cur.fetchall()]
 
     def resolve_with_gemini(self, pairs: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
-        """Calls Gemini Flash in batch JSON mode to resolve ambiguous pairs."""
+        """Calls Gemini Flash in batch JSON mode to resolve ambiguous pairs.
+        Retries up to 3 times with exponential backoff on transient errors.
+        """
         if not self.model or not pairs:
             return {}
 
@@ -180,6 +182,7 @@ class GeminiItemReviewer:
         prompt_str = "Evaluate the following product pairs:\n" + json.dumps(prompt_data, ensure_ascii=False, indent=2)
         results = {}
 
+        # H5 fix: exponential backoff — 2s, 4s, 8s between attempts
         for attempt in range(3):
             try:
                 response = self.model.generate_content(prompt_str)
@@ -195,10 +198,15 @@ class GeminiItemReviewer:
                                 "reason": item.get("reason", "AI batch decision"),
                                 "method": "gemini_ai",
                             }
-                break
+                break  # success — exit retry loop
             except Exception as e:
-                log.warning("Gemini batch error (attempt %d/3): %s", attempt + 1, e)
-                time.sleep(RATE_LIMIT_DELAY * (attempt + 2))
+                backoff = RATE_LIMIT_DELAY * (2 ** attempt)  # 2s, 4s, 8s
+                log.warning(
+                    "Gemini batch error (attempt %d/3, backoff %.0fs): %s",
+                    attempt + 1, backoff, e,
+                )
+                if attempt < 2:
+                    time.sleep(backoff)
 
         return results
 

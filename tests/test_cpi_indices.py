@@ -118,6 +118,54 @@ def test_jevons_math_properties():
     assert math.isclose(jevons_rel, 1.10, rel_tol=1e-5)
 
 
+def test_dutot_and_carli_elementary_indices():
+    """Verify Dutot (ratio of arithmetic means) and Carli (arithmetic mean of ratios)."""
+    base_prices = [1000.0, 2000.0, 5000.0]
+    curr_prices = [1200.0, 2100.0, 5500.0]
+
+    # Dutot: sum(curr) / sum(base) = 8800 / 8000 = 1.10
+    dutot = sum(curr_prices) / sum(base_prices)
+    assert math.isclose(dutot, 1.10, rel_tol=1e-4)
+
+    # Carli: (1.20 + 1.05 + 1.10) / 3 = 3.35 / 3 = 1.11666...
+    relatives = [c / b for c, b in zip(curr_prices, base_prices, strict=True)]
+    carli = sum(relatives) / len(relatives)
+    assert math.isclose(carli, 1.116666, rel_tol=1e-4)
+
+    # By Jensen's Inequality: Carli >= Jevons >= Harmonic
+    log_sum = sum(math.log(r) for r in relatives)
+    jevons = math.exp(log_sum / len(relatives))
+    assert carli >= jevons
+
+
+def test_discount_clamping_and_promo_detection():
+    """Verify promotional discount clamping invariants (0% to 95% bound)."""
+    def compute_discount(orig: float, curr: float) -> tuple[float, bool]:
+        if orig <= 0 or curr <= 0 or curr >= orig:
+            return 0.0, False
+        raw_pct = ((orig - curr) / orig) * 100.0
+        # Clamp: discount > 95% is treated as data error/liquidation anomaly
+        if raw_pct > 95.0:
+            return 0.0, False
+        return round(raw_pct, 2), True
+
+    # 20% normal discount
+    pct, on_promo = compute_discount(5000.0, 4000.0)
+    assert pct == 20.0 and on_promo is True
+
+    # 0% discount (same price)
+    pct, on_promo = compute_discount(5000.0, 5000.0)
+    assert pct == 0.0 and on_promo is False
+
+    # Negative discount (price increase / surcharge)
+    pct, on_promo = compute_discount(5000.0, 6000.0)
+    assert pct == 0.0 and on_promo is False
+
+    # Extreme anomaly: $1000 item priced at $1 (99.9% discount -> rejected by clamp)
+    pct, on_promo = compute_discount(1000.0, 1.0)
+    assert pct == 0.0 and on_promo is False
+
+
 def test_gold_star_schema_tables():
     """Verify that Gold layer contains dim_items, dim_stores, and fct_daily_prices with essential columns."""
     try:

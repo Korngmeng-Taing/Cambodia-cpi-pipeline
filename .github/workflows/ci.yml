@@ -90,6 +90,7 @@ jobs:
           dbt deps --project-dir dbt --profiles-dir dbt
           dbt seed --project-dir dbt --profiles-dir dbt --target cpi_target
           dbt run --project-dir dbt --profiles-dir dbt --target cpi_target
+          dbt test --project-dir dbt --profiles-dir dbt --target cpi_target
           psql -v ON_ERROR_STOP=1 -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/views.sql
 
       - name: Run Full Pytest Suite

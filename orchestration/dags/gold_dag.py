@@ -51,15 +51,34 @@ def _refresh_serving_views(**context):
         )
 
     log.info("Applying serving views from %s", sql_path)
-    with open(sql_path, "r", encoding="utf-8") as f:
-        views_sql = f.read()
+    try:
+        with open(sql_path, "r", encoding="utf-8") as f:
+            views_sql = f.read()
+    except FileNotFoundError:
+        log.error("Views SQL file not found at %s", sql_path)
+        raise
 
-    conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://")
-    with psycopg2.connect(conn_str) as conn:
-        with conn.cursor() as cur:
-            cur.execute(views_sql)
-        conn.commit()
-    log.info("Successfully refreshed serving views in gold schema.")
+    conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://", 1)
+    try:
+        with psycopg2.connect(conn_str) as conn:
+            with conn.cursor() as cur:
+                # Drop existing views first to handle column renames safely
+                cur.execute("""
+                    DO $$ DECLARE r RECORD;
+                    BEGIN
+                        FOR r IN SELECT schemaname, viewname FROM pg_views
+                                 WHERE schemaname = 'gold'
+                        LOOP
+                            EXECUTE format('DROP VIEW IF EXISTS %I.%I', r.schemaname, r.viewname);
+                        END LOOP;
+                    END $$;
+                """)
+                cur.execute(views_sql)
+            conn.commit()
+        log.info("Successfully refreshed serving views in gold schema.")
+    except Exception as exc:
+        log.error("Failed to refresh serving views: %s", exc)
+        raise
 
 
 with DAG(

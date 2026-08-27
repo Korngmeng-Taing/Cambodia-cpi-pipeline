@@ -51,7 +51,7 @@ def test_laspeyres_division_and_headline_aggregation(cpi_engine):
             "base_price_khr": 4000.0,
             "current_price_khr": 4400.0 if div == "01" else 4000.0, # 10% increase in Food only
             "price_ratio": 1.10 if div == "01" else 1.00,
-            "elementary_index": 110.0 if div == "01" else 100.0,
+            "price_ratio_pct": 110.0 if div == "01" else 100.0,
             "is_imputed": False,
             "observation_count": 10
         })

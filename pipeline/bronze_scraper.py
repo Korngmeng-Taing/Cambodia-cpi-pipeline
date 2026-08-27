@@ -133,6 +133,7 @@ class BronzeScraper:
                 %(scraped_at)s::timestamptz
             )
             ON CONFLICT DO NOTHING
+            RETURNING raw_price_id
         """
         count = 0
         default_scraped_at = (
@@ -153,7 +154,8 @@ class BronzeScraper:
                 if not record_data.get("scraped_at"):
                     record_data["scraped_at"] = default_scraped_at
                 cur.execute(insert_query, record_data)
-                count += cur.rowcount or 0
+                # RETURNING gives us the actual inserted row (empty on conflict skip)
+                count += len(cur.fetchall())
 
             # 4. Upsert staging.raw_scrapes batch record.
             #    record_count reflects rows actually written after dedup — the

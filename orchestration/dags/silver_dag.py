@@ -132,14 +132,12 @@ with DAG(
     task_item_matching = PythonOperator(
         task_id="silver_item_matching_service",
         python_callable=_run_item_matching,
-        provide_context=True,
     )
 
     # 2. Automated Item Review (Gemini Flash + Spec Guards on silver.needs_review)
     task_item_auto_review = PythonOperator(
         task_id="gemini_item_auto_review",
         python_callable=_safe_run_item_auto_review,
-        provide_context=True,
     )
 
     _dbt_flags = f"--project-dir {DBT_PROJECT_DIR} --target-path /tmp/dbt/target --log-path /tmp/dbt/logs"
@@ -154,14 +152,12 @@ with DAG(
     task_gemini_coicop = PythonOperator(
         task_id="gemini_coicop_classification",
         python_callable=_safe_run_gemini,
-        provide_context=True,
     )
 
     # 5. Hedonic Quality Adjustment
     task_hedonic_adjustment = PythonOperator(
         task_id="hedonic_quality_adjustment",
         python_callable=_run_hedonic_adjustment,
-        provide_context=True,
     )
 
     # 6. dbt Run

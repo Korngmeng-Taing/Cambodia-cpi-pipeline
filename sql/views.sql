@@ -12,8 +12,8 @@ SELECT
     d.store_slug,
     COUNT(*) AS total_observations,
     COUNT(DISTINCT d.item_id) AS unique_products,
-    COUNT(*) FILTER (WHERE m.coicop_division = 'REVIEW') AS review_queue_count,
-    ROUND(COUNT(*) FILTER (WHERE m.coicop_division <> 'REVIEW' AND m.coicop_division IS NOT NULL)::NUMERIC / NULLIF(COUNT(*), 0) * 100.0, 2) AS classification_rate_pct,
+    COUNT(*) FILTER (WHERE m.coicop_division IS NULL OR m.coicop_division = '99') AS unclassified_count,
+    ROUND(COUNT(*) FILTER (WHERE m.coicop_division IS NOT NULL AND m.coicop_division <> '99')::NUMERIC / NULLIF(COUNT(*), 0) * 100.0, 2) AS classification_rate_pct,
     COUNT(*) FILTER (WHERE m.barcode IS NOT NULL) AS barcode_count,
     ROUND(COUNT(*) FILTER (WHERE m.barcode IS NOT NULL)::NUMERIC / NULLIF(COUNT(*), 0) * 100.0, 2) AS barcode_coverage_pct,
     COUNT(*) FILTER (WHERE d.is_outlier = TRUE) AS outlier_count

@@ -124,7 +124,6 @@ with DAG(
     bronze_gate_task = PythonOperator(
         task_id="verify_bronze_quality_gate",
         python_callable=_verify_minimum_scrapers_success,
-        provide_context=True,
     )
 
     # 3. Trigger Silver DAG

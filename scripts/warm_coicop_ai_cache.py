@@ -153,7 +153,7 @@ def build_gemini_model(model_name: str):
 
 def fetch_uncached_products(engine, limit: int = 1000, scrape_date: str | None = None) -> list[str]:
     """Fetches unique product names active on scrape_date that do not yet exist in silver.dim_coicop_ai_cache."""
-    limit_clause = f"LIMIT {limit}" if limit > 0 else ""
+    limit_clause = "LIMIT :limit" if limit > 0 else ""
     date_filter = "p.scrape_date = CAST(:ds AS DATE)" if scrape_date else "p.scrape_date = (SELECT max(scrape_date) FROM staging.int_prices_cleaned)"
     
     query = text(
@@ -184,6 +184,8 @@ def fetch_uncached_products(engine, limit: int = 1000, scrape_date: str | None =
         """
     )
     params = {"ds": scrape_date} if scrape_date else {}
+    if limit > 0:
+        params["limit"] = limit
     with engine.connect() as conn:
         rows = conn.execute(query, params).fetchall()
         return [r[0] for r in rows]

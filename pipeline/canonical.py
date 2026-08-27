@@ -297,7 +297,7 @@ def normalize_record(
         "quantity": str(quantity) if quantity else None,
         "package_size": str(package_size) if package_size else None,
         "unit": str(unit) if unit else "UNIT",
-        "is_out_of_stock": bool(_first(raw.get("is_out_of_stock"), False)),
+        "is_out_of_stock": _to_bool(_first(raw.get("is_out_of_stock"), False)),
     }
 
 

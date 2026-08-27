@@ -8,6 +8,9 @@ CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS silver;
 CREATE SCHEMA IF NOT EXISTS gold;
 
+-- Required for trigram GIN indexes (e.g. canonical_items.canonical_name)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 -- ============================================================================
 -- 0. BRONZE (Raw Store Listings & Errors)
 -- ============================================================================
@@ -108,11 +111,12 @@ CREATE TABLE IF NOT EXISTS silver.canonical_items (
     brand VARCHAR(256),
     barcode VARCHAR(64),
     size_norm VARCHAR(32),
-    category VARCHAR(64),
     first_seen TIMESTAMPTZ DEFAULT NOW(),
     last_seen TIMESTAMPTZ DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+-- Backwards-compatibility: drop the unused `category` column on existing installs.
+ALTER TABLE silver.canonical_items DROP COLUMN IF EXISTS category;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_canonical_items_barcode ON silver.canonical_items(barcode) WHERE barcode IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_canonical_items_name ON silver.canonical_items(canonical_name);
 CREATE INDEX IF NOT EXISTS idx_canonical_name_trgm ON silver.canonical_items USING gin (canonical_name gin_trgm_ops);
@@ -157,6 +161,29 @@ CREATE TABLE IF NOT EXISTS silver.dim_coicop_ai_cache (
     model_version VARCHAR(64),
     classified_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- P3 #128 — Item Embedding Cache for VectorItemMatcher
+-- Stores pre-computed embeddings for product names to avoid re-embedding on each run.
+-- Columns:
+--   item_id        : canonical_items.item_id (TEXT, since silver.canonical_items.item_id is TEXT)
+--   product_name   : canonical_name from dim_canonical_products (or raw name)
+--   embedding      : VECTOR(1536) or BYTEA for pgvector storage
+--   model_name     : embedding model identifier (e.g., 'text-embedding-3-small')
+--   created_at     : when the embedding was generated
+--   updated_at     : for LRU eviction tracking
+-- This table is looked up by pipeline/vector_item_matcher.py before calling the embedding API.
+CREATE TABLE IF NOT EXISTS silver.item_embedding_cache (
+    item_id TEXT PRIMARY KEY,
+    product_name TEXT NOT NULL,
+    embedding BYTEA NOT NULL,          -- pgvector VECTOR(1536) serialized as BYTEA
+    model_name VARCHAR(128) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_item_embedding_cache_model
+    ON silver.item_embedding_cache(model_name);
+CREATE INDEX IF NOT EXISTS idx_item_embedding_cache_updated
+    ON silver.item_embedding_cache(updated_at DESC);
 
 -- Canonical product dimension created by the canonicalization engine
 CREATE TABLE IF NOT EXISTS silver.dim_canonical_products (
@@ -211,6 +238,12 @@ CREATE TABLE IF NOT EXISTS silver.clean_store_prices (
     match_confidence NUMERIC(5, 4),
     scraped_at TIMESTAMPTZ
 );
+-- Daily grain uniqueness guard. Same item in same store on same date should appear once.
+-- raw_price_id PK comes from bronze; this catches duplicate observations if a scraper
+-- retries mid-day for the same item (raw_price_id is reused only after schema truncation).
+CREATE UNIQUE INDEX IF NOT EXISTS uq_clean_store_prices_date_store_item
+    ON silver.clean_store_prices (scrape_date, store_slug, item_id)
+    WHERE item_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_clean_store_prices_scrape_date_store ON silver.clean_store_prices(scrape_date, store_slug);
 CREATE INDEX IF NOT EXISTS idx_clean_store_prices_store_item ON silver.clean_store_prices(store_slug, item_id);
 CREATE INDEX IF NOT EXISTS idx_clean_store_prices_coicop_code ON silver.clean_store_prices(coicop_code);
@@ -238,13 +271,13 @@ CREATE TABLE IF NOT EXISTS gold.fct_daily_prices (
 -- Gold Jevons Micro-Index Facts
 CREATE TABLE IF NOT EXISTS gold.fct_elementary_indices (
     calculation_date DATE NOT NULL,
-    item_id UUID NOT NULL,
+    item_id TEXT NOT NULL,
     coicop_division VARCHAR(10) NOT NULL,
     coicop_code VARCHAR(20),
     base_price_khr NUMERIC(14, 4),
     current_price_khr NUMERIC(14, 4),
     price_ratio NUMERIC(10, 6),
-    elementary_index NUMERIC(10, 4),
+    price_ratio_pct NUMERIC(10, 4),
     is_imputed BOOLEAN DEFAULT FALSE,
     observation_count INTEGER,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -268,6 +301,25 @@ CREATE TABLE IF NOT EXISTS gold.fct_cpi_daily (
     PRIMARY KEY (calculation_date, coicop_division)
 );
 CREATE INDEX IF NOT EXISTS idx_fct_cpi_daily_date ON gold.fct_cpi_daily(calculation_date);
+
+-- P3 #129 — Data-quality sanity rails on the daily CPI facts.
+-- Headline/Core CPI for a 2020-base series must fall within ±50% of 100 (a literature-normal sanity bound).
+-- The previous default of (50, 500) is a 5× envelope that catches catastrophic unit-price
+-- corruption (e.g. wrong KHR/USD factor × 4000) but lets natural 25%-annual inflation through.
+ALTER TABLE gold.fct_cpi_daily
+    DROP CONSTRAINT IF EXISTS chk_fct_cpi_headline_range,
+    DROP CONSTRAINT IF EXISTS chk_fct_cpi_core_range,
+    DROP CONSTRAINT IF EXISTS chk_fct_cpi_division_index_range,
+    DROP CONSTRAINT IF EXISTS chk_fct_cpi_weight_sum;
+ALTER TABLE gold.fct_cpi_daily
+    ADD CONSTRAINT chk_fct_cpi_headline_range
+        CHECK (headline_cpi IS NULL OR (headline_cpi > 50 AND headline_cpi < 500)),
+    ADD CONSTRAINT chk_fct_cpi_core_range
+        CHECK (core_cpi IS NULL OR (core_cpi > 50 AND core_cpi < 500)),
+    ADD CONSTRAINT chk_fct_cpi_division_index_range
+        CHECK (division_index IS NULL OR (division_index > 30 AND division_index < 700)),
+    ADD CONSTRAINT chk_fct_cpi_weight_sum
+        CHECK (weight IS NULL OR (weight > 0 AND weight < 1));
 
 -- Gold Conformed Item Dimension (Master Catalog)
 CREATE TABLE IF NOT EXISTS gold.dim_items (
@@ -306,6 +358,19 @@ CREATE TABLE IF NOT EXISTS gold.dim_stores (
 
 -- Store Product Link Mapping
 -- (removed: silver.store_products was a legacy table, link data now lives in dbt silver.item_match_log / dim_products)
+
+-- ============================================================================
+-- P3 #123 — OPS SCHEMA. Control-flow tables (overrides, review queues, AI
+-- cache) live in their own schema so silver/gold is reserved for analytical
+-- facts. We keep `silver.*` as the authoritative storage; `ops.*` are
+-- pass-through views so new dbt code can target ops directly while legacy
+-- writers continue to INSERT/UPDATE silver.* unchanged.
+-- ============================================================================
+CREATE SCHEMA IF NOT EXISTS ops;
+
+COMMENT ON SCHEMA ops IS
+    'P3 #123 — Operational & control-flow tables (overrides, review queues, AI cache) live here. '
+    'silver.* views on the same names are kept as legacy pass-through for existing writers.';
 
 -- Manual Overrides Table
 CREATE TABLE IF NOT EXISTS silver.coicop_override (
@@ -358,6 +423,14 @@ CREATE TABLE IF NOT EXISTS silver.classification_queue (
 );
 CREATE INDEX IF NOT EXISTS idx_class_queue_pending ON silver.classification_queue(status) WHERE status = 'PENDING';
 
+-- Ops-schema alias views. Created here (post-table-create) so all source tables
+-- already exist when views compile. dbt source() targets should use schema='ops'.
+CREATE OR REPLACE VIEW ops.coicop_override        AS SELECT * FROM silver.coicop_override;
+CREATE OR REPLACE VIEW ops.coicop_override_manual AS SELECT * FROM silver.coicop_override_manual;
+CREATE OR REPLACE VIEW ops.coicop_category_map    AS SELECT * FROM silver.coicop_category_map;
+CREATE OR REPLACE VIEW ops.classification_queue    AS SELECT * FROM silver.classification_queue;
+CREATE OR REPLACE VIEW ops.dim_coicop_ai_cache     AS SELECT * FROM silver.dim_coicop_ai_cache;
+
 -- Golden Ground Truth Dataset (Active Learning & Human Validation)
 CREATE TABLE IF NOT EXISTS silver.classification_ground_truth (
     id BIGSERIAL PRIMARY KEY,
@@ -379,7 +452,7 @@ CREATE TABLE IF NOT EXISTS silver.hedonic_adjusted_prices (
     item_id VARCHAR(128) NOT NULL,
     store_slug VARCHAR(64) NOT NULL,
     canonical_name TEXT NOT NULL,
-    coicop_division VARCHAR(16) NOT NULL DEFAULT '09',
+    coicop_division VARCHAR(16) NOT NULL,
     raw_price_khr NUMERIC(14, 2) NOT NULL,
     ram_gb INT NOT NULL DEFAULT 0,
     storage_gb INT NOT NULL DEFAULT 0,
@@ -502,6 +575,7 @@ SET coicop_division = EXCLUDED.coicop_division;
 -- Helpful Indexes for high performance dbt execution
 CREATE INDEX IF NOT EXISTS idx_coicop_cat_map_lookup ON silver.coicop_category_map (store_slug, lower(category_native));
 CREATE INDEX IF NOT EXISTS idx_dim_coicop_ai_cache_lower_name ON silver.dim_coicop_ai_cache (lower(product_name));
+CREATE INDEX IF NOT EXISTS idx_dim_coicop_ai_cache_coicop_code ON silver.dim_coicop_ai_cache (coicop_code);
 
 -- Seed AEON Stationery categories -> Recreation & Culture / Stationery (Division 09, UN COICOP 09.5.4)
 INSERT INTO silver.coicop_category_map (store_slug, category_native, coicop_division)

@@ -71,7 +71,7 @@ def get_database_url() -> str:
     """
     url = os.getenv("CPI_DATABASE_URL")
     if url:
-        return url.replace("postgresql+psycopg2://", "postgresql://")
+        return url.replace("postgresql+psycopg2://", "postgresql://", 1)
 
     user = os.getenv("DB_USER") or os.getenv("CPI_DB_USER")
     password = os.getenv("DB_PASS") or os.getenv("CPI_DB_PASSWORD")

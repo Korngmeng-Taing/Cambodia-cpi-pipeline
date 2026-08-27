@@ -17,6 +17,7 @@ import numpy as np
 from rapidfuzz import fuzz
 
 from pipeline.key_pool import get_key_pool
+from pipeline.text_clean import is_size_compatible
 
 try:
     import google.generativeai as genai
@@ -35,8 +36,8 @@ except ImportError:  # pragma: no cover
 log = logging.getLogger(__name__)
 
 # Primary & Fallback Models
-EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/text-embedding-004")
-LLM_MODEL = os.getenv("GEMINI_PRO_MODEL", "gemini-2.5-flash")
+EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-2")
+LLM_MODEL = os.getenv("GEMINI_PRO_MODEL", "gemini-3.5-flash")
 LOCAL_FALLBACK_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 
 # Known cross-lingual equivalences for Cambodian market
@@ -97,10 +98,11 @@ def is_spec_compatible(cand_name: str, base_name: str) -> bool:
         return False
 
     # 3. Size / Volume conflict (> 10% discrepancy within the same unit dimension)
-    if cand_spec["size_val"] and base_spec["size_val"] and cand_spec["size_unit"] == base_spec["size_unit"]:
-        ratio = abs(cand_spec["size_val"] - base_spec["size_val"]) / max(cand_spec["size_val"], base_spec["size_val"])
-        if ratio > 0.10:
-            return False
+    # H2 FIX: Use shared is_size_compatible which cross-normalizes g↔kg and ml↔L
+    cand_size = f"{cand_spec['size_val']}{cand_spec['size_unit']}" if cand_spec["size_val"] and cand_spec["size_unit"] else None
+    base_size = f"{base_spec['size_val']}{base_spec['size_unit']}" if base_spec["size_val"] and base_spec["size_unit"] else None
+    if not is_size_compatible(cand_size, base_size, tolerance=0.10):
+        return False
 
     # 4. Diet / Zero flavor vs Original flavor variant conflict
     cand_lower, base_lower = cand_name.lower(), base_name.lower()
@@ -136,7 +138,7 @@ def _build_semantic_item_vector(text: str) -> np.ndarray:
 
 
 class VectorItemMatcher:
-    """High-precision semantic item matcher powered by text-embedding-004 and Gemini Pro LLM."""
+    """High-precision semantic item matcher powered by Gemini Embedding 2 and Gemini Flash LLM."""
 
     def __init__(self) -> None:
         self.key_pool = get_key_pool()
@@ -151,7 +153,7 @@ class VectorItemMatcher:
         return self._local_model
 
     def embed_text(self, text: str) -> np.ndarray:
-        """Generates semantic dense embedding vector (768-dim via Gemini or 384-dim local)."""
+        """Generates semantic dense embedding vector (768-dim via Gemini or local fallback)."""
         if not text or not text.strip():
             return np.zeros(768, dtype=np.float32)
 
@@ -169,7 +171,13 @@ class VectorItemMatcher:
         local_model = self._get_local_model()
         if local_model is not None:
             vec = local_model.encode(text.strip())
-            return np.array(vec, dtype=np.float32)
+            local_vec = np.array(vec, dtype=np.float32)
+            # Ensure consistent 768-dim: local model may return 384-dim, pad or project to 768
+            if local_vec.shape[0] < 768:
+                padded = np.zeros(768, dtype=np.float32)
+                padded[: local_vec.shape[0]] = local_vec
+                return padded
+            return local_vec[:768]
 
         return _build_semantic_item_vector(text)
 

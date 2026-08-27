@@ -50,7 +50,7 @@ raw as (
         {% if var('ds', '') != '' %}
             and rp.scraped_at::date = '{{ var("ds") }}'::date
         {% else %}
-            and rp.scraped_at::date >= (select coalesce(max(scrape_date) - interval '2 days', '2020-01-01'::date) from {{ this }})
+            and rp.scraped_at::date >= (select coalesce(max(scrape_date) - interval '7 days', '2020-01-01'::date) from {{ this }})
         {% endif %}
     {% endif %}
 ),
@@ -66,8 +66,8 @@ parsed as (
             when upper(raw.currency) = 'KHR' then raw.original_price_curr
             else raw.original_price_curr * coalesce(er.rate, 4044.0)
         end as original_price_khr,
-        coalesce((regexp_match(coalesce(raw.size_norm, ''), '[0-9]+(?:\.[0-9]+)?'))[1], null)::numeric as size_value,
-        lower(coalesce((regexp_match(coalesce(raw.size_norm, ''), '[a-zA-Z]+'))[1], '')) as size_unit,
+        coalesce((regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[1], null)::numeric as size_value,
+        lower(coalesce((regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[2], '')) as size_unit,
         case
             when raw.original_price_curr is not null and raw.original_price_curr > raw.price_original_curr
                  and raw.price_original_curr > 0

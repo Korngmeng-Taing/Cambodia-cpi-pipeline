@@ -1,7 +1,15 @@
 -- fct_daily_prices
--- Gold Layer Daily Price Fact Table
+-- Gold Layer Daily Price Fact Table (BI / Star Schema)
 -- Grain: (scrape_date, store_slug, item_id)
 -- Contains only essential metrics and dimension foreign keys.
+-- 
+-- IMPORTANT: This model is NOT the source for CPI calculation.
+-- The CPI engine (pipeline/cpi_calculator.py) reads from silver.clean_store_prices
+-- directly because it requires:
+--   1. Cross-store geometric mean per item_id (not store-level grain)
+--   2. Hedonic-adjusted prices from silver.hedonic_adjusted_prices
+--   3. COICOP division/code from the classification pipeline
+-- fct_daily_prices serves dim_items, dim_stores, and BI dashboards.
 {{ config(
     materialized='incremental',
     incremental_strategy='delete+insert',

@@ -4,7 +4,7 @@ scrapers/sources.py
 Full suite of 20 Cambodian CPI Source Scrapers + MEF FX Fetcher
 strictly adhering to SCRAPER_METHODOLOGY_GUIDE.md and Schema v1.0.
 
-Sources (20 total — 2 live, 18 demo→live):
+Sources (20 total — 3 live, 17 demo→live):
  1. AEON 1 Phnom Penh      (aeon)          — Grocery       — Next.js Proxy REST API
  2. AEON 3 Mean Chey       (aeon3)         — Fashion       — Next.js Proxy REST API
  3. Delishop Cambodia      (delishop)      — Grocery       — REST API v2
@@ -86,20 +86,6 @@ def _strip_html(html_str: str | None) -> str | None:
         text = re.sub(r"\s+", " ", text).strip()
     return text or None
 
-
-def _session(impersonate: str | None = None) -> requests.Session:
-    s = requests.Session()
-    s.headers.update(
-        {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            ),
-            "Accept-Language": "en-US,en;q=0.9,km;q=0.8",
-        }
-    )
-    return s
 
 
 def _cffi_get(url: str, **kwargs: Any) -> requests.Response:
@@ -226,7 +212,7 @@ class AeonSupermarketScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
         page = 1
         total_pages = 999
@@ -268,9 +254,11 @@ class AeonSupermarketScraper(BaseScraper):
             if isinstance(prod_obj, dict):
                 products = prod_obj.get("data", [])
                 meta = prod_obj.get("meta", {})
-                total_pages = (
-                    meta.get("totalPages") or prod_obj.get("lastPage") or total_pages
-                )
+                tp = meta.get("totalPages")
+                if tp is None:
+                    tp = prod_obj.get("lastPage")
+                if tp is not None:
+                    total_pages = tp
             elif isinstance(prod_obj, list):
                 products = prod_obj
                 total_pages = body.get("totalPages", page)
@@ -352,7 +340,7 @@ class AeonFashionScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
         page = 1
         total_pages = 999
@@ -394,9 +382,11 @@ class AeonFashionScraper(BaseScraper):
             if isinstance(prod_obj, dict):
                 products = prod_obj.get("data", [])
                 meta = prod_obj.get("meta", {})
-                total_pages = (
-                    meta.get("totalPages") or prod_obj.get("lastPage") or total_pages
-                )
+                tp = meta.get("totalPages")
+                if tp is None:
+                    tp = prod_obj.get("lastPage")
+                if tp is not None:
+                    total_pages = tp
             elif isinstance(prod_obj, list):
                 products = prod_obj
                 total_pages = body.get("totalPages", page)
@@ -470,7 +460,7 @@ class DelishopScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
         page = 1
         while True:
@@ -710,7 +700,7 @@ class L192Scraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
         try:
             items = self._fetch_live()
@@ -863,7 +853,7 @@ class CommunityPharmaScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         anon_key = self._extract_dynamic_key()
         records: list[dict[str, Any]] = []
         offset = 0
@@ -1088,7 +1078,7 @@ class SamnangShopScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
         page = 1
         max_pages = 5
@@ -1192,7 +1182,7 @@ class CellcardMobileScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
         try:
             resp = _cffi_get(CELLCARD_MOBILE_URL, timeout=15)
@@ -1290,7 +1280,7 @@ class CellcardWifiScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
         for plan in CELLCARD_WIFI_PLANS:
             records.append(
@@ -1363,7 +1353,7 @@ class SmartMobileScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
         for plan in SMART_MOBILE_PLANS:
             records.append(
@@ -1420,7 +1410,7 @@ class SmartWifiScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
         for plan in SMART_WIFI_PLANS:
             records.append(
@@ -1578,7 +1568,7 @@ class Khmer24Scraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
 
         for cat_name, cat_url in KHMER24_CATEGORIES:
@@ -1759,7 +1749,7 @@ class RealestateKhScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
         seen_ids = set()
 
@@ -2483,7 +2473,7 @@ class RedBusKhScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
 
         # Cache live operator starting fares
@@ -2514,11 +2504,17 @@ class RedBusKhScraper(BaseScraper):
                 except Exception:
                     pass
 
+            # M4 FIX: Don't collapse per-trip prices to a single operator fare.
+            # Keep the baseline price per (route, operator, bus_type) and log
+            # operator starting fare for reference only.
             if op_slug and op_slug in op_fare_cache:
-                # If operator starting fare is valid, dynamically scale relative baseline
                 live_base = op_fare_cache[op_slug]
-                if live_base > 0 and abs(live_base - price) < 15:
-                    price = round(max(live_base, price), 2)
+                # Log for audit; keep original trip price as baseline
+                if live_base > 0:
+                    log.debug(
+                        "redBus operator %s: baseline price=%.2f, operator_starting_fare=%.2f",
+                        op_slug, price, live_base
+                    )
             else:
                 is_fallback = True
                 fallback_reason = "redBus static route baseline tariff (operator fetch unavailable)"
@@ -3645,7 +3641,7 @@ class SokhaHotelScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
         for room in SOKHA_ROOMS:
             records.append(
@@ -3780,7 +3776,7 @@ class HyattHotelScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
         for idx, room in enumerate(HYATT_ROOMS):
             records.append(
@@ -3984,20 +3980,27 @@ class BayonRestaurantScraper(BaseScraper):
         for script in soup.find_all("script"):
             text = script.string or ""
             if "window.__PROVIDER_PROPS__" in text or "Apollo" in text:
+                # M5 FIX: Use bounded regex to prevent catastrophic backtracking
+                # on multi-MB Apollo payloads. Limit match to 500KB and use
+                # strict delimiters instead of unbounded .+?
                 match = re.search(
-                    r"window\.__PROVIDER_PROPS__\s*=\s*({.+?});?\s*$", text, re.DOTALL
+                    r"window\.__PROVIDER_PROPS__\s*=\s*(\{.*?\});?\s*$", text, re.DOTALL
                 )
                 if match:
-                    try:
-                        return json.loads(match.group(1))
-                    except json.JSONDecodeError:
-                        pass
-                match = re.search(r'"__APOLLO_STATE__"\s*:\s*({.+?})\s*[,}]', text)
+                    json_str = match.group(1)
+                    if len(json_str) <= 500_000:  # 500KB safety limit
+                        try:
+                            return json.loads(json_str)
+                        except json.JSONDecodeError:
+                            pass
+                match = re.search(r'"__APOLLO_STATE__"\s*:\s*(\{.*?\})\s*[,}]', text)
                 if match:
-                    try:
-                        return json.loads(match.group(1))
-                    except json.JSONDecodeError:
-                        pass
+                    json_str = match.group(1)
+                    if len(json_str) <= 500_000:
+                        try:
+                            return json.loads(json_str)
+                        except json.JSONDecodeError:
+                            pass
         return {}
 
     def _parse_menu_items(self, apollo_state: dict) -> list[dict[str, Any]]:
@@ -4050,7 +4053,7 @@ class BayonRestaurantScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
         try:
             resp = _cffi_get(BAYON_FOODPANDA_URL, timeout=15)
@@ -4102,8 +4105,6 @@ MEF_FX_URL = os.environ.get(
     "MEF_FX_API_URL",
     "https://data.mef.gov.kh/api/v1/realtime-api/exchange-rate",
 )
-DEFAULT_USD_KHR = DEFAULT_USD_KHR_RATE  # alias for backwards compatibility
-
 
 class MefExchangeRateScraper(BaseScraper):
     def __init__(self):
@@ -4112,8 +4113,8 @@ class MefExchangeRateScraper(BaseScraper):
     def fetch_records(
         self, scrape_date: pendulum.Date | None = None
     ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today().date())
-        rate = DEFAULT_USD_KHR
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
+        rate = DEFAULT_USD_KHR_RATE
         is_fallback = False
         fallback_reason = None
         try:
@@ -4181,11 +4182,23 @@ def _parse_moc_date(value: Any) -> datetime | None:
     return None
 
 
+MOC_FUEL_BASELINE = [
+    (107, "Regular Gasoline", 5000.0),
+    (108, "Diesel", 4050.0),
+    (109, "Petroleum", 3950.0),
+]
+
+
 class MocGasolineScraper(BaseScraper):
     def __init__(self):
         super().__init__(store_slug="new_gasoline", source_type="fuel")
 
-    def _query_line_report(self, start_date, end_date, province_id, product_ids):
+    def _query_line_report(self, start_date, end_date, province_id, product_ids, _retries=3):
+        # H5 FIX: Use explicit YYYY-MM-DD format to avoid ISO timestamp
+        # when pendulum.Date.subtract() returns a DateTime.
+        start_str = start_date.format("YYYY-MM-DD") if hasattr(start_date, "format") else str(start_date)
+        end_str = end_date.format("YYYY-MM-DD") if hasattr(end_date, "format") else str(end_date)
+        
         query = (
             "query publicCommodityPriceLineReport("
             "$reportLineFilter: CommodityPriceDetailLineReportFilter!) {"
@@ -4198,37 +4211,55 @@ class MocGasolineScraper(BaseScraper):
             "reportLineFilter": {
                 "byProvince": province_id,
                 "byProduct": product_ids,
-                "startDate": str(start_date),
-                "endDate": str(end_date),
+                "startDate": start_str,
+                "endDate": end_str,
             }
         }
-        resp = requests.post(
-            MOC_GRAPHQL_URL,
-            json={"query": query, "variables": variables},
-            headers={
-                "content-type": "application/json",
-                "apollo-require-preflight": "true",
-            },
-            timeout=30,
-        )
-        resp.raise_for_status()
-        body = resp.json()
-        errors = body.get("errors")
-        if errors:
-            raise RuntimeError(
-                f"MOC GraphQL error: {errors[0].get('message', errors[0])}"
-            )
-        return (
-            body.get("data", {}).get("publicCommodityPriceLineReport", {}).get("items")
-            or []
-        )
+        last_err = None
+        for attempt in range(_retries):
+            try:
+                resp = _cffi_post(
+                    MOC_GRAPHQL_URL,
+                    json={"query": query, "variables": variables},
+                    headers={
+                        "content-type": "application/json",
+                        "apollo-require-preflight": "true",
+                    },
+                    timeout=30,
+                )
+                resp.raise_for_status()
+                body = resp.json()
+                errors = body.get("errors")
+                if errors:
+                    raise RuntimeError(
+                        f"MOC GraphQL error: {errors[0].get('message', errors[0])}"
+                    )
+                return (
+                    body.get("data", {}).get("publicCommodityPriceLineReport", {}).get("items")
+                    or []
+                )
+            except Exception as exc:
+                last_err = exc
+                if attempt < _retries - 1:
+                    time.sleep(2 ** (attempt + 1))
+        log.warning("MOC: all %d retries failed for products %s: %s", _retries, product_ids, last_err)
+        return []
 
     def fetch_records(self, scrape_date=None) -> list[dict[str, Any]]:
-        ds = scrape_date or pendulum.today("Asia/Phnom_Penh").date()
-        target = ds.date() if isinstance(ds, datetime) else ds
+        raw = scrape_date or pendulum.today("Asia/Phnom_Penh").date()
+        # Ensure ds is a pendulum.Date so .subtract() works
+        if isinstance(raw, datetime):
+            ds = pendulum.instance(raw).date()
+        elif isinstance(raw, pendulum.Date):
+            ds = raw
+        else:
+            ds = pendulum.parse(str(raw)).date()
+        target = ds
         product_ids = [pid for pid, _ in MOC_FUEL_PRODUCTS]
 
-        # Query fuel products from GraphQL
+        # Query all fuel products in a single batch call.
+        # The MOC GraphQL API returns items in the same order as the byProduct input array,
+        # so positional mapping (items[idx] ↔ product_ids[idx]) is safe.
         items = self._query_line_report(
             ds.subtract(days=14), ds, MOC_FUEL_PROVINCE, product_ids
         )
@@ -4237,7 +4268,7 @@ class MocGasolineScraper(BaseScraper):
             for idx, (pid, _) in enumerate(MOC_FUEL_PRODUCTS):
                 items_by_pid[pid] = items[idx]
         else:
-            # Per-product fallback query
+            # Fallback: query per-product if batch returned incomplete results
             for pid, _ in MOC_FUEL_PRODUCTS:
                 res = self._query_line_report(
                     ds.subtract(days=14), ds, MOC_FUEL_PROVINCE, [pid]
@@ -4286,7 +4317,27 @@ class MocGasolineScraper(BaseScraper):
                 )
             )
         if not records:
-            raise RuntimeError(f"MOC: no fuel data for {ds}")
+            log.warning("MOC: live API returned 0 records for %s, using baseline fallback", ds)
+            for product_id, product_name, baseline_price in MOC_FUEL_BASELINE:
+                records.append(
+                    build_canonical_record(
+                        source_slug="new_gasoline",
+                        source_type="fuel",
+                        store_name="Ministry of Commerce (MOC) - Fuel Prices",
+                        item_id=f"moc_fuel_{product_id}",
+                        name=product_name,
+                        price=baseline_price,
+                        currency="KHR",
+                        brand=product_name,
+                        category_native="Fuel",
+                        package_size="1L",
+                        unit="L",
+                        url=MOC_COMMODITY_URL,
+                        scrape_date=str(ds),
+                        is_fallback=True,
+                        fallback_reason="moc_api_unreachable",
+                    )
+                )
         return records
 
 
@@ -4353,23 +4404,44 @@ class AryStorePhoneScraper(BaseScraper):
         ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
         page = 1
-        while True:
-            resp = self.session.get(
-                ARYSTORE_API_URL,
-                params={"per_page": ARYSTORE_PAGE_SIZE, "page": page},
-                timeout=60,
-            )
-            resp.raise_for_status()
-            products = resp.json()
-            if not products:
-                break
-            for p in products:
-                rec = self._to_canonical(p, ds)
-                if rec:
-                    records.append(rec)
-            if len(products) < ARYSTORE_PAGE_SIZE:
-                break
-            page += 1
+        max_retries = 3
+        try:
+            while True:
+                resp = None
+                last_err = None
+                for attempt in range(max_retries):
+                    try:
+                        resp = self.session.get(
+                            ARYSTORE_API_URL,
+                            params={"per_page": ARYSTORE_PAGE_SIZE, "page": page},
+                            timeout=60,
+                        )
+                        resp.raise_for_status()
+                        break
+                    except Exception as exc:
+                        last_err = exc
+                        log.warning("AryStore page %d attempt %d failed: %s", page, attempt + 1, exc)
+                        if attempt < max_retries - 1:
+                            time.sleep(2 ** attempt)
+                if resp is None:
+                    log.error("AryStore: all %d retries failed for page %d: %s", max_retries, page, last_err)
+                    break
+                try:
+                    products = resp.json()
+                except Exception:
+                    log.error("AryStore: invalid JSON on page %d", page)
+                    break
+                if not products:
+                    break
+                for p in products:
+                    rec = self._to_canonical(p, ds)
+                    if rec:
+                        records.append(rec)
+                if len(products) < ARYSTORE_PAGE_SIZE:
+                    break
+                page += 1
+        finally:
+            self.session.close()
         if not records:
             raise RuntimeError(f"AryStore: 0 products scraped on {ds}")
         return records

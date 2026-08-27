@@ -131,15 +131,12 @@ class GeminiItemReviewer:
                 log.warning("Could not initialize google.generativeai: %s", e)
 
     def _get_connection(self):
-        conn_str = self.db_conn_str.replace("postgresql+psycopg2://", "postgresql://")
+        from pipeline.config import alternate_host_url
+        conn_str = self.db_conn_str.replace("postgresql+psycopg2://", "postgresql://", 1)
         try:
             conn = psycopg2.connect(conn_str)
         except psycopg2.OperationalError:
-            if "postgres" in conn_str:
-                alt = conn_str.replace("postgres:5432", "localhost:5432")
-            else:
-                alt = conn_str.replace("localhost:5432", "postgres:5432")
-            conn = psycopg2.connect(alt)
+            conn = psycopg2.connect(alternate_host_url(conn_str))
         register_uuid(conn_or_curs=conn)
         return conn
 
@@ -193,6 +190,12 @@ class GeminiItemReviewer:
             try:
                 response = self.model.generate_content(prompt_str)
                 resp_text = response.text.strip()
+                # M3 FIX: Strip markdown code fences before JSON parse
+                if resp_text.startswith("```"):
+                    # Remove opening fence
+                    resp_text = re.sub(r"^```(?:json)?\s*", "", resp_text)
+                    # Remove closing fence
+                    resp_text = re.sub(r"\s*```$", "", resp_text)
                 parsed = json.loads(resp_text)
                 if isinstance(parsed, list):
                     for item in parsed:

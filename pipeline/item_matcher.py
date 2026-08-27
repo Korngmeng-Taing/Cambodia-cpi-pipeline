@@ -9,7 +9,7 @@ from psycopg2.extras import execute_batch
 from rapidfuzz import fuzz
 
 from pipeline.config import get_database_url
-from pipeline.text_clean import clean_name_for_matching
+from pipeline.text_clean import clean_name_for_matching, is_size_compatible
 from pipeline.vector_item_matcher import VectorItemMatcher, is_spec_compatible
 from pipeline.hybrid_embeddings_classifier import get_hybrid_classifier
 
@@ -42,15 +42,12 @@ class ItemMatcher:
         return self._vector_matcher
 
     def _get_connection(self):
-        conn_str = self.db_conn_str.replace("postgresql+psycopg2://", "postgresql://")
+        from pipeline.config import alternate_host_url
+        conn_str = self.db_conn_str.replace("postgresql+psycopg2://", "postgresql://", 1)
         try:
             conn = psycopg2.connect(conn_str)
         except psycopg2.OperationalError:
-            if "postgres" in conn_str:
-                alt = conn_str.replace("postgres:5432", "localhost:5432")
-            else:
-                alt = conn_str.replace("localhost:5432", "postgres:5432")
-            conn = psycopg2.connect(alt)
+            conn = psycopg2.connect(alternate_host_url(conn_str))
         psycopg2.extras.register_uuid(conn_or_curs=conn)
         return conn
 
@@ -153,38 +150,6 @@ class ItemMatcher:
                 pass
         return None
 
-    @staticmethod
-    def _is_size_compatible(
-        size1: str | None, size2: str | None, tolerance: float = 0.10
-    ) -> bool:
-        """Check if two package sizes are compatible within a relative tolerance."""
-        if not size1 or not size2:
-            return True
-        s1 = size1.strip().lower()
-        s2 = size2.strip().lower()
-        if s1 == s2:
-            return True
-        m1 = re.match(r"^([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)$", s1)
-        m2 = re.match(r"^([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)$", s2)
-        if m1 and m2:
-            v1, u1 = float(m1.group(1)), m1.group(2)
-            v2, u2 = float(m2.group(1)), m2.group(2)
-            if v1 > 0 and v2 > 0:
-                factors = {"ml": 0.001, "l": 1.0, "g": 0.001, "kg": 1.0}
-                f1, f2 = factors.get(u1), factors.get(u2)
-                if (
-                    f1 is not None
-                    and f2 is not None
-                    and (u1 in ("ml", "l")) == (u2 in ("ml", "l"))
-                ):
-                    b1, b2 = v1 * f1, v2 * f2
-                    diff = abs(b1 - b2) / max(b1, b2)
-                    return diff <= tolerance
-                if u1 == u2:
-                    diff = abs(v1 - v2) / max(v1, v2)
-                    return diff <= tolerance
-        return False
-
     def match_by_fuzzy_text(
         self, name_clean: str, size_norm: str | None, conn: Any = None
     ) -> tuple[uuid.UUID, float, str] | None:
@@ -220,7 +185,7 @@ class ItemMatcher:
             if abs(target_len - cand_len) > max(target_len, cand_len) * 0.35:
                 continue
 
-            if not self._is_size_compatible(size_norm, cand_size):
+            if not is_size_compatible(size_norm, cand_size):
                 continue
 
             if not is_spec_compatible(name_clean, canonical_name):
@@ -454,7 +419,7 @@ class ItemMatcher:
             name_upper = name_clean.strip().upper() if name_clean else ""
             if name_upper and name_upper in self.exact_name_cache:
                 item_id = self.exact_name_cache[name_upper]
-                match_logs.append((raw_price_id, str(item_id), "fuzzy_text", 1.0))
+                match_logs.append((raw_price_id, str(item_id), "exact_text", 1.0))
                 totals["matched_fuzzy"] += 1
                 continue
 
@@ -473,9 +438,17 @@ class ItemMatcher:
                     totals["sent_to_review"] += 1
                     continue
 
-            # 5. Create new canonical item
+            # 5. Create new canonical item with auto-classification
             new_id = uuid.uuid4()
-            new_items.append((str(new_id), name_clean, brand, barcode, package_size))
+            coicop_div, coicop_code = None, None
+            try:
+                classifier = get_hybrid_classifier()
+                res = classifier.classify_product(name_clean, store_slug=store_id)
+                coicop_div = res.get("coicop_division")
+                coicop_code = res.get("coicop_code")
+            except Exception as e:
+                log.warning("COICOP classification on batch new item failed: %s", e)
+            new_items.append((str(new_id), name_clean, brand, barcode, package_size, coicop_div, coicop_code))
             if barcode:
                 self.barcode_cache[barcode.strip()] = new_id
             if sku:
@@ -496,8 +469,8 @@ class ItemMatcher:
                 execute_batch(
                     cur,
                     """
-                    INSERT INTO silver.canonical_items (item_id, canonical_name, brand, barcode, size_norm)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO silver.canonical_items (item_id, canonical_name, brand, barcode, size_norm, coicop_division, coicop_code)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (item_id) DO NOTHING
                     """,
                     new_items,

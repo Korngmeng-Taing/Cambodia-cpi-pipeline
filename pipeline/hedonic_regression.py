@@ -56,13 +56,27 @@ _CAMERA_RE = re.compile(r"\b(\d{2,3})\s*MP\b", re.IGNORECASE)
 _5G_RE = re.compile(r"\b5G\b", re.IGNORECASE)
 
 
+_engine_cache = None
+
 def get_engine():
+    global _engine_cache
+    if _engine_cache is not None:
+        return _engine_cache
     from pipeline.config import get_database_url
 
     conn_str = get_database_url().replace(
         "postgresql://", "postgresql+psycopg2://", 1
     )
-    return create_engine(conn_str)
+    try:
+        eng = create_engine(conn_str)
+        with eng.connect() as test_conn:
+            pass
+        _engine_cache = eng
+        return eng
+    except Exception:
+        eng = create_engine(alternate_host_url(conn_str))
+        _engine_cache = eng
+        return eng
 
 
 def extract_specs(name: str) -> dict[str, float | int]:

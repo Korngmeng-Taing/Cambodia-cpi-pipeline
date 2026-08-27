@@ -277,7 +277,7 @@ class GeminiModelPool:
                 return model.generate_content(contents, **kwargs)
             except Exception as exc:
                 last_exc = exc
-                if _is_rate_limit_error(exc) and _is_quota_exhausted_error(exc):
+                if _is_rate_limit_error(exc) or _is_quota_exhausted_error(exc):
                     self.mark_exhausted(key)
                     if self.active_keys:
                         log.info(
@@ -389,14 +389,22 @@ def classify_batch(model, names: list[str]) -> list[dict[str, Any]]:
         if not isinstance(item, dict):
             continue
         code = str(item.get("coicop_code") or UNCLASSIFIED).strip()
+        classification_method = "model"
+        confidence = float(item.get("confidence_score") or 0.0)
+        # H4 FIX: 13.* is invalid per COICOP (no Division 13). Model sometimes
+        # hallucinates it. Instead of silently rewriting 13.* → 12.*, record
+        # the fallback and downgrade confidence so downstream can filter/flag.
         if code.startswith("13."):
             code = "12." + code[3:]
+            classification_method = "model_fallback_rewrite"
+            confidence = min(confidence, 0.5)  # cap confidence for rewritten codes
         normalized.append(
             {
                 "product_name": str(item.get("product_name") or "").strip(),
                 "coicop_code": code,
-                "confidence_score": float(item.get("confidence_score") or 0.0),
+                "confidence_score": confidence,
                 "reasoning": str(item.get("reasoning") or ""),
+                "classification_method": classification_method,
             }
         )
     return normalized

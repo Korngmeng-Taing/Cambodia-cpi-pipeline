@@ -19,7 +19,7 @@ import os
 import uuid
 from typing import Any
 
-import pendulum
+from datetime import datetime
 import psycopg2
 
 from pipeline.bronze_scraper import BronzeScraper
@@ -133,7 +133,7 @@ def ingest_source_bronze(source_slug: str, scrape_date: str) -> dict[str, Any]:
 
     date_str = str(scrape_date)
     parsed_date = (
-        pendulum.parse(date_str).date() if isinstance(scrape_date, str) else scrape_date
+        datetime.fromisoformat(date_str).date() if isinstance(scrape_date, str) else scrape_date
     )
     raw_records = scraper_cls().fetch_records(scrape_date=parsed_date)
     if not raw_records:

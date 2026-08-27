@@ -7,10 +7,12 @@ Based on:
   - National Institute of Statistics (NIS) Cambodia Expenditure Weights
 =============================================================================
 """
+from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Any
+
 import numpy as np
 import pandas as pd
 import psycopg2
@@ -18,9 +20,7 @@ from psycopg2.extras import execute_batch, RealDictCursor
 
 from pipeline.config import get_database_url
 
-logger = logging.getLogger(__name__)
-if not logger.handlers:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+log = logging.getLogger(__name__)
 
 # Official NIS Cambodia 12-Division Expenditure Weights (CSES)
 DEFAULT_NIS_WEIGHTS = {
@@ -59,39 +59,36 @@ class CPICalculationEngine:
     Laspeyres 12-division aggregation, and Headline / Core CPI series.
     """
 
-    def __init__(self, db_url: Optional[str] = None):
+    def __init__(self, db_url: str | None = None):
         self.db_url = db_url or get_database_url()
         self.weights = DEFAULT_NIS_WEIGHTS.copy()
 
     def get_connection(self):
-        conn_str = self.db_url.replace("postgresql+psycopg2://", "postgresql://")
+        conn_str = self.db_url.replace("postgresql+psycopg2://", "postgresql://", 1)
         try:
             return psycopg2.connect(conn_str)
-        except Exception:
-            return psycopg2.connect(conn_str.replace("postgres:5432", "localhost:5432"))
+        except psycopg2.OperationalError as e:
+            # Use the alternate host URL defined in config for proper parsing and fallback handling
+            from pipeline.config import alternate_host_url
+            alt_url = alternate_host_url(self.db_url)
+            try:
+                return psycopg2.connect(alt_url)
+            except psycopg2.OperationalError as e2:
+                # M6 FIX: Preserve original exception as cause so users see the true root cause
+                raise psycopg2.OperationalError(f"Both primary and alternate hosts failed. Primary: {e}") from e
 
-    def compute_jevons_index(self, current_prices: np.ndarray, base_prices: np.ndarray) -> float:
-        """
-        Calculates Jevons Geometric Mean Micro-Index:
-          I = exp( mean( ln(P_t) ) - mean( ln(P_0) ) ) * 100.0
-        """
-        cur = np.asarray(current_prices, dtype=float)
-        base = np.asarray(base_prices, dtype=float)
-
-        cur = cur[cur > 0]
-        base = base[base > 0]
-
-        if len(cur) == 0 or len(base) == 0:
-            return 100.0
-
-        log_cur_mean = np.mean(np.log(cur))
-        log_base_mean = np.mean(np.log(base))
-
-        ratio = np.exp(log_cur_mean - log_base_mean)
-        return float(ratio * 100.0)
 
     def load_clean_prices(self, start_date: date, end_date: date) -> pd.DataFrame:
-        """Loads clean store price observations from silver layer."""
+        """Loads clean store price observations from silver layer.
+
+        NOTE: This reads from silver.clean_store_prices (NOT gold.fct_daily_prices).
+        The CPI engine requires:
+          1. Item-level aggregation across stores (geometric mean per item_id)
+          2. Hedonic-adjusted prices from silver.hedonic_adjusted_prices
+          3. COICOP division/code from the classification pipeline
+        fct_daily_prices is at (scrape_date, store_slug, item_id) grain for BI/star schema
+        and does not include hedonic adjustments or COICOP attribution.
+        """
         query = """
             SELECT 
                 s.scrape_date,
@@ -100,7 +97,7 @@ class CPICalculationEngine:
                 s.name_clean,
                 COALESCE(h.hedonic_adjusted_price_khr, s.unit_price_khr, s.price_khr) AS unit_price_khr,
                 s.price_khr,
-                s.coicop_division,
+                s.coicop_division,  -- post-classification division from clean_store_prices, NOT h.coicop_division
                 s.coicop_code,
                 s.is_outlier
             FROM silver.clean_store_prices s
@@ -120,7 +117,33 @@ class CPICalculationEngine:
         df = df[df["unit_price_khr"] > 0]
         return df
 
-    def compute_base_prices(self, base_date: date, df_prices: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    def compute_jevons_index(self, current_prices, base_prices) -> float:
+        """
+        Diewert (1995) Jevons geometric-mean elementary price index.
+
+        Returns the unweighted geometric-mean price ratio of ``current_prices``
+        relative to ``base_prices``, expressed on a 100-base scale. Both inputs
+        may be any array-like (list, tuple, numpy array); non-positive entries
+        are filtered out. Returns 100.0 (the no-change neutral index) when no
+        usable pairs remain.
+        """
+        cur = np.asarray(current_prices, dtype=float)
+        base = np.asarray(base_prices, dtype=float)
+        # Align to shortest length first, then filter pairs where either is non-positive
+        n = min(len(cur), len(base))
+        cur = cur[:n]
+        base = base[:n]
+        valid_mask = (cur > 0) & (base > 0)
+        cur = cur[valid_mask]
+        base = base[valid_mask]
+        if len(cur) == 0:
+            return 100.0
+        ratios = cur / base
+        if len(ratios) == 0:
+            return 100.0
+        return float(np.exp(np.mean(np.log(ratios))) * 100.0)
+
+    def compute_base_prices(self, base_date: date, df_prices: pd.DataFrame | None = None) -> pd.DataFrame:
         """
         Computes the base geometric mean price per item_id on the base date.
         """
@@ -129,7 +152,7 @@ class CPICalculationEngine:
         
         base_df = df_prices[df_prices["scrape_date"] == base_date]
         if base_df.empty:
-            logger.warning(f"No observations found on base date {base_date}. Using earliest available.")
+            log.warning(f"No observations found on base date {base_date}. Using earliest available.")
             base_df = df_prices
 
         # Geometric mean base price strictly per unique item_id
@@ -164,10 +187,19 @@ class CPICalculationEngine:
         merged["is_imputed"] = False
 
         # Apply 7-day carry-forward imputation for missing items
+        # C4 FIX: Anchor the lookback window to the most recent actual scrape_date
+        # in the database (not calendar days), so a new-month reprice is not
+        # silently imputed from the prior month.
         missing_mask = merged["current_price_khr"].isna()
         if missing_mask.any():
             missing_items = set(merged.loc[missing_mask, "item_id"])
-            min_date = calc_date - timedelta(days=imputation_window_days)
+            # Find the most recent scrape_date < calc_date that has data for ANY item
+            prior_dates = df_history[df_history["scrape_date"] < calc_date]["scrape_date"].unique()
+            if len(prior_dates) > 0:
+                most_recent_scrape = max(prior_dates)
+                min_date = most_recent_scrape - timedelta(days=imputation_window_days)
+            else:
+                min_date = calc_date - timedelta(days=imputation_window_days)
             recent_obs = df_history[
                 (df_history["scrape_date"] >= min_date) & 
                 (df_history["scrape_date"] < calc_date) & 
@@ -195,12 +227,13 @@ class CPICalculationEngine:
         # ILO Outlier Filter: Guard against 1000x currency scaling or raw scraper glitches
         valid = valid[(valid["price_ratio"] >= 0.20) & (valid["price_ratio"] <= 5.00)].copy()
 
-        valid["elementary_index"] = valid["price_ratio"] * 100.0
+        # Store price ratio as a percentage (per-item Jevons index)
+        valid["price_ratio_pct"] = valid["price_ratio"] * 100.0
         valid["calculation_date"] = calc_date
 
         return valid
 
-    def aggregate_division_and_headline(self, elementary_df: pd.DataFrame, calc_date: date) -> Tuple[pd.DataFrame, Dict]:
+    def aggregate_division_and_headline(self, elementary_df: pd.DataFrame, calc_date: date) -> tuple[pd.DataFrame, dict]:
         """
         Aggregates elementary indices into 12 COICOP division indices and Headline / Core CPI.
         """
@@ -234,10 +267,17 @@ class CPICalculationEngine:
         total_weight = df_div["weight"].sum()
         headline_cpi = float((df_div["weight"] * df_div["division_index"]).sum() / total_weight)
 
-        # Core CPI (Ex-Food & Energy): Excludes Division 01 (Food & Non-Alcoholic Beverages)
-        # in strict alignment with NIS Cambodia & National Bank of Cambodia core inflation standards
-        core_divisions = df_div[~df_div["coicop_division"].isin(["01"])]
+        # Core CPI (Ex-Food & Energy): Excludes Division 01 (Food & Non-Alcoholic Beverages),
+        # Division 04 (Housing, Water, Electricity, Gas & Fuels), and Division 07 (Transport
+        # & Automotive Fuels) — in alignment with NIS Cambodia & National Bank of Cambodia
+        # core inflation standards and the project README.
+        core_exclusions = {"01", "04", "07"}
+        core_divisions = df_div[~df_div["coicop_division"].isin(core_exclusions)]
         core_weight = core_divisions["weight"].sum()
+        # Renormalise the denominator to the sum of the CORE weights only. Using
+        # the full 12-division total_weight here caused core_cpi to collapse to
+        # ~25.9 on a base-period day (the sum of core weights) instead of 100.0.
+        # See audit C1.
         core_cpi = float((core_divisions["weight"] * core_divisions["division_index"]).sum() / core_weight) if core_weight > 0 else headline_cpi
 
         headline_summary = {
@@ -250,19 +290,29 @@ class CPICalculationEngine:
 
         return df_div, headline_summary
 
-    def run_daily_pipeline(self, target_date: Optional[date] = None, base_date: Optional[date] = None):
+    def run_daily_pipeline(self, target_date: date | None = None, base_date: date | None = None):
         """Executes full daily CPI calculation and writes results to PostgreSQL."""
         if target_date is None:
             target_date = date.today()
+
+        log.info(f"🚀 Running Daily CPI Calculation for {target_date} (Base Date: {base_date})")
+
+        # When base_date is unset, infer it as the earliest scrape_date with data.
+        # Probe with a wide historical window first so we can pick the right base.
         if base_date is None:
-            base_date = date(2026, 8, 18)
+            probe_start = target_date - timedelta(days=365 * 5)  # 5-year retrospective
+            df_history = self.load_clean_prices(probe_start, target_date)
+            if df_history.empty:
+                log.error("No price history available to infer base_date.")
+                return
+            base_date = df_history['scrape_date'].min()
+            base_obs = int(df_history[df_history['scrape_date'] == base_date]['unit_price_khr'].count())
+            log.info(f"🔧 No base_date provided; using earliest available date {base_date} as base period (obs={base_obs}).")
+        else:
+            df_history = self.load_clean_prices(base_date, target_date)
 
-        logger.info(f"🚀 Running Daily CPI Calculation for {target_date} (Base Date: {base_date})")
-
-        # Load history from base_date to target_date
-        df_history = self.load_clean_prices(base_date, target_date)
         if df_history.empty:
-            logger.error(f"No clean price data available between {base_date} and {target_date}")
+            log.error(f"No clean price data available between {base_date} and {target_date}")
             return
 
         base_df = self.compute_base_prices(base_date, df_history)
@@ -270,30 +320,30 @@ class CPICalculationEngine:
 
         df_div, headline = self.aggregate_division_and_headline(elementary_df, target_date)
 
-        logger.info(f"📊 {target_date} Headline CPI: {headline['headline_cpi']:.2f} | Core CPI: {headline['core_cpi']:.2f} | Active Basket Items: {headline['total_items']}")
+        log.info(f"📊 {target_date} Headline CPI: {headline['headline_cpi']:.2f} | Core CPI: {headline['core_cpi']:.2f} | Active Basket Items: {headline['total_items']}")
 
         self._save_to_database(elementary_df, df_div, headline)
 
-    def _save_to_database(self, elementary_df: pd.DataFrame, df_div: pd.DataFrame, headline: Dict):
+    def _save_to_database(self, elementary_df: pd.DataFrame, df_div: pd.DataFrame, headline: dict):
         """Persists elementary indices and daily CPI facts to PostgreSQL."""
         with self.get_connection() as conn:
             with conn.cursor() as cur:
                 # Ensure Gold schema tables exist
                 cur.execute("""
-                    CREATE TABLE IF NOT EXISTS gold.fct_elementary_indices (
-                        calculation_date DATE NOT NULL,
-                        item_id UUID NOT NULL,
-                        coicop_division VARCHAR(10) NOT NULL,
-                        coicop_code VARCHAR(20),
-                        base_price_khr NUMERIC(14, 4),
-                        current_price_khr NUMERIC(14, 4),
-                        price_ratio NUMERIC(10, 6),
-                        elementary_index NUMERIC(10, 4),
-                        is_imputed BOOLEAN DEFAULT FALSE,
-                        observation_count INTEGER,
-                        created_at TIMESTAMPTZ DEFAULT NOW(),
-                        PRIMARY KEY (calculation_date, item_id)
-                    );
+                     CREATE TABLE IF NOT EXISTS gold.fct_elementary_indices (
+                         calculation_date DATE NOT NULL,
+                         item_id UUID NOT NULL,
+                         coicop_division VARCHAR(10) NOT NULL,
+                         coicop_code VARCHAR(20),
+                         base_price_khr NUMERIC(14, 4),
+                         current_price_khr NUMERIC(14, 4),
+                         price_ratio NUMERIC(10, 6),
+                         price_ratio_pct NUMERIC(10, 4),
+                         is_imputed BOOLEAN DEFAULT FALSE,
+                         observation_count INTEGER,
+                         created_at TIMESTAMPTZ DEFAULT NOW(),
+                         PRIMARY KEY (calculation_date, item_id)
+                     );
 
                     CREATE TABLE IF NOT EXISTS gold.fct_cpi_daily (
                         calculation_date DATE NOT NULL,
@@ -311,11 +361,10 @@ class CPICalculationEngine:
                 """)
 
                 # 1. Upsert Elementary Indices
-                cur.execute("DELETE FROM gold.fct_elementary_indices WHERE calculation_date = %s", (headline["calculation_date"],))
                 elem_rows = [
                     (
                         r["calculation_date"], r["item_id"], r["coicop_division"], r["coicop_code"],
-                        r["base_price_khr"], r["current_price_khr"], r["price_ratio"], r["elementary_index"],
+                        r["base_price_khr"], r["current_price_khr"], r["price_ratio"], r["price_ratio_pct"],
                         r["is_imputed"], int(r["observation_count"])
                     )
                     for _, r in elementary_df.iterrows()
@@ -323,13 +372,21 @@ class CPICalculationEngine:
                 execute_batch(cur, """
                     INSERT INTO gold.fct_elementary_indices (
                         calculation_date, item_id, coicop_division, coicop_code,
-                        base_price_khr, current_price_khr, price_ratio, elementary_index,
+                        base_price_khr, current_price_khr, price_ratio, price_ratio_pct,
                         is_imputed, observation_count
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (calculation_date, item_id) DO UPDATE
+                    SET coicop_division = EXCLUDED.coicop_division,
+                        coicop_code = EXCLUDED.coicop_code,
+                        base_price_khr = EXCLUDED.base_price_khr,
+                        current_price_khr = EXCLUDED.current_price_khr,
+                        price_ratio = EXCLUDED.price_ratio,
+                        price_ratio_pct = EXCLUDED.price_ratio_pct,
+                        is_imputed = EXCLUDED.is_imputed,
+                        observation_count = EXCLUDED.observation_count
                 """, elem_rows, page_size=1000)
 
                 # 2. Upsert Daily Division & Headline CPI
-                cur.execute("DELETE FROM gold.fct_cpi_daily WHERE calculation_date = %s", (headline["calculation_date"],))
                 cpi_rows = [
                     (
                         r["calculation_date"], r["coicop_division"], r["division_name"], r["weight"],
@@ -343,10 +400,18 @@ class CPICalculationEngine:
                         calculation_date, coicop_division, division_name, weight,
                         division_index, headline_cpi, core_cpi, item_count, observation_count
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (calculation_date, coicop_division) DO UPDATE
+                    SET division_name = EXCLUDED.division_name,
+                        weight = EXCLUDED.weight,
+                        division_index = EXCLUDED.division_index,
+                        headline_cpi = EXCLUDED.headline_cpi,
+                        core_cpi = EXCLUDED.core_cpi,
+                        item_count = EXCLUDED.item_count,
+                        observation_count = EXCLUDED.observation_count
                 """, cpi_rows)
 
                 conn.commit()
-                logger.info(f"✅ Successfully persisted {len(elem_rows)} elementary indices and {len(cpi_rows)} division CPI facts!")
+                log.info(f"✅ Successfully persisted {len(elem_rows)} elementary indices and {len(cpi_rows)} division CPI facts!")
 
 if __name__ == "__main__":
     engine = CPICalculationEngine()

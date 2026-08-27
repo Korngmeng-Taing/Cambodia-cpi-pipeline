@@ -30,15 +30,12 @@ log = logging.getLogger("backfill_silver_pipeline")
 
 
 def get_db_connection():
-    conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://")
+    from pipeline.config import alternate_host_url
+    conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://", 1)
     try:
         return psycopg2.connect(conn_str)
     except psycopg2.OperationalError:
-        if "postgres" in conn_str:
-            alt = conn_str.replace("postgres:5432", "localhost:5432")
-        else:
-            alt = conn_str.replace("localhost:5432", "postgres:5432")
-        return psycopg2.connect(alt)
+        return psycopg2.connect(alternate_host_url(conn_str))
 
 
 def reset_silver_for_date_range(start_date: str, end_date: str, conn):
@@ -82,10 +79,11 @@ def run_backfill(start_date: str, end_date: str | None = None):
     start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
     end_dt = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else datetime.now().date()
 
-    conn = get_db_connection()
-    matcher = ItemMatcher()
-
+    conn = None
     try:
+        conn = get_db_connection()
+        matcher = ItemMatcher()
+
         # Reset date range in Silver
         reset_silver_for_date_range(start_date, end_dt.strftime("%Y-%m-%d"), conn)
 
@@ -122,7 +120,8 @@ def run_backfill(start_date: str, end_date: str | None = None):
         log.info("==================================================")
 
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
 
 
 def main():

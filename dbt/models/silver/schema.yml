@@ -52,6 +52,7 @@ models:
                   - "gemini_ai_low_conf"
                   - "category_map"
                   - "unclassified"
+                  - "review"
 
   - name: clean_store_prices
     description: Unified Silver store prices observation table — clean, standardized daily appended rows from all stores.
@@ -73,15 +74,6 @@ models:
           - dbt_utils.expression_is_true:
               expression: "> 0"
 
-  - name: classification_queue
-    description: Operational triage queue capturing unclassified items for Gemini AI batch processing or manual tagging.
-    columns:
-      - name: product_key
-        tests:
-          - not_null
-      - name: store_slug
-        tests:
-          - not_null
-      - name: status
-        tests:
-          - not_null
+  # classification_queue was moved from silver.* to ops.* — its dbt source
+  # declaration now lives in dbt/models/ops/schema.yml. P3 #123.
+

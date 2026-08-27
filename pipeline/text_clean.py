@@ -353,3 +353,64 @@ def full_normalize(raw: str | None) -> str:
     text = expand_abbreviations(text)
 
     return text
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Shared size compatibility (H2 fix) — used by both item_matcher and
+# vector_item_matcher so g↔kg and ml↔L cross-normalization is consistent.
+# ──────────────────────────────────────────────────────────────────────────────
+
+_SIZE_FACTORS = {
+    "ml": 0.001,
+    "l": 1.0,
+    "g": 0.001,
+    "kg": 1.0,
+}
+
+_UNIT_DIMENSION = {
+    "ml": "volume",
+    "l": "volume",
+    "g": "mass",
+    "kg": "mass",
+}
+
+def is_size_compatible(
+    size1: str | None, size2: str | None, tolerance: float = 0.10
+) -> bool:
+    """Check if two package sizes are compatible within a relative tolerance.
+
+    Cross-normalizes g↔kg and ml↔L so "100g" matches "0.1kg" and "330ml"
+    matches "0.33L". Returns True if either size is blank/None (permissive).
+    """
+    if not size1 or not size2:
+        return True
+
+    s1 = size1.strip().lower()
+    s2 = size2.strip().lower()
+
+    if s1 == s2:
+        return True
+
+    m1 = re.match(r"^([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)$", s1)
+    m2 = re.match(r"^([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)$", s2)
+
+    if m1 and m2:
+        v1, u1 = float(m1.group(1)), m1.group(2)
+        v2, u2 = float(m2.group(1)), m2.group(2)
+
+        if v1 > 0 and v2 > 0:
+            f1 = _SIZE_FACTORS.get(u1)
+            f2 = _SIZE_FACTORS.get(u2)
+
+            # Cross-normalize if same dimension (volume↔volume, mass↔mass)
+            if f1 is not None and f2 is not None and _UNIT_DIMENSION.get(u1) == _UNIT_DIMENSION.get(u2):
+                b1, b2 = v1 * f1, v2 * f2
+                diff = abs(b1 - b2) / max(b1, b2)
+                return diff <= tolerance
+
+            # Same unit string — direct comparison
+            if u1 == u2:
+                diff = abs(v1 - v2) / max(v1, v2)
+                return diff <= tolerance
+
+    return False

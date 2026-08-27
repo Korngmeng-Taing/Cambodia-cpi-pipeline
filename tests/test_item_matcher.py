@@ -3,6 +3,7 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 from pipeline.item_matcher import ItemMatcher
+from pipeline.text_clean import is_size_compatible
 
 
 class TestItemMatcher(unittest.TestCase):
@@ -107,14 +108,14 @@ class TestItemMatcher(unittest.TestCase):
     def test_size_compatibility_tolerance(self):
         # 500g vs 520g (<= 10% diff) -> True
         self.assertTrue(
-            self.matcher._is_size_compatible("500g", "520g", tolerance=0.10)
+            is_size_compatible("500g", "520g", tolerance=0.10)
         )
         # 500g vs 1000g (> 10% diff) -> False
         self.assertFalse(
-            self.matcher._is_size_compatible("500g", "1000g", tolerance=0.10)
+            is_size_compatible("500g", "1000g", tolerance=0.10)
         )
         # 1L vs 1000ml -> different units string fallback
-        self.assertTrue(self.matcher._is_size_compatible("1L", "1L"))
+        self.assertTrue(is_size_compatible("1L", "1L"))
 
     def test_process_batch_review_and_new_items(self):
         existing_item_id = uuid.uuid4()

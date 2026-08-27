@@ -60,7 +60,7 @@ all_overrides as materialized (
     from {{ ref('coicop_override') }}
     union all
     select match_type, trim(match_value) as match_value, lower(trim(match_value)) as match_val_lower, store_slug, lpad(coicop_division, 2, '0') as coicop_division
-    from {{ source('silver', 'coicop_override_manual') }}
+    from {{ source('ops', 'coicop_override_manual') }}
 ),
 ov_barcode as materialized (
     select distinct on (match_value)
@@ -111,7 +111,7 @@ ai_prejoined as materialized (
             else lpad(split_part(coicop_code, '.', 1), 2, '0')
         end as coicop_division,
         confidence_score
-    from {{ source('silver', 'dim_coicop_ai_cache') }}
+    from {{ source('ops', 'dim_coicop_ai_cache') }}
     where coicop_code <> '99.9.9'
 ),
 cat_map_prejoined as materialized (
@@ -119,12 +119,15 @@ cat_map_prejoined as materialized (
         store_slug,
         lower(trim(category_native)) as cat_key,
         lpad(coicop_division, 2, '0') as coicop_division
-    from {{ source('silver', 'coicop_category_map') }}
+    from {{ source('ops', 'coicop_category_map') }}
 ),
 store_defaults_prejoined as materialized (
     select distinct on (store_slug)
         store_slug,
         lpad(default_coicop_division, 2, '0') as coicop_division,
+        -- P3 #125 — default code when one is supplied; falls back to NULL
+        -- and the macro's coicop_code_from_division() expansion kicks in.
+        nullif(default_coicop_code, '') as coicop_code,
         confidence as confidence_score
     from {{ ref('coicop_store_defaults') }}
     where is_active = true
@@ -152,15 +155,20 @@ items_evaluated as materialized (
         ai.confidence_score as ai_conf,
         ai.coicop_code as ai_code,
         cm.coicop_division as cat_map_div,
+        -- P3 #125: cat_map_code is the only known override is '09' -> '09.5.4';
+        -- absent a per-row 5-digit code from coicop_category_map, the macro uses
+        -- the 2-digit → 5-digit default table.
+        null::varchar as cat_map_code,
         sd.coicop_division as store_default_div,
+        sd.coicop_code as store_default_code,
         sd.confidence_score as store_default_conf
     from items i
     left join store_purity ps on ps.item_id = i.item_id and ps.store_slug = i.store_slug
     left join ai_prejoined ai on ai.norm_name = i.norm_name
     left join ov_barcode ov_b on i.barcode is not null and trim(i.barcode) <> '' and ov_b.barcode = trim(i.barcode)
     left join ov_product_key ov_pk on i.product_key is not null and trim(i.product_key) <> '' and ov_pk.product_key = trim(i.product_key)
-    left join ov_name_store ov_ns on ov_ns.store_slug = i.store_slug and position(ov_ns.match_val_lower in lower(i.canonical_name)) > 0
-    left join ov_name_global ov_ng on position(ov_ng.match_val_lower in lower(i.canonical_name)) > 0
+    left join ov_name_store ov_ns on ov_ns.store_slug = i.store_slug and position(ov_ns.match_val_lower in i.norm_name) > 0
+    left join ov_name_global ov_ng on position(ov_ng.match_val_lower in i.norm_name) > 0
     left join cat_map_prejoined cm on cm.store_slug = i.store_slug and cm.cat_key = i.norm_category
     left join store_defaults_prejoined sd on sd.store_slug = i.store_slug
 )
@@ -171,161 +179,22 @@ select
     f.category_native,
     f.product_key,
     f.price_khr,
-    coalesce(
-        f.ov_exact_div,
-        f.purity_division,
-        f.ov_global_div,
-        case
-            when f.ai_div is not null and coalesce(f.ai_conf, 0.90) >= 0.50 then f.ai_div
-            when f.ai_div is not null and coalesce(f.ai_conf, 0.90) < 0.50 then 'REVIEW'
-        end,
-        f.cat_map_div,
-        case when f.store_slug in ('khmer24', 'realestate') then '04' end,
-        case when f.store_slug in ('communitypharma') then '06' end,
-        case when f.store_slug in ('sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk') then '11' end,
-        case when f.store_slug in ('bookmebus', 'redbus', 'redmebus', 'new_gasoline') then '07' end,
-        case when f.store_slug in ('cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then '08' end,
-        f.store_default_div,
-        'UNCLASSIFIED'
-    ) as coicop_division,
-    coalesce(
-        case
-            when f.ai_div is not null and coalesce(f.ai_conf, 0.90) >= 0.50 then
-                case
-                    when f.ai_code is not null and f.ai_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then f.ai_code
-                    when f.ai_div = '01' then '01.1.1'
-                    when f.ai_div = '02' then '02.1.1'
-                    when f.ai_div = '03' then '03.1.2'
-                    when f.ai_div = '04' then '04.1.1'
-                    when f.ai_div = '05' then '05.1.1'
-                    when f.ai_div = '06' then '06.1.1'
-                    when f.ai_div = '07' then '07.2.2'
-                    when f.ai_div = '08' then '08.2.0'
-                    when f.ai_div = '09' then '09.1.1'
-                    when f.ai_div = '10' then '10.4.1'
-                    when f.ai_div = '11' then '11.1.1'
-                    when f.ai_div = '12' then '12.1.1'
-                end
-        end,
-        case
-            when f.purity_division is not null then
-                case f.purity_division
-                    when '06' then '06.1.2'
-                    when '04' then '04.1.1'
-                    when '11' then case when f.store_slug = 'bayonbkk' then '11.1.1' else '11.2.0' end
-                    when '07' then case when f.store_slug in ('bookmebus', 'redbus', 'redmebus') then '07.3.1' else '07.2.2' end
-                    when '08' then case when f.store_slug in ('arystore', 'samnangshop') then '08.2.0' else '08.3.0' end
-                end
-        end,
-        case
-            when f.ov_exact_div is not null then
-                case
-                    when f.ov_exact_div ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then f.ov_exact_div
-                    when f.ov_exact_div = '01' then '01.1.1'
-                    when f.ov_exact_div = '02' then '02.1.1'
-                    when f.ov_exact_div = '03' then '03.1.2'
-                    when f.ov_exact_div = '04' then '04.1.1'
-                    when f.ov_exact_div = '05' then '05.1.1'
-                    when f.ov_exact_div = '06' then '06.1.1'
-                    when f.ov_exact_div = '07' then '07.2.2'
-                    when f.ov_exact_div = '08' then '08.2.0'
-                    when f.ov_exact_div = '09' then '09.1.1'
-                    when f.ov_exact_div = '10' then '10.4.1'
-                    when f.ov_exact_div = '11' then '11.1.1'
-                    when f.ov_exact_div = '12' then '12.1.1'
-                    else '01.1.1'
-                end
-        end,
-        case
-            when f.ov_global_div is not null then
-                case
-                    when f.ov_global_div ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then f.ov_global_div
-                    when f.ov_global_div = '01' then '01.1.1'
-                    when f.ov_global_div = '02' then '02.1.1'
-                    when f.ov_global_div = '03' then '03.1.2'
-                    when f.ov_global_div = '04' then '04.1.1'
-                    when f.ov_global_div = '05' then '05.1.1'
-                    when f.ov_global_div = '06' then '06.1.1'
-                    when f.ov_global_div = '07' then '07.2.2'
-                    when f.ov_global_div = '08' then '08.2.0'
-                    when f.ov_global_div = '09' then '09.1.1'
-                    when f.ov_global_div = '10' then '10.4.1'
-                    when f.ov_global_div = '11' then '11.1.1'
-                    when f.ov_global_div = '12' then '12.1.1'
-                    else '01.1.1'
-                end
-        end,
-        case
-            when f.cat_map_div is not null then
-                case
-                    when f.cat_map_div ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then f.cat_map_div
-                    when f.cat_map_div = '01' then '01.1.1'
-                    when f.cat_map_div = '02' then '02.1.1'
-                    when f.cat_map_div = '03' then '03.1.2'
-                    when f.cat_map_div = '04' then '04.1.1'
-                    when f.cat_map_div = '05' then '05.1.1'
-                    when f.cat_map_div = '06' then '06.1.1'
-                    when f.cat_map_div = '07' then '07.2.2'
-                    when f.cat_map_div = '08' then '08.2.0'
-                    when f.cat_map_div = '09' then '09.5.4'
-                    when f.cat_map_div = '10' then '10.4.1'
-                    when f.cat_map_div = '11' then '11.1.1'
-                    when f.cat_map_div = '12' then '12.1.1'
-                    else '01.1.1'
-                end
-        end,
-        case when f.store_slug in ('khmer24', 'realestate') then '04.1.1' end,
-        case when f.store_slug in ('communitypharma') then '06.1.2' end,
-        case when f.store_slug in ('sokhahotel', 'hyyathotel', 'hyatt') then '11.2.0' end,
-        case when f.store_slug in ('bayonbkk') then '11.1.1' end,
-        case when f.store_slug in ('bookmebus', 'redbus', 'redmebus') then '07.3.1' end,
-        case when f.store_slug in ('new_gasoline') then '07.2.2' end,
-        case when f.store_slug in ('cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then '08.3.0' end,
-        case when f.store_slug in ('arystore', 'samnangshop') then '08.2.0' end,
-        case when f.store_slug in ('delishop', 'aeon') then '01.1.1' end,
-        case when f.store_slug in ('aeon3') then '03.1.2' end,
-        case when f.store_slug in ('l192') then '05.1.1' end,
-        case
-            when f.store_default_div is not null then
-                case
-                    when f.store_default_div ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then f.store_default_div
-                    when f.store_default_div = '01' then '01.1.1'
-                    when f.store_default_div = '02' then '02.1.1'
-                    when f.store_default_div = '03' then '03.1.2'
-                    when f.store_default_div = '04' then '04.1.1'
-                    when f.store_default_div = '05' then '05.1.1'
-                    when f.store_default_div = '06' then '06.1.1'
-                    when f.store_default_div = '07' then '07.2.2'
-                    when f.store_default_div = '08' then '08.2.0'
-                    when f.store_default_div = '09' then '09.1.1'
-                    when f.store_default_div = '10' then '10.4.1'
-                    when f.store_default_div = '11' then '11.1.1'
-                    when f.store_default_div = '12' then '12.1.1'
-                    else '01.1.1'
-                end
-        end,
-        'UNCLASSIFIED'
-    ) as coicop_code,
-    case
-        when f.ov_exact_div is not null then 'override'
-        when f.purity_division is not null then 'store_purity'
-        when f.ov_global_div is not null then 'override'
-        when f.ai_div is not null and coalesce(f.ai_conf, 0.90) >= 0.50 then 'gemini_ai'
-        when f.ai_div is not null and coalesce(f.ai_conf, 0.90) < 0.50 then 'gemini_ai_low_conf'
-        when f.cat_map_div is not null then 'category_map'
-        when f.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk', 'bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then 'store_purity'
-        when f.store_default_div is not null then 'store_default'
-        else 'unclassified'
-    end as coicop_method,
-    case
-        when f.ov_exact_div is not null then 1.000
-        when f.purity_division is not null then 0.850
-        when f.ov_global_div is not null then 1.000
-        when f.ai_div is not null and coalesce(f.ai_conf, 0.90) >= 0.50 then coalesce(f.ai_conf, 0.900)
-        when f.ai_div is not null and coalesce(f.ai_conf, 0.90) < 0.50 then 0.400
-        when f.cat_map_div is not null then 0.900
-        when f.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk', 'bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then 0.850
-        when f.store_default_div is not null then coalesce(f.store_default_conf, 0.800)
-        else 0.000
-    end as coicop_confidence
+    {{ resolve_coicop_division(
+        'f.ov_exact_div', 'f.purity_division', 'f.ov_global_div',
+        'f.ai_div', 'f.ai_conf',
+        'f.cat_map_div', 'f.store_default_div', 'f.store_slug') }} as coicop_division,
+    {{ resolve_coicop_code(
+        'f.ai_div', 'f.ai_code', 'f.ai_conf',
+        'f.purity_division', 'f.store_slug',
+        'f.ov_exact_div', 'f.ov_global_div',
+        'f.cat_map_div', 'f.cat_map_code',
+        'f.store_default_div', 'f.store_default_code') }} as coicop_code,
+    {{ resolve_coicop_method(
+        'f.ov_exact_div', 'f.purity_division', 'f.ov_global_div',
+        'f.ai_div', 'f.ai_conf',
+        'f.cat_map_div', 'f.store_slug', 'f.store_default_div') }} as coicop_method,
+    {{ resolve_coicop_confidence(
+        'f.ov_exact_div', 'f.purity_division', 'f.ov_global_div',
+        'f.ai_div', 'f.ai_conf',
+        'f.cat_map_div', 'f.store_slug', 'f.store_default_div', 'f.store_default_conf') }} as coicop_confidence
 from items_evaluated f

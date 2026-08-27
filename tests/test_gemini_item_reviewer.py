@@ -17,6 +17,7 @@ import pytest
 
 from pipeline.gemini_item_reviewer import GeminiItemReviewer, evaluate_rule_guard
 from pipeline.item_matcher import ItemMatcher
+from pipeline.text_clean import is_size_compatible
 
 
 def _make_reviewer():
@@ -187,32 +188,29 @@ class TestDryRun:
 # ── T4: Size compatibility edge cases ────────────────────────────────────────
 
 class TestSizeCompatibility:
-    def setup_method(self):
-        self.m = ItemMatcher()
-
     def test_330ml_equals_0_33L(self):
-        assert self.m._is_size_compatible("330ml", "0.33L")
+        assert is_size_compatible("330ml", "0.33L")
 
     def test_1000ml_equals_1L(self):
-        assert self.m._is_size_compatible("1000ml", "1L")
+        assert is_size_compatible("1000ml", "1L")
 
     def test_500g_equals_0_5kg(self):
-        assert self.m._is_size_compatible("500g", "0.5kg")
+        assert is_size_compatible("500g", "0.5kg")
 
     def test_500g_vs_2kg_incompatible(self):
-        assert not self.m._is_size_compatible("500g", "2kg")
+        assert not is_size_compatible("500g", "2kg")
 
     def test_volume_vs_weight_incompatible(self):
-        assert not self.m._is_size_compatible("500ml", "500g")
+        assert not is_size_compatible("500ml", "500g")
 
     def test_none_always_compatible(self):
-        assert self.m._is_size_compatible(None, "330ml")
-        assert self.m._is_size_compatible("330ml", None)
-        assert self.m._is_size_compatible(None, None)
+        assert is_size_compatible(None, "330ml")
+        assert is_size_compatible("330ml", None)
+        assert is_size_compatible(None, None)
 
     def test_within_tolerance(self):
-        assert self.m._is_size_compatible("500g", "540g", tolerance=0.10)
+        assert is_size_compatible("500g", "540g", tolerance=0.10)
 
     def test_exceeds_tolerance(self):
-        assert not self.m._is_size_compatible("500g", "600g", tolerance=0.10)
+        assert not is_size_compatible("500g", "600g", tolerance=0.10)
 

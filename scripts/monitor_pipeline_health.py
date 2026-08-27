@@ -45,15 +45,12 @@ log = logging.getLogger("pipeline_health_monitor")
 
 
 def get_db_connection():
-    conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://")
+    from pipeline.config import alternate_host_url
+    conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://", 1)
     try:
         return psycopg2.connect(conn_str)
     except psycopg2.OperationalError:
-        if "postgres" in conn_str:
-            alt = conn_str.replace("postgres:5432", "localhost:5432")
-        else:
-            alt = conn_str.replace("localhost:5432", "postgres:5432")
-        return psycopg2.connect(alt)
+        return psycopg2.connect(alternate_host_url(conn_str))
 
 
 def run_health_audit(scrape_date: str | None = None, send_notifications: bool = False) -> dict:
@@ -62,6 +59,9 @@ def run_health_audit(scrape_date: str | None = None, send_notifications: bool = 
 
     report_lines = []
     has_critical_alerts = False
+    total_records = 0
+    rate = 0.0
+    unclass_pct = 0.0
 
     report_lines.append("=" * 80)
     report_lines.append(f" 🛡️ CAMBODIA DAILY CPI PIPELINE HEALTH AUDIT — {today_str}")

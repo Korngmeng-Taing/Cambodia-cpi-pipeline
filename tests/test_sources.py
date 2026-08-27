@@ -545,6 +545,7 @@ def test_moc_gasoline_picks_latest_and_flags_fallback(monkeypatch):
 
     def fake_query(self, start_date, end_date, province_id, product_ids):
         assert province_id == src_mod.MOC_FUEL_PROVINCE
+        # Batch query returns all 3 products in input order
         assert product_ids == [107, 108, 109]
         return [
             {

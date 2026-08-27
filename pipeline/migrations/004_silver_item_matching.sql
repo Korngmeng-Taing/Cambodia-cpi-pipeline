@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS silver.item_match_log (
     match_id BIGSERIAL PRIMARY KEY,
     raw_price_id BIGINT NOT NULL REFERENCES bronze.raw_prices(raw_price_id),
     item_id UUID NOT NULL REFERENCES silver.canonical_items(item_id),
-    match_method VARCHAR(32) NOT NULL CHECK (match_method IN ('barcode_exact', 'sku_exact', 'fuzzy_text', 'new_item')),
+    match_method VARCHAR(32) NOT NULL CHECK (match_method IN ('barcode_exact', 'sku_exact', 'fuzzy_text', 'new_item', 'exact_text')),
     confidence NUMERIC(5,4) NOT NULL CHECK (confidence BETWEEN 0 AND 1),
     matched_at TIMESTAMPTZ DEFAULT NOW(),
     matched_by VARCHAR(64) DEFAULT 'auto'

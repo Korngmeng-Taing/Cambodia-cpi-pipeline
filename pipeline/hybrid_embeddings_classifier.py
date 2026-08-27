@@ -38,8 +38,8 @@ except ImportError:  # pragma: no cover
 
 log = logging.getLogger(__name__)
 
-EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/text-embedding-004")
-LLM_MODEL = os.getenv("GEMINI_PRO_MODEL", "gemini-2.5-flash")
+EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-2")
+LLM_MODEL = os.getenv("GEMINI_PRO_MODEL", "gemini-3.5-flash")
 LOCAL_FALLBACK_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 
 # 15 Single-Category Pure Stores (Instant SQL Assignment)

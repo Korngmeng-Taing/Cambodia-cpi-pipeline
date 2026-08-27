@@ -144,6 +144,40 @@ $$\sum_{c \in \text{Div 01}} w_{c|01} = 100.000\%, \quad W_c = 44.800\% \times w
 
 ---
 
+### 3.3 Intuitive Comparison: Headline CPI vs. Core CPI ($100 Family Budget Analogy)
+
+To understand why the pipeline computes two separate indices every day, consider an average Cambodian family spending **\$100 per month** in Phnom Penh:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                   TOTAL FAMILY MONTHLY EXPENSES: $100                  │
+├────────────────────────────────────────────────────────────────────────┤
+│  🍚 Food & Drinks (Rice, Pork, Fish, Veg)       ──►  $44.80  (44.8%)   │
+│  🏠 House Rent, Water & Electricity             ──►  $17.10  (17.1%)   │
+│  🛵 Gasoline & Motorbike Fuel                   ──►  $12.20  (12.2%)   │
+│  💊 Medicine & Pharmacy                         ──►  $ 5.60  ( 5.6%)   │
+│  📱 Mobile Phone Data & Wi-Fi                   ──►  $ 3.90  ( 3.9%)   │
+│  👕 Clothes, Soap, Haircuts, Other              ──►  $16.40  (16.4%)   │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 1. Headline CPI (The Complete $100 Basket):
+* Tracks **everything**: Rice, Pork, Fish, Rent, Electricity, Gasoline, Mobile Data.
+* Reflects what **citizens actually pay at the market** each morning.
+
+#### 2. Core CPI (The Filtered $52.20 Basket):
+* Temporarily **excludes the $44.80 Food expenditure** and **retail automotive fuel**.
+* **Why?** Heavy monsoon rains or temporary floods in Battambang may cause tomato or morning glory (*Trakuon*) prices to surge $+50\%$ for two weeks before dropping back down. Central banks (**National Bank of Cambodia**) use Core CPI to measure **underlying structural monetary inflation** without being misled by temporary weather or global oil shocks.
+
+| Metric | Headline CPI | Core CPI |
+| :--- | :---: | :---: |
+| **Food & Grocery Drinks (Div 01)** | ✅ **Included (44.8%)** | ❌ **Excluded (0.0%)** |
+| **Retail Automotive Fuel (Div 07)** | ✅ **Included** | ❌ **Excluded** |
+| **Rent, Electricity, Telecom, Health** | ✅ **Included** | ✅ **Included** |
+| **Primary Audience** | Public & General Economy | Central Bank (NBC) & Monetary Policy |
+
+---
+
 ## 4. Step-by-Step Mathematical Calculation Engine
 
 ---
@@ -222,6 +256,39 @@ $$CPI_{\text{headline}}^t = \sum_{d=1}^{12} W_d \cdot I_d^{t/0}, \quad \text{whe
 Excludes volatile **Division 01 (Food)** and **Division 07 Automotive Fuel**:
 
 $$CPI_{\text{core}}^t = \frac{\sum_{d \notin \{01, \text{fuel}\}} W_d \cdot I_d^{t/0}}{\sum_{d \notin \{01, \text{fuel}\}} W_d}$$
+
+#### 3. Live Production Laspeyres Aggregation Table (August 26, 2026):
+
+Queried directly from PostgreSQL `gold.fct_cpi_daily`:
+
+| Division Code & Name | Official NIS Weight ($W_d$) | Today's Index ($I_d^{t/0}$) | **Laspeyres Weighted Contribution** ($W_d \times I_d$) |
+| :--- | :---: | :---: | :---: |
+| **01. Food and Non-Alcoholic Beverages** | **0.44800** | **126.0760** | **56.4820** |
+| **02. Alcoholic Beverages and Tobacco** | **0.01500** | **102.3840** | **1.5358** |
+| **03. Clothing and Footwear** | **0.02900** | **103.7862** | **3.0098** |
+| **04. Housing, Water, Electricity & Gas** | **0.17100** | **100.0000** | **17.1000** |
+| **05. Furnishings & Household Goods** | **0.03300** | **99.5614** | **3.2855** |
+| **06. Health & Pharmacy** | **0.05600** | **106.2686** | **5.9510** |
+| **07. Transport (Buses, Fuel)** | **0.12200** | **97.9320** | **11.9477** |
+| **08. Communication (Phone & Wi-Fi)** | **0.03900** | **99.9956** | **3.8998** |
+| **09. Recreation and Culture** | **0.01900** | **101.0208** | **1.9194** |
+| **10. Education** | **0.01500** | **100.0000** | **1.5000** |
+| **11. Restaurants and Hotels** | **0.03100** | **100.0139** | **3.1004** |
+| **12. Miscellaneous Goods & Services** | **0.02200** | **124.0621** | **2.7294** |
+| **SUM TOTAL (Laspeyres Headline CPI)** | **1.00000 (100%)** | — | **`112.4609`** |
+| **CORE CPI (Excluding Food & Fuel)** | **0.52200 (52.2%)** | — | **`101.4110`** |
+
+#### 4. Python Implementation (`pipeline/cpi_calculator.py:L233-L241`):
+```python
+# Higher-Level Laspeyres Aggregation for Headline CPI
+total_weight = df_div["weight"].sum()
+headline_cpi = float((df_div["weight"] * df_div["division_index"]).sum() / total_weight)
+
+# Core CPI (Excluding Division 01 Food & Energy)
+core_divisions = df_div[~df_div["coicop_division"].isin(["01"])]
+core_weight = core_divisions["weight"].sum()
+core_cpi = float((core_divisions["weight"] * core_divisions["division_index"]).sum() / core_weight)
+```
 
 ---
 

@@ -31,8 +31,9 @@ with classified_products as (
         end as division_name,
         fdp.store_slug,
         fdp.scrape_date,
-        fdp.unit_price_local,
-        fdp.currency
+        fdp.price_khr,
+        fdp.unit_price_khr,
+        'KHR' as currency
     from {{ source('silver', 'canonical_items') }} ci
     left join (
         select distinct on (item_id::uuid)
@@ -44,7 +45,7 @@ with classified_products as (
                  case when coicop_division <> 'UNCLASSIFIED' then 1 else 2 end,
                  coicop_confidence desc
     ) cs on cs.item_id = ci.item_id
-    join {{ ref('fct_daily_prices') }} fdp on fdp.item_id = ci.item_id::uuid
+    join {{ ref('fct_daily_prices') }} fdp on fdp.item_id = ci.item_id::text
     where fdp.store_slug in ('aeon', 'aeon3')
 )
 select * from classified_products

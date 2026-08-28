@@ -50,7 +50,6 @@ select
     ci.brand,
     ci.barcode,
     ci.size_norm,
-    ci.category as native_category,
     coalesce(cs.coicop_division, 'UNCLASSIFIED') as coicop_division,
     coalesce(cs.coicop_code, cs.coicop_division, 'UNCLASSIFIED') as coicop_code,
     fs.unit_of_measure,

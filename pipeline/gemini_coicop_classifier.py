@@ -598,6 +598,14 @@ def triage_with_local_model(
     )
     return needs_gemini, local_results
 
+
+def _get_24h_interval_sql(engine: Any) -> str:
+    """Return SQL dialect-compatible expression for a 24-hour lookback cutoff."""
+    if getattr(getattr(engine, "dialect", None), "name", "") == "sqlite":
+        return "datetime('now', '-24 hours')"
+    return "CURRENT_TIMESTAMP - INTERVAL '24 hours'"
+
+
 def fetch_unclassified(
     engine, scrape_date: str | None = None, limit: int = 5000,
 ) -> list[dict[str, Any]]:
@@ -642,11 +650,7 @@ def fetch_unclassified(
             try:
                 date_filter = "p.scrape_date = CAST(:ds AS DATE)" if scrape_date else "p.scrape_date = (SELECT max(scrape_date) FROM staging.int_prices_cleaned)"
                 # Phase 4: Exclude recently negative-cached items (< 24h old)
-                interval_clause = (
-                    "datetime('now', '-24 hours')"
-                    if getattr(engine.dialect, "name", "") == "sqlite"
-                    else "CURRENT_TIMESTAMP - INTERVAL '24 hours'"
-                )
+                interval_clause = _get_24h_interval_sql(engine)
                 # Phase 6: Order by observation count DESC (most-seen products first)
                 query_sql = f"""
                     SELECT sub.item_id, sub.canonical_name, sub.observation_count
@@ -768,11 +772,7 @@ def update_cache(engine, results: dict[str, dict[str, Any]]) -> int:
         """
     )
     # Phase 4: Negative cache — only update if existing entry is > 24h old
-    interval_clause = (
-        "datetime('now', '-24 hours')"
-        if getattr(engine.dialect, "name", "") == "sqlite"
-        else "CURRENT_TIMESTAMP - INTERVAL '24 hours'"
-    )
+    interval_clause = _get_24h_interval_sql(engine)
     neg_stmt = text(
         f"""
         INSERT INTO silver.dim_coicop_ai_cache

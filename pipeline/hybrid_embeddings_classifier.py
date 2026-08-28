@@ -314,13 +314,13 @@ Return strict JSON only:
                 "coicop_code": str(data.get("coicop_code", "01.1.1")),
                 "confidence_score": float(data.get("confidence_score", 0.90)),
                 "classification_method": "gemini_llm",
-                "reasoning": str(data.get("reasoning", "Gemini LLM classification")),
+                "reasoning": str(data.get("reasoning", "Gemini AI classification")),
             }
 
         try:
             return self.key_pool.execute_with_retry(_call_gemini_llm)
         except Exception as e:
-            log.warning("Gemini LLM classification failed for '%s': %s", product_name, e)
+            log.warning("Gemini AI classification failed for '%s': %s", product_name, e)
             return {
                 "product_name": product_name,
                 "coicop_division": "99",

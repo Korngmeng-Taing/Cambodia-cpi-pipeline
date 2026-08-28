@@ -120,7 +120,7 @@ This document provides an exhaustive, academic-grade literature review of the **
   * **Classification Precision**: **$\mathbf{>95.0\%}$ Precision** across complex, multilingual retailer catalogs containing local dialect slang and manufacturer abbreviations.
   * **Latency & Throughput**: Reduced pipeline classification latency from days to under **3 minutes per batch** through memoized embedding caches.
 * **Direct Mapping to Your Cambodia CPI Pipeline**:
-  * **Silver Layer AI Engine**: Matches your **4-Tier Hybrid Classifier** and **GeminiKeyPool (`pipeline/key_pool.py`)**, which combines deterministic domain locks, 12-division cosine matching, Gemini LLM fallback arbitration, and PostgreSQL memoization (`silver.dim_coicop_ai_cache`).
+  * **Silver Layer AI Engine**: Matches your **4-Tier Hybrid Classifier** and **GeminiKeyPool (`pipeline/key_pool.py`)**, which combines deterministic domain locks, 12-division cosine matching, Gemini AI fallback arbitration, and PostgreSQL memoization (`silver.dim_coicop_ai_cache`).
 
 ---
 

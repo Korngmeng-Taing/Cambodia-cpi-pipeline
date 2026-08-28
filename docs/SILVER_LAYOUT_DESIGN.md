@@ -58,12 +58,12 @@ Deterministic UUID canonical identity master maintained automatically by `pipeli
 Full audit trail mapping `raw_price_id` $\to$ `item_id` with match method (`barcode_exact`, `sku_exact`, `fuzzy_text`, `vector_embedding`, `new_item`) and confidence score ($0.000$–$1.000$).
 
 ### `silver.dim_coicop_ai_cache`
-Persistent memoization cache for Gemini AI classifications (`gemini-2.5-pro` / `gemini-2.5-flash`). Prevents duplicate LLM API calls across daily runs.
+Persistent memoization cache for Gemini AI classifications (`gemini-2.5-pro` / `gemini-2.5-flash`). Prevents duplicate API calls across daily runs.
 
 ### `silver.needs_review`
 Dedicated table for borderline fuzzy/vector match candidates ($0.75 \le \text{confidence} < 0.88$). Auto-reviewed by `pipeline/vector_item_matcher.py` and `pipeline/gemini_item_reviewer.py` via:
 1. **Deterministic Spec Guards (`is_spec_compatible`):** Checks hardware/spec conflicts (Storage GB, RAM, pack size, volume tolerance $\le 10\%$) to reject false merges (`SPLIT_NEW`).
-2. **Gemini Pro/Flash LLM Arbitration:** Resolves ambiguous variants (`APPROVE_MATCH` vs `SPLIT_NEW`) and updates `silver.item_match_log`.
+2. **Gemini Pro/Flash AI Arbitration:** Resolves ambiguous variants (`APPROVE_MATCH` vs `SPLIT_NEW`) and updates `silver.item_match_log`.
 
 ### `silver.hedonic_adjusted_prices`
 Stores quality-adjusted constant-specification prices for Division 08 and 09 electronics. Evaluates multi-attribute characteristics (`ram_gb`, `storage_gb`, `screen_inches`, `camera_mp`, `is_5g`) against a trailing baseline to purge pure technological progress from genuine price inflation.
@@ -77,4 +77,4 @@ Stores quality-adjusted constant-specification prices for Division 08 and 09 ele
   1. *Tier 1:* Human authority overrides (`coicop_override.csv`).
   2. *Tier 2:* 15 Pure Store Domain Locks (Gasoline $\to$ 07, Telecom $\to$ 08, Housing $\to$ 04) resolved in $0.001\text{ms}$.
   3. *Tier 3:* 768-dim Vector Cosine Similarity against the 12 UN COICOP reference category vectors (separates Community Pharma *Panadol* $\to$ 06 from *Cetaphil/Shampoo* $\to$ 12, and resolves AEON multi-division listings).
-  4. *Tier 4:* Gemini Pro LLM fallback for ambiguous cases ($<0.72$), permanently cached in Postgres.
+  4. *Tier 4:* Gemini Pro AI fallback for ambiguous cases ($<0.72$), permanently cached in Postgres.

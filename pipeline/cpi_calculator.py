@@ -360,6 +360,14 @@ class CPICalculationEngine:
                     );
                 """)
 
+                # Ensure price_ratio_pct column exists (table may have been created before this column was added)
+                cur.execute("""
+                    DO $$ BEGIN
+                        ALTER TABLE gold.fct_elementary_indices ADD COLUMN IF NOT EXISTS price_ratio_pct NUMERIC(10, 4);
+                    EXCEPTION WHEN duplicate_column THEN NULL;
+                    END $$;
+                """)
+
                 # 1. Upsert Elementary Indices
                 elem_rows = [
                     (

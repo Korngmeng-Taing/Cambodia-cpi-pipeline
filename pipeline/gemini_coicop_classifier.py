@@ -56,7 +56,7 @@ except ImportError:  # pragma: no cover - only present in the Airflow image
 
 log = logging.getLogger(__name__)
 
-BATCH_SIZE = 50  # Gemini batch size
+BATCH_SIZE = int(os.getenv("GEMINI_BATCH_SIZE", "200"))  # Gemini batch size (was 50)
 DEFAULT_MODEL = "gemini-3.1-flash-lite"
 UNCLASSIFIED = "99.9.9"
 CLASSIFICATION_METHOD = "gemini_ai"
@@ -65,6 +65,11 @@ CLASSIFICATION_METHOD = "gemini_ai"
 # when Google answers 429 / ResourceExhausted.
 BATCH_DELAY_SECONDS = float(os.getenv("GEMINI_BATCH_DELAY_SECONDS", "2"))
 RATE_LIMIT_BACKOFF_SECONDS = float(os.getenv("GEMINI_429_BACKOFF_SECONDS", "30"))
+
+# Phase 2: Adaptive rate limiting — exponential backoff instead of hard circuit breaker.
+INITIAL_BACKOFF_SECONDS = float(os.getenv("GEMINI_INITIAL_BACKOFF_SECONDS", "5"))
+MAX_BACKOFF_SECONDS = float(os.getenv("GEMINI_MAX_BACKOFF_SECONDS", "300"))
+MAX_CONSECUTIVE_FAILURES = int(os.getenv("GEMINI_MAX_CONSECUTIVE_FAILURES", "5"))
 
 SYSTEM_PROMPT = """You are an expert statistical classifier for the UN COICOP 2018 taxonomy (Classification of Individual Consumption According to Purpose). I will give you a list of e-commerce product names from Cambodia. You must return a JSON array mapping each product to its most specific 5-digit COICOP code. If unsure, return '99.9.9'. Include a 'confidence_score' (0.0 to 1.0) and a brief 'reasoning' string.
 
@@ -384,6 +389,14 @@ def classify_batch(model, names: list[str]) -> list[dict[str, Any]]:
             raise
     results = _parse_json_array(response.text)
 
+    # Phase 1: Detect truncated response from larger batch sizes
+    if len(results) < len(names) * 0.8:
+        log.warning(
+            "Batch response incomplete: sent %d names, got %d results. "
+            "Consider reducing GEMINI_BATCH_SIZE.",
+            len(names), len(results),
+        )
+
     normalized = []
     for item in results:
         if not isinstance(item, dict):
@@ -448,7 +461,8 @@ def classify_names(
     cache_hits = len(seen)
     api_calls = 0
     failed = 0
-    consecutive_rate_limits = 0
+    consecutive_failures = 0
+    current_backoff = INITIAL_BACKOFF_SECONDS
     for idx, batch in enumerate(api_batches):
         if idx > 0:
             time.sleep(BATCH_DELAY_SECONDS)
@@ -462,33 +476,52 @@ def classify_names(
                 cache[key] = item
                 # prefer the exact input spelling for the join back to the row
                 seen[item_name] = item
-            consecutive_rate_limits = 0
+            # Reset backoff on success
+            consecutive_failures = 0
+            current_backoff = INITIAL_BACKOFF_SECONDS
         except Exception as exc:  # noqa: BLE001 - one bad batch must not kill the run
             failed += 1
-            log.warning("Gemini batch of %d name(s) failed: %s", len(batch), exc)
+            consecutive_failures += 1
+            log.warning("Gemini batch %d/%d of %d name(s) failed (consecutive=%d): %s",
+                        idx + 1, len(api_batches), len(batch), consecutive_failures, exc)
             for name in batch:
                 seen.setdefault(name, _unclassified_result(name))
 
-            is_quota = _is_quota_exhausted_error(exc)
-            if _is_rate_limit_error(exc):
-                consecutive_rate_limits += 1
-
-            # Circuit breaker: if quota is exhausted or multiple consecutive rate limits hit,
-            # stop calling the API to avoid hanging the DAG for 30+ minutes.
-            if is_quota or consecutive_rate_limits >= 2:
+            # Hard abort: daily/free-tier quota fully exhausted — retrying won't help today
+            if _is_quota_exhausted_error(exc):
                 remaining_batches = api_batches[idx + 1 :]
                 remaining_count = sum(len(b) for b in remaining_batches)
-                log.warning(
-                    "Gemini API quota exhausted / repeated rate limits. "
-                    "Short-circuiting remaining %d batch(es) (%d items) to avoid pipeline delay; "
+                log.error(
+                    "Gemini daily quota exhausted. Aborting remaining %d batch(es) (%d items); "
                     "the dbt rule ladder will classify these products.",
-                    len(remaining_batches),
-                    remaining_count,
+                    len(remaining_batches), remaining_count,
                 )
                 for rem_batch in remaining_batches:
                     for name in rem_batch:
                         seen.setdefault(name, _unclassified_result(name))
                 break
+
+            # Soft abort: too many consecutive failures — stop burning time
+            if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                remaining_batches = api_batches[idx + 1 :]
+                remaining_count = sum(len(b) for b in remaining_batches)
+                log.error(
+                    "Too many consecutive failures (%d). Aborting remaining %d batch(es) (%d items).",
+                    consecutive_failures, len(remaining_batches), remaining_count,
+                )
+                for rem_batch in remaining_batches:
+                    for name in rem_batch:
+                        seen.setdefault(name, _unclassified_result(name))
+                break
+
+            # Adaptive exponential backoff: 5s → 10s → 20s → 40s → ... → 300s max
+            if _is_rate_limit_error(exc):
+                log.info(
+                    "Rate limited — backing off %.0fs before batch %d/%d.",
+                    current_backoff, idx + 2, len(api_batches),
+                )
+                time.sleep(current_backoff)
+                current_backoff = min(current_backoff * 2, MAX_BACKOFF_SECONDS)
 
     return {
         "results": seen,
@@ -507,7 +540,67 @@ def _unclassified_result(name: str) -> dict[str, Any]:
     }
 
 
-def fetch_unclassified(engine, scrape_date: str | None = None) -> list[dict[str, Any]]:
+def triage_with_local_model(
+    items: list[dict[str, Any]],
+    confidence_threshold: float = 0.60,
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Phase 3: Pre-classifies items using the local HybridCOICOPClassifier.
+
+    High-confidence vector/store_purity matches skip the Gemini API entirely.
+
+    Returns:
+        - needs_gemini: items below threshold (must be sent to API)
+        - local_results: dict of name -> result for high-confidence local matches
+    """
+    from pipeline.hybrid_embeddings_classifier import get_hybrid_classifier
+
+    needs_gemini: list[dict[str, Any]] = []
+    local_results: dict[str, dict[str, Any]] = {}
+
+    try:
+        classifier = get_hybrid_classifier()
+    except Exception as exc:
+        log.warning("Could not initialize local classifier for triage: %s", exc)
+        return items, local_results
+
+    for item in items:
+        name = item.get("canonical_name", "")
+        if not name or not name.strip():
+            needs_gemini.append(item)
+            continue
+
+        try:
+            result = classifier.classify_product(name)
+            conf = result.get("confidence_score", 0.0)
+            method = result.get("classification_method", "")
+
+            # Accept local result only for store_purity (exact known code).
+            # Vector embedding returns division-level reference codes (e.g. 01.1.1
+            # for all food) which are too imprecise for full COICOP classification —
+            # those items still need Gemini for precise 5-digit code assignment.
+            if conf >= confidence_threshold and method == "store_purity":
+                local_results[name] = {
+                    "product_name": name,
+                    "coicop_code": result.get("coicop_code", UNCLASSIFIED),
+                    "confidence_score": conf,
+                    "reasoning": f"Local triage: {result.get('reasoning', '')}",
+                    "classification_method": f"local_{method}",
+                }
+                continue
+        except Exception:
+            pass
+
+        needs_gemini.append(item)
+
+    log.info(
+        "Local triage: %d classified locally (>=%.0f%%), %d need Gemini API",
+        len(local_results), confidence_threshold * 100, len(needs_gemini),
+    )
+    return needs_gemini, local_results
+
+def fetch_unclassified(
+    engine, scrape_date: str | None = None, limit: int = 5000,
+) -> list[dict[str, Any]]:
     """Returns unclassified products present in the current scrape_date run ready for Gemini.
 
     Two-tier source order:
@@ -515,9 +608,14 @@ def fetch_unclassified(engine, scrape_date: str | None = None) -> list[dict[str,
          routed to human review because no rule tier matched.
       2. AI sweep over staging.int_prices_cleaned ⋈ silver.canonical_items for the
          specified scrape_date where the canonical name has no entry in
-         silver.dim_coicop_ai_cache.
+         silver.dim_coicop_ai_cache (or only a stale negative cache entry > 24h old).
          Pure single-division stores are skipped (store purity outranks AI in
          the dbt resolution order, so spending API calls on them is unnecessary).
+
+    Phase 4: Excludes products with a recent (< 24h) negative cache entry to
+    prevent retry storms on genuinely unclassifiable items.
+    Phase 5: Accepts a ``limit`` parameter for chunked Airflow scheduling.
+    Phase 6: Orders by observation frequency so high-value products are classified first.
     """
     items: list[dict[str, Any]] = []
     with engine.connect() as conn:
@@ -527,8 +625,10 @@ def fetch_unclassified(engine, scrape_date: str | None = None) -> list[dict[str,
                 text(
                     "SELECT product_key as canonical_item_id, name_clean as canonical_name "
                     "FROM silver.classification_queue "
-                    "WHERE status = 'PENDING'"
-                )
+                    "WHERE status = 'PENDING' "
+                    "LIMIT :lim"
+                ),
+                {"lim": limit},
             ).fetchall()
             for r in q_res:
                 items.append(
@@ -541,31 +641,47 @@ def fetch_unclassified(engine, scrape_date: str | None = None) -> list[dict[str,
         if not items:
             try:
                 date_filter = "p.scrape_date = CAST(:ds AS DATE)" if scrape_date else "p.scrape_date = (SELECT max(scrape_date) FROM staging.int_prices_cleaned)"
+                # Phase 4: Exclude recently negative-cached items (< 24h old)
+                interval_clause = (
+                    "datetime('now', '-24 hours')"
+                    if getattr(engine.dialect, "name", "") == "sqlite"
+                    else "CURRENT_TIMESTAMP - INTERVAL '24 hours'"
+                )
+                # Phase 6: Order by observation count DESC (most-seen products first)
                 query_sql = f"""
-                    SELECT DISTINCT p.item_id::text AS item_id, ci.canonical_name
+                    SELECT sub.item_id, sub.canonical_name, sub.observation_count
                     FROM (
-                        SELECT DISTINCT item_id, store_slug, scrape_date
-                        FROM staging.int_prices_cleaned p
-                        WHERE {date_filter}
-                          AND p.item_id IS NOT NULL
-                          AND p.store_slug NOT IN (
-                              'communitypharma', 'khmer24', 'realestate',
-                              'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk',
-                              'bookmebus', 'redbus', 'redmebus', 'new_gasoline',
-                              'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi',
-                              'smart', 'smart_wifi'
-                          )
-                    ) p
-                    JOIN silver.canonical_items ci
-                      ON ci.item_id::text = p.item_id::text
-                    LEFT JOIN silver.dim_coicop_ai_cache ai
-                      ON lower(regexp_replace(trim(ai.product_name), '\\s+', ' ', 'g')) = lower(regexp_replace(trim(ci.canonical_name), '\\s+', ' ', 'g'))
-                    WHERE (ai.coicop_code IS NULL OR ai.coicop_code = '99.9.9')
-                      AND ci.canonical_name IS NOT NULL
-                      AND length(trim(ci.canonical_name)) > 1
-                    ORDER BY ci.canonical_name
+                        SELECT DISTINCT p.item_id::text AS item_id, ci.canonical_name,
+                               COUNT(*) OVER (PARTITION BY p.item_id) AS observation_count
+                        FROM (
+                            SELECT DISTINCT item_id, store_slug, scrape_date
+                            FROM staging.int_prices_cleaned p
+                            WHERE {date_filter}
+                              AND p.item_id IS NOT NULL
+                              AND p.store_slug NOT IN (
+                                  'communitypharma', 'khmer24', 'realestate',
+                                  'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk',
+                                  'bookmebus', 'redbus', 'redmebus', 'new_gasoline',
+                                  'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi',
+                                  'smart', 'smart_wifi'
+                              )
+                        ) p
+                        JOIN silver.canonical_items ci
+                          ON ci.item_id::text = p.item_id::text
+                        LEFT JOIN silver.dim_coicop_ai_cache ai
+                          ON lower(regexp_replace(trim(ai.product_name), '\\s+', ' ', 'g')) = lower(regexp_replace(trim(ci.canonical_name), '\\s+', ' ', 'g'))
+                        WHERE (ai.coicop_code IS NULL
+                               OR (ai.coicop_code = '99.9.9'
+                                   AND ai.classified_at < {interval_clause}))
+                          AND ci.canonical_name IS NOT NULL
+                          AND length(trim(ci.canonical_name)) > 1
+                    ) sub
+                    ORDER BY sub.observation_count DESC, sub.canonical_name
+                    LIMIT :lim
                 """
-                params = {"ds": scrape_date} if scrape_date else {}
+                params: dict[str, Any] = {"lim": limit}
+                if scrape_date:
+                    params["ds"] = scrape_date
                 ci_res = conn.execute(text(query_sql), params).fetchall()
                 for r in ci_res:
                     items.append(
@@ -623,17 +739,21 @@ def update_cache(engine, results: dict[str, dict[str, Any]]) -> int:
     """
     Upserts fresh Gemini results into silver.dim_coicop_ai_cache.
 
-    '99.9.9' (unclassified) outcomes are deliberately NOT cached so a product
-    can be re-attempted on a later run once the model improves or more context
-    exists.
+    Phase 4: '99.9.9' (unclassified) outcomes are now cached as negative entries
+    so they won't be retried for 24 hours (see fetch_unclassified). Previously
+    they were never cached, causing retry storms on genuinely unclassifiable items.
     """
-    rows = [
+    positive_rows = [
         r
         for r in results.values()
         if r.get("confidence_score", 0.0) > 0.0 and r.get("coicop_code") != UNCLASSIFIED
     ]
-    if not rows:
-        return 0
+    negative_rows = [
+        r
+        for r in results.values()
+        if r.get("coicop_code") == UNCLASSIFIED and r.get("product_name")
+    ]
+
     stmt = text(
         """
         INSERT INTO silver.dim_coicop_ai_cache
@@ -647,10 +767,29 @@ def update_cache(engine, results: dict[str, dict[str, Any]]) -> int:
             classified_at = CURRENT_TIMESTAMP
         """
     )
+    # Phase 4: Negative cache — only update if existing entry is > 24h old
+    interval_clause = (
+        "datetime('now', '-24 hours')"
+        if getattr(engine.dialect, "name", "") == "sqlite"
+        else "CURRENT_TIMESTAMP - INTERVAL '24 hours'"
+    )
+    neg_stmt = text(
+        f"""
+        INSERT INTO silver.dim_coicop_ai_cache
+            (product_name, coicop_code, confidence_score, reasoning, model_version)
+        VALUES (:name, '99.9.9', 0.0, :reasoning, :model)
+        ON CONFLICT (product_name) DO UPDATE
+        SET classified_at = CURRENT_TIMESTAMP,
+            reasoning = EXCLUDED.reasoning
+        WHERE dim_coicop_ai_cache.classified_at < {interval_clause}
+           OR dim_coicop_ai_cache.coicop_code = '99.9.9'
+        """
+    )
     model = os.getenv("GEMINI_MODEL", DEFAULT_MODEL)
     n = 0
+    n_neg = 0
     with engine.begin() as conn:
-        for row in rows:
+        for row in positive_rows:
             conn.execute(
                 stmt,
                 {
@@ -662,7 +801,20 @@ def update_cache(engine, results: dict[str, dict[str, Any]]) -> int:
                 },
             )
             n += 1
-    log.info("Upserted %d row(s) into dim_coicop_ai_cache", n)
+        for row in negative_rows:
+            conn.execute(
+                neg_stmt,
+                {
+                    "name": row["product_name"],
+                    "reasoning": row.get("reasoning", "Gemini returned unclassified"),
+                    "model": model,
+                },
+            )
+            n_neg += 1
+    log.info(
+        "Upserted %d positive + %d negative row(s) into dim_coicop_ai_cache",
+        n, n_neg,
+    )
     return n
 
 
@@ -756,32 +908,47 @@ def classify_unclassified_with_gemini(
     scrape_date: str | None = None,
     batch_size: int = BATCH_SIZE,
     model=None,
+    max_products: int = 5000,
 ) -> dict[str, Any]:
     """
     Gemini AI COICOP classification entry point (Airflow PythonOperator callable).
 
-    Classifies every product still at '99.9.9', using the cache first, then
-    Gemini JSON mode in batches of 50, and persists the results.
+    Classifies every product still at '99.9.9':
+      Phase 3: Local triage first (vector/store_purity) to avoid unnecessary API calls.
+      Then Gemini JSON mode in batches for the remaining ambiguous products.
+      Phase 5: ``max_products`` caps how many items are fetched per run for chunked scheduling.
     """
     engine = engine or get_engine()
-    items = fetch_unclassified(engine, scrape_date=scrape_date)
+    items = fetch_unclassified(engine, scrape_date=scrape_date, limit=max_products)
     if not items:
         log.info("No unclassified products to classify with Gemini")
         return {"status": "SKIPPED_NO_UNCLASSIFIED", "candidates": 0, "classified": 0}
 
-    cache = load_cache(engine)
-    names = [i["canonical_name"] for i in items]
-    outcome = classify_names(names, model=model, cache=cache, batch_size=batch_size)
+    # Phase 3: Local-first triage — classify high-confidence items locally
+    items_for_gemini, local_results = triage_with_local_model(items)
 
-    update_cache(engine, outcome["results"])
-    n_mapping = persist_classifications(engine, outcome["results"], items, scrape_date)
+    cache = load_cache(engine)
+    # Only send remaining ambiguous items to Gemini
+    names = [i["canonical_name"] for i in items_for_gemini]
+    if names:
+        outcome = classify_names(names, model=model, cache=cache, batch_size=batch_size)
+    else:
+        outcome = {"results": {}, "cache_hits": 0, "api_calls": 0, "failed": 0}
+
+    # Merge local + Gemini results (Gemini overwrites local if both have a result)
+    all_results = {**local_results, **outcome["results"]}
+
+    update_cache(engine, all_results)
+    n_mapping = persist_classifications(engine, all_results, items, scrape_date)
 
     classified = sum(
-        1 for r in outcome["results"].values() if r["coicop_code"] != UNCLASSIFIED
+        1 for r in all_results.values() if r["coicop_code"] != UNCLASSIFIED
     )
     return {
         "status": "OK",
         "candidates": len(items),
+        "classified_locally": len(local_results),
+        "sent_to_gemini": len(names),
         "classified": classified,
         "cache_hits": outcome["cache_hits"],
         "api_calls": outcome["api_calls"],

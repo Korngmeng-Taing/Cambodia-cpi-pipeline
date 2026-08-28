@@ -41,12 +41,14 @@ Every silver fact row in `silver.clean_store_prices` carries `coicop_division` +
 | khmer24, realestate | **04** Housing & utilities |
 | sokhahotel, hyyathotel, bayonbkk | **11** Restaurants & hotels |
 
-### 5 Multi-Category Stores (Resolved via 768-dim Vector Embeddings + LLM)
-| Stores (`store_slug`) | Catalog Range | Categorization Method |
-| --------------------- | ------------- | --------------------- |
-| **communitypharma** | Split across **06 Health** (Medicines, Panadol, Balms) and **12 Personal Care** (Cetaphil, Shampoos, Sunscreen, Soaps) | 768-dim Vector Cosine Similarity |
-| **aeon & aeon3** | Hypermarket spanning **01 Food**, **02 Alcohol**, **03 Apparel**, **05 Furnishings/Towels**, **06 OTC Health**, **09 Electronics/Toys**, **12 Personal Care** | 768-dim Vector Cosine Similarity |
-| **delishop** | Spans **01 Food & Groceries**, **02 Wine & Liquor**, **12 Toiletries** | 768-dim Vector Cosine Similarity |
+### 5 Multi-Category Stores (Resolved via 768-dim Vector Embeddings + Gemini AI)
+
+| Store | Categories | Resolution Method |
+| :--- | :--- | :--- |
+| **aeon** | Spans **01 Food**, **02 Alcohol**, **05 Cleaning**, **12 Personal Care** | 768-dim Vector Cosine Similarity |
+| **aeon3** | Spans **03 Clothing & Footwear**, **05 Textiles** | 768-dim Vector Cosine Similarity |
+| **delishop** | Spans **01 Food**, **02 Alcohol**, **05 Household** | 768-dim Vector Cosine Similarity |
+| **communitypharma** | Split between **06 Pharmaceuticals** and **12 Personal Care / Cosmetics** | 768-dim Vector Cosine Similarity |
 | **l192** | Spans **03 Clothing**, **05 Kitchenware/Cookware**, **12 Bags/Cosmetics** | 768-dim Vector Cosine Similarity |
 
 ---
@@ -59,14 +61,14 @@ Observations are resolved in order (first match wins):
 1. Tier 1: ov_exact      → Human Authority Overrides (coicop_override.csv + silver.coicop_override_manual).
 2. Tier 2: store_purity  → 15 Pure Store Domain Locks (Gas->07, Telecom->08, Housing->04, Hotels->11) in 0.001ms.
 3. Tier 3: vector_cosine → 768-dim Vector Cosine Similarity against 12 UN COICOP Reference Vectors.
-4. Tier 4: gemini_llm    → 3-Key Load-Balanced Gemini Pro/Flash LLM Fallback (cached permanently in silver.dim_coicop_ai_cache).
+4. Tier 4: gemini_ai     → 3-Key Load-Balanced Gemini Pro/Flash AI Fallback (cached permanently in silver.dim_coicop_ai_cache).
 ```
 
 `coicop_method` records the winning tier:
 - `override` (1.000 confidence) — exact manual/seed barcode or name rules
 - `store_purity` (1.000 confidence) — pure single-category store domain lock
 - `vector_embedding` (0.750–1.000 confidence) — dense vector cosine match
-- `gemini_llm` (0.800–1.000 confidence) — contextual LLM classification
+- `gemini_ai` (0.800–1.000 confidence) — contextual AI classification
 - `fallback_default` (0.500 confidence) — rule fallback
 
 ---

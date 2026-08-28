@@ -122,7 +122,7 @@ flowchart TD
         
         B3 -- "Step 1" --> B4["Exact Barcode / SKU Match (Conf = 1.0)"]
         B3 -- "Step 2" --> B5["Vector Cosine Sim (>= 0.88)\n+ Deterministic Spec Guards (RAM, Storage, Pack)"]
-        B3 -- "Step 3 (0.75 <= Sim < 0.88)" --> B6["🤖 3-Key Gemini Pro/Flash LLM Arbitrator\n(APPROVE_MATCH vs SPLIT_NEW)"]
+        B3 -- "Step 3 (0.75 <= Sim < 0.88)" --> B6["🤖 3-Key Gemini Pro/Flash AI Arbitrator\n(APPROVE_MATCH vs SPLIT_NEW)"]
         B3 -- "Step 4 (< 0.75)" --> B7["Create New Canonical UUID (silver.canonical_items)"]
     end
 

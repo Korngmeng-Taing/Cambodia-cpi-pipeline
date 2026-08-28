@@ -1,15 +1,23 @@
 """
 scrapers/base.py
-────────────────
+───────────────
 Abstract Base Scraper class enforcing standard interface for Bronze ingestion.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import Any
 
 import pendulum
+
+SCRAPER_SCHEMA_VERSION = "2026-08-28-v1"
+
+
+class OnEmpty(Enum):
+    RAISE = "raise"
+    FALLBACK_STATIC = "fallback_static"
 
 
 class BaseScraper(ABC):
@@ -17,6 +25,8 @@ class BaseScraper(ABC):
     Abstract interface for CPI store scrapers.
     All scrapers return a list of raw dictionary records adhering to the Bronze contract.
     """
+
+    on_empty: OnEmpty = OnEmpty.FALLBACK_STATIC
 
     def __init__(self, store_slug: str, source_type: str = "web"):
         self.store_slug = store_slug
@@ -41,11 +51,32 @@ class BaseScraper(ABC):
         if scrape_date is None:
             scrape_date = pendulum.today("Asia/Phnom_Penh").date()
 
+        ds = self._scrape_date_str(scrape_date)
         records = self.fetch_records(scrape_date=scrape_date)
+
+        if not records and self.on_empty is OnEmpty.RAISE:
+            raise RuntimeError(
+                f"{self.store_slug}: 0 records scraped on {ds} (on_empty=RAISE)"
+            )
+
+        stamped = [self._stamp(r) for r in records]
         return {
             "store_slug": self.store_slug,
             "source_type": self.source_type,
-            "scrape_date": str(scrape_date),
-            "record_count": len(records),
-            "records": records,
+            "scrape_date": ds,
+            "schema_version": SCRAPER_SCHEMA_VERSION,
+            "record_count": len(stamped),
+            "records": stamped,
         }
+
+    @staticmethod
+    def _scrape_date_str(scrape_date: pendulum.Date | None) -> str:
+        if scrape_date is None:
+            scrape_date = pendulum.today("Asia/Phnom_Penh").date()
+        return str(scrape_date)
+
+    def _stamp(self, record: dict[str, Any]) -> dict[str, Any]:
+        attrs = dict(record.get("attrs") or {})
+        attrs.setdefault("_schema_version", SCRAPER_SCHEMA_VERSION)
+        record["attrs"] = attrs
+        return record

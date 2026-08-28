@@ -15,8 +15,8 @@
 | **Storage & Warehouse** | **PostgreSQL 16** (`bronze`/`staging`/`silver`/`gold`/`ops` schemas) | Pure relational data warehouse hosting typed atomic raw listings, item-matching state, cleaned facts, operational control tables, and the analytical star schema. |
 | **Transformation** | **dbt-core** (Silver & Gold) | Turns raw price records, entity-matching outputs, pack-size conversions, and COICOP classification into version-controlled, testable SQL models. |
 | **Multi-Key API Pool** | **GeminiKeyPool** (`pipeline/key_pool.py`) | Thread-safe round-robin API key pool supporting 3+ free Gemini keys (4,500 req/day, 45 RPM) with automatic 429 failover. |
-| **Semantic Item Matching** | **VectorItemMatcher** (`pipeline/vector_item_matcher.py`) | 768-dim multilingual embeddings (`gemini-embedding-2`), deterministic spec guards (RAM/Storage, pack size, volume ≤ 10%), and `gemini-3.5-flash` LLM arbitration for borderline pairs. |
-| **Hybrid COICOP Engine** | **HybridCOICOPClassifier** (`pipeline/hybrid_embeddings_classifier.py`) | 4-tier ladder: human authority overrides → 15 pure store domain locks (0.001ms) → 12-division reference vector cosine matching (resolving Community Pharma 06/12 split & AEON variety) → Gemini Pro LLM fallback & Postgres memoization. |
+| **Semantic Item Matching** | **VectorItemMatcher** (`pipeline/vector_item_matcher.py`) | 768-dim multilingual embeddings (`gemini-embedding-2`), deterministic spec guards (RAM/Storage, pack size, volume ≤ 10%), and `gemini-3.5-flash` AI arbitration for borderline pairs. |
+| **Hybrid COICOP Engine** | **HybridCOICOPClassifier** (`pipeline/hybrid_embeddings_classifier.py`) | 4-tier ladder: human authority overrides → 15 pure store domain locks (0.001ms) → 12-division reference vector cosine matching (resolving Community Pharma 06/12 split & AEON variety) → Gemini Pro AI fallback & Postgres memoization. |
 | **Scraper Observability** | **Metabase v0.49** | Real-time operational monitoring: 20-Source Live Health Matrix, daily ingestion volume trends, and price anomaly alerts. |
 | **Interactive Analytics** | **Microsoft Power BI** | Executive BI dashboards over the gold star schema: retailer and item-level price trends, promo analytics. |
 
@@ -51,7 +51,7 @@
 ### Silver (Clean, Standardize & Resolve Observations)
 - **Clean Store Observations**: `silver.clean_store_prices` — unified daily appended table containing cleaned, standardized prices across all stores with exchange rates applied (KHR), unit normalization, promo clamping, and zero-price filtering.
 - **Item Matching Service**: Python (`pipeline/item_matcher.py` & `pipeline/vector_item_matcher.py`) executing Barcode exact → SKU exact → Exact Text → Vectorized Matrix Cosine (S = M · v) + RapidFuzz with deterministic spec guards to reject storage/pack conflicts.
-- **12-Division COICOP Engine**: `pipeline/hybrid_embeddings_classifier.py` executing 4-tier daily ladder: human overrides → 15 pure store locks → 12-division vector space matching → Gemini Pro LLM fallback cached in `silver.dim_coicop_ai_cache`.
+- **12-Division COICOP Engine**: `pipeline/hybrid_embeddings_classifier.py` executing 4-tier daily ladder: human overrides → 15 pure store locks → 12-division vector space matching → Gemini Pro AI fallback cached in `silver.dim_coicop_ai_cache`.
 - **Operational Triage Queue**: `silver.classification_queue` captures unclassified or low-confidence items for automated review or human labeling.
 - **COICOP Override System**: `silver.coicop_override` (seed-driven) + `silver.coicop_override_manual` (operator-driven) for persistent classification rules.
 

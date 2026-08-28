@@ -9,7 +9,7 @@ This document provides a comprehensive, step-by-step specification of how raw pr
 
 ## 1. Architectural Overview & Philosophy
 
-The Cambodia CPI Pipeline follows a **hybrid vector & LLM classification architecture**:
+The Cambodia CPI Pipeline follows a **hybrid vector & Gemini AI classification architecture**:
 
 ```mermaid
 flowchart TD
@@ -26,7 +26,7 @@ flowchart TD
         C1 --> D{"Item Deduplication Ladder"}
         D -- "1. Barcode / SKU" --> E["Exact Match (Conf = 1.0)"]
         D -- "2. Vector Cosine (>= 0.88)" --> F["Vector Match (with Spec Guards)"]
-        D -- "3. Borderline (0.75-0.88)" --> F1["🤖 Gemini Pro/Flash LLM Arbitrator"]
+        D -- "3. Borderline (0.75-0.88)" --> F1["🤖 Gemini Pro/Flash AI Arbitrator"]
         D -- "4. No Match (< 0.75)" --> G["Create Canonical Item (Auto)\n(silver.canonical_items)"]
     end
 
@@ -35,7 +35,7 @@ flowchart TD
         H -- "Tier 1" --> I["Human Authority Overrides\n(coicop_override.csv)"]
         H -- "Tier 2" --> I2["15 Single-Category Pure Store Locks\n(Fuel->07, Telecom->08, Housing->04)"]
         H -- "Tier 3" --> J["Vector Cosine vs 12 UN COICOP Reference Spaces\n• Panadol -> 06 Health\n• Cetaphil / Shampoo -> 12 Personal Care\n• AEON Multi-Division Catalog"]
-        H -- "Tier 4" --> M["🤖 3-Key Gemini Pro/Flash LLM Fallback\n(silver.dim_coicop_ai_cache)"]
+        H -- "Tier 4" --> M["🤖 3-Key Gemini Pro/Flash AI Fallback\n(silver.dim_coicop_ai_cache)"]
     end
 
     subgraph S7["Stage 5: Gold Layer Star Schema"]
@@ -49,7 +49,7 @@ flowchart TD
 1. **Multi-Key Load Balancing**: Rotates 3+ Gemini API keys in thread-safe round-robin sequence to achieve $4,500$ daily requests, $45$ RPM, and automatic 429 failover.
 2. **Sub-Millisecond Vector Lookup**: 95%+ of daily observations match existing canonical identities or pure store locks in $<0.1\text{ms}$.
 3. **Deterministic Spec Guards**: Hardware RAM/storage, pack size multipliers, and volume discrepancies ($>10\%$) are rejected before merging to guarantee price index integrity.
-4. **Zero Recurring LLM Cost**: Once classified, products inherit canonical identities and are cached permanently in PostgreSQL (`silver.dim_coicop_ai_cache`).
+4. **Zero Recurring AI Cost**: Once classified, products inherit canonical identities and are cached permanently in PostgreSQL (`silver.dim_coicop_ai_cache`).
 5. **Accurate Retailer Separation**:
    - **Community Pharmacy:** Correctly separates *Panadol/Medicines* $\to$ `06 Health` from *Cetaphil/Skincare/Shampoos* $\to$ `12 Personal Care`.
    - **AEON 1 & 3:** Flexibly categorizes hypermarket listings across all 12 UN divisions (Food `01`, Alcohol `02`, Clothing `03`, Towels `05`, Headphones `09`, Personal Care `12`).
@@ -105,7 +105,7 @@ Candidate Scraped Title
          ▼
 [ Step 3: Vector Cosine Similarity (text-embedding-004) ]
   • Sim >= 0.88 ──────────────────────────────────────► APPROVE_MATCH
-  • 0.75 <= Sim < 0.88 ──► [ Gemini Pro LLM Review ] ──► APPROVE or SPLIT
+  • 0.75 <= Sim < 0.88 ──► [ Gemini Pro AI Review ] ──► APPROVE or SPLIT
   • Sim < 0.75 ────────────────────────────────────────► SPLIT_NEW (silver.canonical_items)
 ```
 
@@ -133,7 +133,7 @@ New Canonical Item
   • Panadol -> 06 Health | Cetaphil -> 12 Personal Care
          │ Borderline (< 0.72)
          ▼
-[ Tier 4: Gemini Pro/Flash LLM Fallback ]
+[ Tier 4: Gemini Pro/Flash AI Fallback ]
   • Structured JSON response cached permanently in silver.dim_coicop_ai_cache
 ```
 

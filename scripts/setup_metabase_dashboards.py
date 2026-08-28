@@ -293,6 +293,108 @@ def provision_all():
             """,
             "viz": {"table.pivot_column": None},
             "grid": (14, 11, 10, 8)
+        },
+
+        # AEON MULTI-CATEGORY PRODUCT BREAKDOWN
+        {
+            "name": "AEON Product Distribution by COICOP Division",
+            "desc": "Product count and average prices across all COICOP divisions for AEON multi-category stores (aeon, aeon3).",
+            "display": "bar",
+            "sql": """
+                WITH classified AS (
+                    SELECT
+                        ci.canonical_name,
+                        COALESCE(cs.coicop_division, 'UNCLASSIFIED') AS coicop_division,
+                        CASE
+                            WHEN cs.coicop_division = '01' THEN 'Food & Non-Alc Bev'
+                            WHEN cs.coicop_division = '02' THEN 'Alcohol & Tobacco'
+                            WHEN cs.coicop_division = '03' THEN 'Clothing & Footwear'
+                            WHEN cs.coicop_division = '05' THEN 'Household Items'
+                            WHEN cs.coicop_division = '09' THEN 'Recreation & Electronics'
+                            WHEN cs.coicop_division = '12' THEN 'Personal Care'
+                            ELSE cs.coicop_division
+                        END AS division_name,
+                        fdp.unit_price_local,
+                        fdp.store_slug
+                    FROM silver.canonical_items ci
+                    LEFT JOIN (
+                        SELECT DISTINCT ON (item_id::uuid)
+                            item_id::uuid AS item_id, coicop_division
+                        FROM gold.int_coicop_classified
+                        ORDER BY item_id::uuid,
+                                 CASE WHEN coicop_division <> 'UNCLASSIFIED' THEN 1 ELSE 2 END,
+                                 coicop_confidence DESC
+                    ) cs ON cs.item_id = ci.item_id
+                    JOIN gold.fct_daily_prices fdp ON fdp.item_id = ci.item_id::uuid
+                    WHERE fdp.store_slug IN ('aeon', 'aeon3')
+                      AND fdp.scrape_date = (SELECT MAX(scrape_date) FROM gold.fct_daily_prices WHERE store_slug IN ('aeon', 'aeon3'))
+                )
+                SELECT
+                    division_name AS "COICOP Division",
+                    COUNT(DISTINCT canonical_name) AS "Product Count",
+                    ROUND(AVG(unit_price_local), 0) AS "Avg Price",
+                    ROUND(MIN(unit_price_local), 0) AS "Min Price",
+                    ROUND(MAX(unit_price_local), 0) AS "Max Price"
+                FROM classified
+                WHERE coicop_division <> 'UNCLASSIFIED'
+                GROUP BY division_name, coicop_division
+                ORDER BY coicop_division;
+            """,
+            "viz": {
+                "graph.dimensions": ["COICOP Division"],
+                "graph.metrics": ["Product Count"]
+            },
+            "grid": (0, 19, 12, 7)
+        },
+        {
+            "name": "AEON Sample Products by Division (Detail)",
+            "desc": "Individual product listing with names, brands, sizes, and prices across AEON stores.",
+            "display": "table",
+            "sql": """
+                WITH classified AS (
+                    SELECT
+                        ci.canonical_name,
+                        ci.brand,
+                        ci.size_norm,
+                        COALESCE(cs.coicop_division, 'UNCLASSIFIED') AS coicop_division,
+                        CASE
+                            WHEN cs.coicop_division = '01' THEN 'Food'
+                            WHEN cs.coicop_division = '02' THEN 'Alcohol'
+                            WHEN cs.coicop_division = '03' THEN 'Clothing'
+                            WHEN cs.coicop_division = '05' THEN 'Household'
+                            WHEN cs.coicop_division = '09' THEN 'Electronics'
+                            WHEN cs.coicop_division = '12' THEN 'Personal Care'
+                            ELSE 'Other'
+                        END AS division_name,
+                        fdp.unit_price_local,
+                        fdp.store_slug,
+                        fdp.currency
+                    FROM silver.canonical_items ci
+                    LEFT JOIN (
+                        SELECT DISTINCT ON (item_id::uuid)
+                            item_id::uuid AS item_id, coicop_division
+                        FROM gold.int_coicop_classified
+                        ORDER BY item_id::uuid,
+                                 CASE WHEN coicop_division <> 'UNCLASSIFIED' THEN 1 ELSE 2 END,
+                                 coicop_confidence DESC
+                    ) cs ON cs.item_id = ci.item_id
+                    JOIN gold.fct_daily_prices fdp ON fdp.item_id = ci.item_id::uuid
+                    WHERE fdp.store_slug IN ('aeon', 'aeon3')
+                      AND fdp.scrape_date = (SELECT MAX(scrape_date) FROM gold.fct_daily_prices WHERE store_slug IN ('aeon', 'aeon3'))
+                )
+                SELECT
+                    division_name AS "Division",
+                    canonical_name AS "Product Name",
+                    brand AS "Brand",
+                    size_norm AS "Size",
+                    ROUND(unit_price_local, 0) AS "Price",
+                    store_slug AS "Store"
+                FROM classified
+                WHERE coicop_division <> 'UNCLASSIFIED'
+                ORDER BY division_name, canonical_name;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (12, 19, 12, 7)
         }
     ]
 
@@ -546,13 +648,8 @@ def provision_all():
                     scrape_date AS "Date"
                 FROM silver.clean_store_prices
                 WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
-                  AND (
-                      store_slug IN ('moc_fuel', 'new_gasoline', 'total_energies', 'tela', 'caltex', 'ptt')
-                      OR name_clean ILIKE '%gasoline%'
-                      OR name_clean ILIKE '%ea92%'
-                      OR name_clean ILIKE '%ea95%'
-                      OR (name_clean ILIKE '%diesel%' AND name_clean NOT ILIKE '%edt%' AND name_clean NOT ILIKE '%edp%' AND name_clean NOT ILIKE '%spray%')
-                  )
+                  AND store_slug IN ('moc_fuel', 'new_gasoline', 'total_energies', 'tela', 'caltex', 'ptt')
+                  AND coicop_division = '07'
                 ORDER BY price_khr ASC;
             """,
             "viz": {"table.pivot_column": None},

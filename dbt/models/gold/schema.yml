@@ -49,3 +49,16 @@ models:
   - name: fct_cpi_daily
     description: Gold Daily CPI facts — one row per (calculation_date, coicop_division) plus division_index. Range-enforced by PostgreSQL CHECK constraints (see sql/schema.sql).
     columns: []
+
+  - name: vw_aeon_product_divisions
+    description: View of AEON multi-category product distribution across COICOP divisions. Includes product names, brands, prices, and division classifications for aeon and aeon3 stores.
+    columns:
+      - name: item_id
+        tests:
+          - not_null
+      - name: canonical_name
+        tests:
+          - not_null
+      - name: coicop_division
+        tests:
+          - not_null

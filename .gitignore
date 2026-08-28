@@ -38,6 +38,7 @@ metabase/*.mv.db
 metabase/*.trace.db
 
 # ── Playwright / Scrapers ───────────────────────────────────────────────────
+.playwright-mcp/
 data/parquet_snapshots/
 playwright-report/
 test-results/

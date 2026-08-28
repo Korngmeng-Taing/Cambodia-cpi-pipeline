@@ -96,7 +96,7 @@ def _safe_run_gemini(**context) -> dict:
     pool = get_key_pool()
     if pool.get_key_count() == 0 and not os.getenv("GEMINI_API_KEY"):
         log.warning(
-            "No Gemini API keys detected — running vector/rule ladder only without external LLM."
+            "No Gemini API keys detected — running vector/rule ladder only without external Gemini AI."
         )
         return {"status": "SKIPPED_NO_KEY", "candidates": 0, "classified": 0}
     try:

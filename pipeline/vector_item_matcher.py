@@ -2,7 +2,7 @@
 pipeline/vector_item_matcher.py
 ───────────────────────────────
 Semantic Product Matching using 768-dim Multilingual Vector Embeddings,
-Deterministic Spec Guards, and Gemini Pro/Flash LLM Arbitration.
+Deterministic Spec Guards, and Gemini Pro/Flash AI Arbitration.
 """
 
 from __future__ import annotations
@@ -261,7 +261,7 @@ class VectorItemMatcher:
                 "coicop_division": best_item.get("coicop_division"),
             }
 
-        # 2. Borderline Similarity (0.65 <= sim < 0.80) -> Arbitrate with Gemini LLM
+        # 2. Borderline Similarity (0.65 <= sim < 0.80) -> Arbitrate with Gemini AI
         if best_item and highest_sim >= sim_review_threshold:
             return self.arbitrate_with_llm(candidate_name, best_item, highest_sim)
 

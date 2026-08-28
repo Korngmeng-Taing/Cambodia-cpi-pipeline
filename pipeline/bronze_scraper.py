@@ -228,7 +228,12 @@ class BronzeScraper:
         error_message: str,
         conn: connection,
     ):
-        """Logs malformed records to bronze.scrape_errors."""
+        """Logs malformed records to bronze.scrape_errors.
+
+        Uses a separate short-lived connection with autocommit so that error
+        records are persisted even when the caller's main transaction is
+        rolled back (e.g. after a scraper crash).
+        """
         insert_query = """
             INSERT INTO bronze.scrape_errors (
                 batch_id, store_id, source_name, raw_record, error_type, error_message
@@ -237,18 +242,27 @@ class BronzeScraper:
             )
         """
         try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    insert_query,
-                    (
-                        str(batch_id) if batch_id else None,
-                        store_id,
-                        source_name,
-                        raw_record,
-                        error_type,
-                        error_message,
-                    ),
-                )
+            # Use a separate autocommit connection so error logs survive
+            # even if the main transaction on `conn` is rolled back.
+            import psycopg2
+            dsn = conn.dsn
+            err_conn = psycopg2.connect(dsn)
+            try:
+                err_conn.autocommit = True
+                with err_conn.cursor() as cur:
+                    cur.execute(
+                        insert_query,
+                        (
+                            str(batch_id) if batch_id else None,
+                            store_id,
+                            source_name,
+                            raw_record,
+                            error_type,
+                            error_message,
+                        ),
+                    )
+            finally:
+                err_conn.close()
         except Exception as e:
             logger.error("Failed to log error: %s", e)
 

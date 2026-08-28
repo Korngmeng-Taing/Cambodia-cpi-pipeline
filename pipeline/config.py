@@ -96,15 +96,24 @@ def alternate_host_url(url: str) -> str:
     Return the same DSN pointed at the complementary host
     (localhost <-> postgres), used as container/host failover.
     Parses the URL properly instead of fragile substring matching.
+
+    NOTE: urlsplit returns username/password already URL-decoded, so we
+    must NOT call quote_plus() again — that would double-encode special
+    characters (e.g. %40 → %2540) and break authentication.
     """
+    from urllib.parse import unquote
     parts = urlsplit(url)
     hostname = parts.hostname or "localhost"
     alt_host = "postgres" if hostname == "localhost" else "localhost"
     netloc_parts = []
     if parts.username is not None:
-        netloc_parts.append(quote_plus(parts.username))
+        # urlsplit already decodes percent-encoded characters, so we
+        # re-encode exactly once via quote_plus on the raw value.
+        raw_user = unquote(parts.username) if parts.username else ""
+        netloc_parts.append(quote_plus(raw_user))
         if parts.password is not None:
-            netloc_parts.append(f":{quote_plus(parts.password)}")
+            raw_pass = unquote(parts.password) if parts.password else ""
+            netloc_parts.append(f":{quote_plus(raw_pass)}")
         netloc_parts.append("@")
     netloc_parts.append(alt_host)
     if parts.port:

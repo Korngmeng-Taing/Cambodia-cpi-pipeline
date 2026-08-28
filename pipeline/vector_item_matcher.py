@@ -143,6 +143,7 @@ class VectorItemMatcher:
     def __init__(self) -> None:
         self.key_pool = get_key_pool()
         self._local_model = None
+        self._embed_cache: dict[str, np.ndarray] = {}
 
     def _get_local_model(self):
         if self._local_model is None and HAS_SENTENCE_TRANSFORMERS:
@@ -153,33 +154,46 @@ class VectorItemMatcher:
         return self._local_model
 
     def embed_text(self, text: str) -> np.ndarray:
-        """Generates semantic dense embedding vector (768-dim via Gemini or local fallback)."""
+        """Generates semantic dense embedding vector (768-dim via local fallback or Gemini)."""
         if not text or not text.strip():
             return np.zeros(768, dtype=np.float32)
 
-        if HAS_GENAI and self.key_pool.get_key_count() > 0:
+        cleaned_text = text.strip()
+        if cleaned_text in self._embed_cache:
+            return self._embed_cache[cleaned_text]
+
+        # Fast local embedding mode enabled by default to prevent API quota 429 delays
+        use_local_first = os.getenv("USE_LOCAL_FALLBACK_FIRST", "true").lower() in ("true", "1", "yes")
+        if not use_local_first and HAS_GENAI and self.key_pool.get_key_count() > 0:
             def _call_gemini_embed(key: str) -> np.ndarray:
                 genai.configure(api_key=key)
-                res = genai.embed_content(model=EMBEDDING_MODEL, content=text.strip())
+                res = genai.embed_content(model=EMBEDDING_MODEL, content=cleaned_text)
                 return np.array(res["embedding"], dtype=np.float32)
 
             try:
-                return self.key_pool.execute_with_retry(_call_gemini_embed)
+                vec = self.key_pool.execute_with_retry(_call_gemini_embed)
+                self._embed_cache[cleaned_text] = vec
+                return vec
             except Exception as exc:
                 log.warning("Gemini embedding API failed; falling back to local model: %s", exc)
 
         local_model = self._get_local_model()
         if local_model is not None:
-            vec = local_model.encode(text.strip())
+            vec = local_model.encode(cleaned_text)
             local_vec = np.array(vec, dtype=np.float32)
             # Ensure consistent 768-dim: local model may return 384-dim, pad or project to 768
             if local_vec.shape[0] < 768:
                 padded = np.zeros(768, dtype=np.float32)
                 padded[: local_vec.shape[0]] = local_vec
+                self._embed_cache[cleaned_text] = padded
                 return padded
-            return local_vec[:768]
+            result_vec = local_vec[:768]
+            self._embed_cache[cleaned_text] = result_vec
+            return result_vec
 
-        return _build_semantic_item_vector(text)
+        res_vec = _build_semantic_item_vector(cleaned_text)
+        self._embed_cache[cleaned_text] = res_vec
+        return res_vec
 
     def match_candidate(
         self,
@@ -280,17 +294,21 @@ class VectorItemMatcher:
         best_item: dict[str, Any],
         sim_score: float,
     ) -> dict[str, Any]:
-        """Sends ambiguous candidate pair to Gemini Pro/Flash for final arbitration."""
+        """Sends ambiguous candidate pair to Gemini Pro/Flash or uses local thresholding in local-first mode."""
         canonical_name = best_item.get("canonical_name", "")
         item_id = str(best_item.get("item_id"))
 
-        if not HAS_GENAI or self.key_pool.get_key_count() == 0:
+        use_local_first = os.getenv("USE_LOCAL_FALLBACK_FIRST", "true").lower() in ("true", "1", "yes")
+        if use_local_first or not HAS_GENAI or self.key_pool.get_key_count() == 0:
+            is_match = sim_score >= 0.75
             return {
-                "decision": "APPROVE_MATCH" if sim_score >= 0.75 else "SPLIT_NEW",
-                "matched_item_id": item_id if sim_score >= 0.75 else None,
+                "decision": "APPROVE_MATCH" if is_match else "SPLIT_NEW",
+                "matched_item_id": item_id if is_match else None,
                 "confidence": round(sim_score, 4),
-                "method": "vector_embedding_fallback",
-                "reason": f"Vector fallback score {sim_score:.3f}",
+                "method": "vector_embedding_local",
+                "reason": f"Local vector score {sim_score:.3f}",
+                "coicop_code": best_item.get("coicop_code") if is_match else None,
+                "coicop_division": best_item.get("coicop_division") if is_match else None,
             }
 
         prompt = f"""You are a master product entity matching expert for an official Consumer Price Index.

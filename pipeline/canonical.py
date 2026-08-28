@@ -346,14 +346,20 @@ def validate_record(record: dict[str, Any]) -> list[str]:
 def validate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Validates a batch of canonical records and returns a summary dict.
+
+    ``error_count`` is the number of *invalid records* (not total violations),
+    so ``valid_count + error_count == total`` always holds.
     """
     total = len(records)
     errors: list[str] = []
     valid_count = 0
+    invalid_count = 0
     for rec in records:
         issues = validate_record(rec)
         if issues:
-            errors.extend(issues)
+            invalid_count += 1
+            rec_id = rec.get("item_id") or rec.get("name") or "unknown"
+            errors.extend([f"[{rec_id}] {err}" for err in issues])
         else:
             valid_count += 1
-    return {"total": total, "valid_count": valid_count, "error_count": len(errors), "errors": errors}
+    return {"total": total, "valid_count": valid_count, "error_count": invalid_count, "errors": errors}

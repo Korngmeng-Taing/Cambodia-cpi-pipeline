@@ -69,7 +69,7 @@ COICOP_12_REFERENCE_DEFINITIONS = [
         "division": "01",
         "code": "01.1.1",
         "name": "Food and non-alcoholic beverages",
-        "description": "fresh food groceries rice jasmine bread cereals noodles bakery pasta flour fresh meat beef steak pork chicken poultry fresh fish salmon fillet tuna seafood shrimp squid crab fresh milk dairy cheese butter eggs cooking oil vegetable oil fresh fruit apples bananas oranges mango fresh vegetables tomatoes potatoes onions chili spices seasoning sugar salt coffee tea fruit juice water soft drinks instant noodles packaged canned food ត្រីសាម៉ុង"
+        "description": "fresh food groceries rice jasmine bread cereals noodles bakery pasta flour fresh meat beef steak pork chicken poultry fresh fish salmon fillet tuna seafood shrimp squid crab fresh milk dairy cheese butter eggs cooking oil vegetable oil fresh fruit apples bananas oranges mango fresh vegetables tomatoes potatoes onions chili spices seasoning sugar salt coffee tea fruit juice water soft drinks coca cola coke cola instant noodles packaged canned food ត្រីសាម៉ុង"
     },
     {
         "division": "02",
@@ -169,6 +169,7 @@ class HybridCOICOPClassifier:
     def __init__(self) -> None:
         self.key_pool = get_key_pool()
         self._local_model = None
+        self._embed_cache: dict[str, np.ndarray] = {}
         self._ref_embeddings: list[dict[str, Any]] = []
         self._precompute_reference_vectors()
 
@@ -181,27 +182,44 @@ class HybridCOICOPClassifier:
         return self._local_model
 
     def embed_text(self, text: str) -> np.ndarray:
-        """Generates dense semantic embedding vector."""
+        """Generates dense semantic embedding vector via local fallback or Gemini."""
         if not text or not text.strip():
             return np.zeros(768, dtype=np.float32)
 
-        if HAS_GENAI and self.key_pool.get_key_count() > 0:
+        cleaned_text = text.strip()
+        if cleaned_text in self._embed_cache:
+            return self._embed_cache[cleaned_text]
+
+        use_local_first = os.getenv("USE_LOCAL_FALLBACK_FIRST", "true").lower() in ("true", "1", "yes")
+        if not use_local_first and HAS_GENAI and self.key_pool.get_key_count() > 0:
             def _call_gemini(key: str) -> np.ndarray:
                 genai.configure(api_key=key)
-                res = genai.embed_content(model=EMBEDDING_MODEL, content=text.strip())
+                res = genai.embed_content(model=EMBEDDING_MODEL, content=cleaned_text)
                 return np.array(res["embedding"], dtype=np.float32)
 
             try:
-                return self.key_pool.execute_with_retry(_call_gemini)
+                vec = self.key_pool.execute_with_retry(_call_gemini)
+                self._embed_cache[cleaned_text] = vec
+                return vec
             except Exception as exc:
                 log.warning("Gemini embedding API failed; falling back to local: %s", exc)
 
         local_model = self._get_local_model()
         if local_model is not None:
-            vec = local_model.encode(text.strip())
-            return np.array(vec, dtype=np.float32)
+            vec = local_model.encode(cleaned_text)
+            local_vec = np.array(vec, dtype=np.float32)
+            if local_vec.shape[0] < 768:
+                padded = np.zeros(768, dtype=np.float32)
+                padded[: local_vec.shape[0]] = local_vec
+                self._embed_cache[cleaned_text] = padded
+                return padded
+            result_vec = local_vec[:768]
+            self._embed_cache[cleaned_text] = result_vec
+            return result_vec
 
-        return _build_semantic_fallback_vector(text)
+        res_vec = _build_semantic_fallback_vector(cleaned_text)
+        self._embed_cache[cleaned_text] = res_vec
+        return res_vec
 
     def _precompute_reference_vectors(self) -> None:
         """Embeds the 12 official UN COICOP reference definitions."""
@@ -255,18 +273,30 @@ class HybridCOICOPClassifier:
                 highest_sim = sim
                 best_match = ref
 
-        if best_match and highest_sim >= threshold:
+        use_local_first = os.getenv("USE_LOCAL_FALLBACK_FIRST", "true").lower() in ("true", "1", "yes")
+
+        if best_match and (highest_sim >= threshold or use_local_first):
             return {
                 "product_name": clean_name,
                 "coicop_division": best_match["division"],
                 "coicop_code": best_match["code"],
-                "confidence_score": round(highest_sim, 4),
+                "confidence_score": round(max(highest_sim, 0.50), 4),
                 "classification_method": "vector_embedding",
                 "reasoning": f"Matched vector semantics for {best_match['name']} ({highest_sim:.3f}).",
             }
 
-        # Tier 4: Gemini Pro/Flash LLM Fallback for ambiguous edge cases (< threshold)
-        return self.classify_with_llm(clean_name, store_slug)
+        # Tier 4: Gemini Pro/Flash LLM Fallback for ambiguous edge cases (< threshold when not in local-first mode)
+        if not use_local_first:
+            return self.classify_with_llm(clean_name, store_slug)
+
+        return {
+            "product_name": clean_name,
+            "coicop_division": "01",
+            "coicop_code": "01.1.1",
+            "confidence_score": 0.50,
+            "classification_method": "fallback_default",
+            "reasoning": "Local fallback default assigned.",
+        }
 
     def classify_with_llm(self, product_name: str, store_slug: str = "") -> dict[str, Any]:
         """Calls Gemini Pro/Flash for deep contextual economic classification."""

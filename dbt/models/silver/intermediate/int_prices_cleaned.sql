@@ -107,8 +107,8 @@ select
     wps.price_original_curr,
     wps.original_price_curr,
     wps.usd_khr_rate,
-    round(wps.price_khr, 2) as price_khr,
-    round(wps.original_price_khr, 2) as original_price_khr,
+    round(wps.price_khr::numeric, 2)::numeric(14, 2) as price_khr,
+    round(wps.original_price_khr::numeric, 2)::numeric(14, 2) as original_price_khr,
     case
         when wps.raw_discount_pct is null then null
         when wps.raw_discount_pct < 0 then 0.00

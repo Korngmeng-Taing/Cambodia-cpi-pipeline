@@ -208,6 +208,14 @@ class GeminiItemReviewer:
                                 "method": "gemini_ai",
                             }
                 break  # success — exit retry loop
+            except json.JSONDecodeError as je:
+                # JSON parse failures are likely deterministic at temp=0.1;
+                # retrying wastes API quota. Fail fast.
+                log.warning(
+                    "Gemini returned unparseable JSON (attempt %d/3): %s",
+                    attempt + 1, je,
+                )
+                break  # exit retry loop — retrying won't help
             except Exception as e:
                 backoff = RATE_LIMIT_DELAY * (2 ** attempt)  # 2s, 4s, 8s
                 log.warning(

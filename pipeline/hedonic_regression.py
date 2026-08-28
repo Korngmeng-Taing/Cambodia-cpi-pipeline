@@ -230,13 +230,18 @@ def fit_ols(df: pd.DataFrame) -> dict[str, Any]:
             f"Hedonic model needs >= {MIN_SAMPLE_SIZE} positive-price rows; got {len(train)}"
         )
 
-    # Include core features (RAM + Storage) plus any active features with non-zero variance
+    # Include features that have non-zero variance (at least 2 distinct values).
+    # Previously, RAM_GB and Storage_GB were forcefully appended without this
+    # check, causing rank-deficient OLS matrices when all items had the same spec.
     active_features = []
     for feat in HEDONIC_FEATURES:
-        if feat in ("RAM_GB", "Storage_GB"):
+        if feat in train.columns and train[feat].nunique() > 1:
             active_features.append(feat)
-        elif feat in train.columns and train[feat].nunique() > 1:
-            active_features.append(feat)
+    if not active_features:
+        raise ValueError(
+            "Hedonic feature matrix is rank-deficient: no features have variance "
+            "(all items share identical specs). Cannot fit a hedonic model."
+        )
 
     X_raw = train[active_features].astype(float)
     X = sm.add_constant(X_raw, has_constant="add")
@@ -271,15 +276,28 @@ def fit_ols(df: pd.DataFrame) -> dict[str, Any]:
 
 
 def baseline_specs(df: pd.DataFrame, current_scrape_date: str) -> dict[str, float]:
-    """Average characteristics of items from the previous calendar month (the baseline)."""
+    """Average characteristics of items from the previous calendar month (the baseline).
+
+    When no prior-month data exists (e.g. the very first month of collection),
+    falls back to the current month's median to produce neutral quality
+    adjustments, instead of using 0.0 which would radically distort prices.
+    """
     current_month = pd.to_datetime(current_scrape_date).to_period("M")
     prior = df[pd.to_datetime(df["scrape_date"]).dt.to_period("M") < current_month]
+    current = df[pd.to_datetime(df["scrape_date"]).dt.to_period("M") == current_month]
     base = {}
     for feat in HEDONIC_FEATURES:
-        if prior.empty or feat not in prior.columns:
-            base[feat] = 0.0
-        else:
+        if not prior.empty and feat in prior.columns:
             base[feat] = float(prior[feat].mean())
+        elif not current.empty and feat in current.columns:
+            # Fallback: use current month median for neutral adjustment
+            base[feat] = float(current[feat].median())
+            log.warning(
+                "No prior-month data for feature '%s'; using current month median (%.2f) as baseline.",
+                feat, base[feat],
+            )
+        else:
+            base[feat] = 0.0
     return base
 
 

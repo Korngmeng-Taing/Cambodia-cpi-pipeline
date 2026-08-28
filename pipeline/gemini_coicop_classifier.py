@@ -387,7 +387,15 @@ def classify_batch(model, names: list[str]) -> list[dict[str, Any]]:
                 time.sleep(backoff)
                 continue
             raise
-    results = _parse_json_array(response.text)
+    try:
+        results = _parse_json_array(response.text)
+    except (json.JSONDecodeError, ValueError) as parse_err:
+        log.warning(
+            "Gemini returned unparseable JSON for batch of %d names: %s. "
+            "Falling back to unclassified for this batch.",
+            len(names), parse_err,
+        )
+        return []
 
     # Phase 1: Detect truncated response from larger batch sizes
     if len(results) < len(names) * 0.8:

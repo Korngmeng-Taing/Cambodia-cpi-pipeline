@@ -3,7 +3,7 @@ orchestration/dags/cpi_master_dag.py
 ────────────────────────────────────
 Master Orchestrator for the Cambodia CPI Medallion Pipeline.
 
-Daily 07:00 Asia/Phnom_Penh (or manual trigger):
+Daily 02:00 Asia/Phnom_Penh (or manual trigger):
     Stage 1 (Bronze): Trigger all 20 per-source scraper DAGs in parallel.
     Stage 2 (Silver): Trigger silver_dag (Item matching + Vector & Gemini AI Classification + Log-Linear Hedonic + dbt Silver).
     Stage 3 (Gold):   Trigger gold_dag (dbt Gold star-schema models + tests).

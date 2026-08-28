@@ -82,16 +82,27 @@ def with_retries(
     Returns the first successful value; raises the last exception if exhausted.
     """
     last_err: BaseException | None = None
+    consecutive_errors = 0
     for attempt in range(attempts):
         try:
             result = fn()
             return result
         except Exception as exc:  # noqa: BLE001
             last_err = exc
+            consecutive_errors += 1
             if on_error is not None:
                 on_error(attempt, exc)
+            if consecutive_errors >= max_consecutive_errors:
+                log.warning(
+                    "with_retries: %d consecutive errors reached limit; aborting early.",
+                    consecutive_errors,
+                )
+                break
             if attempt < attempts - 1:
-                time.sleep(backoff_base * (attempt + 1))
+                import random
+
+                delay = (backoff_base ** (attempt + 1)) + random.uniform(0.1, 0.7)
+                time.sleep(delay)  # Exponential with jitter
     assert last_err is not None
     raise last_err
 

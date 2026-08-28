@@ -46,7 +46,14 @@ class GeminiKeyPool:
         return len(self.keys)
 
     def get_next_key(self) -> str | None:
-        """Returns the next healthy API key in round-robin fashion, skipping cooling keys."""
+        """Returns the next healthy API key in round-robin fashion, skipping cooling keys.
+
+        IMPORTANT: Any required sleep is performed OUTSIDE the lock to avoid
+        blocking other threads waiting for a key.
+        """
+        wait_time = 0.0
+        selected_key: str | None = None
+
         with self._lock:
             if not self.keys:
                 return None
@@ -57,17 +64,24 @@ class GeminiKeyPool:
             for _ in range(len(self.keys)):
                 key = next(self._key_cycle)
                 if key not in self._cooldowns:
-                    return key
+                    return key  # Healthy key found — return immediately (no sleep)
 
             if self._cooldowns:
                 earliest_key = min(self._cooldowns.keys(), key=lambda k: self._cooldowns[k])
                 wait_time = max(0.0, self._cooldowns[earliest_key] - now)
-                log.warning("All %d Gemini API keys in cooldown. Waiting %.1fs for key...", len(self.keys), wait_time)
-                if wait_time > 0:
-                    time.sleep(min(wait_time, 5.0))
-                return earliest_key
+                selected_key = earliest_key
+            else:
+                selected_key = self.keys[0]
 
-            return self.keys[0]
+        # Sleep OUTSIDE the lock so other threads are not blocked.
+        # Honor the full cooldown duration — do NOT cap at 5 seconds,
+        # otherwise the key is returned before it has recovered, triggering
+        # another 429 and destroying the backoff strategy.
+        if wait_time > 0:
+            log.warning("All %d Gemini API keys in cooldown. Waiting %.1fs for key...", len(self.keys), wait_time)
+            time.sleep(wait_time)
+
+        return selected_key
 
     def mark_key_rate_limited(self, key: str) -> None:
         """Places a key into temporary cooldown following a 429 ResourceExhausted response."""

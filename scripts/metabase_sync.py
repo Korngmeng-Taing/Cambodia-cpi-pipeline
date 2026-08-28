@@ -1,8 +1,12 @@
+import os
 import urllib.request, json, sys
+
+port = os.environ.get("METABASE_PORT", "3001")
+base_url = f"http://localhost:{port}"
 
 # Get session token
 session_data = json.dumps({'username': 'admin@metabase.local', 'password': 'P@ssw0rd!'}).encode()
-req = urllib.request.Request('http://localhost:3000/api/session', data=session_data, headers={'Content-Type': 'application/json'})
+req = urllib.request.Request(f'{base_url}/api/session', data=session_data, headers={'Content-Type': 'application/json'})
 try:
     resp = urllib.request.urlopen(req)
     token = json.loads(resp.read())['id']
@@ -13,7 +17,7 @@ except Exception as e:
 
 # Trigger schema sync
 headers = {'Content-Type': 'application/json', 'X-Metabase-Session': token}
-req2 = urllib.request.Request('http://localhost:3000/api/database/2/sync_schema', headers=headers, method='POST')
+req2 = urllib.request.Request(f'{base_url}/api/database/2/sync_schema', headers=headers, method='POST')
 try:
     resp2 = urllib.request.urlopen(req2)
     print(f"Sync response: {resp2.status}")

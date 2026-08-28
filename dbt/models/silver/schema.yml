@@ -74,6 +74,30 @@ models:
           - dbt_utils.expression_is_true:
               expression: "> 0"
 
+unit_tests:
+  - name: test_int_prices_cleaned_usd_khr_conversion
+    description: "Verify USD prices are properly converted to KHR and positive prices are retained"
+    model: int_prices_cleaned
+    overrides:
+      macros:
+        is_incremental: false
+    given:
+      - input: source('bronze', 'raw_prices')
+        rows:
+          - {raw_price_id: 101, store_id: 'delishop', source_name: 'delishop', item_description_raw: 'Fresh Milk 1L', price: 2.50, currency: 'USD', scraped_at: '2026-08-28 10:00:00', raw_payload: '{"barcode": "123456"}'}
+          - {raw_price_id: 102, store_id: 'aeon', source_name: 'aeon', item_description_raw: 'Cambodia Beer 330ml', price: 2800, currency: 'KHR', scraped_at: '2026-08-28 10:00:00', raw_payload: '{}'}
+      - input: source('staging', 'exchange_rates')
+        rows:
+          - {execution_date: '2026-08-28', rate: 4000.0}
+      - input: source('silver', 'item_match_log')
+        rows:
+          - {raw_price_id: 101, item_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', match_method: 'barcode', confidence: 1.0}
+          - {raw_price_id: 102, item_id: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', match_method: 'exact', confidence: 1.0}
+    expect:
+      rows:
+        - {raw_price_id: 101, price_khr: 10000.00, cpi_eligible: true}
+        - {raw_price_id: 102, price_khr: 2800.00, cpi_eligible: true}
+
   # classification_queue was moved from silver.* to ops.* — its dbt source
   # declaration now lives in dbt/models/ops/schema.yml. P3 #123.
 

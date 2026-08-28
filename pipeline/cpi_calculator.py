@@ -129,7 +129,8 @@ class CPICalculationEngine:
         """
         cur = np.asarray(current_prices, dtype=float)
         base = np.asarray(base_prices, dtype=float)
-        # Align to shortest length first, then filter pairs where either is non-positive
+        if len(cur) == 0 or len(base) == 0:
+            return 100.0
         n = min(len(cur), len(base))
         cur = cur[:n]
         base = base[:n]
@@ -247,16 +248,22 @@ class CPICalculationEngine:
                 obs_cnt = int(div_items["observation_count"].sum())
                 item_cnt = len(div_items)
             else:
-                div_index = 100.0
+                # FIX: Do NOT default to 100.0 — that artificially drags the
+                # headline CPI toward 100 on days when a division is missing.
+                # Instead, mark as NaN so its weight is excluded from the
+                # Laspeyres aggregation denominator below.
+                div_index = np.nan
                 obs_cnt = 0
                 item_cnt = 0
+                log.warning("Division %s (%s) has no items on %s — excluding from headline aggregation.",
+                            div_code, DIVISION_NAMES.get(div_code, ""), elementary_df["calculation_date"].iloc[0] if not elementary_df.empty else "?")
 
             div_records.append({
                 "calculation_date": calc_date,
                 "coicop_division": div_code,
                 "division_name": DIVISION_NAMES.get(div_code, f"Division {div_code}"),
                 "weight": weight,
-                "division_index": float(div_index),
+                "division_index": float(div_index) if not np.isnan(div_index) else 100.0,
                 "item_count": item_cnt,
                 "observation_count": obs_cnt
             })
@@ -264,15 +271,21 @@ class CPICalculationEngine:
         df_div = pd.DataFrame(div_records)
 
         # Higher-Level Laspeyres Aggregation for Headline CPI
-        total_weight = df_div["weight"].sum()
-        headline_cpi = float((df_div["weight"] * df_div["division_index"]).sum() / total_weight)
+        # Only include divisions that actually have observed items;
+        # exclude missing divisions from both numerator and denominator.
+        active_div = df_div[df_div["item_count"] > 0]
+        if active_div.empty:
+            headline_cpi = 100.0
+        else:
+            total_weight = active_div["weight"].sum()
+            headline_cpi = float((active_div["weight"] * active_div["division_index"]).sum() / total_weight)
 
         # Core CPI (Ex-Food & Energy): Excludes Division 01 (Food & Non-Alcoholic Beverages),
         # Division 04 (Housing, Water, Electricity, Gas & Fuels), and Division 07 (Transport
         # & Automotive Fuels) — in alignment with NIS Cambodia & National Bank of Cambodia
         # core inflation standards and the project README.
         core_exclusions = {"01", "04", "07"}
-        core_divisions = df_div[~df_div["coicop_division"].isin(core_exclusions)]
+        core_divisions = active_div[~active_div["coicop_division"].isin(core_exclusions)]
         core_weight = core_divisions["weight"].sum()
         # Renormalise the denominator to the sum of the CORE weights only. Using
         # the full 12-division total_weight here caused core_cpi to collapse to

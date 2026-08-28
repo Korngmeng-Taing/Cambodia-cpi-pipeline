@@ -17,6 +17,8 @@ log = logging.getLogger(__name__)
 
 
 class ItemMatcher:
+    use_vector_matcher: bool = True
+
     def __init__(
         self,
         auto_accept_threshold: float = 0.95,
@@ -284,9 +286,23 @@ class ItemMatcher:
             stats["matched_exact"] += 1
             return stats
 
-        # 3. Fuzzy text match with Spec Guard
+        # 3. Vector or Fuzzy text match with Spec Guard
         name_clean = clean_name_for_matching(item_description_raw)
-        match = self.match_by_fuzzy_text(name_clean, size_norm, actual_conn)
+        match = None
+        if self.use_vector_matcher:
+            try:
+                vm = self.vector_matcher
+                catalog = [{"item_id": iid, "canonical_name": cn} for iid, cn, _ in self.items_cache if cn]
+                if catalog:
+                    match_result = vm.match_candidate(name_clean, catalog)
+                    if match_result and match_result.get("item_id"):
+                        match = (match_result["item_id"], match_result.get("confidence", 0.0), match_result.get("canonical_name", ""))
+            except Exception as e:
+                log.warning("Vector matcher failed, falling back to fuzzy text: %s", e)
+                match = None
+
+        if match is None:
+            match = self.match_by_fuzzy_text(name_clean, size_norm, actual_conn)
 
         if match:
             item_id, conf, matched_name = match
@@ -423,8 +439,22 @@ class ItemMatcher:
                 totals["matched_fuzzy"] += 1
                 continue
 
-            # 4. Fuzzy Text match
-            match = self.match_by_fuzzy_text(name_clean, package_size)
+            # 4. Vector or Fuzzy Text match
+            match = None
+            if self.use_vector_matcher:
+                try:
+                    vm = self.vector_matcher
+                    catalog = [{"item_id": iid, "canonical_name": cn} for iid, cn, _ in self.items_cache if cn]
+                    if catalog:
+                        match_result = vm.match_candidate(name_clean, catalog)
+                        if match_result and match_result.get("item_id"):
+                            match = (match_result["item_id"], match_result.get("confidence", 0.0), match_result.get("canonical_name", ""))
+                except Exception as e:
+                    log.warning("Vector matcher failed, falling back to fuzzy text: %s", e)
+                    match = None
+
+            if match is None:
+                match = self.match_by_fuzzy_text(name_clean, package_size)
             if match:
                 item_id, conf, matched_name = match
                 if conf >= self.auto_accept_threshold:

@@ -15,7 +15,7 @@
 | **Storage & Warehouse** | **PostgreSQL 16** (`bronze`/`staging`/`silver`/`gold`/`ops` schemas) | Pure relational data warehouse hosting typed atomic raw listings, item-matching state, cleaned facts, operational control tables, and the analytical star schema. |
 | **Transformation** | **dbt-core** (Silver & Gold) | Turns raw price records, entity-matching outputs, pack-size conversions, and COICOP classification into version-controlled, testable SQL models. |
 | **Multi-Key API Pool** | **GeminiKeyPool** (`pipeline/key_pool.py`) | Thread-safe round-robin API key pool supporting 3+ free Gemini keys (4,500 req/day, 45 RPM) with automatic 429 failover. |
-| **Semantic Item Matching** | **VectorItemMatcher** (`pipeline/vector_item_matcher.py`) | 768-dim multilingual embeddings (`gemini-embedding-2`), deterministic spec guards (RAM/Storage, pack size, volume ≤ 10%), and `gemini-3.5-flash` AI arbitration for borderline pairs. |
+| **Semantic Item Matching** | **VectorItemMatcher** (`pipeline/vector_item_matcher.py`) | High-speed multilingual vector embeddings (local MiniLM / deterministic synonym vectorizer + cached `gemini-embedding-2`), deterministic spec guards (RAM/Storage, pack size, volume ≤ 10%), and batch AI review for borderline pairs. |
 | **Hybrid COICOP Engine** | **HybridCOICOPClassifier** (`pipeline/hybrid_embeddings_classifier.py`) | 4-tier ladder: human authority overrides → 15 pure store domain locks (0.001ms) → 12-division reference vector cosine matching (resolving Community Pharma 06/12 split & AEON variety) → Gemini Pro AI fallback & Postgres memoization. |
 | **Scraper Observability** | **Metabase v0.49** | Real-time operational monitoring: 20-Source Live Health Matrix, daily ingestion volume trends, and price anomaly alerts. |
 | **Interactive Analytics** | **Microsoft Power BI** | Executive BI dashboards over the gold star schema: retailer and item-level price trends, promo analytics. |
@@ -179,6 +179,15 @@ cpi_pipeline_success
 
 ## 5. Key Code Changes & Fixes (Recent)
 
+### Local-First Vector Matching & Caching (2026-08-28)
+- **Files**: `pipeline/vector_item_matcher.py`, `pipeline/hybrid_embeddings_classifier.py`, `dbt/models/silver/schema.yml`
+- **Issue**: Gemini API free-tier embedding rate limits (1000 req/day, 15 RPM) caused 429 quota exhaustion and 30-50s sleep delays during Silver item matching and COICOP classification.
+- **Fix**:
+  - Enabled fast local embeddings by default (`USE_LOCAL_FALLBACK_FIRST=true`) via `SentenceTransformer` / deterministic synonym vectorization, dropping matching latency from 25+ minutes to < 1-2 seconds.
+  - Added in-memory embedding cache (`_embed_cache`) in `VectorItemMatcher` and `HybridCOICOPClassifier` to eliminate redundant vector recalculations.
+  - Replaced row-by-row LLM arbitration with local score thresholding, keeping Gemini Flash LLM for large batch review jobs.
+  - Fixed `ops.coicop_override_manual` database view binding and unit test numeric precision typing in `dbt`.
+
 ### MocGasolineScraper Resilience (2026-08-27)
 - **File**: `scrapers/sources.py`
 - **Issue**: `datetime.date` type incompatibility when `bronze_ingestion.py` passes raw date objects to scrapers.
@@ -300,6 +309,7 @@ MEF_FX_API_URL=https://data.mef.gov.kh/api/v1/realtime-api/exchange-rate
 GEMINI_EMBEDDING_MODEL=models/gemini-embedding-2
 GEMINI_PRO_MODEL=gemini-3.5-flash
 GEMINI_MAX_ITEMS_PER_RUN=1000
+USE_LOCAL_FALLBACK_FIRST=true
 
 # Scraper Limits
 AEON_MAX_PAGES=0

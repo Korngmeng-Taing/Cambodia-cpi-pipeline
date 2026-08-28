@@ -45,8 +45,34 @@ DEFAULT_ARGS = {
     "on_failure_callback": airflow_task_failure_callback,
 }
 
-def get_base_date() -> date:
-    """Fetch base date from Airflow Variable; fallback to project inception date."""
+def get_base_date(target_date: date | None = None) -> date:
+    """Fetch the applicable base date for a given target_date from the
+    date-effective lookup table ``gold.cpi_base_dates``.
+
+    Falls back to the Airflow Variable ``cpi_base_date`` → project inception
+    date if the table doesn't exist or has no rows yet.
+    """
+    if target_date is None:
+        target_date = date.today()
+
+    try:
+        import psycopg2
+        from pipeline.config import get_database_url
+        conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://", 1)
+        with psycopg2.connect(conn_str) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT base_date FROM gold.cpi_base_dates
+                    WHERE effective_from <= %s
+                    ORDER BY effective_from DESC
+                    LIMIT 1
+                """, (target_date,))
+                row = cur.fetchone()
+                if row:
+                    return row[0]
+    except Exception:
+        pass  # Table may not exist yet; fall through to legacy lookup
+
     try:
         base_str = Variable.get("cpi_base_date")
         return datetime.strptime(base_str, "%Y-%m-%d").date()
@@ -60,7 +86,7 @@ def execute_daily_cpi_calculation(**context):
     else:
         calc_date = date.today()
 
-    base_date = get_base_date()
+    base_date = get_base_date(calc_date)
     print(f"🚀 Starting Gold CPI Calculation for {calc_date} (Base Date: {base_date})...")
 
     engine = CPICalculationEngine()
@@ -71,6 +97,11 @@ def annual_rebase_cpi(**context):
     """
     Annual rebasing task: runs on Jan 1 (or first business day).
     Computes the average CPI for the preceding December and sets that as the new base.
+
+    IMPORTANT: Base dates are stored in a date-effective lookup table
+    ``gold.cpi_base_dates`` so that historical backfills always use the
+    correct base date for their execution period. The Airflow Variable
+    is also updated for backward compatibility.
     """
     logical_date_str = context.get("ds")
     if logical_date_str:
@@ -109,10 +140,35 @@ def annual_rebase_cpi(**context):
 
     if cpi_values:
         avg_cpi = sum(cpi_values) / len(cpi_values)
-        # Set base to Dec 1 (the start of the averaging period)
         new_base = dec_start
+        effective_from = date(run_date.year, 1, 1)
+
+        # Persist to date-effective lookup table (backfill-safe)
+        import psycopg2
+        from pipeline.config import get_database_url
+        conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://", 1)
+        with psycopg2.connect(conn_str) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS gold.cpi_base_dates (
+                        effective_from DATE PRIMARY KEY,
+                        base_date DATE NOT NULL,
+                        avg_december_cpi NUMERIC(10, 4),
+                        created_at TIMESTAMPTZ DEFAULT NOW()
+                    );
+                """)
+                cur.execute("""
+                    INSERT INTO gold.cpi_base_dates (effective_from, base_date, avg_december_cpi)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (effective_from) DO UPDATE
+                    SET base_date = EXCLUDED.base_date,
+                        avg_december_cpi = EXCLUDED.avg_december_cpi;
+                """, (effective_from, new_base, avg_cpi))
+            conn.commit()
+
+        # Also update Airflow Variable for backward compatibility
         Variable.set("cpi_base_date", new_base.strftime("%Y-%m-%d"))
-        print(f"✅ Annual rebasing complete: new base_date = {new_base} (avg December CPI: {avg_cpi:.2f})")
+        print(f"✅ Annual rebasing complete: new base_date = {new_base} effective from {effective_from} (avg December CPI: {avg_cpi:.2f})")
     else:
         print(f"⚠️ Could not compute December average CPI; rebasing skipped.")
 

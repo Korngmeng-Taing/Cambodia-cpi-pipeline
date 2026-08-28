@@ -227,6 +227,7 @@ def test_classify_names_circuit_breaker_on_quota():
 
 
 def test_get_api_keys(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEYS", raising=False)
     monkeypatch.setenv("GEMINI_API_KEY", "key1, key2,key3")
     assert gcc._get_api_keys() == ["key1", "key2", "key3"]
 

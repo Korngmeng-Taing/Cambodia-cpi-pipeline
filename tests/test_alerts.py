@@ -1,5 +1,8 @@
 import pytest
-from orchestration.dags.alerts import send_telegram_alert, send_slack_alert, airflow_task_failure_callback
+try:
+    from orchestration.dags.alerts import send_telegram_alert, send_slack_alert, airflow_task_failure_callback
+except ImportError:
+    from alerts import send_telegram_alert, send_slack_alert, airflow_task_failure_callback
 
 
 def test_alerts_graceful_degradation_without_tokens(monkeypatch):

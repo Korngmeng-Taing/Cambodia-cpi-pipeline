@@ -195,6 +195,57 @@ class VectorItemMatcher:
         self._embed_cache[cleaned_text] = res_vec
         return res_vec
 
+    def embed_texts(self, texts: list[str], batch_size: int = 256) -> np.ndarray:
+        """Generates semantic dense embedding vectors in batched tensor passes for speed."""
+        if not texts:
+            return np.zeros((0, 768), dtype=np.float32)
+
+        result = np.zeros((len(texts), 768), dtype=np.float32)
+        to_encode_indices: list[int] = []
+        to_encode_texts: list[str] = []
+
+        for i, t in enumerate(texts):
+            cleaned = t.strip() if t else ""
+            if not cleaned:
+                continue
+            if cleaned in self._embed_cache:
+                result[i] = self._embed_cache[cleaned]
+            else:
+                to_encode_indices.append(i)
+                to_encode_texts.append(cleaned)
+
+        if not to_encode_texts:
+            return result
+
+        local_model = self._get_local_model()
+        if local_model is not None:
+            try:
+                batch_vecs = local_model.encode(
+                    to_encode_texts, batch_size=batch_size, show_progress_bar=False
+                )
+                batch_np = np.array(batch_vecs, dtype=np.float32)
+                if batch_np.shape[1] < 768:
+                    padded = np.zeros((batch_np.shape[0], 768), dtype=np.float32)
+                    padded[:, : batch_np.shape[1]] = batch_np
+                    batch_np = padded
+                else:
+                    batch_np = batch_np[:, :768]
+
+                for idx, orig_idx in enumerate(to_encode_indices):
+                    vec = batch_np[idx]
+                    cleaned = to_encode_texts[idx]
+                    self._embed_cache[cleaned] = vec
+                    result[orig_idx] = vec
+                return result
+            except Exception as e:
+                log.warning("Batch encoding with local model failed: %s", e)
+
+        for idx, orig_idx in enumerate(to_encode_indices):
+            cleaned = to_encode_texts[idx]
+            vec = self.embed_text(cleaned)
+            result[orig_idx] = vec
+        return result
+
     def match_candidate(
         self,
         candidate_name: str,
@@ -219,21 +270,33 @@ class VectorItemMatcher:
         else:
             cand_unit = cand_vec
 
-        # Pre-ensure all catalog items have unit vectors
-        vectors = []
-        for item in catalog:
-            ivec = item.get("vector")
-            if ivec is None:
-                ivec = self.embed_text(item.get("canonical_name", ""))
-                inorm = np.linalg.norm(ivec)
-                if inorm > 0:
-                    ivec = ivec / inorm
-                item["vector"] = ivec
-            vectors.append(ivec)
+        # Pre-ensure all catalog items have unit vectors and cache the matrix
+        if hasattr(catalog, "_cached_matrix") and getattr(catalog, "_cached_matrix_len", 0) == len(catalog):
+            mat = catalog._cached_matrix
+        else:
+            missing_items = [item for item in catalog if item.get("vector") is None]
+            if missing_items:
+                missing_names = [item.get("canonical_name", "") for item in missing_items]
+                missing_vecs = self.embed_texts(missing_names, batch_size=256)
+                for i, item in enumerate(missing_items):
+                    ivec = missing_vecs[i]
+                    inorm = np.linalg.norm(ivec)
+                    if inorm > 0:
+                        ivec = ivec / inorm
+                    item["vector"] = ivec
 
-        # Batch vector dot-product cosine similarity across all catalog items
-        if vectors:
-            mat = np.vstack(vectors)
+            vectors = [item["vector"] for item in catalog if item.get("vector") is not None]
+            if vectors:
+                mat = np.vstack(vectors)
+            else:
+                mat = np.zeros((0, 768), dtype=np.float32)
+            try:
+                catalog._cached_matrix = mat
+                catalog._cached_matrix_len = len(catalog)
+            except (AttributeError, TypeError):
+                pass
+
+        if mat.shape[0] > 0:
             cos_sims = np.dot(mat, cand_unit)
         else:
             cos_sims = np.zeros(len(catalog), dtype=np.float32)
@@ -242,11 +305,20 @@ class VectorItemMatcher:
         highest_sim = -1.0
         cand_lower = candidate_name.lower()
 
-        # Fast filtering: evaluate spec compatibility and fuzzy booster
-        for idx, item in enumerate(catalog):
+        # Fast filtering: evaluate only top-K vector candidate neighbors instead of full O(M) loop
+        n_items = len(catalog)
+        if n_items > 30:
+            top_indices = np.argpartition(cos_sims, -30)[-30:]
+            # Sort top 30 descending by cosine similarity
+            top_indices = top_indices[np.argsort(cos_sims[top_indices])[::-1]]
+        else:
+            top_indices = range(n_items)
+
+        for idx in top_indices:
+            item = catalog[idx]
             vec_sim = float(cos_sims[idx]) if idx < len(cos_sims) else 0.0
-            
-            # Fast prune if vector similarity is too low
+
+            # Early exit if vector similarity is too low and we already have a strong match
             if vec_sim < 0.40 and highest_sim > 0.60:
                 continue
 

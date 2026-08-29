@@ -124,6 +124,7 @@ with DAG(
     start_date=pendulum.datetime(2024, 1, 1, tz=local_tz),
     schedule=None,  # Orchestrated by cpi_master_dag
     catchup=False,
+    max_active_runs=1,
     default_args=DEFAULT_ARGS,
     tags=["cpi", "silver", "dbt", "matching", "classification", "vectors"],
 ) as dag:

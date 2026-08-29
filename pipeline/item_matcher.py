@@ -286,8 +286,16 @@ class ItemMatcher:
             stats["matched_exact"] += 1
             return stats
 
-        # 3. Vector or Fuzzy text match with Spec Guard
+        # 3. Exact Name match
         name_clean = clean_name_for_matching(item_description_raw)
+        name_upper = name_clean.strip().upper() if name_clean else ""
+        if name_upper and name_upper in self.exact_name_cache:
+            item_id = self.exact_name_cache[name_upper]
+            self._log_match(raw_price_id, item_id, "exact_text", 1.0, actual_conn)
+            stats["matched_fuzzy"] += 1
+            return stats
+
+        # 4. Vector or Fuzzy text match with Spec Guard
         match = None
         if self.use_vector_matcher:
             try:
@@ -295,13 +303,15 @@ class ItemMatcher:
                 catalog = [{"item_id": iid, "canonical_name": cn} for iid, cn, _ in self.items_cache if cn]
                 if catalog:
                     match_result = vm.match_candidate(name_clean, catalog)
-                    if match_result and match_result.get("item_id"):
-                        match = (match_result["item_id"], match_result.get("confidence", 0.0), match_result.get("canonical_name", ""))
+                    item_id_match = match_result.get("matched_item_id") or match_result.get("item_id") if match_result else None
+                    if item_id_match:
+                        match = (item_id_match, match_result.get("confidence", 0.0), match_result.get("canonical_name", ""))
+                else:
+                    match = self.match_by_fuzzy_text(name_clean, size_norm, actual_conn)
             except Exception as e:
                 log.warning("Vector matcher failed, falling back to fuzzy text: %s", e)
-                match = None
-
-        if match is None:
+                match = self.match_by_fuzzy_text(name_clean, size_norm, actual_conn)
+        else:
             match = self.match_by_fuzzy_text(name_clean, size_norm, actual_conn)
 
         if match:
@@ -413,6 +423,13 @@ class ItemMatcher:
         reviews = []
         sku_registrations = []
 
+        catalog = [{"item_id": iid, "canonical_name": cn} for iid, cn, _ in self.items_cache if cn]
+        classifier = None
+        try:
+            classifier = get_hybrid_classifier()
+        except Exception:
+            classifier = None
+
         for row in rows:
             raw_price_id, desc, barcode, sku, store_id, brand, package_size = row
             name_clean = clean_name_for_matching(desc)
@@ -444,17 +461,17 @@ class ItemMatcher:
             if self.use_vector_matcher:
                 try:
                     vm = self.vector_matcher
-                    catalog = [{"item_id": iid, "canonical_name": cn} for iid, cn, _ in self.items_cache if cn]
                     if catalog:
                         match_result = vm.match_candidate(name_clean, catalog)
-                        if match_result and match_result.get("item_id"):
-                            match = (match_result["item_id"], match_result.get("confidence", 0.0), match_result.get("canonical_name", ""))
+                        item_id_match = match_result.get("matched_item_id") or match_result.get("item_id") if match_result else None
+                        if item_id_match:
+                            match = (item_id_match, match_result.get("confidence", 0.0), match_result.get("canonical_name", ""))
                 except Exception as e:
                     log.warning("Vector matcher failed, falling back to fuzzy text: %s", e)
-                    match = None
-
-            if match is None:
+                    match = self.match_by_fuzzy_text(name_clean, package_size)
+            else:
                 match = self.match_by_fuzzy_text(name_clean, package_size)
+
             if match:
                 item_id, conf, matched_name = match
                 if conf >= self.auto_accept_threshold:
@@ -472,7 +489,8 @@ class ItemMatcher:
             new_id = uuid.uuid4()
             coicop_div, coicop_code = None, None
             try:
-                classifier = get_hybrid_classifier()
+                if classifier is None:
+                    classifier = get_hybrid_classifier()
                 res = classifier.classify_product(name_clean, store_slug=store_id)
                 coicop_div = res.get("coicop_division")
                 coicop_code = res.get("coicop_code")
@@ -490,6 +508,7 @@ class ItemMatcher:
             if name_upper:
                 self.exact_name_cache[name_upper] = new_id
             self.items_cache.append((new_id, name_clean, package_size))
+            catalog.append({"item_id": new_id, "canonical_name": name_clean})
 
             match_logs.append((raw_price_id, str(new_id), "new_item", 1.0))
             totals["new_items_created"] += 1

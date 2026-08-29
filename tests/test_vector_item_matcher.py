@@ -56,3 +56,18 @@ def test_vector_matcher_empty_catalog():
     res = matcher.match_candidate("Fresh Salmon 500g", [])
     assert res["decision"] == "SPLIT_NEW"
     assert res["matched_item_id"] is None
+
+
+def test_embed_texts_and_batch_matching():
+    matcher = VectorItemMatcher()
+    texts = ["Angkor Beer 330ml Can", "Coca-Cola 330ml Can", "Fresh Salmon 500g"]
+    vecs = matcher.embed_texts(texts, batch_size=2)
+    assert vecs.shape == (3, 768)
+
+    catalog = [
+        {"item_id": "item-1", "canonical_name": "Angkor Beer 330ml Can"},
+        {"item_id": "item-2", "canonical_name": "Coca-Cola 330ml Can"},
+    ]
+    res = matcher.match_candidate("Angkor Beer 330ml Can", catalog)
+    assert res["decision"] == "APPROVE_MATCH"
+    assert res["matched_item_id"] == "item-1"

@@ -96,6 +96,46 @@ def test_seven_day_imputation(cpi_engine):
     assert len(elem_df) == 2
     item2_row = elem_df[elem_df["item_id"] == item2_id].iloc[0]
     assert item2_row["is_imputed"] == True
-    # Carried forward from day 1 price of 2100.0
-    assert item2_row["current_price_khr"] == 2100.0
-    assert pytest.approx(item2_row["price_ratio"], 0.001) == 2100.0 / 2000.0
+    # Advanced using ILO Class-Mean Imputation: 2100.0 * (1100.0 / 1050.0) = 2200.0
+    assert pytest.approx(item2_row["current_price_khr"], 0.01) == 2200.0
+    assert pytest.approx(item2_row["price_ratio"], 0.001) == 2200.0 / 2000.0
+
+
+def test_missing_division_saves_as_null(cpi_engine):
+    """Tests that missing divisions have division_index as None/NaN in DataFrame and convert to None for DB."""
+    calc_date = date(2026, 8, 30)
+    # Only division 01 has items; division 10 is missing
+    elem_df = pd.DataFrame([
+        {
+            "calculation_date": calc_date,
+            "item_id": "item-1",
+            "coicop_division": "01",
+            "coicop_code": "01.1.1",
+            "base_price_khr": 1000.0,
+            "current_price_khr": 1050.0,
+            "price_ratio": 1.05,
+            "price_ratio_pct": 105.0,
+            "is_imputed": False,
+            "observation_count": 1,
+        }
+    ])
+
+    df_div, headline = cpi_engine.aggregate_division_and_headline(elem_df, calc_date)
+    div10 = df_div[df_div["coicop_division"] == "10"].iloc[0]
+    assert div10["item_count"] == 0
+    assert pd.isna(div10["division_index"])
+
+    # Verify that during DB serialization, NaN converts to Python None (which becomes SQL NULL)
+    cpi_rows = [
+        (
+            r["calculation_date"], r["coicop_division"], r["division_name"], r["weight"],
+            None if pd.isna(r["division_index"]) else float(r["division_index"]),
+            headline["headline_cpi"], headline["core_cpi"],
+            int(r["item_count"]), int(r["observation_count"])
+        )
+        for _, r in df_div.iterrows()
+    ]
+    row10 = next(r for r in cpi_rows if r[1] == "10")
+    assert row10[4] is None  # Must be None, not float('nan')
+
+

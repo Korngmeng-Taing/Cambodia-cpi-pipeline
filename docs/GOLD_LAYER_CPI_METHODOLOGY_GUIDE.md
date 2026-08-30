@@ -1,6 +1,6 @@
 # Gold Layer Architecture & Economic CPI Calculation Methodology
 
-**Document Version:** 2.1.0  
+**Document Version:** 2.2.0  
 **Status:** ✅ **LIVE IN PRODUCTION**  
 **Compliance Standards:** United Nations COICOP (2018), ILO Consumer Price Index Manual (2020), Diewert (1995) Axiomatic Price Index Theory  
 **Reference Base Period:** August 18, 2026 ($CPI = 100.00$)  
@@ -12,12 +12,15 @@
 The **Gold Layer** is the **Official Macroeconomic and Policy Serving Layer** of the Cambodia Daily Consumer Price Index (CPI) Pipeline. 
 
 While the **Silver Layer** standardizes heterogeneous web-scraped store observations into clean canonical price quotes, the **Gold Layer** transforms these micro-level prices into:
-1. **Conformed Star Schema Dimensional Models** (`gold.dim_items`, `gold.dim_stores`, `gold.fct_daily_prices`).
+1. **Conformed Star Schema Dimensional Models** (`gold.dim_items`, `gold.dim_items_history` SCD Type 2, `gold.dim_stores`, `gold.fct_daily_prices`).
 2. **Elementary Geometric Mean Micro-Indices** (Jevons Formula across ~28,000 canonical items).
-3. **7-Day Missing Price Imputation** (ILO standard for inventory stockout resilience).
-4. **Hierarchical 12-Division COICOP Expenditure Weighting** (Official National Institute of Statistics of Cambodia weights).
-5. **Headline CPI vs. Core CPI Indicators** (Isolating monetary inflation from volatile food and energy shocks).
-6. **Executive BI & Policy Serving Marts** (Metabase, Power BI, National Bank of Cambodia dashboards).
+3. **ILO Class-Mean Imputation Engine** ($P_{i,t} = P_{i,t-1} \times \frac{\bar{P}_{d,t}}{\bar{P}_{d,t-1}}$ for inventory stockout resilience $\le 7$ days).
+4. **Intermediate 4-Digit COICOP Aggregate Mart** (`gold.fct_coicop_class_daily` for policy drilldown).
+5. **Multilateral Superlative Rolling GEKS-Törnqvist Engine** (Eliminating substitution bias and chain drift).
+6. **Hierarchical 12-Division COICOP Expenditure Weighting** (Official National Institute of Statistics of Cambodia weights).
+7. **Headline CPI vs. Core CPI Indicators** (Isolating monetary inflation from volatile food and energy shocks).
+8. **Executive BI & Policy Serving Marts** (Metabase, Power BI, National Bank of Cambodia dashboards).
+
 
 ---
 

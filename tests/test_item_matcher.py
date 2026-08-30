@@ -129,6 +129,7 @@ class TestItemMatcher(unittest.TestCase):
             ],
         ]
 
+        self.matcher.use_vector_matcher = False
         with patch.object(self.matcher, "match_by_fuzzy_text") as mock_fuzzy:
             # For raw_price_id 2: fuzzy score 0.88 (review band)
             # For raw_price_id 3: no fuzzy match

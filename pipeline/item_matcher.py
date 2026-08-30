@@ -252,6 +252,15 @@ class ItemMatcher:
         size_norm: str | None = None,
         brand_or_conn: Any = None,
     ) -> dict:
+        """Match a single record against the canonical item catalogue.
+
+        .. deprecated::
+            The production pipeline uses :meth:`process_unmatched_batch` which
+            processes records in bulk with batched DB writes. This single-record
+            method is retained for unit tests and one-off lookups only.
+            Do NOT add new callers — use ``ItemMatcher().process_unmatched_batch()``
+            instead.
+        """
         actual_conn = conn
         actual_brand = brand
         if brand_or_conn is not None:
@@ -332,7 +341,7 @@ class ItemMatcher:
                 stats["sent_to_review"] += 1
                 return stats
 
-        # 4. Create new canonical item with auto-classification
+        # 5. Create new canonical item with auto-classification
         item_id = self.create_canonical_item(
             name_clean, actual_brand, barcode, size_norm, actual_conn, store_slug=store_id
         )
@@ -466,6 +475,10 @@ class ItemMatcher:
                         item_id_match = match_result.get("matched_item_id") or match_result.get("item_id") if match_result else None
                         if item_id_match:
                             match = (item_id_match, match_result.get("confidence", 0.0), match_result.get("canonical_name", ""))
+                        else:
+                            match = self.match_by_fuzzy_text(name_clean, package_size)
+                    else:
+                        match = self.match_by_fuzzy_text(name_clean, package_size)
                 except Exception as e:
                     log.warning("Vector matcher failed, falling back to fuzzy text: %s", e)
                     match = self.match_by_fuzzy_text(name_clean, package_size)

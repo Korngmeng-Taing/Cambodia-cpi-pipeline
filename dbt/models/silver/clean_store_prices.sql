@@ -225,7 +225,7 @@ select
         c.coicop_confidence,
         case
             when ov_b.coicop_division is not null or ov_ns.coicop_division is not null or ov_ng.coicop_division is not null then 1.000
-            when p.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'bayonbkk', 'bookmebus', 'redbus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then 0.850
+            when p.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'bayonbkk', 'bookmebus', 'redbus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'aeon3', 'delishop', 'aeon', 'l192') then 0.850
             when ai.coicop_division is not null and coalesce(ai.confidence_score, 0.90) >= 0.50 then coalesce(ai.confidence_score, 0.900)
             when cm.coicop_division is not null then 0.900
             else 0.800

@@ -1,5 +1,9 @@
+import sys
 import psycopg2
 from psycopg2.extras import RealDictCursor
+
+if sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 conn_mb = psycopg2.connect("postgresql://metabase:metabase@localhost:5432/metabase")
 conn_cpi = psycopg2.connect("postgresql://cpi_user:cpi_pass@localhost:5432/cpi_db")

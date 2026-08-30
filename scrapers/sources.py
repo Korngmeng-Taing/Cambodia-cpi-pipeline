@@ -465,21 +465,41 @@ class DelishopScraper(BaseScraper):
         ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
         page = 1
+        max_page_retries = 3
         while True:
-            try:
-                resp = _cffi_get(
-                    DELI_API,
-                    params={"page": page, "limit": DELI_PAGE_SIZE},
-                    headers={
-                        "Origin": "https://delishop.asia",
-                        "Referer": "https://delishop.asia/",
-                    },
-                    timeout=30,
-                )
-                resp.raise_for_status()
-                body = resp.json()
-            except Exception as e:
-                log.warning("Delishop page %d request error: %s", page, e)
+            body = None
+            for attempt in range(1, max_page_retries + 1):
+                try:
+                    resp = _cffi_get(
+                        DELI_API,
+                        params={"page": page, "limit": DELI_PAGE_SIZE},
+                        headers={
+                            "Origin": "https://delishop.asia",
+                            "Referer": "https://delishop.asia/",
+                        },
+                        timeout=30,
+                    )
+                    resp.raise_for_status()
+                    body = resp.json()
+                    break
+                except Exception as e:
+                    log.warning(
+                        "Delishop page %d attempt %d/%d error: %s",
+                        page,
+                        attempt,
+                        max_page_retries,
+                        e,
+                    )
+                    if attempt < max_page_retries:
+                        time.sleep(2 * attempt)
+                    else:
+                        if page > 1:
+                            raise RuntimeError(
+                                f"Delishop scrape failed mid-pagination on page {page} after {len(records)} items: {e}"
+                            )
+                        break
+
+            if not body:
                 break
             products = body.get("data") or body.get("products") or []
             if not products:
@@ -4148,7 +4168,7 @@ class MefExchangeRateScraper(BaseScraper):
         except Exception as exc:
             is_fallback = True
             fallback_reason = f"MEF FX API failed ({exc}); used default rate"
-            log.warning("MEF FX API failed, using default %s: %s", DEFAULT_USD_KHR, exc)
+            log.warning("MEF FX API failed, using default %s: %s", DEFAULT_USD_KHR_RATE, exc)
         return [
             {
                 "scrape_date": ds,

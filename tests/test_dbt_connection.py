@@ -14,24 +14,28 @@ import pytest
 
 def test_postgres_connection_and_schemas():
     host = os.getenv("DB_HOST", "localhost")
+    user = os.getenv("DB_USER") or "cpi_user"
+    password = os.getenv("DB_PASS") or "cpi_pass"
+    port = int(os.getenv("DB_PORT", "5432"))
+    dbname = os.getenv("DB_NAME", "cpi_db")
     # In docker containers, DB_HOST=postgres; on local host machine, localhost
     try:
         conn = psycopg2.connect(
             host=host,
-            port=int(os.getenv("DB_PORT", "5432")),
-            user=os.getenv("DB_USER", ""),
-            password=os.getenv("DB_PASS", ""),
-            dbname=os.getenv("DB_NAME", "cpi_db"),
+            port=port,
+            user=user,
+            password=password,
+            dbname=dbname,
         )
     except psycopg2.OperationalError:
         try:
-            alt_host = "postgres" if host == "localhost" else "localhost"
+            alt_host = "127.0.0.1" if host in ("postgres", "localhost") else "localhost"
             conn = psycopg2.connect(
                 host=alt_host,
-                port=int(os.getenv("DB_PORT", "5432")),
-                user=os.getenv("DB_USER", ""),
-                password=os.getenv("DB_PASS", ""),
-                dbname=os.getenv("DB_NAME", "cpi_db"),
+                port=port,
+                user=user,
+                password=password,
+                dbname=dbname,
             )
         except psycopg2.OperationalError as e:
             pytest.skip(f"Postgres database not reachable: {e}")

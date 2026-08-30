@@ -303,6 +303,21 @@ def normalize_khmer(text: str) -> str:
     return text
 
 
+# Pre-compiled combined alternation regex for unit synonyms — sorted longest-first
+# so multi-character tokens (e.g. "millilitre") match before single-char ones ("l").
+# Built once at module load; reused across all expand_abbreviations() calls.
+_UNIT_PATTERN = re.compile(
+    r"\b(" + "|".join(re.escape(k) for k in sorted(_UNIT_SYNONYMS, key=len, reverse=True)) + r")\b",
+    re.IGNORECASE,
+)
+
+# Pre-compiled combined alternation regex for product abbreviations.
+_ABBREV_PATTERN = re.compile(
+    r"\b(" + "|".join(re.escape(k) for k in sorted(_PRODUCT_ABBREVIATIONS, key=len, reverse=True)) + r")\b",
+    re.IGNORECASE,
+)
+
+
 def expand_abbreviations(text: str) -> str:
     """Expand common product and unit abbreviations for better matching.
 
@@ -311,24 +326,14 @@ def expand_abbreviations(text: str) -> str:
     if not text:
         return ""
 
-    # Expand unit abbreviations
-    for abbr, canonical in _UNIT_SYNONYMS.items():
-        text = re.sub(
-            r"\b" + re.escape(abbr) + r"\b",
-            canonical.upper(),
-            text,
-            flags=re.IGNORECASE,
-        )
+    def _replace_unit(m: re.Match) -> str:
+        return _UNIT_SYNONYMS.get(m.group(1).lower(), m.group(1)).upper()
 
-    # Expand English product abbreviations
-    for abbr, expanded in _PRODUCT_ABBREVIATIONS.items():
-        text = re.sub(
-            r"\b" + re.escape(abbr) + r"\b",
-            expanded,
-            text,
-            flags=re.IGNORECASE,
-        )
+    def _replace_abbrev(m: re.Match) -> str:
+        return _PRODUCT_ABBREVIATIONS.get(m.group(1).upper(), m.group(1))
 
+    text = _UNIT_PATTERN.sub(_replace_unit, text)
+    text = _ABBREV_PATTERN.sub(_replace_abbrev, text)
     return re.sub(r"\s+", " ", text).strip()
 
 

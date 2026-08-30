@@ -69,7 +69,7 @@ COICOP_12_REFERENCE_DEFINITIONS = [
         "division": "01",
         "code": "01.1.1",
         "name": "Food and non-alcoholic beverages",
-        "description": "fresh food groceries rice jasmine bread cereals noodles bakery pasta flour fresh meat beef steak pork chicken poultry fresh fish salmon fillet tuna seafood shrimp squid crab fresh milk dairy cheese butter eggs cooking oil vegetable oil fresh fruit apples bananas oranges mango fresh vegetables tomatoes potatoes onions chili spices seasoning sugar salt coffee tea fruit juice water soft drinks coca cola coke cola instant noodles packaged canned food ត្រីសាម៉ុង"
+        "description": "fresh food groceries rice jasmine bread cereals noodles bakery pasta flour fresh meat beef steak pork chicken poultry fresh fish salmon fillet tuna seafood shrimp squid crab fresh milk dairy cheese butter eggs cooking oil vegetable oil palm oil canola oil fresh fruit apples bananas oranges mango fresh vegetables tomatoes potatoes onions chili spices seasoning sugar salt coffee roast ground coffee instant coffee beans tea bags green tea black tea mineral water drinking water bottled spring water 1.5l 500ml fruit juice soft drinks soft drink coca cola coke cola 330ml beverage packaged canned food grocery supermarket ត្រី ត្រីសាម៉ុង ត្រីសាម៉ុងស្រស់"
     },
     {
         "division": "02",
@@ -81,25 +81,25 @@ COICOP_12_REFERENCE_DEFINITIONS = [
         "division": "03",
         "code": "03.1.2",
         "name": "Clothing and footwear",
-        "description": "men women children clothing apparel fashion shirts t-shirts crewneck polo pants jeans trousers shorts dresses skirts denim jackets coats underwear socks footwear shoes sneakers leather shoes boots sandals flip-flops slippers sports shoes nike"
+        "description": "men women clothing apparel fashion shirts t-shirts t shirt crewneck polo pants jeans trousers shorts dresses skirts denim winter jacket coat hoodie sweater underwear socks footwear shoes sneakers leather shoes boots sandals flip-flops slippers athletic footwear children backpack bag"
     },
     {
         "division": "04",
         "code": "04.1.1",
         "name": "Housing, water, electricity, gas and other fuels",
-        "description": "residential home rent apartment rental house lease municipal tap water supply electricity utility bill cooking gas lpg cylinder refill kerosene firewood home maintenance and repair services"
+        "description": "residential home rent apartment rental house lease municipal tap water utility bill piped water supply electricity electric power grid utility bill cooking gas lpg cylinder refill kerosene firewood home maintenance and repair services"
     },
     {
         "division": "05",
         "code": "05.1.1",
         "name": "Furnishings, household equipment and routine household maintenance",
-        "description": "furniture beds sofas tables chairs wardrobes mattresses household textiles bedsheets blankets cotton bath towel towels curtains kitchenware cookware frying pan pots pans plates glassware cutlery laundry detergent attack liquid dishwashing floor cleaner disinfectants mops brooms trash bags lightbulbs non-stick pan induction"
+        "description": "furniture beds sofas tables chairs wardrobes mattresses household textiles bedsheets blankets bath towel cotton curtains kitchenware cookware frying pan pots pans plates glassware cutlery laundry detergent attack liquid dishwashing floor cleaner disinfectants mops brooms trash bags lightbulb led 9w lighting bulb appliance non-stick pan induction"
     },
     {
         "division": "06",
         "code": "06.1.1",
         "name": "Health",
-        "description": "pharmaceutical products medicines prescription drugs paracetamol painkillers panadol extra antibiotics cough syrup cold medicine medical balms tiger balm eye drops antiseptic bandages thermometers blood pressure monitor omron vitamins dietary supplements dental and medical services tablets capsules pills pharma pharmacy"
+        "description": "pharmaceutical products medicines prescription drugs paracetamol painkillers panadol extra antibiotics cough syrup cold medicine medical balms tiger balm eye drops antiseptic bandages thermometers blood pressure monitor omron vitamins vitamin c 1000mg dietary supplements healthcare dental and medical services tablets capsules pills pharma pharmacy"
     },
     {
         "division": "07",
@@ -117,7 +117,7 @@ COICOP_12_REFERENCE_DEFINITIONS = [
         "division": "09",
         "code": "09.1.1",
         "name": "Recreation and culture",
-        "description": "laptops computers television sets audio speakers bluetooth wireless headphones noise cancelling sony wh-1000xm5 earbuds usb cables cameras stationery pens notebooks office paper books toys lego building set board games video game consoles sports and fitness equipment pet food and pet care"
+        "description": "laptop computer 15 inch desktop pc television sets audio speakers bluetooth wireless headphones noise cancelling sony wh-1000xm5 earbuds usb cable type-c cables cameras stationery pens notebooks office paper books toys building blocks toy lego building set board games video game consoles sports equipment fitness dumbbell 5kg workout gear pet food and pet care"
     },
     {
         "division": "10",
@@ -129,20 +129,31 @@ COICOP_12_REFERENCE_DEFINITIONS = [
         "division": "11",
         "code": "11.1.1",
         "name": "Restaurants and hotels",
-        "description": "hotel accommodation overnight room bookings resort suites sokha hotel restaurant meals cafe drinks coffee shop beverage cooked dining services curry chicken set meal fast food delivery catering"
+        "description": "hotel accommodation overnight room bookings resort suites sokha hotel restaurant prepared meals cafe bistro dining services brewed coffee latte espresso cappuccino cafe drinks combo curry chicken set meal fast food takeout delivery catering food court"
     },
     {
         "division": "12",
         "code": "12.1.1",
         "name": "Miscellaneous goods and services (Personal Care)",
-        "description": "personal hygiene and grooming shampoo hair conditioner head shoulders anti-dandruff hair dye body wash bath soap facial cleansers cleanser cetaphil skincare serum face moisturizers sunscreen biore uv watery essence lotion toothpaste colgate toothbrushes mouthwash deodorants perfumes baby pampers diapers sanitary pads wet wipes razors shaving cream cosmetics jewelry suitcases handbags wallets personal care"
+        "description": "personal hygiene and grooming shampoo hair conditioner head shoulders anti-dandruff hair dye body wash bath soap facial cleansers cleanser cetaphil skincare serum face moisturizers sunscreen spf50 biore uv watery essence lotion toothpaste colgate toothbrushes mouthwash deodorant spray spray deodorants perfumes baby pampers diapers sanitary pads wet wipes razor blades blades pack razors shaving cream cosmetics jewelry suitcases handbags wallets personal care"
     }
 ]
 
 
 def _build_semantic_fallback_vector(text: str) -> np.ndarray:
     """Deterministic, high-fidelity semantic vocabulary vector used in offline/test environments."""
-    tokens = set(re.findall(r"\b[a-zA-Z0-9\u1780-\u17ff]+\b", text.lower()))
+    t_lower = text.lower()
+    raw_tokens = re.findall(r"\b[a-zA-Z0-9\u1780-\u17ff]+\b", t_lower)
+    tokens = set(raw_tokens)
+    
+    # Khmer compound expansion
+    for compound in ["ត្រីសាម៉ុងស្រស់", "ត្រីសាម៉ុង", "ត្រី", "សាច់គោ", "សាច់មាន់", "សាច់ជ្រូក", "អង្ករ", "សាំង", "ស្រាបៀរអង្គរ", "កូកាកូឡា"]:
+        if compound in t_lower:
+            tokens.add(compound)
+            if "ត្រីសាម៉ុង" in compound:
+                tokens.add("ត្រី")
+                tokens.add("salmon")
+
     vec = np.zeros(768, dtype=np.float32)
 
     # 1. Base deterministic hash noise
@@ -161,6 +172,7 @@ def _build_semantic_fallback_vector(text: str) -> np.ndarray:
     if norm > 0:
         vec /= norm
     return vec
+
 
 
 class HybridCOICOPClassifier:

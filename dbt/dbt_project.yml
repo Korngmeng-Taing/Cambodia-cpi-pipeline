@@ -30,7 +30,7 @@ models:
       +schema: silver
       +materialized: incremental
       intermediate:
-        +schema: staging
+        +schema: silver
         +materialized: view
     gold:
       +schema: gold

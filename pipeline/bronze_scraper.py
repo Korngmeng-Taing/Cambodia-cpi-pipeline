@@ -110,19 +110,33 @@ class BronzeScraper:
         if not records:
             return 0
 
-        # Parse canonical records into bronze.raw_prices rows
-        parsed = self.parse_records(records, source_name, store_id)
+        # Map canonical Schema v1.0 records directly to bronze.raw_prices row dicts.
+        # parse_records() was designed for raw HTML/JSON input and was being called
+        # redundantly on already-normalized canonical records. Direct mapping is
+        # clearer and avoids the intermediate transformation.
         existing = self._existing_keys(conn, store_id, source_name, scrape_date)
-        parsed = [
+        deduped_records = [
             r
-            for r in parsed
+            for r in records
             if (
-                r.get("source_url", "") or "",
-                r.get("item_description_raw", ""),
+                r.get("url") or r.get("source_url", "") or "",
+                r.get("name") or r.get("item_description_raw", ""),
                 float(r.get("price") or 0),
             )
             not in existing
         ]
+
+        def _to_bronze_row(rec: dict) -> dict:
+            return {
+                "item_description_raw": rec.get("name") or rec.get("item_description_raw", ""),
+                "price": float(rec.get("price") or 0),
+                "currency": rec.get("currency", "USD"),
+                "source_url": rec.get("url") or rec.get("source_url", ""),
+                "scraped_at": rec.get("scraped_at"),
+                "raw_payload": json.dumps(rec),
+            }
+
+        parsed = [_to_bronze_row(r) for r in deduped_records]
         insert_query = """
             INSERT INTO bronze.raw_prices (
                 store_id, item_description_raw, price, currency,
@@ -157,12 +171,10 @@ class BronzeScraper:
                 # RETURNING gives us the actual inserted row (empty on conflict skip)
                 count += len(cur.fetchall())
 
-            # 4. Upsert staging.raw_scrapes batch record.
-            #    record_count reflects rows actually written after dedup — the
-            #    pre-dedup len(records) inflated gate/monitoring metrics and let
-            #    check_bronze_gate pass on batches whose every row was a dupe.
-            #    GREATEST keeps a dupe-only re-run from shrinking the count of
-            #    the original same-day batch.
+            # Upsert staging.raw_scrapes batch record.
+            # record_count reflects rows actually written after dedup.
+            # payload stores the deduped canonical records (preserving Schema v1.0
+            # for stg_raw_scrapes.sql), not pre-dedup records.
             cur.execute(
                 """
                 INSERT INTO staging.raw_scrapes (
@@ -178,7 +190,7 @@ class BronzeScraper:
                     store_id,
                     scrape_date or time.strftime("%Y-%m-%d"),
                     count,
-                    json.dumps(records),
+                    json.dumps(deduped_records),
                     source_type,
                 ),
             )

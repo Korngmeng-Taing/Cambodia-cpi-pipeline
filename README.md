@@ -41,6 +41,12 @@
 │ MEF FX Daily    │ (Typed Ingestion) │ 3-Key Gemini Pool +       │                          │   - Airflow Real-Time DAGs    │
 │ ... (20 total)  │ Atomic & Typed    │ 12-Division Reference     │ Jevons Micro-Index +     │   - MEF FX Exchange Rate      │
 │                 │ Rows in Postgres  │ Vector Cosine & Memo Cache│ 7-Day Imputation Engine  │   - Retail Fuel Prices Feed   │
+│                 │                   │                           │                          │ • 03: Scraper Ingestion & QA  │
+│                 │                   │                           │                          │   - Daily Ingestion Volume    │
+│                 │                   │                           │                          │   - 14-Day Store Matrix       │
+│                 │                   │                           │                          │   - Field Completeness (%)    │
+│                 │                   │                           │                          │   - Outlier & Fallback Audit  │
+│                 │                   │                           │                          │   - Classification Methods    │
 └─────────────────┴───────────────────┴───────────────────────────┴──────────────────────────┴───────────────────────────────┘
 ```
 
@@ -56,18 +62,26 @@
 - **COICOP Override System**: `silver.coicop_override` (seed-driven) + `silver.coicop_override_manual` (operator-driven) for persistent classification rules.
 
 ### Gold (Kimball Star Schema & Jevons/Laspeyres CPI Engine)
-- **Dimensional Modeling (Star Schema)**:
+- **Dimensional Modeling (Star Schema & Aggregate Marts)**:
   - `gold.dim_items`: Curated canonical product master dimension with COICOP attribution.
+  - `gold.dim_items_history`: dbt SCD Type 2 snapshot tracking longitudinal changes in brand packaging and classification.
   - `gold.dim_stores`: Store & retailer master dimension.
   - `gold.fct_daily_prices`: Conformed daily price fact table at grain `(scrape_date, store_slug, item_id)` with KHR prices, unit prices, promo/outlier/fallback flags, and COICOP attribution.
+  - `gold.fct_coicop_class_daily`: Intermediate 4-digit COICOP class-level aggregate mart (e.g. `01.1.1` Bread & Cereals) for sub-division policy drilldown.
 - **Economic Index Calculation Engine (`pipeline/cpi_calculator.py`)**:
   - **Jevons Micro-Index Compilation**: Unweighted geometric mean price ratios across active basket items:
     $$I_{j}^{t/0} = \exp\left(\frac{1}{n_t} \sum_{i=1}^{n_t} \ln P_{i,t} - \frac{1}{n_0} \sum_{i=1}^{n_0} \ln P_{i,0}\right) \times 100.0$$
-  - **7-Day Missing Price Imputation**: Carries forward the last valid observed price for temporary retail stockouts ≤ 7 days.
+  - **ILO Class-Mean Imputation Engine**: Missing items ($\le 7$ days) are dynamically imputed using the geometric mean rate of change of observed items in the corresponding COICOP division:
+    $$P_{i,t} = P_{i,t-k} \times \left( \prod_{j \in D_i} \frac{P_{j,t}}{P_{j,t-1}} \right)^{\frac{1}{|D_i|}}$$
   - **Hedonic Quality Adjustment Bridge**: Directly bridges `silver.hedonic_adjusted_prices` to adjust for technology/electronic quality improvements (Division 08/09).
   - **Laspeyres 12-Division Weighting**: Official National Institute of Statistics (NIS) Cambodia expenditure shares compiled into Headline and Core CPI (`gold.fct_cpi_daily`).
   - **Refined Core CPI**: Excludes volatile food (Division 01) and energy/fuel in accordance with NIS and National Bank of Cambodia core inflation standards.
-- **Serving Views** (`sql/views.sql`): Operational monitoring views for Metabase dashboards.
+- **Serving Views & Metabase Dashboards** (`sql/views.sql`):
+  - `gold.v_cpi_inflation_summary`: Headline & Core CPI DoD/MoM inflation metrics.
+  - `gold.v_coicop_class_breakdown`: 4-digit COICOP class-level granular breakdown.
+  - `gold.v_monitor_source_health_matrix`: 20-Source Scraper Live Availability Matrix.
+  - `gold.v_monitor_price_alerts`: Daily price anomaly & extreme shift alerts (> 20% DoD).
+  - `gold.v_monitor_fx_health`: Official MEF USD/KHR Exchange Rate Freshness Monitor.
 
 ---
 
@@ -96,6 +110,7 @@ CPI PIPELINE/
 ├── scripts/               # Maintenance & operational CLI utilities
 │   ├── run_cpi_backtest.py # Runs historical CPI backtest across all dates
 │   ├── evaluate_accuracy_benchmark.py # End-to-end accuracy benchmark utility
+│   ├── generate_literature_review_excel.py # Generates 4-tab systematic literature review Excel
 │   ├── backfill_silver_pipeline.py # Historical Silver layer backfill runner
 │   ├── bootstrap_vector_embeddings.py # Vector catalog pre-warming utility
 │   ├── auto_review_items.py # CLI for running AI item match review queue
@@ -121,6 +136,11 @@ CPI PIPELINE/
 │   ├── schema.sql         # Full relational schema (647 lines)
 │   ├── views.sql          # Metabase serving views (143 lines)
 │   └── migrations/        # Incremental migration scripts
+├── thesis/                # Academic Engineering Thesis LaTeX & Assets
+│   ├── main.tex           # Master LaTeX compilation document
+│   ├── Chapters/          # Ch 1-5 (Introduction, Literature Review, Methodology, Results)
+│   ├── Cover_Pages/       # Multilingual covers (EN, KH, FR), acknowledgements, abstracts
+│   └── Literature_Review_Matrix.xlsx # Comprehensive 4-tab systematic review spreadsheet
 ├── docs/                  # Centralized technical documentation & architectural guides
 │   ├── ARCHITECTURE_DIAGRAMS.md # All 4 Medallion layer architectural diagrams
 │   ├── diagrams/          # Individual .mmd Mermaid diagram source files
@@ -135,6 +155,7 @@ CPI PIPELINE/
 ├── tests/                 # Full pytest suite (140 unit test cases)
 ├── postgres-init/         # PostgreSQL initialization scripts
 ├── docker-compose.yml     # Multi-service stack (PostgreSQL, Airflow, Metabase)
+├── Literature_Review_Matrix.xlsx # Root 4-tab literature review matrix & Cambodia CPI weights
 └── .env                   # Environment configuration (secrets, API keys)
 ```
 

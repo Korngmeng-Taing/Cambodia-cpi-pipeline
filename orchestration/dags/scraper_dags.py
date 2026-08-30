@@ -1,8 +1,7 @@
 """
 orchestration/dags/scraper_dags.py
 ──────────────────────────────────
-Per-source Daily Scraper DAGs — one DAG per source in SCRAPER_REGISTRY
-(17 Cambodian retail/telecom/transport/housing/hotel/restaurant sources + MEF FX).
+Per-source Daily Scraper DAGs — one DAG per source in SCRAPER_REGISTRY.
 
 Each DAG implements the guide's Bronze ingestion path:
     fetch_records ─► canonical.normalize (Schema v1.0) ─► zero-product gate
@@ -10,7 +9,7 @@ Each DAG implements the guide's Bronze ingestion path:
       ─► bronze_dq_gate (verifies non-empty staging row)
 
 DAG ids:  scrape_{source_slug}_dag   (e.g. scrape_aeon_dag, scrape_delishop_dag)
-Schedule: None — triggered by cpi_master_dag at 07:00 daily (also runnable standalone).
+Schedule: None — triggered by cpi_master_dag at 02:00 daily (also runnable standalone).
 """
 
 from __future__ import annotations

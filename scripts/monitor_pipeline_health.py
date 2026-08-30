@@ -34,7 +34,6 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from pipeline.config import get_database_url
 from pipeline.key_pool import get_key_pool
-from orchestration.dags.alerts import send_telegram_alert, send_slack_alert
 from scrapers.sources import SCRAPER_REGISTRY
 
 logging.basicConfig(
@@ -197,18 +196,6 @@ def run_health_audit(scrape_date: str | None = None, send_notifications: bool = 
     full_report = "\n".join(report_lines)
     print(full_report)
 
-    if send_notifications:
-        summary_msg = (
-            f"*{status_str}* — Cambodia Daily CPI Pipeline\n"
-            f"• *Date:* `{today_str}`\n"
-            f"• *Total Daily Observations:* `{total_records:,}` rows\n"
-            f"• *Active Sources:* `{len(ingested_stores)}/20`\n"
-            f"• *Exchange Rate:* `{rate:,.2f} KHR/USD`\n"
-            f"• *COICOP Unclassified:* `{unclass_pct:.1f}%`"
-        )
-        send_telegram_alert(summary_msg)
-        send_slack_alert(summary_msg)
-
     return {
         "status": "ALERT" if has_critical_alerts else "OK",
         "total_records": total_records,
@@ -220,10 +207,9 @@ def run_health_audit(scrape_date: str | None = None, send_notifications: bool = 
 def main():
     parser = argparse.ArgumentParser(description="Pipeline Health & Observability Audit")
     parser.add_argument("--date", type=str, default=None, help="Scrape date to audit (YYYY-MM-DD), default today")
-    parser.add_argument("--notify", action="store_true", help="Send alert notifications to Telegram / Slack")
     args = parser.parse_args()
 
-    run_health_audit(args.date, send_notifications=args.notify)
+    run_health_audit(args.date)
 
 
 if __name__ == "__main__":

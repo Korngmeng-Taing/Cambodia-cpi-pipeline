@@ -210,6 +210,12 @@ def normalize_record(
     )
     if orig_price is None or orig_price <= 0:
         orig_price = price
+    if orig_price < price:
+        log.warning(
+            "Scraper data error for '%s' ('%s'): original_price %.4f < price %.4f. "
+            "Clamping original_price to price. Check the scraper.",
+            slug, name, orig_price, price,
+        )
     orig_price = max(orig_price, price)
 
     on_promo_raw = raw.get("on_promo")

@@ -48,12 +48,11 @@ class GeminiKeyPool:
     def get_next_key(self) -> str | None:
         """Returns the next healthy API key in round-robin fashion, skipping cooling keys.
 
-        IMPORTANT: Any required sleep is performed OUTSIDE the lock to avoid
-        blocking other threads waiting for a key.
+        Sleep (when all keys are cooling) is performed OUTSIDE the lock to avoid
+        blocking other threads. After sleeping, the lock is re-acquired to pick
+        the freshest available key — this eliminates the race window where two
+        threads would both be handed the same cooldown key simultaneously.
         """
-        wait_time = 0.0
-        selected_key: str | None = None
-
         with self._lock:
             if not self.keys:
                 return None
@@ -66,22 +65,27 @@ class GeminiKeyPool:
                 if key not in self._cooldowns:
                     return key  # Healthy key found — return immediately (no sleep)
 
-            if self._cooldowns:
-                earliest_key = min(self._cooldowns.keys(), key=lambda k: self._cooldowns[k])
-                wait_time = max(0.0, self._cooldowns[earliest_key] - now)
-                selected_key = earliest_key
-            else:
-                selected_key = self.keys[0]
+            # All keys are cooling — find the shortest remaining wait time.
+            if not self._cooldowns:
+                return self.keys[0]
+            earliest_key = min(self._cooldowns.keys(), key=lambda k: self._cooldowns[k])
+            wait_time = max(0.0, self._cooldowns[earliest_key] - now)
 
         # Sleep OUTSIDE the lock so other threads are not blocked.
-        # Honor the full cooldown duration — do NOT cap at 5 seconds,
-        # otherwise the key is returned before it has recovered, triggering
-        # another 429 and destroying the backoff strategy.
         if wait_time > 0:
             log.warning("All %d Gemini API keys in cooldown. Waiting %.1fs for key...", len(self.keys), wait_time)
             time.sleep(wait_time)
 
-        return selected_key
+        # Re-acquire the lock after sleeping to return the freshest available key,
+        # preventing two threads from both being handed the same key.
+        with self._lock:
+            now = time.time()
+            self._cooldowns = {k: exp for k, exp in self._cooldowns.items() if exp > now}
+            for _ in range(len(self.keys)):
+                key = next(self._key_cycle)
+                if key not in self._cooldowns:
+                    return key
+            return self.keys[0]
 
     def mark_key_rate_limited(self, key: str) -> None:
         """Places a key into temporary cooldown following a 429 ResourceExhausted response."""
@@ -122,3 +126,13 @@ def get_key_pool() -> GeminiKeyPool:
     if _global_key_pool is None:
         _global_key_pool = GeminiKeyPool()
     return _global_key_pool
+
+
+def reset_key_pool() -> None:
+    """Resets the global GeminiKeyPool singleton.
+
+    Intended for unit test teardown to prevent key state from leaking
+    between tests that configure different GEMINI_API_KEYS environments.
+    """
+    global _global_key_pool
+    _global_key_pool = None

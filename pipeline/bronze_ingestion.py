@@ -142,28 +142,37 @@ def ingest_source_bronze(source_slug: str, scrape_date: str) -> dict[str, Any]:
             f"Zero-product quality gate: source '{source_slug}' returned 0 records on {date_str}"
         )
 
-    conn = _get_db_connection()
     engine = BronzeScraper()
-    try:
-        if source_slug == "mef_fx":
+
+    # FX path: short-circuit before normalization (no product records to normalize).
+    # Acquire connection immediately since FX handling is not CPU-bound.
+    if source_slug == "mef_fx":
+        conn = _get_db_connection()
+        try:
             result = _ingest_fx(raw_records, source_slug, date_str, engine, conn)
             conn.commit()
             return result
+        finally:
+            conn.close()
 
-        records = normalize_records(
-            raw_records,
-            scrape_date=date_str,
-            source_slug=source_slug,
+    # Normalize and validate BEFORE acquiring the DB connection so the
+    # connection is not held open during CPU-bound text processing of large batches.
+    records = normalize_records(
+        raw_records,
+        scrape_date=date_str,
+        source_slug=source_slug,
+    )
+    dq = validate_records(records)
+    if dq["error_count"] > 0:
+        logger.warning(
+            "DQ issues for %s on %s: %s",
+            source_slug,
+            date_str,
+            dq["errors"][:5],
         )
-        dq = validate_records(records)
-        if dq["error_count"] > 0:
-            logger.warning(
-                "DQ issues for %s on %s: %s",
-                source_slug,
-                date_str,
-                dq["errors"][:5],
-            )
 
+    conn = _get_db_connection()
+    try:
         batch_id = uuid.uuid4()
         count = engine.write_canonical_batch(
             records=records,

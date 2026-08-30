@@ -141,3 +141,42 @@ SELECT
     END AS fx_status
 FROM staging.exchange_rates
 ORDER BY execution_date DESC;
+
+
+-- 10.5 4-Digit COICOP Class Breakdown Mart View (Metabase Granular Analytics)
+CREATE OR REPLACE VIEW gold.v_coicop_class_breakdown AS
+SELECT
+    c.calculation_date,
+    c.coicop_division,
+    c.coicop_code,
+    c.class_index,
+    c.item_count,
+    c.total_observations,
+    c.imputed_item_count,
+    ROUND((c.class_index - LAG(c.class_index) OVER (PARTITION BY c.coicop_code ORDER BY c.calculation_date)) / NULLIF(LAG(c.class_index) OVER (PARTITION BY c.coicop_code ORDER BY c.calculation_date), 0) * 100.0, 3) AS dod_class_change_pct
+FROM gold.fct_coicop_class_daily c
+ORDER BY c.calculation_date DESC, c.coicop_code ASC;
+
+
+-- 10.6 National CPI Inflation Summary (Headline, Core, and ILO Imputation Metrics)
+CREATE OR REPLACE VIEW gold.v_cpi_inflation_summary AS
+SELECT
+    f.calculation_date,
+    f.headline_cpi,
+    f.core_cpi,
+    ROUND((f.headline_cpi - LAG(f.headline_cpi) OVER (ORDER BY f.calculation_date)) / NULLIF(LAG(f.headline_cpi) OVER (ORDER BY f.calculation_date), 0) * 100.0, 3) AS dod_headline_inflation_pct,
+    ROUND((f.core_cpi - LAG(f.core_cpi) OVER (ORDER BY f.calculation_date)) / NULLIF(LAG(f.core_cpi) OVER (ORDER BY f.calculation_date), 0) * 100.0, 3) AS dod_core_inflation_pct,
+    f.total_items AS active_basket_items,
+    f.total_observations
+FROM (
+    SELECT
+        calculation_date,
+        MAX(headline_cpi) AS headline_cpi,
+        MAX(core_cpi) AS core_cpi,
+        SUM(item_count) AS total_items,
+        SUM(observation_count) AS total_observations
+    FROM gold.fct_cpi_daily
+    GROUP BY calculation_date
+) f
+ORDER BY f.calculation_date DESC;
+

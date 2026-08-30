@@ -64,9 +64,19 @@ def extract_specs(text: str) -> dict[str, Any]:
     storage_match = re.search(r"\b(\d+)\s*(gb|tb)\b", t)
     storage = storage_match.group(0).replace(" ", "") if storage_match else None
 
-    # 2. Pack size / Multiplier (x6, pack of 12, 6x330ml, x24 cans)
-    pack_match = re.search(r"(?:pack of|pack|pk|x|\*)\s*(\d+)\b", t)
-    pack_qty = int(pack_match.group(1)) if pack_match else 1
+    # 2. Pack size / Multiplier (e.g. 24x330ml, 6 x 500ml, pack of 12, case of 24, 24 cans, 6 bottles, 6pk)
+    pack_match = re.search(
+        r"(?:(\d+)\s*(?:x|\*)\s*\d+(?:\.\d+)?\s*(?:ml|l|g|kg|gm|ltr)\b)"
+        r"|(?:(?:pack of|case of|pack|pk|box of)\s*(\d+)\b)"
+        r"|(?:\b(\d+)\s*(?:cans?|bottles?|packs?|pcs?|pieces?|pk)\b)"
+        r"|(?:(?:x|\*)\s*(\d+)\b)",
+        t,
+    )
+    if pack_match:
+        matched_groups = [g for g in pack_match.groups() if g is not None]
+        pack_qty = int(matched_groups[0]) if matched_groups else 1
+    else:
+        pack_qty = 1
 
     # 3. Volume / Mass (330ml, 1.5L, 500g, 1kg)
     size_match = re.search(r"(\d+(?:\.\d+)?)\s*(kg|g|gm|l|ltr|ml)\b", t)

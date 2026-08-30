@@ -112,6 +112,8 @@ class TestSpecExtraction:
         ("Samsung S24 256GB", {"storage": "256gb", "pack_qty": 1, "size_val": None, "size_unit": None}),
         ("MacBook Pro 1TB", {"storage": "1tb", "pack_qty": 1, "size_val": None, "size_unit": None}),
         ("Coca Cola 330ml x6", {"storage": None, "pack_qty": 6, "size_val": 330.0, "size_unit": "ml"}),
+        ("Coca Cola 24x330ml", {"storage": None, "pack_qty": 24, "size_val": 330.0, "size_unit": "ml"}),
+        ("Water Case of 24 500ml", {"storage": None, "pack_qty": 24, "size_val": 500.0, "size_unit": "ml"}),
         ("Beer Pack of 12", {"storage": None, "pack_qty": 12, "size_val": None, "size_unit": None}),
         ("Milk 1L", {"storage": None, "pack_qty": 1, "size_val": 1.0, "size_unit": "l"}),
         ("Rice 5kg", {"storage": None, "pack_qty": 1, "size_val": 5.0, "size_unit": "kg"}),

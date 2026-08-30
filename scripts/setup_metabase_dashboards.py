@@ -320,7 +320,7 @@ def provision_all():
                     LEFT JOIN (
                         SELECT DISTINCT ON (item_id::uuid)
                             item_id::uuid AS item_id, coicop_division
-                        FROM gold.int_coicop_classified
+                        FROM staging.int_coicop_classified
                         ORDER BY item_id::uuid,
                                  CASE WHEN coicop_division <> 'UNCLASSIFIED' THEN 1 ELSE 2 END,
                                  coicop_confidence DESC
@@ -373,7 +373,7 @@ def provision_all():
                     LEFT JOIN (
                         SELECT DISTINCT ON (item_id::uuid)
                             item_id::uuid AS item_id, coicop_division
-                        FROM gold.int_coicop_classified
+                        FROM staging.int_coicop_classified
                         ORDER BY item_id::uuid,
                                  CASE WHEN coicop_division <> 'UNCLASSIFIED' THEN 1 ELSE 2 END,
                                  coicop_confidence DESC
@@ -662,16 +662,530 @@ def provision_all():
         col, row, sx, sy = item["grid"]
         place_card_on_dashboard(cur, d_ops_id, cid, col, row, sx, sy, item["viz"])
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 3. 🕷️ SCRAPER DATA HEALTH & EXTRACTION MONITORING DASHBOARD
+    # ═══════════════════════════════════════════════════════════════════════════
+    col_name_3 = "03 - Scraper Data Ingestion & Quality Monitoring"
+    dash_name_3 = "🕷️ Scraper Data Health & Ingestion Quality Dashboard"
+    purge_target_collection_items(cur, col_name_3, dash_name_3, db_id=db_id)
+
+    print("[5/5] Setting up Scraper Data Monitoring Collection & Dashboard...")
+    c_scrape = get_or_create_collection(
+        cur,
+        col_name_3,
+        "Comprehensive scrape ingestion volume, field extraction completeness, fallback rates, outlier detection, and COICOP classification efficiency.",
+        "#509EE3"
+    )
+
+    d_scrape_id = create_or_update_dashboard(
+        cur,
+        dash_name_3,
+        "End-to-end telemetry for web scrapers: row volume, store coverage matrix, missing fields, fallbacks, price anomalies, and classification methods.",
+        c_scrape
+    )
+
+    scrape_cards = [
+        # ROW 0: TOP KPI STATUS SUMMARY (Y=0, H=3)
+        {
+            "name": "Total Scraped Records (Latest Day)",
+            "desc": "Total raw observation records scraped across all retail and market sources on the latest scrape date.",
+            "display": "scalar",
+            "sql": """
+                SELECT COUNT(*) AS "Total Scraped Today"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
+            """,
+            "viz": {},
+            "grid": (0, 0, 5, 3)
+        },
+        {
+            "name": "Active Stores Scraped (Latest Day)",
+            "desc": "Distinct active retail store channels successfully ingested on the latest scrape date.",
+            "display": "scalar",
+            "sql": """
+                SELECT COUNT(DISTINCT store_slug) AS "Active Stores Today"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
+            """,
+            "viz": {},
+            "grid": (5, 0, 5, 3)
+        },
+        {
+            "name": "Price Outlier / Anomaly Rate (%)",
+            "desc": "Percentage of scraped prices flagged as statistical outliers or abnormal swings.",
+            "display": "scalar",
+            "sql": """
+                SELECT 
+                    ROUND((COUNT(*) FILTER (WHERE is_outlier = TRUE) * 100.0 / NULLIF(COUNT(*), 0))::numeric, 2) AS "Outlier Rate (%)"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
+            """,
+            "viz": {},
+            "grid": (10, 0, 5, 3)
+        },
+        {
+            "name": "Fallback Selector Rate (%)",
+            "desc": "Percentage of items extracted using scraper fallback selectors (potential website HTML structure change).",
+            "display": "scalar",
+            "sql": """
+                SELECT 
+                    ROUND((COUNT(*) FILTER (WHERE is_fallback = TRUE) * 100.0 / NULLIF(COUNT(*), 0))::numeric, 2) AS "Fallback Rate (%)"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
+            """,
+            "viz": {},
+            "grid": (15, 0, 5, 3)
+        },
+        {
+            "name": "Unclassified Products Count",
+            "desc": "Items ingested today that could not be mapped to any COICOP division.",
+            "display": "scalar",
+            "sql": """
+                SELECT COUNT(*) AS "Unclassified Items"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                  AND coicop_division = 'UNCLASSIFIED';
+            """,
+            "viz": {},
+            "grid": (20, 0, 4, 3)
+        },
+
+        # ROW 3: DAILY SCRAPE VOLUME BY STORE & STORE MATRIX (Y=3, H=8)
+        {
+            "name": "Daily Scraped Observation Volume by Store (Last 30 Days)",
+            "desc": "Time series stacked bar chart showing record volume by store channel to detect missing runs or scrape drops.",
+            "display": "bar",
+            "sql": """
+                SELECT 
+                    scrape_date AS "Scrape Date",
+                    store_slug AS "Store",
+                    COUNT(*) AS "Records Scraped"
+                FROM silver.clean_store_prices
+                WHERE scrape_date >= (SELECT MAX(scrape_date) - INTERVAL '30 days' FROM silver.clean_store_prices)
+                GROUP BY scrape_date, store_slug
+                ORDER BY scrape_date ASC, store_slug;
+            """,
+            "viz": {
+                "graph.dimensions": ["Scrape Date", "Store"],
+                "graph.metrics": ["Records Scraped"],
+                "stackable.stack_type": "stacked"
+            },
+            "grid": (0, 3, 14, 8)
+        },
+        {
+            "name": "Store Scrape Ingestion Matrix (Last 14 Days)",
+            "desc": "Matrix grid showing scraped record counts per store across recent days (detects intermittent scraper outages).",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    store_slug AS "Store Slug",
+                    COUNT(*) FILTER (WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)) AS "Latest",
+                    COUNT(*) FILTER (WHERE scrape_date = (SELECT MAX(scrape_date) - INTERVAL '1 day' FROM silver.clean_store_prices)) AS "D-1",
+                    COUNT(*) FILTER (WHERE scrape_date = (SELECT MAX(scrape_date) - INTERVAL '2 day' FROM silver.clean_store_prices)) AS "D-2",
+                    COUNT(*) FILTER (WHERE scrape_date = (SELECT MAX(scrape_date) - INTERVAL '3 day' FROM silver.clean_store_prices)) AS "D-3",
+                    COUNT(*) FILTER (WHERE scrape_date = (SELECT MAX(scrape_date) - INTERVAL '4 day' FROM silver.clean_store_prices)) AS "D-4",
+                    COUNT(*) FILTER (WHERE scrape_date = (SELECT MAX(scrape_date) - INTERVAL '5 day' FROM silver.clean_store_prices)) AS "D-5",
+                    COUNT(*) FILTER (WHERE scrape_date = (SELECT MAX(scrape_date) - INTERVAL '6 day' FROM silver.clean_store_prices)) AS "D-6",
+                    COUNT(*) AS "Total 14D Records"
+                FROM silver.clean_store_prices
+                WHERE scrape_date >= (SELECT MAX(scrape_date) - INTERVAL '14 days' FROM silver.clean_store_prices)
+                GROUP BY store_slug
+                ORDER BY "Latest" DESC, store_slug;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (14, 3, 10, 8)
+        },
+
+        # ROW 11: FIELD EXTRACTION COMPLETENESS & FALLBACK LOG (Y=11, H=8)
+        {
+            "name": "Scraper Field Extraction Completeness (%)",
+            "desc": "Percentage of scraped rows with non-null critical metadata (barcode, brand, native category, unit size).",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    store_slug AS "Store",
+                    COUNT(*) AS "Total Items",
+                    ROUND((COUNT(barcode) FILTER (WHERE barcode IS NOT NULL AND TRIM(barcode) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Barcode (%)",
+                    ROUND((COUNT(brand) FILTER (WHERE brand IS NOT NULL AND TRIM(brand) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Brand (%)",
+                    ROUND((COUNT(category_native) FILTER (WHERE category_native IS NOT NULL AND TRIM(category_native) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Category Native (%)",
+                    ROUND((COUNT(size_unit) FILTER (WHERE size_unit IS NOT NULL AND TRIM(size_unit) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Unit Size (%)",
+                    ROUND((COUNT(*) FILTER (WHERE on_promo = TRUE) * 100.0 / COUNT(*))::numeric, 1) AS "Promo Rate (%)"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                GROUP BY store_slug
+                ORDER BY "Total Items" DESC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (0, 11, 14, 8)
+        },
+        {
+            "name": "COICOP Classification Method Breakdown",
+            "desc": "Method distribution used to assign COICOP codes (rule override, Gemini AI cache, category map, store default).",
+            "display": "bar",
+            "sql": """
+                SELECT 
+                    COALESCE(coicop_method, 'unclassified') AS "Classification Method",
+                    COUNT(*) AS "Item Count"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                GROUP BY coicop_method
+                ORDER BY "Item Count" DESC;
+            """,
+            "viz": {
+                "graph.dimensions": ["Classification Method"],
+                "graph.metrics": ["Item Count"]
+            },
+            "grid": (14, 11, 10, 8)
+        },
+
+        # ROW 19: OUTLIERS, ANOMALIES & FALLBACK AUDIT (Y=19, H=7)
+        {
+            "name": "Scraper Price Outliers & Anomalies Audit (Latest)",
+            "desc": "Inspection table of items flagged as outliers or extreme price deviations for manual validation.",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    scrape_date AS "Date",
+                    store_slug AS "Store",
+                    name_clean AS "Product Name",
+                    price_original_curr AS "Raw Price",
+                    currency AS "Currency",
+                    price_khr AS "Price (KHR)",
+                    coicop_division AS "Div",
+                    is_outlier AS "Outlier",
+                    is_fallback AS "Fallback",
+                    fallback_reason AS "Fallback Reason"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                  AND (is_outlier = TRUE OR is_fallback = TRUE)
+                ORDER BY is_outlier DESC, price_khr DESC
+                LIMIT 50;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (0, 19, 24, 7)
+        }
+    ]
+
+    for item in scrape_cards:
+        cid = create_or_update_card(cur, item["name"], item["desc"], item["display"], item["sql"], item["viz"], c_scrape, db_id=db_id)
+        col, row, sx, sy = item["grid"]
+        place_card_on_dashboard(cur, d_scrape_id, cid, col, row, sx, sy, item["viz"])
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 4. 🥉🥈 MEDALLION BRONZE & SILVER DATA QUALITY & OBSERVABILITY DASHBOARD
+    # ═══════════════════════════════════════════════════════════════════════════
+    col_name_4 = "04 - Medallion Bronze & Silver Data Quality & Observability"
+    dash_name_4 = "🥉🥈 Medallion Bronze & Silver Data Observability Dashboard"
+    purge_target_collection_items(cur, col_name_4, dash_name_4, db_id=db_id)
+
+    print("[6/6] Setting up Bronze & Silver Data Quality Collection & Dashboard...")
+    c_bs = get_or_create_collection(
+        cur,
+        col_name_4,
+        "Observability dashboard tracking raw ingestion health (Bronze), cleaning and survival rates, null audits, COICOP coverage, and outlier anomalies (Silver).",
+        "#FF9900"
+    )
+
+    d_bs_id = create_or_update_dashboard(
+        cur,
+        dash_name_4,
+        "Production Data Observability for Bronze (Raw Ingestion, SLA Freshness, Schema/Scrape Errors) and Silver (Survival Rate, COICOP Classification Coverage, Outlier & Null Audits).",
+        c_bs
+    )
+
+    bs_cards = [
+        # ROW 0: TOP KPI TICKERS (Y=0, H=3)
+        {
+            "name": "Bronze Ingested Today (Raw Rows)",
+            "desc": "Total raw uncleaned price records collected today across all scrapers and ingestion channels.",
+            "display": "scalar",
+            "sql": """
+                SELECT COUNT(*) AS "Bronze Raw Ingested Today"
+                FROM bronze.raw_prices
+                WHERE scraped_at::date = (SELECT MAX(scraped_at::date) FROM bronze.raw_prices);
+            """,
+            "viz": {},
+            "grid": (0, 0, 4, 3)
+        },
+        {
+            "name": "Bronze-to-Silver Survival Rate (%)",
+            "desc": "Percentage of raw records that successfully passed validation and normalization into Silver.",
+            "display": "scalar",
+            "sql": """
+                WITH b AS (
+                    SELECT COUNT(*) AS b_cnt
+                    FROM bronze.raw_prices
+                    WHERE scraped_at::date = (SELECT MAX(scraped_at::date) FROM bronze.raw_prices)
+                ),
+                s AS (
+                    SELECT COUNT(*) AS s_cnt
+                    FROM silver.clean_store_prices
+                    WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                )
+                SELECT ROUND((s.s_cnt * 100.0 / NULLIF(b.b_cnt, 0))::numeric, 2) AS "Survival Rate (%)"
+                FROM b, s;
+            """,
+            "viz": {},
+            "grid": (4, 0, 4, 3)
+        },
+        {
+            "name": "Silver Clean Records (Latest Day)",
+            "desc": "Total validated and standardized records loaded into the Silver layer.",
+            "display": "scalar",
+            "sql": """
+                SELECT COUNT(*) AS "Silver Clean Records"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
+            """,
+            "viz": {},
+            "grid": (8, 0, 4, 3)
+        },
+        {
+            "name": "COICOP Classification Coverage Rate (%)",
+            "desc": "Percentage of Silver products successfully mapped to a standard COICOP division (01-12).",
+            "display": "scalar",
+            "sql": """
+                SELECT 
+                    ROUND((COUNT(*) FILTER (WHERE coicop_division IS NOT NULL AND coicop_division <> 'UNCLASSIFIED') * 100.0 / NULLIF(COUNT(*), 0))::numeric, 2) AS "Classification Coverage (%)"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
+            """,
+            "viz": {},
+            "grid": (12, 0, 4, 3)
+        },
+        {
+            "name": "Silver Price Outliers Detected",
+            "desc": "Count of items flagged as statistical price outliers in the latest batch.",
+            "display": "scalar",
+            "sql": """
+                SELECT COUNT(*) AS "Price Outliers Flagged"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                  AND is_outlier = TRUE;
+            """,
+            "viz": {},
+            "grid": (16, 0, 4, 3)
+        },
+        {
+            "name": "Pending Human Review Queue",
+            "desc": "Count of items in Silver needs_review table awaiting human resolution.",
+            "display": "scalar",
+            "sql": """
+                SELECT COUNT(*) AS "Pending Review Items"
+                FROM silver.needs_review
+                WHERE status = 'pending';
+            """,
+            "viz": {},
+            "grid": (20, 0, 4, 3)
+        },
+
+        # ROW 3: BRONZE INGESTION TELEMETRY & FRESHNESS SLA (Y=3, H=8)
+        {
+            "name": "Bronze Ingestion Volume by Source (Last 30 Days)",
+            "desc": "Time series stacked bar chart showing raw ingested records per merchant to identify missing ingestion runs.",
+            "display": "bar",
+            "sql": """
+                SELECT 
+                    scraped_at::date AS "Ingestion Date",
+                    source_name AS "Source",
+                    COUNT(*) AS "Raw Records"
+                FROM bronze.raw_prices
+                WHERE scraped_at >= (SELECT MAX(scraped_at) - INTERVAL '30 days' FROM bronze.raw_prices)
+                GROUP BY scraped_at::date, source_name
+                ORDER BY scraped_at::date ASC, source_name;
+            """,
+            "viz": {
+                "graph.dimensions": ["Ingestion Date", "Source"],
+                "graph.metrics": ["Raw Records"],
+                "stackable.stack_type": "stacked"
+            },
+            "grid": (0, 3, 14, 8)
+        },
+        {
+            "name": "Bronze Ingestion Freshness & SLA Lag by Source",
+            "desc": "Elapsed hours since last raw batch landed for each data source with color-coded SLA status.",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    source_name AS "Source Name",
+                    COUNT(*) AS "Total Ingested (7D)",
+                    MAX(scraped_at) AS "Last Ingested (UTC)",
+                    ROUND(EXTRACT(EPOCH FROM (NOW() - MAX(scraped_at))) / 3600.0, 1) AS "Lag (Hours)",
+                    CASE 
+                        WHEN NOW() - MAX(scraped_at) <= INTERVAL '24 hours' THEN '🟢 FRESH (<24h)'
+                        WHEN NOW() - MAX(scraped_at) <= INTERVAL '48 hours' THEN '🟡 DELAYED (24-48h)'
+                        ELSE '🔴 STALE (>48h)'
+                    END AS "Freshness SLA"
+                FROM bronze.raw_prices
+                GROUP BY source_name
+                ORDER BY "Lag (Hours)" ASC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (14, 3, 10, 8)
+        },
+
+        # ROW 11: BRONZE-TO-SILVER RECONCILIATION FUNNEL & ERROR LOG (Y=11, H=8)
+        {
+            "name": "Bronze vs Silver Daily Reconciliation Funnel",
+            "desc": "Conversion comparison between Bronze raw records and Silver clean records per day and source.",
+            "display": "table",
+            "sql": """
+                WITH bronze_daily AS (
+                    SELECT 
+                        scraped_at::date AS d_date,
+                        source_name AS store_key,
+                        COUNT(*) AS bronze_count
+                    FROM bronze.raw_prices
+                    WHERE scraped_at >= (SELECT MAX(scraped_at) - INTERVAL '14 days' FROM bronze.raw_prices)
+                    GROUP BY scraped_at::date, source_name
+                ),
+                silver_daily AS (
+                    SELECT 
+                        scrape_date AS d_date,
+                        store_slug AS store_key,
+                        COUNT(*) AS silver_count
+                    FROM silver.clean_store_prices
+                    WHERE scrape_date >= (SELECT MAX(scrape_date) - INTERVAL '14 days' FROM silver.clean_store_prices)
+                    GROUP BY scrape_date, store_slug
+                )
+                SELECT 
+                    COALESCE(b.d_date, s.d_date) AS "Date",
+                    COALESCE(b.store_key, s.store_key) AS "Source / Store",
+                    COALESCE(b.bronze_count, 0) AS "Bronze Ingested",
+                    COALESCE(s.silver_count, 0) AS "Silver Cleaned",
+                    COALESCE(b.bronze_count, 0) - COALESCE(s.silver_count, 0) AS "Filtered / Deduped",
+                    ROUND((COALESCE(s.silver_count, 0) * 100.0 / NULLIF(b.bronze_count, 0))::numeric, 1) AS "Survival Rate (%)"
+                FROM bronze_daily b
+                FULL OUTER JOIN silver_daily s ON b.d_date = s.d_date AND b.store_key = s.store_key
+                ORDER BY "Date" DESC, "Bronze Ingested" DESC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (0, 11, 14, 8)
+        },
+        {
+            "name": "Bronze Scrape Errors & Ingestion Exceptions Log",
+            "desc": "Detailed log of unparsable payloads, extraction errors, and network failures in Bronze.",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    created_at AT TIME ZONE 'Asia/Phnom_Penh' AS "Timestamp (ICT)",
+                    source_name AS "Source",
+                    error_type AS "Error Category",
+                    LEFT(error_message, 100) AS "Error Message",
+                    LEFT(raw_record, 60) AS "Raw Sample"
+                FROM bronze.scrape_errors
+                ORDER BY created_at DESC
+                LIMIT 30;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (14, 11, 10, 8)
+        },
+
+        # ROW 19: SILVER CATEGORIZATION & ATTRIBUTE COMPLETENESS (Y=19, H=8)
+        {
+            "name": "Silver COICOP Classification Product Breakdown",
+            "desc": "Product count distribution across all 12 COICOP divisions in the Silver layer.",
+            "display": "bar",
+            "sql": """
+                SELECT 
+                    COALESCE(coicop_division, 'UNCLASSIFIED') AS "COICOP Division",
+                    COUNT(*) AS "Product Count"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                GROUP BY coicop_division
+                ORDER BY "Product Count" DESC;
+            """,
+            "viz": {
+                "graph.dimensions": ["COICOP Division"],
+                "graph.metrics": ["Product Count"]
+            },
+            "grid": (0, 19, 10, 8)
+        },
+        {
+            "name": "Silver Field Null & Attribute Completeness Audit",
+            "desc": "Completeness audit of barcode, brand, category, size unit, and COICOP mapping across stores in Silver.",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    store_slug AS "Store Channel",
+                    COUNT(*) AS "Total Clean Items",
+                    ROUND((COUNT(barcode) FILTER (WHERE barcode IS NOT NULL AND TRIM(barcode) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Barcode (%)",
+                    ROUND((COUNT(brand) FILTER (WHERE brand IS NOT NULL AND TRIM(brand) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Brand (%)",
+                    ROUND((COUNT(category_native) FILTER (WHERE category_native IS NOT NULL AND TRIM(category_native) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Category (%)",
+                    ROUND((COUNT(size_unit) FILTER (WHERE size_unit IS NOT NULL AND TRIM(size_unit) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Unit Size (%)",
+                    ROUND((COUNT(*) FILTER (WHERE coicop_division IS NOT NULL AND coicop_division <> 'UNCLASSIFIED') * 100.0 / COUNT(*))::numeric, 1) AS "COICOP Classified (%)"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                GROUP BY store_slug
+                ORDER BY "Total Clean Items" DESC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (10, 19, 14, 8)
+        },
+
+        # ROW 27: SILVER OUTLIERS & NEEDS REVIEW QUEUE (Y=27, H=7)
+        {
+            "name": "Silver Flagged Price Outliers & Fallback Audits",
+            "desc": "High-risk records flagged for price abnormalities or scraper selector fallbacks in Silver.",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    scrape_date AS "Date",
+                    store_slug AS "Store",
+                    name_clean AS "Product Name",
+                    price_khr AS "Price (KHR)",
+                    unit_price_khr AS "Unit Price (KHR)",
+                    coicop_division AS "Div",
+                    is_outlier AS "Outlier",
+                    fallback_reason AS "Audit Reason"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                  AND (is_outlier = TRUE OR is_fallback = TRUE)
+                ORDER BY is_outlier DESC, price_khr DESC
+                LIMIT 30;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (0, 27, 14, 7)
+        },
+        {
+            "name": "Silver Needs Review Queue (Fuzzy Matching)",
+            "desc": "Low-confidence or ambiguous items routed for human review in Silver layer.",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    review_id AS "ID",
+                    TO_CHAR(created_at AT TIME ZONE 'Asia/Phnom_Penh', 'YYYY-MM-DD HH24:MI') AS "Queued (ICT)",
+                    LEFT(item_description_raw, 40) AS "Raw Description",
+                    LEFT(best_match_name, 35) AS "Matched Name",
+                    ROUND(confidence * 100.0, 1) AS "Confidence (%)",
+                    status AS "Status"
+                FROM silver.needs_review
+                ORDER BY created_at DESC
+                LIMIT 30;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (14, 27, 10, 7)
+        }
+    ]
+
+    for item in bs_cards:
+        cid = create_or_update_card(cur, item["name"], item["desc"], item["display"], item["sql"], item["viz"], c_bs, db_id=db_id)
+        col, row, sx, sy = item["grid"]
+        place_card_on_dashboard(cur, d_bs_id, cid, col, row, sx, sy, item["viz"])
+
     cur.execute("DELETE FROM query_cache;")
     conn.commit()
     conn.close()
 
     print("\n=============================================================================")
-    print("SUCCESS: Metabase CPI & Operations Dashboards configured!")
+    print("SUCCESS: Metabase CPI, Operations, Scraper & Observability Dashboards configured!")
     print(f"  [1] CPI Inflation Dashboard ID: {d_cpi_id} | Collection ID: {c_cpi}")
     print(f"  [2] Operations Dashboard ID: {d_ops_id} | Collection ID: {c_ops}")
-    print("  Metabase URL: http://localhost:3000")
+    print(f"  [3] Scraper Quality Dashboard ID: {d_scrape_id} | Collection ID: {c_scrape}")
+    print(f"  [4] Bronze/Silver Observability Dashboard ID: {d_bs_id} | Collection ID: {c_bs}")
+    print("  Metabase URL: http://localhost:3001 (or :3000)")
     print("=============================================================================")
 
 if __name__ == "__main__":
     provision_all()
+

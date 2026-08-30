@@ -10,7 +10,30 @@ sources:
     tables:
       - name: raw_scrapes
         description: Append-only per-source batches (payload JSONB array of canonical records).
+        loaded_at_field: created_at
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 48, period: hour}
       - name: exchange_rates
         description: MEF USD/KHR official daily rate (+ fallback audit).
+        loaded_at_field: fetched_at
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 48, period: hour}
       - name: bronze_ingestion_stats
         description: Per-source parquet snapshot validation stats.
+        loaded_at_field: created_at
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 48, period: hour}
+
+  - name: gold
+    schema: gold
+    description: Gold layer calculated facts (Jevons micro-indices and Laspeyres CPI facts).
+    tables:
+      - name: fct_elementary_indices
+        description: Jevons micro-indices calculated daily by pipeline/cpi_calculator.py.
+      - name: fct_cpi_daily
+        description: Daily 12-division Laspeyres and Headline/Core CPI facts.
+
+

@@ -48,8 +48,6 @@ RUN pip install --no-cache-dir \
     pytest-asyncio>=0.23.0 \
     httpx>=0.27.0 \
     google-generativeai>=0.4.0 \
-    boto3>=1.34.0 \
-    pyarrow>=15.0.0 \
     dbt-core>=1.8.0 \
     dbt-postgres>=1.8.0 \
     black>=24.0.0 \

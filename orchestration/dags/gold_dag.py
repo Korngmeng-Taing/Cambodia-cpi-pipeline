@@ -7,7 +7,7 @@ Workflow:
     dbt_gold_run (dim_items, dim_stores, fct_daily_prices)
       ─► dbt_gold_test
 
-NOTE: CPI index computation (Jevons / Laspeyres / GEKS / Fisher) is planned
+NOTE: CPI index computation (Jevons elementary indices + Laspeyres division aggregation)
 but NOT implemented yet — this DAG only materializes the star schema.
 
 Schedule: None — orchestrated by cpi_master_dag after silver_dag finishes.
@@ -62,17 +62,9 @@ def _refresh_serving_views(**context):
     try:
         with psycopg2.connect(conn_str) as conn:
             with conn.cursor() as cur:
-                # Drop existing views first to handle column renames safely
-                cur.execute("""
-                    DO $$ DECLARE r RECORD;
-                    BEGIN
-                        FOR r IN SELECT schemaname, viewname FROM pg_views
-                                 WHERE schemaname = 'gold'
-                        LOOP
-                            EXECUTE format('DROP VIEW IF EXISTS %I.%I', r.schemaname, r.viewname);
-                        END LOOP;
-                    END $$;
-                """)
+                # views.sql must use CREATE OR REPLACE VIEW — we no longer
+                # drop all views first because that would destroy dbt-managed
+                # views and any view added by future dbt models.
                 cur.execute(views_sql)
             conn.commit()
         log.info("Successfully refreshed serving views in gold schema.")

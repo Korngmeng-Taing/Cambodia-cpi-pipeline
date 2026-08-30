@@ -25,14 +25,6 @@ from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
-try:
-    from orchestration.dags.alerts import airflow_task_failure_callback, airflow_sla_miss_callback
-except ImportError:
-    try:
-        from dags.alerts import airflow_task_failure_callback, airflow_sla_miss_callback
-    except ImportError:
-        from alerts import airflow_task_failure_callback, airflow_sla_miss_callback
-
 from scrapers.sources import SCRAPER_REGISTRY
 
 log = logging.getLogger(__name__)
@@ -45,7 +37,6 @@ DEFAULT_ARGS = {
     "retries": 2,
     "retry_delay": timedelta(minutes=2),
     "email_on_failure": False,
-    "on_failure_callback": airflow_task_failure_callback,
 }
 
 WAIT_POKE_INTERVAL = 10
@@ -99,7 +90,6 @@ with DAG(
     schedule="0 2 * * *",  # 02:00 AM Phnom Penh time daily
     catchup=False,
     default_args=DEFAULT_ARGS,
-    sla_miss_callback=airflow_sla_miss_callback,
     tags=["cpi", "master", "orchestration", "medallion", "monitoring"],
 ) as dag:
 

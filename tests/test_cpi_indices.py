@@ -4,7 +4,7 @@ tests/test_cpi_indices.py
 Tests for the Gold Star Schema (dim_items, dim_stores, fct_daily_prices),
 COICOP weight integrity, and Jevons formula math properties.
 
-NOTE: CPI index computation (Jevons aggregation, Laspeyres roll-ups, GEKS,
+NOTE: CPI index computation (Jevons aggregation, Laspeyres roll-ups)
 Fisher) is planned but NOT implemented yet — these tests only cover the
 materialized star schema and reference-data invariants.
 """

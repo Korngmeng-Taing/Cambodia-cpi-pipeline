@@ -1,0 +1,21 @@
+﻿# Normalize line endings to LF for all text files across the project.
+# Fixes the mixed CRLF (pipeline/) vs LF (dbt/models/gold/) issue.
+* text=auto eol=lf
+
+# Explicit overrides for key file types
+*.py    text eol=lf
+*.sql   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+*.toml  text eol=lf
+*.json  text eol=lf
+*.sh    text eol=lf
+
+# Binaries - never touch line endings
+*.xlsx  binary
+*.png   binary
+*.jpg   binary
+*.gif   binary
+*.ico   binary
+*.zip   binary

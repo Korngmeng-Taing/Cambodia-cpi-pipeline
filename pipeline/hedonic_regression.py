@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import threading
 from datetime import date, timedelta
 from typing import Any
 
@@ -57,26 +58,28 @@ _5G_RE = re.compile(r"\b5G\b", re.IGNORECASE)
 
 
 _engine_cache = None
+_engine_lock = threading.Lock()
 
 def get_engine():
     global _engine_cache
-    if _engine_cache is not None:
-        return _engine_cache
-    from pipeline.config import get_database_url
+    with _engine_lock:
+        if _engine_cache is not None:
+            return _engine_cache
+        from pipeline.config import alternate_host_url, get_database_url
 
-    conn_str = get_database_url().replace(
-        "postgresql://", "postgresql+psycopg2://", 1
-    )
-    try:
-        eng = create_engine(conn_str)
-        with eng.connect() as test_conn:
-            pass
-        _engine_cache = eng
-        return eng
-    except Exception:
-        eng = create_engine(alternate_host_url(conn_str))
-        _engine_cache = eng
-        return eng
+        conn_str = get_database_url().replace(
+            "postgresql://", "postgresql+psycopg2://", 1
+        )
+        try:
+            eng = create_engine(conn_str)
+            with eng.connect() as test_conn:
+                pass
+            _engine_cache = eng
+            return eng
+        except Exception:
+            eng = create_engine(alternate_host_url(conn_str))
+            _engine_cache = eng
+            return eng
 
 
 def extract_specs(name: str) -> dict[str, float | int]:

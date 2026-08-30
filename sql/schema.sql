@@ -8,8 +8,9 @@ CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS silver;
 CREATE SCHEMA IF NOT EXISTS gold;
 
--- Required for trigram GIN indexes (e.g. canonical_items.canonical_name)
+-- Required for trigram GIN indexes and high-dimensional vector search
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ============================================================================
 -- 0. BRONZE (Raw Store Listings & Errors)
@@ -245,6 +246,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_clean_store_prices_date_store_item
     ON silver.clean_store_prices (scrape_date, store_slug, item_id)
     WHERE item_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_clean_store_prices_scrape_date_store ON silver.clean_store_prices(scrape_date, store_slug);
+CREATE INDEX IF NOT EXISTS idx_clean_store_prices_scrape_date_brin ON silver.clean_store_prices USING brin (scrape_date);
 CREATE INDEX IF NOT EXISTS idx_clean_store_prices_store_item ON silver.clean_store_prices(store_slug, item_id);
 CREATE INDEX IF NOT EXISTS idx_clean_store_prices_coicop_code ON silver.clean_store_prices(coicop_code);
 CREATE INDEX IF NOT EXISTS idx_clean_store_prices_coicop_division ON silver.clean_store_prices(coicop_division);

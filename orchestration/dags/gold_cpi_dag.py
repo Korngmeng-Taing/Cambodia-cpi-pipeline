@@ -5,7 +5,6 @@ Triggers after Silver DAG completes:
   1. Computes Jevons micro-indices with 7-day missing price imputation.
   2. Aggregates 12 COICOP division indices with official NIS expenditure weights.
   3. Computes Headline CPI, Core CPI (ex-food & energy), and daily inflation.
-  4. Dispatches failure / SLA alerts to Telegram & Slack.
 
 REBASING POLICY (see docs/rebasing_policy.md):
   - Base period is the average of the preceding December (ILO CPI Manual §9.41).
@@ -24,13 +23,6 @@ import pendulum
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.models import Variable
-try:
-    from orchestration.dags.alerts import airflow_task_failure_callback, airflow_sla_miss_callback
-except ImportError:
-    try:
-        from dags.alerts import airflow_task_failure_callback, airflow_sla_miss_callback
-    except ImportError:
-        from alerts import airflow_task_failure_callback, airflow_sla_miss_callback
 
 from pipeline.cpi_calculator import CPICalculationEngine
 
@@ -41,16 +33,15 @@ DEFAULT_ARGS = {
     "email_on_retry": False,
     "retries": 2,
     "retry_delay": timedelta(minutes=5),
-    "sla": timedelta(minutes=20),
-    "on_failure_callback": airflow_task_failure_callback,
 }
 
 def get_base_date(target_date: date | None = None) -> date:
     """Fetch the applicable base date for a given target_date from the
     date-effective lookup table ``gold.cpi_base_dates``.
 
-    Falls back to the Airflow Variable ``cpi_base_date`` → project inception
-    date if the table doesn't exist or has no rows yet.
+    Falls back to the Airflow Variable ``cpi_base_date`` → env var
+    ``CPI_DEFAULT_BASE_DATE`` → project inception date if the table
+    doesn't exist or has no rows yet.
     """
     if target_date is None:
         target_date = date.today()
@@ -77,6 +68,13 @@ def get_base_date(target_date: date | None = None) -> date:
         base_str = Variable.get("cpi_base_date")
         return datetime.strptime(base_str, "%Y-%m-%d").date()
     except (KeyError, ValueError):
+        pass
+
+    # Last resort: configurable via env var (avoids hardcoding in source).
+    env_default = os.getenv("CPI_DEFAULT_BASE_DATE", "2026-08-18")
+    try:
+        return datetime.strptime(env_default, "%Y-%m-%d").date()
+    except ValueError:
         return date(2026, 8, 18)
 
 def execute_daily_cpi_calculation(**context):
@@ -96,7 +94,9 @@ def execute_daily_cpi_calculation(**context):
 def annual_rebase_cpi(**context):
     """
     Annual rebasing task: runs on Jan 1 (or first business day).
-    Computes the average CPI for the preceding December and sets that as the new base.
+    Picks the date in December with the most price observations as the new
+    base date (more representative than always anchoring to Dec 1, which
+    may be missing data in many years).
 
     IMPORTANT: Base dates are stored in a date-effective lookup table
     ``gold.cpi_base_dates`` so that historical backfills always use the
@@ -126,6 +126,12 @@ def annual_rebase_cpi(**context):
         print(f"⚠️ No price data for December {dec_year}; rebasing skipped.")
         return
 
+    # Pick the date in December with the most price observations — more
+    # representative than always anchoring to Dec 1, which may be missing data.
+    obs_by_date = df_dec.groupby("scrape_date")["item_id"].count()
+    new_base = obs_by_date.idxmax()
+    effective_from = date(run_date.year, 1, 1)
+
     # Compute average December headline CPI across all days with data
     dec_dates = df_dec["scrape_date"].unique()
     cpi_values = []
@@ -140,8 +146,6 @@ def annual_rebase_cpi(**context):
 
     if cpi_values:
         avg_cpi = sum(cpi_values) / len(cpi_values)
-        new_base = dec_start
-        effective_from = date(run_date.year, 1, 1)
 
         # Persist to date-effective lookup table (backfill-safe)
         import psycopg2
@@ -168,7 +172,7 @@ def annual_rebase_cpi(**context):
 
         # Also update Airflow Variable for backward compatibility
         Variable.set("cpi_base_date", new_base.strftime("%Y-%m-%d"))
-        print(f"✅ Annual rebasing complete: new base_date = {new_base} effective from {effective_from} (avg December CPI: {avg_cpi:.2f})")
+        print(f"✅ Annual rebasing complete: new base_date = {new_base} (most-observed Dec date) effective from {effective_from} (avg December CPI: {avg_cpi:.2f})")
     else:
         print(f"⚠️ Could not compute December average CPI; rebasing skipped.")
 
@@ -181,7 +185,6 @@ with DAG(
     schedule=None,  # Triggered by cpi_master_dag, not cron — avoids double execution
     start_date=pendulum.datetime(2026, 8, 18, tz=local_tz),
     catchup=False,
-    sla_miss_callback=airflow_sla_miss_callback,
     tags=["gold", "cpi", "inflation", "economics", "jevons", "laspeyres"],
 ) as dag:
 

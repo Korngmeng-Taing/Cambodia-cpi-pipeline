@@ -30,7 +30,7 @@ with grouped as (
         p.item_id,
         round(exp(avg(ln(p.price_khr)) filter (where p.price_khr > 0)), 2) as price_khr,
         min(p.original_price_khr) as original_price_khr,
-        min(p.discount_pct) as discount_pct,
+        max(p.discount_pct) as discount_pct,
         bool_or(p.on_promo) as on_promo,
         min(p.size_value) as size_value,
         min(p.size_unit) as size_unit,

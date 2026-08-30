@@ -10,13 +10,12 @@ Based on:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta
-from typing import Any
+from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
 import psycopg2
-from psycopg2.extras import execute_batch, RealDictCursor
+from psycopg2.extras import execute_batch
 
 from pipeline.config import get_database_url
 
@@ -74,8 +73,9 @@ class CPICalculationEngine:
             try:
                 return psycopg2.connect(alt_url)
             except psycopg2.OperationalError as e2:
-                # M6 FIX: Preserve original exception as cause so users see the true root cause
-                raise psycopg2.OperationalError(f"Both primary and alternate hosts failed. Primary: {e}") from e
+                raise psycopg2.OperationalError(
+                    f"Both primary and alternate hosts failed. Primary: {e}. Alternate: {e2}"
+                ) from e2
 
 
     def load_clean_prices(self, start_date: date, end_date: date) -> pd.DataFrame:
@@ -111,7 +111,11 @@ class CPICalculationEngine:
               AND s.item_id IS NOT NULL;
         """
         with self.get_connection() as conn:
-            df = pd.read_sql(query, conn, params=(start_date, end_date))
+            with conn.cursor() as cur:
+                cur.execute(query, (start_date, end_date))
+                cols = [desc[0] for desc in cur.description]
+                rows = cur.fetchall()
+                df = pd.DataFrame(rows, columns=cols)
         df["scrape_date"] = pd.to_datetime(df["scrape_date"]).dt.date
         df["unit_price_khr"] = pd.to_numeric(df["unit_price_khr"], errors="coerce")
         df = df[df["unit_price_khr"] > 0]
@@ -126,11 +130,21 @@ class CPICalculationEngine:
         may be any array-like (list, tuple, numpy array); non-positive entries
         are filtered out. Returns 100.0 (the no-change neutral index) when no
         usable pairs remain.
+
+        NOTE: Arrays must be pre-aligned (same item in the same position).
+        If lengths differ a warning is emitted and the shorter length is used;
+        callers should ensure alignment before invoking this method.
         """
         cur = np.asarray(current_prices, dtype=float)
         base = np.asarray(base_prices, dtype=float)
         if len(cur) == 0 or len(base) == 0:
             return 100.0
+        if len(cur) != len(base):
+            log.warning(
+                "compute_jevons_index: current_prices length (%d) != base_prices length (%d). "
+                "Arrays must be pre-aligned. Truncating to shorter length.",
+                len(cur), len(base),
+            )
         n = min(len(cur), len(base))
         cur = cur[:n]
         base = base[:n]
@@ -140,8 +154,6 @@ class CPICalculationEngine:
         if len(cur) == 0:
             return 100.0
         ratios = cur / base
-        if len(ratios) == 0:
-            return 100.0
         return float(np.exp(np.mean(np.log(ratios))) * 100.0)
 
     def compute_base_prices(self, base_date: date, df_prices: pd.DataFrame | None = None) -> pd.DataFrame:
@@ -174,7 +186,9 @@ class CPICalculationEngine:
         imputation_window_days: int = 7
     ) -> pd.DataFrame:
         """
-        Computes elementary Jevons price indices for calc_date with 7-day carry-forward imputation.
+        Computes elementary Jevons price indices for calc_date with ILO Class-Mean Imputation.
+        When an item is missing on day t (gap <= 7 days), its price is advanced using the
+        geometric average rate of change of observed items in the same COICOP division.
         """
         # Current day observations strictly per unique item_id
         today_obs = df_history[df_history["scrape_date"] == calc_date]
@@ -187,18 +201,33 @@ class CPICalculationEngine:
         merged = pd.merge(base_df, today_agg, on="item_id", how="left")
         merged["is_imputed"] = False
 
-        # Apply 7-day carry-forward imputation for missing items
-        # C4 FIX: Anchor the lookback window to the most recent actual scrape_date
-        # in the database (not calendar days), so a new-month reprice is not
-        # silently imputed from the prior month.
+        # Compute division movement ratios for observed items between yesterday and today
+        prior_dates = sorted([d for d in df_history["scrape_date"].unique() if d < calc_date])
+        prev_date = prior_dates[-1] if prior_dates else None
+        
+        division_movement_ratios: dict[str, float] = {}
+        if prev_date is not None and not today_obs.empty:
+            prev_obs = df_history[df_history["scrape_date"] == prev_date]
+            prev_agg = prev_obs.groupby("item_id")["unit_price_khr"].agg(
+                lambda x: float(np.exp(np.mean(np.log(x[x > 0]))))
+            ).reset_index()
+            
+            # Common items between yesterday and today
+            common = pd.merge(today_agg, prev_agg, on="item_id", suffixes=("_today", "_prev"))
+            if not common.empty:
+                common = pd.merge(common, base_df[["item_id", "coicop_division"]], on="item_id", how="left")
+                common["ratio"] = common["current_price_khr"] / common["unit_price_khr"]
+                common = common[(common["ratio"] >= 0.5) & (common["ratio"] <= 2.0)]
+                for div, group in common.groupby("coicop_division"):
+                    if len(group) > 0:
+                        division_movement_ratios[str(div)] = float(np.exp(np.mean(np.log(group["ratio"]))))
+
+        # Apply ILO Class-Mean Imputation for missing items (gap <= 7 days)
         missing_mask = merged["current_price_khr"].isna()
         if missing_mask.any():
             missing_items = set(merged.loc[missing_mask, "item_id"])
-            # Find the most recent scrape_date < calc_date that has data for ANY item
-            prior_dates = df_history[df_history["scrape_date"] < calc_date]["scrape_date"].unique()
-            if len(prior_dates) > 0:
-                most_recent_scrape = max(prior_dates)
-                min_date = most_recent_scrape - timedelta(days=imputation_window_days)
+            if prev_date is not None:
+                min_date = prev_date - timedelta(days=imputation_window_days)
             else:
                 min_date = calc_date - timedelta(days=imputation_window_days)
             recent_obs = df_history[
@@ -208,7 +237,6 @@ class CPICalculationEngine:
             ]
 
             if not recent_obs.empty:
-                # Get the most recent available price for each missing item
                 recent_sorted = recent_obs.sort_values("scrape_date", ascending=False)
                 last_prices = recent_sorted.groupby("item_id")["unit_price_khr"].first().to_dict()
 
@@ -216,7 +244,12 @@ class CPICalculationEngine:
                     item_id = row["item_id"]
                     val = last_prices.get(item_id)
                     if val is not None and not pd.isna(val) and float(val) > 0:
-                        merged.at[idx, "current_price_khr"] = float(val)
+                        div = str(row.get("coicop_division", "01"))
+                        # Apply class-mean movement ratio if available, clamped to [0.80, 1.25]
+                        movement = division_movement_ratios.get(div, 1.0)
+                        movement = max(0.80, min(1.25, movement))
+                        imputed_price = float(val) * movement
+                        merged.at[idx, "current_price_khr"] = imputed_price
                         merged.at[idx, "observation_count"] = 1
                         merged.at[idx, "is_imputed"] = True
 
@@ -225,7 +258,7 @@ class CPICalculationEngine:
         valid = valid[(valid["current_price_khr"] > 0) & (valid["base_price_khr"] > 0)]
         valid["price_ratio"] = valid["current_price_khr"] / valid["base_price_khr"]
         
-        # ILO Outlier Filter: Guard against 1000x currency scaling or raw scraper glitches
+        # ILO Outlier Filter: Guard against extreme price scaling or raw scraper glitches
         valid = valid[(valid["price_ratio"] >= 0.20) & (valid["price_ratio"] <= 5.00)].copy()
 
         # Store price ratio as a percentage (per-item Jevons index)
@@ -255,15 +288,15 @@ class CPICalculationEngine:
                 div_index = np.nan
                 obs_cnt = 0
                 item_cnt = 0
-                log.warning("Division %s (%s) has no items on %s — excluding from headline aggregation.",
-                            div_code, DIVISION_NAMES.get(div_code, ""), elementary_df["calculation_date"].iloc[0] if not elementary_df.empty else "?")
+                log.info("Division %s (%s) has no items on %s — reweighting headline aggregation.",
+                         div_code, DIVISION_NAMES.get(div_code, ""), elementary_df["calculation_date"].iloc[0] if not elementary_df.empty else "?")
 
             div_records.append({
                 "calculation_date": calc_date,
                 "coicop_division": div_code,
                 "division_name": DIVISION_NAMES.get(div_code, f"Division {div_code}"),
                 "weight": weight,
-                "division_index": float(div_index) if not np.isnan(div_index) else 100.0,
+                "division_index": float(div_index) if not np.isnan(div_index) else None,
                 "item_count": item_cnt,
                 "observation_count": obs_cnt
             })
@@ -345,7 +378,7 @@ class CPICalculationEngine:
                 cur.execute("""
                      CREATE TABLE IF NOT EXISTS gold.fct_elementary_indices (
                          calculation_date DATE NOT NULL,
-                         item_id UUID NOT NULL,
+                         item_id TEXT NOT NULL,
                          coicop_division VARCHAR(10) NOT NULL,
                          coicop_code VARCHAR(20),
                          base_price_khr NUMERIC(14, 4),
@@ -384,7 +417,7 @@ class CPICalculationEngine:
                 # 1. Upsert Elementary Indices
                 elem_rows = [
                     (
-                        r["calculation_date"], r["item_id"], r["coicop_division"], r["coicop_code"],
+                        r["calculation_date"], str(r["item_id"]), r["coicop_division"], r["coicop_code"],
                         r["base_price_khr"], r["current_price_khr"], r["price_ratio"], r["price_ratio_pct"],
                         r["is_imputed"], int(r["observation_count"])
                     )
@@ -411,8 +444,9 @@ class CPICalculationEngine:
                 cpi_rows = [
                     (
                         r["calculation_date"], r["coicop_division"], r["division_name"], r["weight"],
-                        r["division_index"], headline["headline_cpi"], headline["core_cpi"],
-                        r["item_count"], r["observation_count"]
+                        None if pd.isna(r["division_index"]) else float(r["division_index"]),
+                        headline["headline_cpi"], headline["core_cpi"],
+                        int(r["item_count"]), int(r["observation_count"])
                     )
                     for _, r in df_div.iterrows()
                 ]

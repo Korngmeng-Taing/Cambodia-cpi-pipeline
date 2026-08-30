@@ -72,7 +72,8 @@ models:
         tests:
           - not_null
           - dbt_utils.expression_is_true:
-              expression: "> 0"
+              arguments:
+                expression: "> 0"
 
 unit_tests:
   - name: test_int_prices_cleaned_usd_khr_conversion

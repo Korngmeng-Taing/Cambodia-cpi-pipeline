@@ -39,16 +39,7 @@ models:
         tests:
           - not_null
 
-  # fct_cpi_daily is materialised by pipeline/cpi_calculator.py (not a dbt model),
-  # so its range tests live as CHECK constraints on the database table. See:
-  #   sql/schema.sql lines 277-300  (chk_fct_cpi_headline_range, chk_fct_cpi_core_range,
-  #                                  chk_fct_cpi_division_index_range, chk_fct_cpi_weight_sum)
-  # Postgres enforces (50, 500) bounds on headline_cpi and core_cpi — a sanity
-  # envelope that catches catastrophic unit-price corruption while leaving room
-  # for natural 25%-annual inflation on a 2020-base series.
-  - name: fct_cpi_daily
-    description: Gold Daily CPI facts — one row per (calculation_date, coicop_division) plus division_index. Range-enforced by PostgreSQL CHECK constraints (see sql/schema.sql).
-    columns: []
+
 
   - name: fct_coicop_class_daily
     description: Intermediate 4-digit COICOP class level aggregate index facts (e.g. 01.1.1 Bread & Cereals).

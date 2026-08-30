@@ -11,9 +11,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ── 1. Lint & Code Quality ──────────────────────────────────────────────────
-  lint:
-    name: Lint & Code Quality
+  # ── 1. Fast Quality, DAG Integrity & Scraper Gates (< 30s) ──────────────────
+  quality-gate:
+    name: Fast Quality, DAG Integrity & Scraper Gates
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -25,18 +25,33 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install Lint Tools
+      - name: Install Quality Tools & Core Testing Libs
         run: |
           pip install --upgrade pip
-          pip install ruff
+          pip install ruff pytest pendulum rapidfuzz requests
 
       - name: Run Ruff Lint (Syntax & Critical Checks)
         run: |
           ruff check --select=E9,F63,F7,F82,F401,F841 --ignore=E501,EXE002,W292 pipeline scrapers orchestration tests scripts
 
-  # ── 2. Full Pytest Test Suite (with PostgreSQL 16 Service) ──────────────────
-  test-suite:
-    name: Pytest Unit & Integration Suite
+      - name: Airflow DAG Syntax & Integrity Check
+        run: |
+          pytest tests/test_airflow_dags.py -v
+
+      - name: Scraper Contract & Schema Compliance Check
+        run: |
+          pytest tests/test_sources.py tests/test_scrapers.py -v
+
+      - name: Validate Docker Compose Configuration
+        run: |
+          if [ -f .env.example ]; then cp .env.example .env; fi
+          docker compose config --quiet
+          echo "docker-compose.yml configuration is valid."
+
+  # ── 2. Full Integration Suite (PostgreSQL 16 + pgvector + dbt) ──────────────
+  integration-suite:
+    name: Database, dbt & CPI Mathematical Axiom Suite
+    needs: [quality-gate]
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -63,22 +78,27 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
+      - name: Cache dbt Packages
+        uses: actions/cache@v4
+        with:
+          path: dbt/dbt_packages
+          key: ${{ runner.os }}-dbt-packages-${{ hashFiles('dbt/packages.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-dbt-packages-
+
       - name: Install System & Python Dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y postgresql-client
           pip install --upgrade pip
-          pip install pytest pytest-asyncio rapidfuzz numpy pandas scipy sqlalchemy statsmodels pendulum python-dotenv psycopg2-binary beautifulsoup4 requests google-genai openpyxl reportlab dbt-core dbt-postgres
+          pip install pytest pytest-asyncio pytest-cov rapidfuzz numpy pandas scipy sqlalchemy statsmodels pendulum python-dotenv psycopg2-binary beautifulsoup4 requests google-genai openpyxl reportlab dbt-core dbt-postgres
 
-      - name: Initialize PostgreSQL Schemas
+      - name: Initialize PostgreSQL Schemas & Tables
         env:
           PGPASSWORD: cpi_pass
         run: |
           psql -v ON_ERROR_STOP=1 -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/schema.sql
 
-      # The integration tests read the gold star-schema relations
-      # (gold.dim_items / gold.dim_stores / gold.fct_daily_prices), which dbt
-      # owns; sql/views.sql only adds the serving layer on top.
-      - name: Build dbt Models & Serving Views
+      - name: Run dbt Pipeline (Deps -> Seed -> Run -> Test)
         env:
           DB_HOST: localhost
           DB_PORT: "5432"
@@ -93,7 +113,7 @@ jobs:
           dbt test --project-dir dbt --profiles-dir dbt --target cpi_target
           psql -v ON_ERROR_STOP=1 -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/views.sql
 
-      - name: Run Full Pytest Suite
+      - name: Run Full Pytest Suite with Coverage
         env:
           DB_HOST: localhost
           DB_PORT: "5432"
@@ -103,25 +123,11 @@ jobs:
         run: |
           pytest tests/ -v
 
-  # ── 3. dbt Model Compilation, Seeding & Tests ──────────────────────────────
-  dbt-validation:
-    name: PostgreSQL 16 & dbt Validation
+  # ── 3. Academic Artifact Generation & Archive ────────────────────────────────
+  build-academic-artifacts:
+    name: Build & Archive Thesis PDF and Literature Matrix
+    needs: [quality-gate]
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: cpi_user
-          POSTGRES_PASSWORD: cpi_pass
-          POSTGRES_DB: cpi_db
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -132,47 +138,21 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install PostgreSQL Client & dbt
+      - name: Install ReportLab & OpenPyXL
         run: |
-          sudo apt-get update && sudo apt-get install -y postgresql-client
-          pip install --upgrade pip
-          pip install dbt-core dbt-postgres psycopg2-binary
+          pip install reportlab openpyxl pandas
 
-      - name: Initialize PostgreSQL Schemas
-        env:
-          PGPASSWORD: cpi_pass
+      - name: Generate Literature Review Matrix & PDF Compendium
         run: |
-          psql -v ON_ERROR_STOP=1 -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/schema.sql
+          python scripts/generate_simple_literature_review_excel.py
+          python scripts/generate_literature_review_pdf.py
 
-      - name: Run dbt Pipeline (Deps → Seed → Run Models → Test)
-        env:
-          DB_HOST: localhost
-          DB_PORT: "5432"
-          DB_NAME: cpi_db
-          DB_USER: cpi_user
-          DB_PASS: cpi_pass
-        run: |
-          dbt deps --project-dir dbt --profiles-dir dbt
-          dbt seed --project-dir dbt --profiles-dir dbt --target cpi_target
-          dbt run --project-dir dbt --profiles-dir dbt --target cpi_target
-          dbt test --project-dir dbt --profiles-dir dbt --target cpi_target
-
-      - name: Initialize Analytical Views
-        env:
-          PGPASSWORD: cpi_pass
-        run: |
-          psql -v ON_ERROR_STOP=1 -h localhost -p 5432 -U cpi_user -d cpi_db -f sql/views.sql
-
-  # ── 4. Docker Compose Syntax & Compose Config Validation ────────────────────
-  docker-validation:
-    name: Docker Compose Validation
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Validate Docker Compose Configuration
-        run: |
-          if [ -f .env.example ]; then cp .env.example .env; fi
-          docker compose config --quiet
-          echo "docker-compose.yml configuration is valid."
+      - name: Upload Thesis Artifacts to GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: cambodia-cpi-academic-compendium
+          path: |
+            thesis/Cambodia_CPI_Literature_Review.pdf
+            thesis/Literature_Review_Matrix.xlsx
+            thesis/MACHINE_LEARNING_IN_CPI_GUIDE.md
+          if-no-files-found: warn

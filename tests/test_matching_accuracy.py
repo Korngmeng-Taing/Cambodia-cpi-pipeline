@@ -14,7 +14,6 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
-from rapidfuzz import fuzz
 
 from pipeline.item_matcher import ItemMatcher
 from pipeline.text_clean import (

@@ -1,4 +1,3 @@
-import pytest
 from pipeline.vector_item_matcher import extract_specs, is_spec_compatible, VectorItemMatcher
 
 

@@ -1,5 +1,4 @@
-import pytest
-from pipeline.hybrid_embeddings_classifier import HybridCOICOPClassifier, PURE_STORE_MAP
+from pipeline.hybrid_embeddings_classifier import HybridCOICOPClassifier
 
 
 def test_pure_store_domain_purity():

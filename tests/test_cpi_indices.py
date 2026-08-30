@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import math
 
-import psycopg2
 import pytest
 
 from pipeline.config import COICOP_WEIGHTS, get_db_connection

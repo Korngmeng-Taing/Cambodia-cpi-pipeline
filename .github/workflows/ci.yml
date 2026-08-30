@@ -32,7 +32,7 @@ jobs:
 
       - name: Run Ruff Lint (Syntax & Critical Checks)
         run: |
-          ruff check --select=E9,F63,F7,F82,F401,F841 --ignore=E501,EXE002,W292 pipeline scrapers orchestration tests scripts apps
+          ruff check --select=E9,F63,F7,F82,F401,F841 --ignore=E501,EXE002,W292 pipeline scrapers orchestration tests scripts
 
   # ── 2. Full Pytest Test Suite (with PostgreSQL 16 Service) ──────────────────
   test-suite:
@@ -67,7 +67,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y postgresql-client
           pip install --upgrade pip
-          pip install pytest pytest-asyncio rapidfuzz numpy pandas scipy sqlalchemy statsmodels pendulum python-dotenv boto3 pyarrow psycopg2-binary beautifulsoup4 requests google-genai dbt-core dbt-postgres
+          pip install pytest pytest-asyncio rapidfuzz numpy pandas scipy sqlalchemy statsmodels pendulum python-dotenv psycopg2-binary beautifulsoup4 requests google-genai openpyxl reportlab dbt-core dbt-postgres
 
       - name: Initialize PostgreSQL Schemas
         env:

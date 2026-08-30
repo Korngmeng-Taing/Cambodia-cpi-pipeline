@@ -1,9 +1,8 @@
-﻿import os
-import sys
+import os
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether, HRFlowable
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether, HRFlowable
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
@@ -115,12 +114,6 @@ def generate_pdf(output_path):
         leading=13.5,
         textColor=colors.HexColor("#2D3748"),
         spaceAfter=6
-    )
-
-    body_bold = ParagraphStyle(
-        'BodyDarkBold',
-        parent=body_style,
-        fontName='Helvetica-Bold'
     )
 
     callout_style = ParagraphStyle(

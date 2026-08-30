@@ -13,10 +13,8 @@ import json
 import uuid
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from pipeline.gemini_item_reviewer import GeminiItemReviewer, evaluate_rule_guard
-from pipeline.item_matcher import ItemMatcher
 from pipeline.text_clean import is_size_compatible
 
 

@@ -217,7 +217,7 @@ def get_engine():
     )
     try:
         eng = create_engine(conn_str)
-        with eng.connect() as test_conn:
+        with eng.connect():
             pass
         return eng
     except Exception:

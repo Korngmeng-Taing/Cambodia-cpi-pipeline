@@ -15,15 +15,13 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import uuid
 from typing import Any
 
 from datetime import datetime
-import psycopg2
 
 from pipeline.bronze_scraper import BronzeScraper
-from pipeline.config import DEFAULT_USD_KHR_RATE, get_db_connection
+from pipeline.config import get_db_connection
 from pipeline.canonical import normalize_records, validate_records
 from scrapers.sources import SCRAPER_REGISTRY
 

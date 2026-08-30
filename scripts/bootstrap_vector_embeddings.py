@@ -15,8 +15,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from pipeline.key_pool import get_key_pool
-from pipeline.hybrid_embeddings_classifier import get_hybrid_classifier, COICOP_12_REFERENCE_DEFINITIONS
-from pipeline.vector_item_matcher import VectorItemMatcher
+from pipeline.hybrid_embeddings_classifier import get_hybrid_classifier
 
 logging.basicConfig(
     level=logging.INFO,

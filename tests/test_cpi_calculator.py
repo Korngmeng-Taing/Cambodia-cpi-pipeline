@@ -7,7 +7,7 @@ UNIT TESTS FOR CPI CALCULATION ENGINE (Jevons & Laspeyres)
 import pytest
 import numpy as np
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date
 from uuid import uuid4
 
 from pipeline.cpi_calculator import CPICalculationEngine, DEFAULT_NIS_WEIGHTS

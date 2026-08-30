@@ -20,7 +20,7 @@ if sys.platform.startswith("win"):
 # Ensure project root is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from pipeline.vector_item_matcher import VectorItemMatcher, is_spec_compatible, extract_specs
+from pipeline.vector_item_matcher import VectorItemMatcher
 from pipeline.hybrid_embeddings_classifier import get_hybrid_classifier
 
 # ============================================================================

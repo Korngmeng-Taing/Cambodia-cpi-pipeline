@@ -13,7 +13,7 @@ import logging
 import os
 import threading
 import time
-from typing import Callable, TypeVar, Any
+from typing import Callable, TypeVar
 
 log = logging.getLogger(__name__)
 

@@ -266,7 +266,6 @@ class TestVectorSeparation:
     products within the same division."""
 
     def _get_fallback_embeddings(self):
-        classifier = HybridCOICOPClassifier()
         ref_embeddings = []
         for ref in COICOP_12_REFERENCE_DEFINITIONS:
             vec = _build_semantic_fallback_vector(ref["description"])
@@ -286,7 +285,6 @@ class TestVectorSeparation:
         div07 = next(r for r in refs if r[0] == "07")[2]
 
         food_vec = _build_semantic_fallback_vector("rice chicken milk bread")
-        transport_vec = _build_semantic_fallback_vector("gasoline diesel fuel oil")
 
         sim_food_food = self._cosine_sim(food_vec, div01)
         sim_food_transport = self._cosine_sim(food_vec, div07)
@@ -303,7 +301,6 @@ class TestVectorSeparation:
         div12 = next(r for r in refs if r[0] == "12")[2]
 
         pharma_vec = _build_semantic_fallback_vector("paracetamol tablets medicine cough syrup")
-        personal_vec = _build_semantic_fallback_vector("shampoo toothpaste sunscreen soap")
 
         sim_pharma_health = self._cosine_sim(pharma_vec, div06)
         sim_pharma_personal = self._cosine_sim(pharma_vec, div12)
@@ -320,7 +317,6 @@ class TestVectorSeparation:
         div09 = next(r for r in refs if r[0] == "09")[2]
 
         telecom_vec = _build_semantic_fallback_vector("smartphone mobile phone sim card data plan")
-        recreation_vec = _build_semantic_fallback_vector("laptop computer television headphones toy")
 
         sim_telecom = self._cosine_sim(telecom_vec, div08)
         sim_telecom_recreation = self._cosine_sim(telecom_vec, div09)

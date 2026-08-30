@@ -10,7 +10,6 @@ Usage:
 
 import argparse
 import logging
-import sys
 
 from pipeline.gemini_item_reviewer import GeminiItemReviewer
 

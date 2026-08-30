@@ -24,7 +24,6 @@ Requires: statsmodels>=0.14, sqlalchemy, pandas
 from __future__ import annotations
 
 import logging
-import os
 import re
 import threading
 from datetime import date, timedelta
@@ -72,7 +71,7 @@ def get_engine():
         )
         try:
             eng = create_engine(conn_str)
-            with eng.connect() as test_conn:
+            with eng.connect():
                 pass
             _engine_cache = eng
             return eng

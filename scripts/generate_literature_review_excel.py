@@ -16,7 +16,6 @@ def create_literature_review_excel(output_path):
     TITLE_FONT = Font(name=FONT_FAMILY, size=14, bold=True, color="FFFFFF")
 
     SECTION_FILL = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
-    SECTION_FONT = Font(name=FONT_FAMILY, size=11, bold=True, color="1F4E79")
 
     ZEBRA_FILL = PatternFill(start_color="F2F5F9", end_color="F2F5F9", fill_type="solid")
     WHITE_FILL = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")

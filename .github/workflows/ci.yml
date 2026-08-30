@@ -173,5 +173,6 @@ jobs:
 
       - name: Validate Docker Compose Configuration
         run: |
+          if [ -f .env.example ]; then cp .env.example .env; fi
           docker compose config --quiet
           echo "docker-compose.yml configuration is valid."

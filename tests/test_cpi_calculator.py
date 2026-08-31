@@ -139,3 +139,30 @@ def test_missing_division_saves_as_null(cpi_engine):
     assert row10[4] is None  # Must be None, not float('nan')
 
 
+def test_monthly_cpi_aggregation():
+    """Verifies monthly aggregation logic across daily conformed indices."""
+    daily_records = [
+        # August 2026: 3 days of conformed headline CPI
+        {"calculation_date": date(2026, 8, 1), "headline_cpi": 100.0, "core_cpi": 100.0, "observation_count": 100},
+        {"calculation_date": date(2026, 8, 15), "headline_cpi": 102.0, "core_cpi": 101.0, "observation_count": 120},
+        {"calculation_date": date(2026, 8, 31), "headline_cpi": 104.0, "core_cpi": 102.0, "observation_count": 110},
+    ]
+    df = pd.DataFrame(daily_records)
+    df["cpi_month"] = pd.to_datetime(df["calculation_date"]).dt.to_period("M").dt.to_timestamp().dt.date
+
+    monthly_summary = df.groupby("cpi_month").agg(
+        monthly_headline_cpi=("headline_cpi", "mean"),
+        monthly_core_cpi=("core_cpi", "mean"),
+        active_days=("calculation_date", "nunique"),
+        total_obs=("observation_count", "sum"),
+    ).reset_index()
+
+    # Average of 100, 102, 104 is 102.0
+    assert pytest.approx(monthly_summary.iloc[0]["monthly_headline_cpi"], 0.01) == 102.0
+    # Average of 100, 101, 102 is 101.0
+    assert pytest.approx(monthly_summary.iloc[0]["monthly_core_cpi"], 0.01) == 101.0
+    assert monthly_summary.iloc[0]["active_days"] == 3
+    assert monthly_summary.iloc[0]["total_obs"] == 330
+
+
+

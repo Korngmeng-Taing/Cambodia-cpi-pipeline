@@ -42,14 +42,50 @@ LOCAL_FALLBACK_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 
 # Known cross-lingual equivalences for Cambodian market
 KHMER_ENGLISH_SYNONYMS = {
+    # Beer & Beverages
     "ស្រាបៀរអង្គរ": "angkor beer",
+    "ស្រាបៀរ": "beer",
     "កូកាកូឡា": "coca cola",
+    "ទឹកក្រូច": "soft drink",
+    "ទឹកបរិសុទ្ធ": "water",
+    "កាហ្វេ": "coffee",
+    "តែ": "tea",
+
+    # Groceries & Meat
     "ត្រីសាម៉ុង": "salmon",
-    "សាំង": "gasoline",
+    "ត្រីសាម៉ុងស្រស់": "fresh salmon",
+    "ត្រី": "fish",
     "សាច់គោ": "beef",
     "សាច់ជ្រូក": "pork",
     "សាច់មាន់": "chicken",
     "ទឹកដោះគោ": "milk",
+    "អង្ករ": "rice",
+    "នំប៉័ង": "bread",
+    "មី": "noodles",
+    "ប្រេងឆា": "cooking oil",
+    "ស្ករស": "sugar",
+    "អំបិល": "salt",
+
+    # Energy & Fuel
+    "សាំង": "gasoline",
+    "ប្រេងសាំង": "gasoline",
+    "ម៉ាស៊ូត": "diesel",
+
+    # Health & Personal Care
+    "ថ្នាំពេទ្យ": "medicine",
+    "ថ្នាំ": "medicine",
+    "ប៉ារ៉ាសេតាម៉ុល": "paracetamol",
+    "សាប៊ូកក់សក់": "shampoo",
+    "សាប៊ូដុសខ្លួន": "body wash",
+    "ថ្នាំដុសធ្មេញ": "toothpaste",
+    "ឡេការពារកម្តៅថ្ងៃ": "sunscreen",
+
+    # Tech & Transport
+    "ទូរស័ព្ទ": "phone",
+    "ទូរស័ព្ទដៃ": "phone",
+    "កុំព្យូទ័រ": "computer",
+    "ទូរទស្សន៍": "tv",
+    "សំបុត្រឡានក្រុង": "bus ticket",
 }
 
 
@@ -134,7 +170,7 @@ def _build_semantic_item_vector(text: str) -> np.ndarray:
     # Normalize common synonyms (e.g., Coke -> Coca-Cola)
     t_clean = re.sub(r"\bcoke\b", "coca cola", t_clean)
 
-    tokens = set(re.findall(r"\b[a-zA-Z0-9]+\b", t_clean))
+    tokens = set(re.findall(r"\b[a-zA-Z0-9\u1780-\u17ff]+\b", t_clean))
     vec = np.zeros(768, dtype=np.float32)
 
     for tok in tokens:

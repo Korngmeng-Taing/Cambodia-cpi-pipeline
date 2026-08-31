@@ -1,0 +1,287 @@
+\begin{thebibliography}{}
+
+\bibitem [\protect \citeauthoryear {%
+{Bank for International Settlements and European Central Bank and Deutsche Bundesbank}%
+}{%
+{Bank for International Settlements and European Central Bank and Deutsche Bundesbank}%
+}{%
+{\protect \APACyear {2024}}%
+}]{%
+bis2024spectrum}
+\APACinsertmetastar {%
+bis2024spectrum}%
+\begin{APACrefauthors}%
+{Bank for International Settlements and European Central Bank and Deutsche Bundesbank}.%
+\end{APACrefauthors}%
+\unskip\
+\newblock
+\APACrefYearMonthDay{2024}{}{}.
+\newblock
+\APACrefbtitle {Project Spectrum: Using Generative AI to Enhance Inflation Nowcasting} {Project spectrum: Using generative ai to enhance inflation nowcasting}\ \APACbVolEdTR{}{\BTR{}}.
+\newblock
+\APACaddressInstitution{Basel, Switzerland}{Bank for International Settlements Innovation Hub}.
+\newblock
+\begin{APACrefURL} \url{https://www.bis.org/about/bisih/topics/ai/spectrum.htm} \end{APACrefURL}
+\PrintBackRefs{\CurrentBib}
+
+\bibitem [\protect \citeauthoryear {%
+Berki%
+, Andicsova%
+\BCBL {}\ \BBA {} Oravec%
+}{%
+Berki%
+\ \protect \BOthers {.}}{%
+{\protect \APACyear {2025}}%
+}]{%
+berki2025nlp}
+\APACinsertmetastar {%
+berki2025nlp}%
+\begin{APACrefauthors}%
+Berki, M.%
+, Andicsova, V.%
+\BCBL {}\ \BBA {} Oravec, M.%
+\end{APACrefauthors}%
+\unskip\
+\newblock
+\APACrefYearMonthDay{2025}{}{}.
+\newblock
+{\BBOQ}\APACrefatitle {NLP-Enhanced Inflation Measurement Using BERT and Web Scraping} {Nlp-enhanced inflation measurement using bert and web scraping}.{\BBCQ}
+\newblock
+\APACjournalVolNumPages{Frontiers in Artificial Intelligence}{8}{}{1543026}.
+\newblock
+\begin{APACrefDOI} \doi{10.3389/frai.2025.1543026} \end{APACrefDOI}
+\PrintBackRefs{\CurrentBib}
+
+\bibitem [\protect \citeauthoryear {%
+Cavallo%
+\ \BBA {} Rigobon%
+}{%
+Cavallo%
+\ \BBA {} Rigobon%
+}{%
+{\protect \APACyear {2016}}%
+}]{%
+cavallo2016billion}
+\APACinsertmetastar {%
+cavallo2016billion}%
+\begin{APACrefauthors}%
+Cavallo, A.%
+\BCBT {}\ \BBA {} Rigobon, R.%
+\end{APACrefauthors}%
+\unskip\
+\newblock
+\APACrefYearMonthDay{2016}{}{}.
+\newblock
+{\BBOQ}\APACrefatitle {The Billion Prices Project: Using Online Prices for Measurement and Research} {The billion prices project: Using online prices for measurement and research}.{\BBCQ}
+\newblock
+\APACjournalVolNumPages{Journal of Economic Perspectives}{30}{2}{151--178}.
+\newblock
+\begin{APACrefDOI} \doi{10.1257/jep.30.2.151} \end{APACrefDOI}
+\PrintBackRefs{\CurrentBib}
+
+\bibitem [\protect \citeauthoryear {%
+Chessa%
+}{%
+Chessa%
+}{%
+{\protect \APACyear {2016}}%
+}]{%
+chessa2016methodology}
+\APACinsertmetastar {%
+chessa2016methodology}%
+\begin{APACrefauthors}%
+Chessa, A\BPBI G.%
+\end{APACrefauthors}%
+\unskip\
+\newblock
+\APACrefYearMonthDay{2016}{}{}.
+\newblock
+{\BBOQ}\APACrefatitle {A New Methodology for Processing Scanner Data in the Dutch CPI} {A new methodology for processing scanner data in the dutch cpi}.{\BBCQ}
+\newblock
+\APACjournalVolNumPages{EURONA -- Eurostat Review on National Accounts and Macroeconomic Indicators}{2016}{1}{49--69}.
+\PrintBackRefs{\CurrentBib}
+
+\bibitem [\protect \citeauthoryear {%
+Diewert%
+\ \BBA {} Fox%
+}{%
+Diewert%
+\ \BBA {} Fox%
+}{%
+{\protect \APACyear {2020}}%
+}]{%
+diewert2020substitution}
+\APACinsertmetastar {%
+diewert2020substitution}%
+\begin{APACrefauthors}%
+Diewert, W\BPBI E.%
+\BCBT {}\ \BBA {} Fox, K\BPBI J.%
+\end{APACrefauthors}%
+\unskip\
+\newblock
+\APACrefYearMonthDay{2020}{}{}.
+\newblock
+{\BBOQ}\APACrefatitle {Substitution Bias and Scanner Data: Measuring Price Change with Scanner Data} {Substitution bias and scanner data: Measuring price change with scanner data}.{\BBCQ}
+\newblock
+\APACjournalVolNumPages{Journal of Econometrics}{217}{2}{268--284}.
+\newblock
+\begin{APACrefDOI} \doi{10.1016/j.jeconom.2019.12.013} \end{APACrefDOI}
+\PrintBackRefs{\CurrentBib}
+
+\bibitem [\protect \citeauthoryear {%
+{Eurostat}%
+}{%
+{Eurostat}%
+}{%
+{\protect \APACyear {2022}}%
+}]{%
+eurostat2022webscraping}
+\APACinsertmetastar {%
+eurostat2022webscraping}%
+\begin{APACrefauthors}%
+{Eurostat}.%
+\end{APACrefauthors}%
+\unskip\
+\newblock
+\APACrefYearMonthDay{2022}{}{}.
+\newblock
+\APACrefbtitle {Practical Guide on the Use of Web Scraping for the Calculation of the Harmonised Index of Consumer Prices (HICP)} {Practical guide on the use of web scraping for the calculation of the harmonised index of consumer prices (hicp)}\ \APACbVolEdTR{}{\BTR{}}.
+\newblock
+\APACaddressInstitution{Luxembourg}{Statistical Office of the European Communities}.
+\PrintBackRefs{\CurrentBib}
+
+\bibitem [\protect \citeauthoryear {%
+{International Monetary Fund and International Labour Organization and OECD and Eurostat and United Nations and World Bank}%
+}{%
+{International Monetary Fund and International Labour Organization and OECD and Eurostat and United Nations and World Bank}%
+}{%
+{\protect \APACyear {2020}}%
+}]{%
+imf2020cpi}
+\APACinsertmetastar {%
+imf2020cpi}%
+\begin{APACrefauthors}%
+{International Monetary Fund and International Labour Organization and OECD and Eurostat and United Nations and World Bank}.%
+\end{APACrefauthors}%
+\unskip\
+\newblock
+\APACrefYear{2020}.
+\newblock
+\APACrefbtitle {Consumer Price Index Manual: Concepts and Methods} {Consumer price index manual: Concepts and methods}.
+\newblock
+\APACaddressPublisher{Washington, D.C.}{International Monetary Fund}.
+\PrintBackRefs{\CurrentBib}
+
+\bibitem [\protect \citeauthoryear {%
+Macias%
+, Stelmasiak%
+\BCBL {}\ \BBA {} Szafranek%
+}{%
+Macias%
+\ \protect \BOthers {.}}{%
+{\protect \APACyear {2023}}%
+}]{%
+macias2023nowcasting}
+\APACinsertmetastar {%
+macias2023nowcasting}%
+\begin{APACrefauthors}%
+Macias, P.%
+, Stelmasiak, D.%
+\BCBL {}\ \BBA {} Szafranek, K.%
+\end{APACrefauthors}%
+\unskip\
+\newblock
+\APACrefYearMonthDay{2023}{}{}.
+\newblock
+{\BBOQ}\APACrefatitle {Nowcasting Food Inflation with a Massive Amount of Online Prices} {Nowcasting food inflation with a massive amount of online prices}.{\BBCQ}
+\newblock
+\APACjournalVolNumPages{International Journal of Forecasting}{39}{2}{809--826}.
+\newblock
+\begin{APACrefDOI} \doi{10.1016/j.ijforecast.2022.01.007} \end{APACrefDOI}
+\PrintBackRefs{\CurrentBib}
+
+\bibitem [\protect \citeauthoryear {%
+Medeiros%
+, Vasconcelos%
+, Veiga%
+\BCBL {}\ \BBA {} Zilberman%
+}{%
+Medeiros%
+\ \protect \BOthers {.}}{%
+{\protect \APACyear {2021}}%
+}]{%
+medeiros2021forecasting}
+\APACinsertmetastar {%
+medeiros2021forecasting}%
+\begin{APACrefauthors}%
+Medeiros, M\BPBI C.%
+, Vasconcelos, G\BPBI F\BPBI R.%
+, Veiga, {\'A}.%
+\BCBL {}\ \BBA {} Zilberman, E.%
+\end{APACrefauthors}%
+\unskip\
+\newblock
+\APACrefYearMonthDay{2021}{}{}.
+\newblock
+{\BBOQ}\APACrefatitle {Forecasting Inflation in a Data-Rich Environment: The Benefits of Machine Learning Methods} {Forecasting inflation in a data-rich environment: The benefits of machine learning methods}.{\BBCQ}
+\newblock
+\APACjournalVolNumPages{Journal of Business \& Economic Statistics}{39}{1}{98--119}.
+\newblock
+\begin{APACrefDOI} \doi{10.1080/07350015.2019.1637745} \end{APACrefDOI}
+\PrintBackRefs{\CurrentBib}
+
+\bibitem [\protect \citeauthoryear {%
+{Office for National Statistics}%
+}{%
+{Office for National Statistics}%
+}{%
+{\protect \APACyear {2020}}%
+}]{%
+ons2020clothing}
+\APACinsertmetastar {%
+ons2020clothing}%
+\begin{APACrefauthors}%
+{Office for National Statistics}.%
+\end{APACrefauthors}%
+\unskip\
+\newblock
+\APACrefYearMonthDay{2020}{}{}.
+\newblock
+\APACrefbtitle {Using Machine Learning for Classifying Web-Scraped Data into COICOP} {Using machine learning for classifying web-scraped data into coicop}\ \APACbVolEdTR{}{\BTR{}}.
+\newblock
+\APACaddressInstitution{Newport, United Kingdom}{Office for National Statistics Data Science Campus}.
+\newblock
+\begin{APACrefURL} \url{https://www.ons.gov.uk/economy/inflationandpriceindices/methodologies} \end{APACrefURL}
+\PrintBackRefs{\CurrentBib}
+
+\bibitem [\protect \citeauthoryear {%
+Polidoro%
+, Giannini%
+, Lo~Conte%
+\BCBL {}\ \BBA {} Rossetti%
+}{%
+Polidoro%
+\ \protect \BOthers {.}}{%
+{\protect \APACyear {2015}}%
+}]{%
+polidoro2015webscraping}
+\APACinsertmetastar {%
+polidoro2015webscraping}%
+\begin{APACrefauthors}%
+Polidoro, F.%
+, Giannini, R.%
+, Lo~Conte, R.%
+\BCBL {}\ \BBA {} Rossetti, S.%
+\end{APACrefauthors}%
+\unskip\
+\newblock
+\APACrefYearMonthDay{2015}{}{}.
+\newblock
+{\BBOQ}\APACrefatitle {Web scraping techniques to collect data on consumer prices and machine learning for product classification} {Web scraping techniques to collect data on consumer prices and machine learning for product classification}.{\BBCQ}
+\newblock
+\APACjournalVolNumPages{Statistical Journal of the IAOS}{31}{3}{447--461}.
+\newblock
+\begin{APACrefDOI} \doi{10.3233/SJI-150896} \end{APACrefDOI}
+\PrintBackRefs{\CurrentBib}
+
+\end{thebibliography}

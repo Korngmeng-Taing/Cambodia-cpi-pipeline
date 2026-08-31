@@ -44,10 +44,19 @@ def test_is_spec_compatible_guards():
         "Fresh Milk 330ml",
         "Fresh Milk 1000ml"
     )
+    assert not is_spec_compatible(
+        "Cooking Oil 1L",
+        "Cooking Oil 1.15L"  # 15% difference -> rejected
+    )
+    assert is_spec_compatible(
+        "Cooking Oil 1L",
+        "Cooking Oil 1.05L"  # 5% difference (within 10% tolerance) -> accepted
+    )
     assert is_spec_compatible(
         "Cooking Oil 1L",
         "Cooking Oil 1L"
     )
+
 
 
 def test_vector_matcher_empty_catalog():

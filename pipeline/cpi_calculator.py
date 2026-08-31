@@ -468,6 +468,116 @@ class CPICalculationEngine:
                 conn.commit()
                 log.info(f"✅ Successfully persisted {len(elem_rows)} elementary indices and {len(cpi_rows)} division CPI facts!")
 
+    def compute_monthly_cpi(self, month_date: date | None = None) -> pd.DataFrame:
+        """Computes conformed monthly CPI facts across all 12 COICOP divisions and headline/core indices."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                where_clause = ""
+                params = []
+                if month_date is not None:
+                    target_month = month_date.replace(day=1)
+                    where_clause = "WHERE DATE_TRUNC('month', calculation_date)::DATE = %s"
+                    params.append(target_month)
+
+                query = f"""
+                    WITH monthly_base AS (
+                        SELECT
+                            DATE_TRUNC('month', calculation_date)::DATE AS cpi_month,
+                            coicop_division,
+                            MAX(division_name) AS division_name,
+                            MAX(weight) AS weight,
+                            ROUND(AVG(division_index)::numeric, 4) AS monthly_division_index,
+                            ROUND(AVG(headline_cpi)::numeric, 4) AS monthly_headline_cpi,
+                            ROUND(AVG(core_cpi)::numeric, 4) AS monthly_core_cpi,
+                            SUM(item_count) AS item_count,
+                            SUM(observation_count) AS observation_count,
+                            COUNT(DISTINCT calculation_date) AS active_days_in_month
+                        FROM gold.fct_cpi_daily
+                        {where_clause}
+                        GROUP BY DATE_TRUNC('month', calculation_date)::DATE, coicop_division
+                    )
+                    SELECT
+                        cpi_month,
+                        coicop_division,
+                        division_name,
+                        weight,
+                        monthly_division_index,
+                        monthly_headline_cpi,
+                        monthly_core_cpi,
+                        ROUND(((monthly_division_index - LAG(monthly_division_index) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_division_index) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::numeric, 4) AS mom_inflation_pct,
+                        ROUND(((monthly_division_index - LAG(monthly_division_index, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_division_index, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::numeric, 4) AS yoy_inflation_pct,
+                        item_count,
+                        observation_count,
+                        active_days_in_month
+                    FROM monthly_base
+                    ORDER BY cpi_month DESC, coicop_division ASC;
+                """
+                cur.execute(query, params)
+                cols = [desc[0] for desc in cur.description]
+                rows = cur.fetchall()
+                df = pd.DataFrame(rows, columns=cols)
+                return df
+
+    def save_monthly_cpi(self, monthly_df: pd.DataFrame) -> None:
+        """Upserts computed monthly CPI facts into gold.fct_cpi_monthly."""
+        if monthly_df.empty:
+            log.warning("No monthly CPI records to save.")
+            return
+
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS gold.fct_cpi_monthly (
+                        cpi_month DATE NOT NULL,
+                        coicop_division VARCHAR(10) NOT NULL,
+                        division_name VARCHAR(150),
+                        weight NUMERIC(8, 5),
+                        monthly_division_index NUMERIC(10, 4),
+                        monthly_headline_cpi NUMERIC(10, 4),
+                        monthly_core_cpi NUMERIC(10, 4),
+                        mom_inflation_pct NUMERIC(8, 4),
+                        yoy_inflation_pct NUMERIC(8, 4),
+                        item_count INTEGER,
+                        observation_count INTEGER,
+                        active_days_in_month INTEGER,
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        PRIMARY KEY (cpi_month, coicop_division)
+                    );
+                """)
+                rows = [
+                    (
+                        r["cpi_month"], r["coicop_division"], r["division_name"], r["weight"],
+                        None if pd.isna(r["monthly_division_index"]) else float(r["monthly_division_index"]),
+                        float(r["monthly_headline_cpi"]), float(r["monthly_core_cpi"]),
+                        None if pd.isna(r["mom_inflation_pct"]) else float(r["mom_inflation_pct"]),
+                        None if pd.isna(r["yoy_inflation_pct"]) else float(r["yoy_inflation_pct"]),
+                        int(r["item_count"]), int(r["observation_count"]), int(r["active_days_in_month"])
+                    )
+                    for _, r in monthly_df.iterrows()
+                ]
+                execute_batch(cur, """
+                    INSERT INTO gold.fct_cpi_monthly (
+                        cpi_month, coicop_division, division_name, weight,
+                        monthly_division_index, monthly_headline_cpi, monthly_core_cpi,
+                        mom_inflation_pct, yoy_inflation_pct,
+                        item_count, observation_count, active_days_in_month
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (cpi_month, coicop_division) DO UPDATE
+                    SET division_name = EXCLUDED.division_name,
+                        weight = EXCLUDED.weight,
+                        monthly_division_index = EXCLUDED.monthly_division_index,
+                        monthly_headline_cpi = EXCLUDED.monthly_headline_cpi,
+                        monthly_core_cpi = EXCLUDED.monthly_core_cpi,
+                        mom_inflation_pct = EXCLUDED.mom_inflation_pct,
+                        yoy_inflation_pct = EXCLUDED.yoy_inflation_pct,
+                        item_count = EXCLUDED.item_count,
+                        observation_count = EXCLUDED.observation_count,
+                        active_days_in_month = EXCLUDED.active_days_in_month
+                """, rows)
+                conn.commit()
+                log.info(f"✅ Successfully persisted {len(rows)} monthly CPI facts into gold.fct_cpi_monthly!")
+
 if __name__ == "__main__":
     engine = CPICalculationEngine()
     engine.run_daily_pipeline()
+

@@ -334,6 +334,27 @@ ALTER TABLE gold.fct_cpi_daily
     ADD CONSTRAINT chk_fct_cpi_weight_sum
         CHECK (weight IS NULL OR (weight > 0 AND weight < 1));
 
+-- Gold Monthly Laspeyres 12-Division & Headline CPI Facts
+CREATE TABLE IF NOT EXISTS gold.fct_cpi_monthly (
+    cpi_month DATE NOT NULL,
+    coicop_division VARCHAR(10) NOT NULL,
+    division_name VARCHAR(150),
+    weight NUMERIC(8, 5),
+    monthly_division_index NUMERIC(10, 4),
+    monthly_headline_cpi NUMERIC(10, 4),
+    monthly_core_cpi NUMERIC(10, 4),
+    mom_inflation_pct NUMERIC(8, 4),
+    yoy_inflation_pct NUMERIC(8, 4),
+    item_count INTEGER,
+    observation_count INTEGER,
+    active_days_in_month INTEGER,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (cpi_month, coicop_division)
+);
+CREATE INDEX IF NOT EXISTS idx_fct_cpi_monthly_month ON gold.fct_cpi_monthly(cpi_month);
+CREATE INDEX IF NOT EXISTS idx_fct_cpi_monthly_div ON gold.fct_cpi_monthly(coicop_division);
+
+
 -- Gold Conformed Item Dimension (Master Catalog)
 CREATE TABLE IF NOT EXISTS gold.dim_items (
     item_id TEXT PRIMARY KEY,

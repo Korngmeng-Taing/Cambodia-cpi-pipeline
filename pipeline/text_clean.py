@@ -63,46 +63,224 @@ _KHMER_DIGITS = str.maketrans("០១២៣៤៥៦៧៨៩", "0123456789")
 
 # Comprehensive Khmer dictionary mappings (Khmer UTF-8 → English standard terms)
 _KHMER_TERMS = {
+    # Automotive / Energy (Div 07 / 04)
     "សាំង": "GASOLINE",
     "ប្រេងសាំង": "GASOLINE",
     "ប្រេងម៉ាស៊ូត": "DIESEL",
     "ម៉ាស៊ូត": "DIESEL",
+    "ហ្គាស": "COOKING GAS",
+    "អគ្គិសនី": "ELECTRICITY",
+    "ទឹកស្អាត": "TAP WATER",
+
+    # Alcohol & Tobacco (Div 02)
     "ស្រា": "BEER",
     "ស្រាបៀរ": "BEER",
+    "ស្រាបៀរអង្គរ": "ANGKOR BEER",
+    "ស្រាក្រហម": "RED WINE",
+    "ស្រាស": "WHITE WINE",
+    "ស្រាវីស្គី": "WHISKEY",
+    "បារី": "CIGARETTES",
+
+    # Rice, Grains, Bakery (Div 01.1.1)
     "អង្ករ": "RICE",
     "អង្ករផ្កាម្លិះ": "JASMINE RICE",
-    "ត្រី": "FISH",
-    "ទឹក": "WATER",
-    "ទឹកបរិសុទ្ធ": "WATER",
-    "ទឹកដោះគោ": "MILK",
-    "មាន់": "CHICKEN",
-    "សាច់មាន់": "CHICKEN",
-    "ជ្រូក": "PORK",
-    "សាច់ជ្រូក": "PORK",
-    "គោ": "BEEF",
+    "នំប៉័ង": "BREAD",
+    "មី": "NOODLES",
+    "ម្សៅ": "FLOUR",
+    "ម្សៅមី": "WHEAT FLOUR",
+
+    # Meat & Poultry (Div 01.1.2)
     "សាច់គោ": "BEEF",
+    "សាច់គោស្រស់": "FRESH BEEF",
+    "គោ": "BEEF",
+    "សាច់ជ្រូក": "PORK",
+    "សាច់ជ្រូកស្រស់": "FRESH PORK",
+    "ជ្រូក": "PORK",
+    "សាច់មាន់": "CHICKEN",
+    "សាច់មាន់ស្រស់": "FRESH CHICKEN",
+    "មាន់": "CHICKEN",
+    "សាច់ទា": "DUCK",
+    "សាច់ក្រក": "SAUSAGE",
+
+    # Fish & Seafood (Div 01.1.3)
+    "ត្រី": "FISH",
+    "ត្រីស្រស់": "FRESH FISH",
+    "ត្រីសាម៉ុង": "SALMON",
+    "ត្រីសាម៉ុងស្រស់": "FRESH SALMON",
+    "ត្រីធូណា": "TUNA",
+    "បង្គា": "SHRIMP",
+    "មឹក": "SQUID",
+    "ក្តាម": "CRAB",
+    "ប្រហុក": "FERMENTED FISH",
+
+    # Dairy & Eggs (Div 01.1.4)
+    "ទឹកដោះគោ": "MILK",
+    "ទឹកដោះគោស្រស់": "FRESH MILK",
+    "ទឹកដោះគោឆៅ": "RAW MILK",
+    "ឈីស": "CHEESE",
+    "ប៊ឺ": "BUTTER",
+    "យ៉ាអួ": "YOGURT",
     "ស៊ុត": "EGG",
     "ពងទា": "DUCK EGG",
     "ពងមាន់": "CHICKEN EGG",
-    "បន្លែ": "VEGETABLE",
-    "ផ្លែឈើ": "FRUIT",
+
+    # Oils & Fats (Div 01.1.5)
     "ប្រេងឆា": "COOKING OIL",
+    "ប្រេងដូង": "COCONUT OIL",
+    "ប្រេងអូលីវ": "OLIVE OIL",
+
+    # Fruit (Div 01.1.6)
+    "ផ្លែឈើ": "FRUIT",
+    "ផ្លែប៉ោម": "APPLE",
+    "ផ្លែចេក": "BANANA",
+    "ចេក": "BANANA",
+    "ផ្លែក្រូច": "ORANGE",
+    "ក្រូច": "ORANGE",
+    "ផ្លែស្វាយ": "MANGO",
+    "ស្វាយ": "MANGO",
+    "ឪឡឹក": "WATERMELON",
+    "ទំពាំងបាយជូរ": "GRAPES",
+
+    # Vegetables (Div 01.1.7)
+    "បន្លែ": "VEGETABLE",
+    "ប៉េងប៉ោះ": "TOMATO",
+    "ដំឡូងបារាំង": "POTATO",
+    "ខ្ទឹមបារាំង": "ONION",
+    "ខ្ទឹមស": "GARLIC",
+    "ម្ទេស": "CHILI",
+    "ការ៉ុត": "CARROT",
+
+    # Sugar, Sweets & Spices (Div 01.1.8 / 01.1.9)
     "ស្ករស": "SUGAR",
+    "ស្ករត្នោត": "PALM SUGAR",
+    "ទឹកឃ្មុំ": "HONEY",
+    "សូកូឡា": "CHOCOLATE",
+    "ស្ករគ្រាប់": "CANDY",
+    "នំ": "CAKE",
+    "នំស្រួយ": "BISCUITS",
     "អំបិល": "SALT",
-    "នំប៉័ង": "BREAD",
-    "មី": "NOODLES",
+    "ទឹកត្រី": "FISH SAUCE",
+    "ទឹកស៊ីអ៊ីវ": "SOY SAUCE",
+    "គ្រឿងទេស": "SPICES",
+
+    # Beverages (Div 01.2.1 / 01.2.2)
     "កាហ្វេ": "COFFEE",
     "តែ": "TEA",
-    "ថ្នាំ": "MEDICINE",
-    "សាប៊ូ": "SOAP",
+    "កាកាវ": "COCOA",
+    "ទឹក": "WATER",
+    "ទឹកបរិសុទ្ធ": "WATER",
+    "ទឹកក្រូច": "SOFT DRINK",
+    "កូកាកូឡា": "COCA COLA",
+    "ទឹកផ្លែឈើ": "FRUIT JUICE",
+
+    # Clothing & Footwear (Div 03)
     "ខោអាវ": "CLOTHES",
+    "អាវ": "SHIRT",
+    "អាវយឺត": "T-SHIRT",
+    "ខោ": "PANTS",
+    "ខោខូវប៊យ": "JEANS",
+    "រ៉ូប": "DRESS",
+    "សំពត់": "SKIRT",
+    "អាវរងា": "JACKET",
+    "ស្រោមជើង": "SOCKS",
     "ស្បែកជើង": "SHOES",
-    "ទូរស័ព្ទ": "PHONE",
-    "ឡាន": "CAR",
-    "ម៉ូតូ": "MOTORBIKE",
+    "ស្បែកជើងប៉ាតា": "SNEAKERS",
+    "ស្បែកជើងផ្ទាត់": "SLIPPERS",
+
+    # Housing & Furnishing (Div 04 / 05)
     "ផ្ទះ": "HOUSE",
     "បន្ទប់ជួល": "RENTAL",
+    "ផ្ទះជួល": "HOUSE RENTAL",
+    "តុ": "TABLE",
+    "កៅអី": "CHAIR",
+    "គ្រែ": "BED",
+    "ពូក": "MATTRESS",
+    "ភួយ": "BLANKET",
+    "កន្សែង": "TOWEL",
+    "កម្រាលពូក": "BEDSHEET",
+    "សាប៊ូបោកខោអាវ": "LAUNDRY DETERGENT",
+    "ទឹកលាងចាន": "DISHWASHING LIQUID",
+    "ទឹកជូតឥដ្ឋ": "FLOOR CLEANER",
+    "អំពូលភ្លើង": "LIGHT BULB",
+
+    # Health (Div 06)
+    "ថ្នាំ": "MEDICINE",
+    "ថ្នាំពេទ្យ": "MEDICINE",
+    "ប៉ារ៉ាសេតាម៉ុល": "PARACETAMOL",
+    "វីតាមីន": "VITAMINS",
+    "បង់រុំរបួស": "BANDAGE",
+    "ប្រេងកូឡា": "MEDICATED BALM",
+    "ម៉ាស់": "FACE MASK",
+
+    # Communication & Tech (Div 08 / 09)
+    "ទូរស័ព្ទ": "PHONE",
+    "ទូរស័ព្ទដៃ": "MOBILE PHONE",
+    "ស៊ីមកាត": "SIM CARD",
+    "កាតទូរស័ព្ទ": "PHONE CARD",
+    "អ៊ីនធឺណិត": "INTERNET",
+    "កុំព្យូទ័រ": "COMPUTER",
+    "កុំព្យូទ័រយួរដៃ": "LAPTOP",
+    "ទូរទស្សន៍": "TELEVISION",
+    "កាស": "HEADPHONES",
+    "ធុងបាស": "SPEAKER",
+    "ឆ្នាំងសាក": "CHARGER",
+    "ខ្សែសាក": "CHARGING CABLE",
+    "សៀវភៅ": "BOOK",
+    "ប៊ិច": "PEN",
+    "ប្រដាប់ក្មេងលេង": "TOYS",
+
+    # Transport & Hospitality (Div 07 / 11)
+    "ឡាន": "CAR",
+    "ម៉ូតូ": "MOTORBIKE",
+    "សំបុត្រឡានក្រុង": "BUS TICKET",
+    "សណ្ឋាគារ": "HOTEL",
+    "អាហារដ្ឋាន": "RESTAURANT",
+    "ហាងកាហ្វេ": "CAFE",
+
+    # Personal Care (Div 12)
+    "សាប៊ូ": "SOAP",
+    "សាប៊ូកក់សក់": "SHAMPOO",
+    "ក្រែមបន្ទន់សក់": "HAIR CONDITIONER",
+    "សាប៊ូដុសខ្លួន": "BODY WASH",
+    "ថ្នាំដុសធ្មេញ": "TOOTHPASTE",
+    "ច្រាសដុសធ្មេញ": "TOOTHBRUSH",
+    "ឡេការពារកម្តៅថ្ងៃ": "SUNSCREEN",
+    "ឡេលាបខ្លួន": "BODY LOTION",
+    "ក្រែមលាបមុខ": "FACE CREAM",
+    "ខោទឹកនោម": "DIAPERS",
+    "សំឡីអនាម័យ": "SANITARY PADS",
+    "ទឹកអប់": "PERFUME",
+    "កាបូប": "BAG",
+    "នាឡិកា": "WATCH",
+    "គ្រឿងអលង្ការ": "JEWELRY",
 }
+
+
+def is_khmer_text(text: str) -> bool:
+    """Returns True if the text contains Khmer unicode characters (\u1780-\u17ff)."""
+    if not text:
+        return False
+    return bool(re.search(r"[\u1780-\u17ff]", text))
+
+
+def extract_khmer_tokens(text: str) -> list[str]:
+    """Extracts known Khmer compound tokens and unsegmented Khmer morphemes."""
+    if not text or not is_khmer_text(text):
+        return []
+    tokens = []
+    # 1. Match known dictionary compounds longest-first
+    remaining = text
+    for k in sorted(_KHMER_TERMS.keys(), key=len, reverse=True):
+        if k in remaining:
+            tokens.append(k)
+            eng_equiv = _KHMER_TERMS[k].lower()
+            tokens.extend(eng_equiv.split())
+    # 2. Extract any individual Khmer character clusters
+    khmer_clusters = re.findall(r"[\u1780-\u17ff]+", text)
+    for cl in khmer_clusters:
+        if cl not in tokens:
+            tokens.append(cl)
+    return tokens
 
 # Common English abbreviations to expand
 _EN_ABBREV = re.compile(

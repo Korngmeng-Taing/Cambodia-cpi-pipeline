@@ -180,3 +180,82 @@ FROM (
 ) f
 ORDER BY f.calculation_date DESC;
 
+
+-- 10.7 Monthly National CPI Inflation Summary (Headline & Core MoM / YoY)
+CREATE OR REPLACE VIEW gold.v_cpi_monthly_summary AS
+WITH monthly_base AS (
+    SELECT
+        DATE_TRUNC('month', calculation_date)::DATE AS cpi_month,
+        ROUND(AVG(headline_cpi), 4) AS monthly_headline_cpi,
+        ROUND(AVG(core_cpi), 4) AS monthly_core_cpi,
+        COUNT(DISTINCT calculation_date) AS active_days_in_month,
+        SUM(observation_count) AS total_observations,
+        SUM(item_count) AS total_items
+    FROM (
+        SELECT
+            calculation_date,
+            MAX(headline_cpi) AS headline_cpi,
+            MAX(core_cpi) AS core_cpi,
+            SUM(observation_count) AS observation_count,
+            SUM(item_count) AS item_count
+        FROM gold.fct_cpi_daily
+        GROUP BY calculation_date
+    ) d
+    GROUP BY DATE_TRUNC('month', calculation_date)::DATE
+),
+monthly_lags AS (
+    SELECT
+        cpi_month,
+        monthly_headline_cpi,
+        monthly_core_cpi,
+        active_days_in_month,
+        total_observations,
+        total_items,
+        LAG(monthly_headline_cpi, 1) OVER (ORDER BY cpi_month) AS prev_month_headline_cpi,
+        LAG(monthly_core_cpi, 1) OVER (ORDER BY cpi_month) AS prev_month_core_cpi,
+        LAG(monthly_headline_cpi, 12) OVER (ORDER BY cpi_month) AS prev_year_headline_cpi,
+        LAG(monthly_core_cpi, 12) OVER (ORDER BY cpi_month) AS prev_year_core_cpi
+    FROM monthly_base
+)
+SELECT
+    cpi_month,
+    monthly_headline_cpi,
+    monthly_core_cpi,
+    active_days_in_month,
+    total_observations,
+    ROUND(((monthly_headline_cpi - prev_month_headline_cpi) / NULLIF(prev_month_headline_cpi, 0) * 100.0)::NUMERIC, 2) AS headline_mom_inflation_pct,
+    ROUND(((monthly_core_cpi - prev_month_core_cpi) / NULLIF(prev_month_core_cpi, 0) * 100.0)::NUMERIC, 2) AS core_mom_inflation_pct,
+    ROUND(((monthly_headline_cpi - prev_year_headline_cpi) / NULLIF(prev_year_headline_cpi, 0) * 100.0)::NUMERIC, 2) AS headline_yoy_inflation_pct,
+    ROUND(((monthly_core_cpi - prev_year_core_cpi) / NULLIF(prev_year_core_cpi, 0) * 100.0)::NUMERIC, 2) AS core_yoy_inflation_pct
+FROM monthly_lags
+ORDER BY cpi_month DESC;
+
+
+-- 10.8 Monthly 12-Division COICOP Breakdown Matrix
+CREATE OR REPLACE VIEW gold.v_cpi_monthly_divisions AS
+WITH div_monthly AS (
+    SELECT
+        DATE_TRUNC('month', calculation_date)::DATE AS cpi_month,
+        coicop_division,
+        MAX(division_name) AS division_name,
+        MAX(weight) AS weight,
+        ROUND(AVG(division_index), 4) AS monthly_division_index,
+        SUM(observation_count) AS total_observations,
+        COUNT(DISTINCT calculation_date) AS active_days_in_month
+    FROM gold.fct_cpi_daily
+    GROUP BY DATE_TRUNC('month', calculation_date)::DATE, coicop_division
+)
+SELECT
+    cpi_month,
+    coicop_division,
+    division_name,
+    weight,
+    monthly_division_index,
+    ROUND(((monthly_division_index - LAG(monthly_division_index) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_division_index) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::NUMERIC, 2) AS division_mom_change_pct,
+    ROUND(((monthly_division_index - LAG(monthly_division_index, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_division_index, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::NUMERIC, 2) AS division_yoy_change_pct,
+    total_observations,
+    active_days_in_month
+FROM div_monthly
+ORDER BY cpi_month DESC, coicop_division ASC;
+
+

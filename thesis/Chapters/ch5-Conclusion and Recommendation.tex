@@ -1,5 +1,34 @@
 \newpage
 \mychapter{V. CONCLUSION AND RECOMMENDATION}{V. CONCLUSION AND RECOMMENDATION}
+
 \section{Conclusion}
+\hs This graduation thesis research developed, implemented, and benchmarked an end-to-end automated **Cambodia Daily Consumer Price Index (CPI) Medallion Pipeline**. By combining modern data engineering architectures, dense multilingual vector embeddings, Large Language Model arbitration, and micro-econometric index aggregation, the pipeline addresses the critical limitations of traditional retrospective monthly price surveys.
+
+\subsection{Summary of Principal Achievements}
+\begin{enumerate}
+    \item \textbf{Comprehensive 12-Division Digital Ingestion:} Successfully engineered and orchestrated 20 daily scrapers across supermarkets, pharmacies, transport platforms, real estate portals, telecommunications, hospitality, and official government APIs into an immutable PostgreSQL 16 Medallion Bronze layer, capturing over 16,000 price quotes per day with 99.5\% system uptime.
+    \item \textbf{High-Accuracy Multilingual Entity Matching:} Implemented a 768-dimensional dense vector item matching engine combined with strict deterministic specification guards (RAM, storage, packaging volume variance $\le 10\%$) and Gemini AI arbitration. This achieved an \textbf{F1-score of 95.6\%} and suppressed false merge rates to \textbf{2.2\%}.
+    \item \textbf{Efficient 4-Tier Hybrid COICOP Classification:} Engineered a 4-tier classification hierarchy that resolved \textbf{93.4\% of items in sub-millisecond time} via domain locks and vector cosine matching, achieving an overall classification accuracy of \textbf{98.2\%} across all 12 UN COICOP categories while operating within free-tier API quotas.
+    \item \textbf{Axiomatically Robust Econometric Index Compilation:} Formulated elementary unweighted geometric mean price relatives (\textbf{Jevons formula}) coupled with a \textbf{7-day ILO class-mean imputation engine} and upper-level Laspeyres weighting calibrated to official NIS Cambodia expenditure shares, successfully publishing real-time daily National Headline CPI and Refined Core CPI series.
+\end{enumerate}
+
 \section{Recommendations}
 
+\subsection{Recommendations for Macroeconomic Policy Institutions (NBC \& MEF)}
+\begin{itemize}
+    \item \textbf{Integration into Monetary Policy Frameworks:} The National Bank of Cambodia (NBC) should utilize the daily high-frequency Headline and Core CPI series as an early-warning signal for exchange rate pass-through and domestic supply chain bottlenecks ahead of monthly statistical releases.
+    \item \textbf{High-Frequency Fiscal Policy Calibrations:} The Ministry of Economy and Finance (MEF) can leverage category-level price movements (such as Division 04 utilities and Division 07 transport fuels) to dynamically calibrate targeted social safety net transfers and assess tariff adjustments.
+\end{itemize}
+
+\subsection{Recommendations for National Statistical Authorities (NIS)}
+\begin{itemize}
+    \item \textbf{Hybrid Physical-Digital Index Compilation:} The National Institute of Statistics should adopt a hybrid model where physical survey collection in rural and informal wet markets is augmented with automated daily web-scraped data from modern urban retailers.
+    \item \textbf{Dynamic Scanner Data Integration:} Establish direct data-sharing protocols with major domestic supermarket chains and payment aggregators (e.g., Bakong) to ingest barcode scanner data equipped with exact expenditure transaction weights.
+\end{itemize}
+
+\subsection{Recommendations for Future Academic and Engineering Research}
+\begin{itemize}
+    \item \textbf{Multilateral Rolling Index Engines:} Implement automated rolling multilateral index methods (e.g., GEKS-T\"ornqvist with Movement Splicing) directly into the dbt transformation pipeline to eliminate commodity substitution bias and chain drift across longitudinal scanner datasets.
+    \item \textbf{Computer Vision for Product Image Matching:} Incorporate multi-modal vision-language models to verify packaging changes, labels, and shrinkflation directly from scraped product photographs.
+    \item \textbf{Geographic Expansion across Provinces:} Expand scraper coverage beyond Phnom Penh to major provincial hubs (Siem Reap, Battambang, Sihanoukville) to track spatial price disparities across Cambodia.
+\end{itemize}

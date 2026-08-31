@@ -33,7 +33,7 @@ flowchart LR
         D1[("gold.dim_items & gold.dim_stores")]
         D2[("gold.fct_daily_prices")]
         D3["Jevons Geometric Mean & Imputation"]
-        D4[("gold.cpi_headline_daily\n12-Division & National CPI")]
+        D4[("gold.fct_cpi_daily & gold.fct_cpi_monthly\n12-Division & National CPI")]
     end
 
     subgraph S4["SERVING & ANALYTICS"]

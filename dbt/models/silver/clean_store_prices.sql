@@ -90,6 +90,7 @@ ai_prejoined as materialized (
         confidence_score
     from {{ source('ops', 'dim_coicop_ai_cache') }}
     where coicop_code <> '99.9.9'
+    order by lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')), classified_at desc
 ),
 ai_match as materialized (
     select distinct on (p.raw_price_id)

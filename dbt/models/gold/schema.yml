@@ -67,6 +67,20 @@ models:
         tests:
           - not_null
 
+  - name: fct_cpi_monthly
+    description: Monthly conformed 12-division and national headline/core CPI facts with MoM and YoY inflation rates.
+    columns:
+      - name: cpi_month
+        tests:
+          - not_null
+      - name: coicop_division
+        tests:
+          - not_null
+      - name: monthly_headline_cpi
+        tests:
+          - not_null
+
+
 
 
 

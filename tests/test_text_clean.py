@@ -143,3 +143,19 @@ class TestSegmentKhmerLongestFirst:
         assert segment_khmer_words("ទឹកដោះគោ") == "MILK"
         assert segment_khmer_words("ប្រេងម៉ាស៊ូត") == "DIESEL"
         assert segment_khmer_words("សាច់ជ្រូក") == "PORK"
+
+
+class TestKhmerUtilities:
+    def test_is_khmer_text(self):
+        from pipeline.text_clean import is_khmer_text
+        assert is_khmer_text("ត្រីសាម៉ុង 500g") is True
+        assert is_khmer_text("Coca-Cola 330ml") is False
+        assert is_khmer_text("") is False
+        assert is_khmer_text(None) is False
+
+    def test_extract_khmer_tokens(self):
+        from pipeline.text_clean import extract_khmer_tokens
+        tokens = extract_khmer_tokens("ត្រីសាម៉ុងស្រស់ 500g")
+        assert "ត្រីសាម៉ុងស្រស់" in tokens or "ត្រីសាម៉ុង" in tokens
+        assert "fresh" in tokens or "salmon" in tokens or "fish" in tokens
+

@@ -1,0 +1,86 @@
+﻿\section*{Appendix A: 12 UN COICOP Division Expenditure Weights and Baseline Items}
+\addcontentsline{toc}{section}{Appendix A: 12 UN COICOP Division Expenditure Weights}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|c|p{7cm}|r|c|}
+\hline
+\rowcolor{blue!20}
+\textbf{Division} & \textbf{Official UN COICOP Division Name} & \textbf{NIS Weight (\%)} & \textbf{Core Inflation Status} \\ \hline
+\textbf{01} & Food and Non-Alcoholic Beverages & 44.800\% & Excluded from Core CPI \\ \hline
+\textbf{02} & Alcoholic Beverages and Tobacco & 1.500\% & Included in Core CPI \\ \hline
+\textbf{03} & Clothing and Footwear & 2.900\% & Included in Core CPI \\ \hline
+\textbf{04} & Housing, Water, Electricity, Gas and Other Fuels & 17.100\% & Excluded (Energy/Fuels) \\ \hline
+\textbf{05} & Furnishings, Household Equipment \& Maintenance & 3.300\% & Included in Core CPI \\ \hline
+\textbf{06} & Health and Pharmaceuticals & 5.600\% & Included in Core CPI \\ \hline
+\textbf{07} & Transport and Automotive Fuels & 12.200\% & Excluded (Gasoline/Diesel) \\ \hline
+\textbf{08} & Communication and Telecommunications & 3.900\% & Included in Core CPI \\ \hline
+\textbf{09} & Recreation and Culture & 1.900\% & Included in Core CPI \\ \hline
+\textbf{10} & Education & 1.500\% & Included in Core CPI \\ \hline
+\textbf{11} & Restaurants and Hotels & 3.100\% & Included in Core CPI \\ \hline
+\textbf{12} & Miscellaneous Goods and Services & 2.200\% & Included in Core CPI \\ \hline
+\rowcolor{blue!10}
+\textbf{Total} & \textbf{National Basket Headline CPI} & \textbf{100.000\%} & \textbf{Core CPI: 52.200\%} \\ \hline
+\end{tabular}
+\caption{Official National Institute of Statistics (NIS) Cambodia 12-Division Expenditure Weights}
+\label{tab:app_coicop_weights}
+\end{table}
+
+\newpage
+\section*{Appendix B: Machine Learning and Transformer Hyperparameter Configurations}
+\addcontentsline{toc}{section}{Appendix B: Machine Learning Hyperparameters}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|l|l|}
+\hline
+\rowcolor{blue!20}
+\textbf{Model / Architecture} & \textbf{Hyperparameter} & \textbf{Configured Value / Search Space} \\ \hline
+\multirow{4}{*}{\textbf{Embedding Engine}} & Model Name & \texttt{text-embedding-004} (Gemini) \\ \cline{2-3}
+ & Embedding Dimension & 768 float32 dimensions \\ \cline{2-3}
+ & Similarity Metric & Cosine Similarity ($S = \frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\|_2 \|\mathbf{v}\|_2}$) \\ \cline{2-3}
+ & Similarity Threshold & $\tau_{\text{match}} = 0.82$, $\tau_{\text{coicop}} = 0.72$ \\ \hline
+\multirow{5}{*}{\textbf{XGBoost Inflation Model}} & \texttt{n\_estimators} & 500 \\ \cline{2-3}
+ & \texttt{learning\_rate} & 0.05 \\ \cline{2-3}
+ & \texttt{max\_depth} & 6 \\ \cline{2-3}
+ & \texttt{subsample} & 0.80 \\ \cline{2-3}
+ & \texttt{colsample\_bytree} & 0.80 \\ \hline
+\multirow{4}{*}{\textbf{LSTM Neural Network}} & Hidden Units & 128 (Layer 1), 64 (Layer 2) \\ \cline{2-3}
+ & Sequence Length & 30 daily timesteps \\ \cline{2-3}
+ & Optimizer / Learning Rate & Adam ($lr = 1\times 10^{-3}$) \\ \cline{2-3}
+ & Dropout Rate & 0.20 \\ \hline
+\multirow{3}{*}{\textbf{Prophet Time-Series}} & Growth & Linear \\ \cline{2-3}
+ & Changepoint Prior Scale & 0.05 \\ \cline{2-3}
+ & Seasonality Mode & Multiplicative \\ \hline
+\end{tabular}
+\caption{Hyperparameter Search Space and Optimal Pipeline Configurations}
+\label{tab:app_hyperparameters}
+\end{table}
+
+\newpage
+\section*{Appendix C: Database Star-Schema and Relational Entities}
+\addcontentsline{toc}{section}{Appendix C: Database Star-Schema and Relational Entities}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|l|p{7.5cm}|}
+\hline
+\rowcolor{blue!20}
+\textbf{Schema} & \textbf{Table Name} & \textbf{Grain / Primary Function} \\ \hline
+\texttt{bronze} & \texttt{raw\_prices} & Immutable raw scraped payload per listing with raw JSONB \\ \hline
+\texttt{staging} & \texttt{raw\_scrapes} & Daily batch execution health log, store slug, row count \\ \hline
+\texttt{staging} & \texttt{exchange\_rates} & Daily official MEF USD/KHR foreign exchange rates \\ \hline
+\texttt{silver} & \texttt{canonical\_items} & Resolved product identities with barcode and canonical title \\ \hline
+\texttt{silver} & \texttt{clean\_store\_prices} & Standardized daily prices in KHR with unit price normalization \\ \hline
+\texttt{silver} & \texttt{dim\_coicop\_ai\_cache} & PostgreSQL vector memoization cache for Gemini AI outputs \\ \hline
+\texttt{gold} & \texttt{dim\_items} & Curated item master dimension with UN COICOP attribution \\ \hline
+\texttt{gold} & \texttt{dim\_stores} & Conformed store and digital retailer master dimension \\ \hline
+\texttt{gold} & \texttt{fct\_daily\_prices} & Daily price fact table at \texttt{(scrape\_date, store\_slug, item\_id)} \\ \hline
+\texttt{gold} & \texttt{fct\_cpi\_daily} & Aggregated Jevons micro-index, 12-division \& National CPI \\ \hline
+\end{tabular}
+\caption{PostgreSQL 16 Medallion Star-Schema and Conformed Entities}
+\label{tab:app_database_schema}
+\end{table}

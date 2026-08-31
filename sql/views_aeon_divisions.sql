@@ -37,7 +37,7 @@ WITH classified_products AS (
             item_id AS item_id,
             coicop_division,
             coicop_code
-        FROM staging.int_coicop_classified
+        FROM silver.int_coicop_classified
         ORDER BY item_id,
                  CASE WHEN coicop_division <> 'UNCLASSIFIED' THEN 1 ELSE 2 END,
                  coicop_confidence DESC

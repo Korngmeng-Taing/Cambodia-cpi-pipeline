@@ -30,10 +30,11 @@ The Medallion architecture strictly separates store-level observation data hygie
 │ • silver.hedonic_adjusted_    │                                             │
 │   prices                      │                                             │
 ├───────────────────────────────┴─────────────────────────────────────────────┤
-│ 3. INTERMEDIATE TRANSFORMATIONS (Built in staging schema)                    │
-│ • staging.int_prices_cleaned (USD->KHR, promo clamping, unit standardization)│
-│ • staging.int_coicop_classified (4-tier hybrid vector & AI COICOP ladder)    │
+│ 3. INTERMEDIATE TRANSFORMATIONS (Built in silver schema)                    │
+│ • silver.int_prices_cleaned (USD->KHR, promo clamping, unit standardization) │
+│ • silver.int_coicop_classified (4-tier hybrid vector & AI COICOP ladder)    │
 └─────────────────────────────────────────────────────────────────────────────┘
+
 ```
 
 ---

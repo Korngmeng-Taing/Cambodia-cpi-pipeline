@@ -91,7 +91,21 @@ def execute_daily_cpi_calculation(**context):
     engine.run_daily_pipeline(target_date=calc_date, base_date=base_date)
     print(f"✅ Gold CPI Calculation completed successfully for {calc_date}!")
 
+def execute_monthly_cpi_calculation(**context):
+    logical_date_str = context.get("ds")
+    if logical_date_str:
+        calc_date = datetime.strptime(logical_date_str, "%Y-%m-%d").date()
+    else:
+        calc_date = date.today()
+
+    print(f"🚀 Updating Monthly CPI Mart for {calc_date}...")
+    engine = CPICalculationEngine()
+    df_monthly = engine.compute_monthly_cpi()
+    engine.save_monthly_cpi(df_monthly)
+    print(f"✅ Monthly CPI calculation and persistence complete!")
+
 def annual_rebase_cpi(**context):
+
     """
     Annual rebasing task: runs on Jan 1 (or first business day).
     Picks the date in December with the most price observations as the new
@@ -193,9 +207,15 @@ with DAG(
         python_callable=execute_daily_cpi_calculation,
     )
 
+    calculate_monthly_cpi_task = PythonOperator(
+        task_id="calculate_monthly_cpi_indices",
+        python_callable=execute_monthly_cpi_calculation,
+    )
+
     annual_rebase_task = PythonOperator(
         task_id="annual_rebase_cpi",
         python_callable=annual_rebase_cpi,
     )
 
-    calculate_cpi_task >> annual_rebase_task
+    calculate_cpi_task >> calculate_monthly_cpi_task >> annual_rebase_task
+

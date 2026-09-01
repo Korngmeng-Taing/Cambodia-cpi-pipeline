@@ -383,7 +383,7 @@ def provision_all():
         },
         {
             "name": "Log-Price Relative Distribution (Hadi / Tukey Outlier Check)",
-            "desc": "Histogram of ln(P_t / P_t-1) checking for standard bell curve and catching 10x decimal errors (peaks at +/-2.30).",
+            "desc": "Histogram of ln(P_t / P_t-1) checking for standard bell curve and catching 10x decimal errors.",
             "display": "bar",
             "sql": """
                 WITH prev_date AS (
@@ -408,7 +408,7 @@ def provision_all():
                     log_relative AS "Log Price Relative [ln(Pt/Pt-1)]",
                     COUNT(*) AS "Observation Count"
                 FROM relatives
-                WHERE log_relative BETWEEN -3.0 AND 3.0
+                WHERE log_relative BETWEEN -2.5 AND 2.5
                 GROUP BY log_relative
                 ORDER BY log_relative ASC;
             """,
@@ -419,38 +419,72 @@ def provision_all():
             "grid": (0, 3, 12, 8)
         },
         {
-            "name": "Clearance & Dump Price Screener (Ottawa Group Filter)",
-            "desc": "Scatter plot of discount % vs price KHR to isolate temporary liquidation drops (>70% off) from regular core prices.",
-            "display": "scatter",
+            "name": "Basket Imputation & Missingness Rate by COICOP Division",
+            "desc": "Share of active items requiring 7-day ILO class-mean geometric imputation per division.",
+            "display": "bar",
             "sql": """
                 SELECT 
-                    discount_pct AS "Discount (%)",
-                    price_khr AS "Price (KHR)",
-                    store_slug AS "Retail Store"
-                FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
-                  AND discount_pct > 15
-                  AND price_khr < 500000
-                LIMIT 500;
+                    coicop_division AS "Division Code",
+                    COUNT(*) AS "Total Basket Items",
+                    COUNT(*) FILTER (WHERE is_imputed = TRUE) AS "Imputed Items",
+                    ROUND((COUNT(*) FILTER (WHERE is_imputed = TRUE) * 100.0 / NULLIF(COUNT(*), 0))::numeric, 1) AS "Imputation Rate (%)"
+                FROM gold.fct_elementary_indices
+                WHERE calculation_date = (SELECT MAX(calculation_date) FROM gold.fct_elementary_indices)
+                GROUP BY coicop_division
+                ORDER BY coicop_division ASC;
             """,
             "viz": {
-                "graph.dimensions": ["Discount (%)"],
-                "graph.metrics": ["Price (KHR)"]
+                "graph.dimensions": ["Division Code"],
+                "graph.metrics": ["Imputation Rate (%)"]
             },
             "grid": (12, 3, 12, 8)
         },
         {
-            "name": "Benchmark Commodity Price Trajectories (Price Spells / Spaghetti Plot)",
-            "desc": "Time series of staple goods checking for sticky price step-functions and catching scraper sawtooth variant bugs.",
+            "name": "Pre-Flight Extreme Price Spikes & Drops (>25% DoD)",
+            "desc": "Pre-aggregation outlier table capturing single-day jumps or drops exceeding 25%.",
+            "display": "table",
+            "sql": """
+                WITH prev_date AS (
+                    SELECT DISTINCT scrape_date 
+                    FROM silver.clean_store_prices 
+                    WHERE scrape_date < (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                    ORDER BY scrape_date DESC LIMIT 1
+                )
+                SELECT 
+                    curr.store_slug AS "Store",
+                    LEFT(curr.name_clean, 35) AS "Product Name",
+                    curr.coicop_division AS "Div",
+                    ROUND(prev.price_khr, 0) AS "Prev Price (KHR)",
+                    ROUND(curr.price_khr, 0) AS "Today Price (KHR)",
+                    ROUND(((curr.price_khr / NULLIF(prev.price_khr, 0)) - 1.0) * 100.0, 1) AS "Shift (%)",
+                    CASE WHEN curr.discount_pct > 0 THEN 'PROMO ' || curr.discount_pct || '%' ELSE 'REGULAR' END AS "Promo State"
+                FROM silver.clean_store_prices curr
+                JOIN silver.clean_store_prices prev 
+                  ON curr.item_id = prev.item_id 
+                 AND curr.store_slug = prev.store_slug
+                WHERE curr.scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                  AND prev.scrape_date = (SELECT scrape_date FROM prev_date)
+                  AND curr.price_khr > 0 
+                  AND prev.price_khr > 0
+                  AND ABS((curr.price_khr / NULLIF(prev.price_khr, 0)) - 1.0) > 0.25
+                ORDER BY ABS((curr.price_khr / NULLIF(prev.price_khr, 0)) - 1.0) DESC
+                LIMIT 25;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (0, 11, 14, 8)
+        },
+        {
+            "name": "Benchmark Commodity Price Trajectories (Price Spells)",
+            "desc": "Time series of staple goods checking for sticky price step-functions.",
             "display": "line",
             "sql": """
                 SELECT 
                     scrape_date AS "Date",
-                    store_slug || ' - ' || LEFT(name_clean, 25) AS "Commodity SKU",
+                    store_slug || ' - ' || LEFT(name_clean, 20) AS "Commodity SKU",
                     AVG(unit_price_khr) AS "Unit Price (KHR/kg or L)"
                 FROM silver.clean_store_prices
                 WHERE coicop_division IN ('01', '07')
-                  AND name_clean ILIKE ANY (ARRAY['%rice%', '%pork%', '%gasoline%', '%oil%', '%milk%'])
+                  AND name_clean ILIKE ANY (ARRAY['%rice%', '%gasoline%', '%oil%', '%milk%', '%pork%'])
                   AND scrape_date >= (SELECT MAX(scrape_date) FROM silver.clean_store_prices) - INTERVAL '14 days'
                   AND is_outlier = FALSE
                   AND unit_price_khr > 0
@@ -461,7 +495,7 @@ def provision_all():
                 "graph.dimensions": ["Date"],
                 "graph.metrics": ["Unit Price (KHR/kg or L)"]
             },
-            "grid": (0, 11, 24, 8)
+            "grid": (14, 11, 10, 8)
         }
     ]
 
@@ -622,28 +656,7 @@ def provision_all():
                 ORDER BY "Raw Records Today" DESC;
             """,
             "viz": {"table.pivot_column": None},
-            "grid": (0, 11, 14, 8)
-        },
-        {
-            "name": "All Gasoline & Retail Fuel Prices (Latest)",
-            "desc": "Live prices of Gasoline (EA92, EA95), Diesel, and Petroleum products collected.",
-            "display": "table",
-            "sql": """
-                SELECT 
-                    name_clean AS "Fuel Product Name",
-                    store_slug AS "Provider / Outlet",
-                    price_khr AS "Price (KHR)",
-                    unit_price_khr AS "Unit Price (KHR/L)",
-                    currency AS "Currency",
-                    scrape_date AS "Date"
-                FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
-                  AND store_slug IN ('moc_fuel', 'new_gasoline', 'total_energies', 'tela', 'caltex', 'ptt')
-                  AND coicop_division = '07'
-                ORDER BY price_khr ASC;
-            """,
-            "viz": {"table.pivot_column": None},
-            "grid": (14, 11, 10, 8)
+            "grid": (0, 11, 24, 8)
         }
     ]
 
@@ -675,13 +688,14 @@ def provision_all():
 
     scrape_cards = [
         {
-            "name": "Total Raw Quotes Collected (Latest Day)",
-            "desc": "Total raw uncleaned price records collected across all 20 retail scrapers today.",
+            "name": "Scraper Ingestion Success Rate (%)",
+            "desc": "Percentage of 20 scrapers that successfully delivered data today.",
             "display": "scalar",
             "sql": """
-                SELECT COUNT(*) AS "Total Scraped Today"
-                FROM bronze.raw_prices
-                WHERE scraped_at::date = (SELECT MAX(scraped_at::date) FROM bronze.raw_prices);
+                SELECT 
+                    ROUND((COUNT(DISTINCT store_slug) * 100.0 / 20.0)::numeric, 1) AS "Scraper Success Rate (%)"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
             """,
             "viz": {},
             "grid": (0, 0, 8, 3)
@@ -818,7 +832,7 @@ def provision_all():
                 WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
             """,
             "viz": {},
-            "grid": (0, 0, 8, 3)
+            "grid": (0, 0, 6, 3)
         },
         {
             "name": "COICOP Classification Coverage (%)",
@@ -831,7 +845,19 @@ def provision_all():
                 WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
             """,
             "viz": {},
-            "grid": (8, 0, 8, 3)
+            "grid": (6, 0, 6, 3)
+        },
+        {
+            "name": "Direct Resolution Share (Exact/Domain)",
+            "desc": "Percentage of items matched directly without needing AI review.",
+            "display": "scalar",
+            "sql": """
+                SELECT 
+                    ROUND((COUNT(*) FILTER (WHERE match_method IN ('barcode_exact', 'sku_exact', 'exact_text')) * 100.0 / NULLIF(COUNT(*), 0))::numeric, 1) AS "Direct Exact Match (%)"
+                FROM silver.item_match_log;
+            """,
+            "viz": {},
+            "grid": (12, 0, 6, 3)
         },
         {
             "name": "Pending Human Review Queue",
@@ -843,7 +869,7 @@ def provision_all():
                 WHERE status = 'pending';
             """,
             "viz": {},
-            "grid": (16, 0, 8, 3)
+            "grid": (18, 0, 6, 3)
         },
         {
             "name": "COICOP 12-Division Product Distribution",
@@ -862,7 +888,25 @@ def provision_all():
                 "graph.dimensions": ["COICOP Division"],
                 "graph.metrics": ["Product Count"]
             },
-            "grid": (0, 3, 12, 8)
+            "grid": (0, 3, 8, 8)
+        },
+        {
+            "name": "Item Matching Method Distribution",
+            "desc": "Breakdown of entity resolution methods: Barcode, SKU, Exact Text, Vector Cosine, New Item.",
+            "display": "bar",
+            "sql": """
+                SELECT 
+                    COALESCE(match_method, 'unknown') AS "Matching Method",
+                    COUNT(*) AS "Matched Count"
+                FROM silver.item_match_log
+                GROUP BY match_method
+                ORDER BY "Matched Count" DESC;
+            """,
+            "viz": {
+                "graph.dimensions": ["Matching Method"],
+                "graph.metrics": ["Matched Count"]
+            },
+            "grid": (8, 3, 8, 8)
         },
         {
             "name": "COICOP Classification Method Breakdown",
@@ -881,7 +925,7 @@ def provision_all():
                 "graph.dimensions": ["Classification Method"],
                 "graph.metrics": ["Item Count"]
             },
-            "grid": (12, 3, 12, 8)
+            "grid": (16, 3, 8, 8)
         },
         {
             "name": "Silver Flagged Price Outliers & Fallback Audits",

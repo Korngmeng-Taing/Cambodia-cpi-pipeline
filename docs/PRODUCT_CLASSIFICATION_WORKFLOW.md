@@ -60,7 +60,7 @@ flowchart TD
 
 ### Implementation Files:
 - [`pipeline/bronze_scraper.py`](file:///D:/CPI%20PIPELINE/pipeline/bronze_scraper.py)
-- [`scrapers/sources.py`](file:///D:/CPI%20PIPELINE/scrapers/sources.py)
+- [`scrapers/sources/`](file:///D:/CPI%20PIPELINE/scrapers/sources/)
 - Database Table: `bronze.raw_prices`
 
 ### Process:

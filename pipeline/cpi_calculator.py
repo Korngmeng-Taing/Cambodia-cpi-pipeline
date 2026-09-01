@@ -543,6 +543,7 @@ class CPICalculationEngine:
                         created_at TIMESTAMPTZ DEFAULT NOW(),
                         PRIMARY KEY (cpi_month, coicop_division)
                     );
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_fct_cpi_monthly ON gold.fct_cpi_monthly (cpi_month, coicop_division);
                 """)
                 rows = [
                     (

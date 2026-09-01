@@ -38,9 +38,9 @@ def get_db_connection():
         return psycopg2.connect(alternate_host_url(conn_str))
 
 
-def reset_silver_for_date_range(start_date: str, end_date: str, conn):
+def reset_silver_for_date_range(start_date: str, end_date: str, conn, full_reset: bool = False):
     """Safely cleans Silver match records for the backfill window so they re-process with the new pipeline."""
-    log.info("Resetting Silver match logs between %s and %s...", start_date, end_date)
+    log.info("Resetting Silver match logs between %s and %s (full_reset=%s)...", start_date, end_date, full_reset)
     with conn.cursor() as cur:
         # 1. Clear item match logs for observations in date range
         cur.execute(
@@ -67,12 +67,18 @@ def reset_silver_for_date_range(start_date: str, end_date: str, conn):
             (start_date, end_date)
         )
         deleted_reviews = cur.rowcount
+
+        if full_reset:
+            cur.execute("DELETE FROM silver.dim_canonical_products;")
+            cur.execute("DELETE FROM silver.canonical_items;")
+            log.info("Full reset: Emptied silver.canonical_items and silver.dim_canonical_products.")
+
         conn.commit()
 
     log.info("Reset complete: Cleared %d match logs and %d review rows.", deleted_matches, deleted_reviews)
 
 
-def run_backfill(start_date: str, end_date: str | None = None):
+def run_backfill(start_date: str, end_date: str | None = None, full_reset: bool = False):
     pool = get_key_pool()
     log.info("Initializing Backfill with %d active Gemini API key(s)...", pool.get_key_count())
 
@@ -85,7 +91,7 @@ def run_backfill(start_date: str, end_date: str | None = None):
         matcher = ItemMatcher()
 
         # Reset date range in Silver
-        reset_silver_for_date_range(start_date, end_dt.strftime("%Y-%m-%d"), conn)
+        reset_silver_for_date_range(start_date, end_dt.strftime("%Y-%m-%d"), conn, full_reset=full_reset)
 
         # Iterate day by day in chronological order
         curr_dt = start_dt
@@ -128,9 +134,10 @@ def main():
     parser = argparse.ArgumentParser(description="Backfill Silver Layer Item Matching & COICOP Classification")
     parser.add_argument("--start-date", type=str, default="2026-08-18", help="Start date (YYYY-MM-DD), default: 2026-08-18")
     parser.add_argument("--end-date", type=str, default=None, help="End date (YYYY-MM-DD), default: today")
+    parser.add_argument("--full-reset", action="store_true", help="Wipe silver.canonical_items and re-generate catalog from scratch")
     args = parser.parse_args()
 
-    run_backfill(args.start_date, args.end_date)
+    run_backfill(args.start_date, args.end_date, full_reset=args.full_reset)
 
 
 if __name__ == "__main__":

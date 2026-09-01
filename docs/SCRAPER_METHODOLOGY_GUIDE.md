@@ -1,7 +1,7 @@
 > **[!NOTE]**
 > **IMPLEMENTATION STATUS (LIVE IN PRODUCTION):** The Gold-layer CPI Calculation Engine is fully operational in production.
 > Live components:
-> - **Bronze Ingestion:** 20 scrapers (`scrapers/sources.py`) extracting atomic prices and official MEF USD/KHR rates into `bronze.raw_prices`.
+> - **Bronze Ingestion:** 20 scrapers (`scrapers/sources/`) extracting atomic prices and official MEF USD/KHR rates into `bronze.raw_prices`.
 > - **Silver Processing:** Data cleaning (`int_prices_cleaned.sql`), hybrid vector matching (`pipeline/vector_item_matcher.py`), 12-division COICOP classification (`pipeline/hybrid_embeddings_classifier.py`), and log-linear hedonic quality adjustment (`pipeline/hedonic_regression.py`).
 > - **Gold Econometric Layer:** Kimball star schema (`gold.dim_items`, `gold.dim_stores`, `gold.fct_daily_prices`), Jevons micro-indices with 7-day imputation (`gold.fct_elementary_indices`), and Laspeyres 12-division daily aggregates (`gold.fct_cpi_daily`).
 > - **Observability & Analytics:** Metabase dashboards (Port 3000) and Power BI models.
@@ -295,7 +295,7 @@ Every night at 07:00, Airflow orchestrates daily data extraction across **19 Cam
 - **Category / Source Type**: Macroeconomic Currency Conversion (`fx`)
 - **Target Source**: Ministry of Economy and Finance (MEF) / National Bank of Cambodia (NBC)
 - **Best Scraping Method**: **Official Central Bank / MEF Rate Fetcher**
-  - **Pipeline Integration**: Implemented in `scrapers/sources.py` (MEF FX fetcher) and routed through `pipeline/bronze_ingestion.py::_ingest_fx`. Writes the official daily rate to `staging.exchange_rates` and raw execution records to `staging.raw_scrapes`.
+  - **Pipeline Integration**: Implemented in `scrapers/sources/mef_fx.py` (MEF FX fetcher) and routed through `pipeline/bronze_ingestion.py::_ingest_fx`. Writes the official daily rate to `staging.exchange_rates` and raw execution records to `staging.raw_scrapes`.
   - **Role in CPI**: USD price observations are converted to KHR (`price_khr`) during the Silver transformation so all elementary price relatives are calculated on a unified national currency basis.
 
 ---

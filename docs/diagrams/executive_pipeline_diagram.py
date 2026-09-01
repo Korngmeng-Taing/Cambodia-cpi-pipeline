@@ -162,7 +162,7 @@ draw_sub_block(ax, col_xs[0] + 0.2, col_y + 3.85, col_w - 0.4, 2.05,
                 "Pharma & Tech: Community, Samnang",
                 "Transit & Fuel: redBus, MOC Gas",
                 "Official FX: MEF USD/KHR Daily"],
-               "scrapers/sources.py", "#0369A1", "#E0F2FE")
+               "scrapers/sources/", "#0369A1", "#E0F2FE")
 
 draw_sub_block(ax, col_xs[0] + 0.2, col_y + 1.85, col_w - 0.4, 1.85,
                "VAL", "Ingestion Guards",

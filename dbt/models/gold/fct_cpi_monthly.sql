@@ -4,7 +4,10 @@
     materialized='incremental',
     incremental_strategy='delete+insert',
     unique_key=['cpi_month', 'coicop_division'],
-    on_schema_change='append_new_columns'
+    on_schema_change='append_new_columns',
+    post_hook=[
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_fct_cpi_monthly ON {{ this }} (cpi_month, coicop_division)"
+    ]
 ) }}
 
 with daily_facts as (

@@ -162,7 +162,7 @@ This document provides an exhaustive, academic-grade literature review of the **
   * **Classification Accuracy**: **82.0% to 92.5%** depending on product category verbosity and structural complexity.
   * **Sample Scale**: Expanded quote sample sizes by **over 100x** (from hundreds of manual monthly quotes to tens of thousands of daily automated quotes) while slashing operational data collection costs.
 * **Direct Mapping to Your Cambodia CPI Pipeline**:
-  * **Bronze & Silver Data Pipelines**: Represents the historical institutional benchmark for your multi-source scraper registry (`scrapers/sources.py`) and Airflow DAG orchestration.
+  * **Bronze & Silver Data Pipelines**: Represents the historical institutional benchmark for your multi-source scraper registry (`scrapers/sources/`) and Airflow DAG orchestration.
 
 ---
 

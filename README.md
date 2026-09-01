@@ -52,7 +52,7 @@
 
 ### Bronze (Raw Ingestion & Staging)
 - **Tables**: `bronze.raw_prices` (atomic typed listings with barcodes, brands, sizes, and prices), `staging.exchange_rates` (MEF USD/KHR official daily rate), `staging.raw_scrapes`.
-- **Scraper Registry**: 20 production scrapers (`scrapers/sources.py`) extracting native categories, automated fallbacks, and zero-product circuit breakers.
+- **Scraper Registry**: 20 production scrapers (`scrapers/sources/`) extracting native categories, automated fallbacks, and zero-product circuit breakers.
 
 ### Silver (Clean, Standardize & Resolve Observations)
 - **Clean Store Observations**: `silver.clean_store_prices` — unified daily appended table containing cleaned, standardized prices across all stores with exchange rates applied (KHR), unit normalization, promo clamping, and zero-price filtering.
@@ -94,7 +94,11 @@
 CPI PIPELINE/
 ├── scrapers/              # Python scraper modules (Bronze ingestion)
 │   ├── base.py            # Abstract BaseScraper interface
-│   └── sources.py         # SCRAPER_REGISTRY (20 sources: 19 retail + MEF FX)
+│   ├── _http.py           # Shared HTTP / rate-limiting client
+│   └── sources/           # Modular SCRAPER_REGISTRY (20 sources: 19 retail + MEF FX)
+│       ├── _common.py     # Canonical normalization & HTTP request helpers
+│       ├── aeon.py, arystore.py, cellcard.py, ...
+│       └── __init__.py    # Registry mapping source_slug -> ScraperClass
 ├── pipeline/              # Core pipeline services
 │   ├── cpi_calculator.py  # Jevons micro-index, 7-day imputation & Laspeyres CPI engine
 │   ├── key_pool.py        # 3-Key Round-Robin Gemini API Pool & Failover Manager
@@ -213,7 +217,7 @@ cpi_pipeline_success
   - Fixed `ops.coicop_override_manual` database view binding and unit test numeric precision typing in `dbt`.
 
 ### MocGasolineScraper Resilience (2026-08-27)
-- **File**: `scrapers/sources.py`
+- **File**: `scrapers/sources/gasoline.py`
 - **Issue**: `datetime.date` type incompatibility when `bronze_ingestion.py` passes raw date objects to scrapers.
 - **Fix**: Added pendulum date conversion with 3x retry with exponential backoff, switched from `requests.post` to `_cffi_post`, added `MOC_FUEL_BASELINE` fallback catalog (5000/4050/3950 KHR) for API failures.
 

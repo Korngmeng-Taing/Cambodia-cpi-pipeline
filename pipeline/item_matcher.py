@@ -304,6 +304,7 @@ class ItemMatcher:
 
         # 4. Vector or Fuzzy text match with Spec Guard
         match = None
+        matched_method = "fuzzy_text"
         if self.use_vector_matcher:
             try:
                 vm = self.vector_matcher
@@ -313,18 +314,22 @@ class ItemMatcher:
                     item_id_match = match_result.get("matched_item_id") or match_result.get("item_id") if match_result else None
                     if item_id_match:
                         match = (item_id_match, match_result.get("confidence", 0.0), match_result.get("canonical_name", ""))
+                        matched_method = "vector_embedding"
                 else:
                     match = self.match_by_fuzzy_text(name_clean, size_norm, actual_conn)
+                    matched_method = "fuzzy_text"
             except Exception as e:
                 log.warning("Vector matcher failed, falling back to fuzzy text: %s", e)
                 match = self.match_by_fuzzy_text(name_clean, size_norm, actual_conn)
+                matched_method = "fuzzy_text"
         else:
             match = self.match_by_fuzzy_text(name_clean, size_norm, actual_conn)
+            matched_method = "fuzzy_text"
 
         if match:
             item_id, conf, matched_name = match
             if conf >= self.auto_accept_threshold:
-                self._log_match(raw_price_id, item_id, "fuzzy_text", conf, actual_conn)
+                self._log_match(raw_price_id, item_id, matched_method, conf, actual_conn)
                 stats["matched_fuzzy"] += 1
                 return stats
             elif conf >= self.review_threshold:
@@ -465,6 +470,7 @@ class ItemMatcher:
 
             # 4. Vector or Fuzzy Text match
             match = None
+            matched_method = "fuzzy_text"
             if self.use_vector_matcher:
                 try:
                     vm = self.vector_matcher
@@ -473,20 +479,25 @@ class ItemMatcher:
                         item_id_match = match_result.get("matched_item_id") or match_result.get("item_id") if match_result else None
                         if item_id_match:
                             match = (item_id_match, match_result.get("confidence", 0.0), match_result.get("canonical_name", ""))
+                            matched_method = "vector_embedding"
                         else:
                             match = self.match_by_fuzzy_text(name_clean, package_size)
+                            matched_method = "fuzzy_text"
                     else:
                         match = self.match_by_fuzzy_text(name_clean, package_size)
+                        matched_method = "fuzzy_text"
                 except Exception as e:
                     log.warning("Vector matcher failed, falling back to fuzzy text: %s", e)
                     match = self.match_by_fuzzy_text(name_clean, package_size)
+                    matched_method = "fuzzy_text"
             else:
                 match = self.match_by_fuzzy_text(name_clean, package_size)
+                matched_method = "fuzzy_text"
 
             if match:
                 item_id, conf, matched_name = match
                 if conf >= self.auto_accept_threshold:
-                    match_logs.append((raw_price_id, str(item_id), "fuzzy_text", conf))
+                    match_logs.append((raw_price_id, str(item_id), matched_method, conf))
                     totals["matched_fuzzy"] += 1
                     continue
                 elif conf >= self.review_threshold:

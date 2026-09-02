@@ -140,14 +140,10 @@ class CPICalculationEngine:
         if len(cur) == 0 or len(base) == 0:
             return 100.0
         if len(cur) != len(base):
-            log.warning(
-                "compute_jevons_index: current_prices length (%d) != base_prices length (%d). "
-                "Arrays must be pre-aligned. Truncating to shorter length.",
-                len(cur), len(base),
+            raise ValueError(
+                f"compute_jevons_index: current_prices length ({len(cur)}) != base_prices length ({len(base)}). "
+                "Arrays must be aligned by item_id before computing index."
             )
-        n = min(len(cur), len(base))
-        cur = cur[:n]
-        base = base[:n]
         valid_mask = (cur > 0) & (base > 0)
         cur = cur[valid_mask]
         base = base[valid_mask]
@@ -344,18 +340,24 @@ class CPICalculationEngine:
         log.info(f"🚀 Running Daily CPI Calculation for {target_date} (Base Date: {base_date})")
 
         # When base_date is unset, infer it as the earliest scrape_date with data.
-        # Probe with a wide historical window first so we can pick the right base.
         if base_date is None:
-            probe_start = target_date - timedelta(days=365 * 5)  # 5-year retrospective
-            df_history = self.load_clean_prices(probe_start, target_date)
-            if df_history.empty:
-                log.error("No price history available to infer base_date.")
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT MIN(scrape_date) 
+                        FROM silver.clean_store_prices 
+                        WHERE price_khr > 0 AND item_id IS NOT NULL;
+                    """)
+                    row = cur.fetchone()
+                    base_date = row[0] if row and row[0] else None
+
+            if base_date is None:
+                log.error("No price history available in silver.clean_store_prices to infer base_date.")
                 return
-            base_date = df_history['scrape_date'].min()
-            base_obs = int(df_history[df_history['scrape_date'] == base_date]['unit_price_khr'].count())
-            log.info(f"🔧 No base_date provided; using earliest available date {base_date} as base period (obs={base_obs}).")
-        else:
-            df_history = self.load_clean_prices(base_date, target_date)
+
+            log.info(f"🔧 No base_date provided; using earliest available date {base_date} as base period.")
+
+        df_history = self.load_clean_prices(base_date, target_date)
 
         if df_history.empty:
             log.error(f"No clean price data available between {base_date} and {target_date}")
@@ -476,7 +478,7 @@ class CPICalculationEngine:
                 params = []
                 if month_date is not None:
                     target_month = month_date.replace(day=1)
-                    where_clause = "WHERE DATE_TRUNC('month', calculation_date)::DATE = %s"
+                    where_clause = "WHERE cpi_month = %s"
                     params.append(target_month)
 
                 query = f"""
@@ -493,23 +495,26 @@ class CPICalculationEngine:
                             SUM(observation_count) AS observation_count,
                             COUNT(DISTINCT calculation_date) AS active_days_in_month
                         FROM gold.fct_cpi_daily
-                        {where_clause}
                         GROUP BY DATE_TRUNC('month', calculation_date)::DATE, coicop_division
+                    ),
+                    calculated AS (
+                        SELECT
+                            cpi_month,
+                            coicop_division,
+                            division_name,
+                            weight,
+                            monthly_division_index,
+                            monthly_headline_cpi,
+                            monthly_core_cpi,
+                            ROUND(((monthly_division_index - LAG(monthly_division_index) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_division_index) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::numeric, 4) AS mom_inflation_pct,
+                            ROUND(((monthly_division_index - LAG(monthly_division_index, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_division_index, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::numeric, 4) AS yoy_inflation_pct,
+                            item_count,
+                            observation_count,
+                            active_days_in_month
+                        FROM monthly_base
                     )
-                    SELECT
-                        cpi_month,
-                        coicop_division,
-                        division_name,
-                        weight,
-                        monthly_division_index,
-                        monthly_headline_cpi,
-                        monthly_core_cpi,
-                        ROUND(((monthly_division_index - LAG(monthly_division_index) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_division_index) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::numeric, 4) AS mom_inflation_pct,
-                        ROUND(((monthly_division_index - LAG(monthly_division_index, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_division_index, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::numeric, 4) AS yoy_inflation_pct,
-                        item_count,
-                        observation_count,
-                        active_days_in_month
-                    FROM monthly_base
+                    SELECT * FROM calculated
+                    {where_clause}
                     ORDER BY cpi_month DESC, coicop_division ASC;
                 """
                 cur.execute(query, params)

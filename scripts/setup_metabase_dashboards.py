@@ -294,6 +294,25 @@ def provision_all():
             """,
             "viz": {"table.pivot_column": None},
             "grid": (14, 11, 10, 8)
+        },
+        {
+            "name": "Official UN COICOP 2018 Expenditure Weight Breakdown",
+            "desc": "Official NIS Cambodia expenditure basket breakdown across 12 Divisions, 29 Groups, and 48 Classes.",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    coicop_level AS "Level",
+                    coicop_code AS "COICOP Code",
+                    coicop_name AS "Category Name",
+                    coicop_name_kh AS "ឈ្មោះជាភាសាខ្មែរ",
+                    ROUND(weight_pct, 3) AS "Basket Weight (%)",
+                    parent_division AS "Division"
+                FROM gold.cambodia_cpi_coicop_weights_breakdown
+                WHERE coicop_level <> 'Summary'
+                ORDER BY coicop_code ASC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (0, 19, 24, 8)
         }
     ]
 

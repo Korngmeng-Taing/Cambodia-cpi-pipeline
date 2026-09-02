@@ -96,7 +96,7 @@ The pipeline maps products directly into granular 4-digit / 5-digit UN COICOP 20
   - `02.2.0` Tobacco (បារី)
 - **03 Clothing & Footwear**: `03.1.2` Garments (ខោអាវ), `03.2.1` Footwear (ស្បែកជើង)
 - **04 Housing & Utilities**: `04.1.1` Rentals (ផ្ទះជួល), `04.4.1` Water (ទឹកស្អាត), `04.5.1` Electricity (អគ្គិសនី), `04.5.2` Cooking Gas (ហ្គាស)
-- **05 Furnishings & Cleaning**: `05.1.1` Furniture (តុ, កៅអី), `05.2.0` Textiles (ភួយ, កន្សែង), `05.6.1` Cleaning goods (សាប៊ូបោកខោអាវ, ទឹកលាងចាន)
+- **05 Furnishings & Cleaning**: `05.1.1` Furniture (តុ, កៅអី), `05.2.1` Textiles (ភួយ, កន្សែង), `05.6.1` Cleaning goods (សាប៊ូបោកខោអាវ, ទឹកលាងចាន)
 - **06 Health**: `06.1.1` Pharmaceuticals (ថ្នាំពេទ្យ, ប៉ារ៉ាសេតាម៉ុល), `06.1.2` Medical products (បង់រុំរបួស, ប្រេងកូឡា, ម៉ាស់)
 - **07 Transport**: `07.2.2` Vehicle fuels & lubricants (សាំង, ម៉ាស៊ូត), `07.3.2` Bus & coach tickets (សំបុត្រឡានក្រុង)
 - **08 Communication**: `08.2.0` Phone hardware (ទូរស័ព្ទ), `08.3.0` Telecom & Internet data (ស៊ីមកាត, អ៊ីនធឺណិត)

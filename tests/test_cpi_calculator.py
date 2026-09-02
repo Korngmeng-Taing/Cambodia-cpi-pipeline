@@ -32,9 +32,11 @@ def test_jevons_index_formula(cpi_engine):
     assert pytest.approx(cpi_engine.compute_jevons_index(p1, p0), 0.01) == 100.0
 
 def test_jevons_zero_and_empty_handling(cpi_engine):
-    """Ensures zeros and empty arrays do not crash computation."""
+    """Ensures zeros and empty arrays do not crash computation and mismatched lengths raise ValueError."""
     assert cpi_engine.compute_jevons_index(np.array([]), np.array([])) == 100.0
-    assert cpi_engine.compute_jevons_index(np.array([0.0, -5.0]), np.array([100.0])) == 100.0
+    assert cpi_engine.compute_jevons_index(np.array([0.0, -5.0]), np.array([100.0, 100.0])) == 100.0
+    with pytest.raises(ValueError, match="Arrays must be aligned by item_id"):
+        cpi_engine.compute_jevons_index(np.array([100.0, 200.0]), np.array([100.0]))
 
 def test_laspeyres_division_and_headline_aggregation(cpi_engine):
     """Tests 12-division aggregation with official NIS Cambodia weights."""

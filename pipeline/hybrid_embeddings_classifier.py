@@ -131,7 +131,7 @@ COICOP_12_REFERENCE_DEFINITIONS = [
         "division": "11",
         "code": "11.1.1",
         "name": "Restaurants and hotels",
-        "description": "hotel accommodation overnight room bookings resort suites sokha hotel restaurant prepared meals cafe bistro dining services coffee shop latte cappuccino dining meal combo curry chicken set meal fast food takeout delivery catering food court សណ្ឋាគារ អាហារដ្ឋាន ហាងកាហ្វេ"
+        "description": "hotel accommodation overnight room bookings resort suites sokha hotel restaurant dining services cafe bistro dining meal service coffee shop latte espresso cappuccino catering food court dine-in buffet table service takeaway restaurant order សណ្ឋាគារ អាហារដ្ឋាន ហាងកាហ្វេ"
     },
     {
         "division": "12",
@@ -286,7 +286,7 @@ COICOP_4DIGIT_REFERENCE_DEFINITIONS = [
     },
     {
         "division": "05",
-        "code": "05.2.0",
+        "code": "05.2.1",
         "name": "Household textiles",
         "description": "bedsheets bed cover pillow pillowcase blanket quilt duvet bath towel face towel cotton curtains tablecloth ភួយ កន្សែង កម្រាលពូក"
     },
@@ -378,7 +378,7 @@ COICOP_4DIGIT_REFERENCE_DEFINITIONS = [
         "division": "11",
         "code": "11.1.1",
         "name": "Restaurants and cafes",
-        "description": "restaurant prepared food cafe dining fast food meal combo chicken burger set pizza takeout dining coffee shop latte cappuccino food court meal service អាហារដ្ឋាន ហាងកាហ្វេ"
+        "description": "restaurant food service cafe dining establishment coffee shop latte cappuccino espresso dine-in buffet table service dining bill restaurant order delivery catering food court service អាហារដ្ឋាន ហាងកាហ្វេ"
     },
     {
         "division": "11",
@@ -646,11 +646,22 @@ class HybridCOICOPClassifier:
             winning_sim = highest_sim_div
 
         if winning_match and (winning_sim >= threshold or use_local_first):
+            final_div = winning_match["division"]
+            final_code = winning_match["code"]
+            final_name = winning_match["name"]
+            
+            # Store Context Override: Retail grocers do not sell restaurant/hotel services (Division 11).
+            # If a grocery store item maps to 11, remap to Food & Non-Alcoholic Beverages (01).
+            if final_div == "11" and store_slug and store_slug.lower() in MULTI_CATEGORY_STORES:
+                final_div = "01"
+                final_code = "01.1.1"
+                final_name = "Food and non-alcoholic beverages"
+
             return {
                 "product_name": clean_name,
-                "coicop_division": winning_match["division"],
-                "coicop_code": winning_match["code"],
-                "coicop_class_name": winning_match["name"],
+                "coicop_division": final_div,
+                "coicop_code": final_code,
+                "coicop_class_name": final_name,
                 "confidence_score": round(max(winning_sim, 0.50), 4),
                 "classification_method": "vector_embedding",
                 "reasoning": f"Matched vector semantics for {winning_match['name']} ({winning_sim:.3f}).",

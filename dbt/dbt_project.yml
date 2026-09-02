@@ -48,6 +48,16 @@ seeds:
         weight_pct: numeric(6, 3)
         source: text
         effective_date: date
+    cambodia_cpi_coicop_weights_breakdown:
+      +schema: gold
+      +column_types:
+        coicop_level: varchar(16)
+        coicop_code: varchar(16)
+        coicop_name: text
+        coicop_name_kh: text
+        weight_pct: numeric(6, 3)
+        parent_division: varchar(16)
+        source: text
     coicop_store_defaults:
       +schema: silver
       +column_types:

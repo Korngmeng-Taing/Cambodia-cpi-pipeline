@@ -44,6 +44,15 @@ COICOP_ELECTRONICS_PREFIX = "09"
 HISTORY_MONTHS = 3
 MIN_SAMPLE_SIZE = 20  # refuse to fit a model on a tiny sample
 
+# Standard benchmark priors for electronics baseline (used during cold-start or sparse periods)
+DEFAULT_BENCHMARK_SPECS: dict[str, float] = {
+    "RAM_GB": 8.0,
+    "Storage_GB": 128.0,
+    "Screen_Inches": 6.5,
+    "Camera_MP": 50.0,
+    "Is_5G": 1.0,
+}
+
 # Regexes for hedonic characteristics embedded in product names, e.g.
 # "Samsung Galaxy S24 8GB/256GB 6.2" 50MP 5G", "iPhone 15 Pro 128GB".
 _COMPOUND_SPEC_RE = re.compile(
@@ -281,8 +290,7 @@ def baseline_specs(df: pd.DataFrame, current_scrape_date: str) -> dict[str, floa
     """Average characteristics of items from the previous calendar month (the baseline).
 
     When no prior-month data exists (e.g. the very first month of collection),
-    falls back to the current month's median to produce neutral quality
-    adjustments, instead of using 0.0 which would radically distort prices.
+    falls back to the current month's median if available, or to 0.0 / benchmark priors.
     """
     current_month = pd.to_datetime(current_scrape_date).to_period("M")
     prior = df[pd.to_datetime(df["scrape_date"]).dt.to_period("M") < current_month]

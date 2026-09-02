@@ -157,7 +157,7 @@ with DAG(
     # 6. dbt Run
     task_dbt_silver_run = BashOperator(
         task_id="dbt_silver_run",
-        trigger_rule="none_failed_min_one_success",
+        trigger_rule="none_failed",
         bash_command=(
             f"dbt run {_dbt_flags} "
             "--select silver staging "

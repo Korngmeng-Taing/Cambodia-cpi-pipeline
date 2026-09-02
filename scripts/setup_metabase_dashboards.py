@@ -313,6 +313,51 @@ def provision_all():
             """,
             "viz": {"table.pivot_column": None},
             "grid": (0, 19, 24, 8)
+        },
+        {
+            "name": "Projected Month-End Inflation Nowcast (MoM %)",
+            "desc": "Real-time Machine Learning (ADL + GBRT) projection of current month's final MoM inflation rate.",
+            "display": "scalar",
+            "sql": """
+                SELECT 
+                    ROUND(projected_mom_pct::numeric, 2) AS "Projected MoM Inflation (%)"
+                FROM gold.fct_cpi_nowcast
+                WHERE nowcast_date = (SELECT MAX(nowcast_date) FROM gold.fct_cpi_nowcast)
+                ORDER BY nowcast_date DESC
+                LIMIT 1;
+            """,
+            "viz": {},
+            "grid": (0, 27, 8, 3)
+        },
+        {
+            "name": "Projected Month-End Headline CPI",
+            "desc": "Real-time Machine Learning projection of current month's final conformed Headline CPI index level.",
+            "display": "scalar",
+            "sql": """
+                SELECT 
+                    ROUND(nowcast_headline_cpi::numeric, 2) AS "Projected Month-End CPI"
+                FROM gold.fct_cpi_nowcast
+                WHERE nowcast_date = (SELECT MAX(nowcast_date) FROM gold.fct_cpi_nowcast)
+                ORDER BY nowcast_date DESC
+                LIMIT 1;
+            """,
+            "viz": {},
+            "grid": (8, 27, 8, 3)
+        },
+        {
+            "name": "Nowcasting Horizon & Uncertainty Status",
+            "desc": "Number of days observed vs days remaining in month and 95% Confidence Interval band.",
+            "display": "scalar",
+            "sql": """
+                SELECT 
+                    CONCAT(days_observed, ' Days Observed / ', days_remaining, ' Remaining (±', ROUND(((ci_upper_95 - ci_lower_95) / 2.0)::numeric, 2), ' pts)') AS "Nowcasting Status"
+                FROM gold.fct_cpi_nowcast
+                WHERE nowcast_date = (SELECT MAX(nowcast_date) FROM gold.fct_cpi_nowcast)
+                ORDER BY nowcast_date DESC
+                LIMIT 1;
+            """,
+            "viz": {},
+            "grid": (16, 27, 8, 3)
         }
     ]
 

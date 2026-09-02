@@ -212,10 +212,17 @@ with DAG(
         python_callable=execute_monthly_cpi_calculation,
     )
 
+    from ml.nowcaster import execute_nowcasting_pipeline
+
+    nowcast_cpi_task = PythonOperator(
+        task_id="nowcast_monthly_inflation",
+        python_callable=execute_nowcasting_pipeline,
+    )
+
     annual_rebase_task = PythonOperator(
         task_id="annual_rebase_cpi",
         python_callable=annual_rebase_cpi,
     )
 
-    calculate_cpi_task >> calculate_monthly_cpi_task >> annual_rebase_task
+    calculate_cpi_task >> calculate_monthly_cpi_task >> nowcast_cpi_task >> annual_rebase_task
 

@@ -37,8 +37,8 @@ class CPINowcaster:
 
     def fetch_training_data(
         self, target_date: date
-    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """Fetches daily CPI facts, exchange rates, and monthly CPI history from PostgreSQL."""
+    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        """Fetches daily CPI facts, exchange rates, monthly CPI history, and official NIS records from PostgreSQL."""
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
@@ -72,7 +72,21 @@ class CPINowcaster:
                 cols_monthly = [desc[0] for desc in cur.description]
                 df_monthly = pd.DataFrame(cur.fetchall(), columns=cols_monthly)
 
-                return df_daily, df_fx, df_monthly
+                # 4. Fetch official NIS benchmark series
+                df_nis = pd.DataFrame()
+                try:
+                    cur.execute("""
+                        SELECT cpi_month, headline_cpi, core_cpi, mom_inflation_pct, yoy_inflation_pct, release_date
+                        FROM silver.nis_official_cpi
+                        WHERE cpi_month < %s
+                        ORDER BY cpi_month ASC;
+                    """, (target_date.replace(day=1),))
+                    cols_nis = [desc[0] for desc in cur.description]
+                    df_nis = pd.DataFrame(cur.fetchall(), columns=cols_nis)
+                except Exception as e:
+                    log.warning("silver.nis_official_cpi could not be queried: %s", e)
+
+                return df_daily, df_fx, df_monthly, df_nis
         finally:
             conn.close()
 
@@ -130,9 +144,10 @@ class CPINowcaster:
         df_daily: pd.DataFrame,
         df_fx: pd.DataFrame | None = None,
         df_monthly: pd.DataFrame | None = None,
+        df_nis: pd.DataFrame | None = None,
     ) -> dict[str, Any]:
-        """Generates conformed nowcast record combining ADL and Tree Ensembles."""
-        features = extract_nowcasting_features(target_date, df_daily, df_fx, df_monthly)
+        """Generates conformed nowcast record combining ADL and Tree Ensembles with Dual-Index Chain-Linking."""
+        features = extract_nowcasting_features(target_date, df_daily, df_fx, df_monthly, df_nis)
 
         # 1. Evaluate Sub-Models
         pred_mom_adl = self.run_adl_model(features)
@@ -217,14 +232,18 @@ class CPINowcaster:
                 cur.execute("""
                     INSERT INTO gold.fct_cpi_nowcast (
                         nowcast_date, target_month, days_observed, days_remaining, days_in_month,
-                        realized_cpi_so_far, projected_remaining_cpi, nowcast_headline_cpi, nowcast_core_cpi,
-                        prior_month_cpi, projected_mom_pct, projected_yoy_pct,
-                        ci_lower_95, ci_upper_95, uncertainty_pct, model_name
+                        realized_cpi_so_far, projected_remaining_cpi, nowcast_headline_cpi,
+                        nowcast_core_cpi, prior_month_cpi,
+                        projected_mom_pct, projected_yoy_pct,
+                        ci_lower_95, ci_upper_95,
+                        uncertainty_pct, model_name
                     ) VALUES (
                         %(nowcast_date)s, %(target_month)s, %(days_observed)s, %(days_remaining)s, %(days_in_month)s,
-                        %(realized_cpi_so_far)s, %(projected_remaining_cpi)s, %(nowcast_headline_cpi)s, %(nowcast_core_cpi)s,
-                        %(prior_month_cpi)s, %(projected_mom_pct)s, %(projected_yoy_pct)s,
-                        %(ci_lower_95)s, %(ci_upper_95)s, %(uncertainty_pct)s, %(model_name)s
+                        %(realized_cpi_so_far)s, %(projected_remaining_cpi)s, %(nowcast_headline_cpi)s,
+                        %(nowcast_core_cpi)s, %(prior_month_cpi)s,
+                        %(projected_mom_pct)s, %(projected_yoy_pct)s,
+                        %(ci_lower_95)s, %(ci_upper_95)s,
+                        %(uncertainty_pct)s, %(model_name)s
                     )
                     ON CONFLICT (nowcast_date, target_month, model_name) DO UPDATE
                     SET days_observed = EXCLUDED.days_observed,
@@ -259,8 +278,13 @@ class CPINowcaster:
 
         log.info("🚀 Initiating High-Frequency Inflation Nowcast for %s...", target_date)
         try:
-            df_daily, df_fx, df_monthly = self.fetch_training_data(target_date)
-            nowcast_res = self.nowcast_for_date(target_date, df_daily, df_fx, df_monthly)
+            training_data = self.fetch_training_data(target_date)
+            if len(training_data) == 4:
+                df_daily, df_fx, df_monthly, df_nis = training_data
+            else:
+                df_daily, df_fx, df_monthly = training_data[:3]
+                df_nis = None
+            nowcast_res = self.nowcast_for_date(target_date, df_daily, df_fx, df_monthly, df_nis)
             self.save_nowcast(nowcast_res)
             return nowcast_res
         except Exception as e:
@@ -298,8 +322,12 @@ class CPINowcaster:
         df_monthly = pd.DataFrame([
             {"cpi_month": target_month_start - timedelta(days=30), "monthly_headline_cpi": 102.0, "monthly_core_cpi": 101.5, "mom_inflation_pct": 0.40, "yoy_inflation_pct": 2.80}
         ])
+        df_nis = pd.DataFrame([
+            {"cpi_month": target_month_start - timedelta(days=30), "headline_cpi": 100.35, "core_cpi": 100.40, "mom_inflation_pct": 0.15, "yoy_inflation_pct": 1.80}
+        ])
 
-        return self.nowcast_for_date(target_date, df_daily, df_fx, df_monthly)
+        return self.nowcast_for_date(target_date, df_daily, df_fx, df_monthly, df_nis)
+
 
 
 def execute_nowcasting_pipeline(**context) -> dict[str, Any]:

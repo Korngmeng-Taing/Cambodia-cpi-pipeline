@@ -47,3 +47,4 @@ FEATURE_WINDOWS = {
 # Default Confidence Interval settings
 CI_ALPHA = 0.05  # 95% Confidence Interval (z = 1.96)
 Z_SCORE_95 = 1.95996
+

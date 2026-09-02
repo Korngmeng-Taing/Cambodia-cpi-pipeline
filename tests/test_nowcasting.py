@@ -79,3 +79,4 @@ def test_execute_nowcasting_pipeline_callable():
     assert isinstance(res, dict)
     assert "nowcast_headline_cpi" in res
     assert "projected_mom_pct" in res
+

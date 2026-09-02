@@ -124,6 +124,6 @@ def get_db_connection():
     """
     conn_str = get_database_url()
     try:
-        return psycopg2.connect(conn_str)
+        return psycopg2.connect(conn_str, connect_timeout=2)
     except psycopg2.OperationalError:
         return psycopg2.connect(alternate_host_url(conn_str))

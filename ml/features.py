@@ -58,9 +58,11 @@ def extract_nowcasting_features(
     df_daily_cpi: pd.DataFrame,
     df_exchange_rates: pd.DataFrame | None = None,
     df_monthly_cpi: pd.DataFrame | None = None,
+    df_nis_official: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
     """
     Constructs a comprehensive feature vector for target_date within its month.
+    Extracts intra-month scraped signals, macroeconomic indicators, and official NIS anchors.
     """
     target_month_start = target_date.replace(day=1)
     _, total_days_in_month = calendar.monthrange(target_date.year, target_date.month)
@@ -68,8 +70,32 @@ def extract_nowcasting_features(
     days_remaining = total_days_in_month - days_observed
     observed_ratio = float(days_observed / total_days_in_month)
 
+    # Ensure numeric columns are cast to float from database Decimals
+    if df_daily_cpi is not None and not df_daily_cpi.empty:
+        df_daily_cpi = df_daily_cpi.copy()
+        for col in ["headline_cpi", "core_cpi", "division_index", "weight"]:
+            if col in df_daily_cpi.columns:
+                df_daily_cpi[col] = pd.to_numeric(df_daily_cpi[col], errors="coerce")
+
+    if df_exchange_rates is not None and not df_exchange_rates.empty:
+        df_exchange_rates = df_exchange_rates.copy()
+        if "rate" in df_exchange_rates.columns:
+            df_exchange_rates["rate"] = pd.to_numeric(df_exchange_rates["rate"], errors="coerce")
+
+    if df_monthly_cpi is not None and not df_monthly_cpi.empty:
+        df_monthly_cpi = df_monthly_cpi.copy()
+        for col in ["monthly_headline_cpi", "monthly_core_cpi", "mom_inflation_pct", "yoy_inflation_pct"]:
+            if col in df_monthly_cpi.columns:
+                df_monthly_cpi[col] = pd.to_numeric(df_monthly_cpi[col], errors="coerce")
+
+    if df_nis_official is not None and not df_nis_official.empty:
+        df_nis_official = df_nis_official.copy()
+        for col in ["headline_cpi", "core_cpi", "mom_inflation_pct", "yoy_inflation_pct"]:
+            if col in df_nis_official.columns:
+                df_nis_official[col] = pd.to_numeric(df_nis_official[col], errors="coerce")
+
     # ── 1. Intra-Month Observed Dynamics ─────────────────────────────────────
-    if df_daily_cpi.empty:
+    if df_daily_cpi is None or df_daily_cpi.empty:
         realized_headline = 100.0
         realized_core = 100.0
         div_means = {d: 100.0 for d in NIS_COICOP_WEIGHTS}
@@ -94,7 +120,7 @@ def extract_nowcasting_features(
                 div_means[div_code] = float(sub["division_index"].mean()) if not sub.empty else 100.0
 
     # ── 2. Rolling Moving Averages & Volatility Across Recent Days ────────────
-    unique_dates = sorted(df_daily_cpi["calculation_date"].unique()) if not df_daily_cpi.empty else []
+    unique_dates = sorted(df_daily_cpi["calculation_date"].unique()) if df_daily_cpi is not None and not df_daily_cpi.empty else []
     recent_dates = [d for d in unique_dates if d <= target_date]
 
     ma7_headline = realized_headline
@@ -107,6 +133,7 @@ def extract_nowcasting_features(
             df_daily_cpi[df_daily_cpi["calculation_date"].isin(recent_dates)]
             .groupby("calculation_date")["headline_cpi"]
             .first()
+            .astype(float)
             .sort_index()
         )
 
@@ -135,7 +162,7 @@ def extract_nowcasting_features(
                 if rate_7d_ago > 0:
                     fx_change_7d_pct = float(((fx_rate_today - rate_7d_ago) / rate_7d_ago) * 100.0)
 
-    # ── 4. Lagged Monthly Ground Truth Inflation ─────────────────────────────
+    # ── 4. Lagged Monthly Ground Truth Inflation & NIS Anchors ────────────────
     prior_month_cpi = 100.0
     lag1_mom_inflation = 0.0
     lag12_yoy_inflation = 0.0
@@ -143,12 +170,47 @@ def extract_nowcasting_features(
     if df_monthly_cpi is not None and not df_monthly_cpi.empty:
         m_sorted = df_monthly_cpi[df_monthly_cpi["cpi_month"] < target_month_start].sort_values("cpi_month")
         if not m_sorted.empty:
-            prior_month_cpi = float(m_sorted.iloc[-1].get("monthly_headline_cpi", 100.0))
-            lag1_mom_inflation = float(m_sorted.iloc[-1].get("mom_inflation_pct", 0.0))
+            prior_val = m_sorted.iloc[-1].get("monthly_headline_cpi")
+            prior_month_cpi = float(prior_val) if pd.notna(prior_val) else 100.0
+            
+            mom_val = m_sorted.iloc[-1].get("mom_inflation_pct")
+            lag1_mom_inflation = float(mom_val) if pd.notna(mom_val) else 0.0
+            
             if len(m_sorted) >= 12:
-                cpi_year_ago = float(m_sorted.iloc[-12].get("monthly_headline_cpi", 100.0))
+                cpi_year_ago_val = m_sorted.iloc[-12].get("monthly_headline_cpi")
+                cpi_year_ago = float(cpi_year_ago_val) if pd.notna(cpi_year_ago_val) else 0.0
                 if cpi_year_ago > 0:
                     lag12_yoy_inflation = float(((prior_month_cpi - cpi_year_ago) / cpi_year_ago) * 100.0)
+
+    # Extract official NIS benchmarks if available from database
+    latest_nis_cpi = 100.0
+    latest_nis_core_cpi = 100.0
+    latest_nis_month = target_month_start - timedelta(days=30)
+
+    if df_nis_official is not None and not df_nis_official.empty:
+        nis_sorted = df_nis_official[df_nis_official["cpi_month"] < target_month_start].sort_values("cpi_month")
+        if not nis_sorted.empty:
+            last_nis_row = nis_sorted.iloc[-1]
+            nis_head_val = last_nis_row.get("headline_cpi")
+            if pd.notna(nis_head_val):
+                latest_nis_cpi = float(nis_head_val)
+            
+            nis_core_val = last_nis_row.get("core_cpi")
+            if pd.notna(nis_core_val):
+                latest_nis_core_cpi = float(nis_core_val)
+            
+            latest_nis_month = last_nis_row.get("cpi_month", latest_nis_month)
+
+            # Check if official lag should supplement or override
+            if lag1_mom_inflation == 0.0:
+                nis_mom_val = last_nis_row.get("mom_inflation_pct")
+                if pd.notna(nis_mom_val):
+                    lag1_mom_inflation = float(nis_mom_val)
+            
+            if lag12_yoy_inflation == 0.0:
+                nis_yoy_val = last_nis_row.get("yoy_inflation_pct")
+                if pd.notna(nis_yoy_val):
+                    lag12_yoy_inflation = float(nis_yoy_val)
 
     # ── 5. Holiday & Calendar Indicators ─────────────────────────────────────
     holiday_dict = get_holiday_features(target_date)
@@ -174,5 +236,10 @@ def extract_nowcasting_features(
         "prior_month_cpi": prior_month_cpi,
         "lag1_mom_inflation": lag1_mom_inflation,
         "lag12_yoy_inflation": lag12_yoy_inflation,
+        "latest_nis_cpi": latest_nis_cpi,
+        "latest_nis_core_cpi": latest_nis_core_cpi,
+        "latest_nis_month": latest_nis_month,
         **holiday_dict,
     }
+
+

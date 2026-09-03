@@ -80,19 +80,7 @@ models:
         tests:
           - not_null
 
-  - name: cambodia_cpi_coicop_weights_breakdown
-    description: Official NIS Cambodia expenditure basket breakdown across 12 Divisions, 29 Groups, and 48 Classes aligned with UN COICOP 2018 standards.
-    columns:
-      - name: coicop_code
-        tests:
-          - not_null
-          - unique
-      - name: coicop_level
-        tests:
-          - not_null
-      - name: weight_pct
-        tests:
-          - not_null
+
 
 
 

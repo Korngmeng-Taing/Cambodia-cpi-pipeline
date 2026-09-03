@@ -37,6 +37,10 @@ raw as (
         rp.raw_payload ->> 'package_size' as size_norm,
         rp.raw_payload ->> 'is_fallback' as is_fallback_raw,
         rp.raw_payload ->> 'fallback_reason' as fallback_reason,
+        case
+            when lower(coalesce(rp.raw_payload ->> 'on_promo', 'false')) in ('true', 't', '1', 'yes') then true
+            else false
+        end as raw_on_promo,
         (rp.raw_payload ->> 'original_price')::numeric as original_price_curr,
         rp.price as price_original_curr,
         rp.currency,

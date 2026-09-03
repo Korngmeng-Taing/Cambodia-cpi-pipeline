@@ -51,6 +51,7 @@ x-airflow-common: &airflow-common
     MEF_FX_API_URL: ${MEF_FX_API_URL:-https://data.mef.gov.kh/api/v1/realtime-api/exchange-rate}
     VIREAKBUNTHAM_BEARER_TOKEN: ${VIREAKBUNTHAM_BEARER_TOKEN:-}
     GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    GEMINI_API_KEYS: ${GEMINI_API_KEYS:-}
     GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
     GEMINI_MAX_ITEMS_PER_RUN: ${GEMINI_MAX_ITEMS_PER_RUN:-1000}
     USE_LOCAL_FALLBACK_FIRST: ${USE_LOCAL_FALLBACK_FIRST:-true}
@@ -66,6 +67,7 @@ x-airflow-common: &airflow-common
     - ./tests:/opt/airflow/tests
     - ./scripts:/opt/airflow/scripts
     - ./dbt:/opt/airflow/dbt
+    - ./ml:/opt/airflow/ml
   depends_on:
     postgres:
       condition: service_healthy

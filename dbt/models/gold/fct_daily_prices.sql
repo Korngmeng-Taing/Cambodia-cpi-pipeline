@@ -29,11 +29,12 @@ with grouped as (
         p.store_slug,
         p.item_id,
         round(exp(avg(ln(p.price_khr)) filter (where p.price_khr > 0)), 2) as price_khr,
+        round(exp(avg(ln(p.unit_price_khr)) filter (where p.unit_price_khr > 0)), 2) as unit_price_khr,
         min(p.original_price_khr) as original_price_khr,
         max(p.discount_pct) as discount_pct,
         bool_or(p.on_promo) as on_promo,
         min(p.size_value) as size_value,
-        min(p.size_unit) as size_unit,
+        mode() within group (order by p.size_unit) as size_unit,
         max(p.pack_qty) as pack_qty,
         bool_and(p.cpi_eligible) as cpi_eligible,
         bool_or(p.is_outlier) as is_outlier,
@@ -61,17 +62,7 @@ select
     original_price_khr,
     discount_pct,
     on_promo,
-    case
-        when lower(size_unit) in ('kg', 'kilo', 'kilos', 'kilogram', 'kilograms') and size_value > 0
-            then round(price_khr / size_value, 2)
-        when lower(size_unit) in ('g', 'gm', 'gram', 'grams') and size_value > 0
-            then round(price_khr / (size_value / 1000.0), 2)
-        when lower(size_unit) in ('l', 'ltr', 'litre', 'liter', 'litres', 'liters') and size_value > 0
-            then round(price_khr / size_value, 2)
-        when lower(size_unit) in ('ml', 'millilitre', 'milliliter', 'millilitres', 'milliliters') and size_value > 0
-            then round(price_khr / (size_value / 1000.0), 2)
-        else null
-    end as unit_price_khr,
+    unit_price_khr,
     size_value,
     size_unit,
     pack_qty,

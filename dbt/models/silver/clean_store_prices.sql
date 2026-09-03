@@ -167,38 +167,10 @@ select
         when c.coicop_code is not null and c.coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then c.coicop_code
         when c.coicop_code is not null and c.coicop_code <> '' and c.coicop_code <> 'UNCLASSIFIED' then c.coicop_code
         when coalesce(ov_b.coicop_division, ov_ns.coicop_division, ov_ng.coicop_division) is not null then
-            case coalesce(ov_b.coicop_division, ov_ns.coicop_division, ov_ng.coicop_division)
-                when '01' then '01.1.1'
-                when '02' then '02.1.1'
-                when '03' then '03.1.2'
-                when '04' then '04.1.1'
-                when '05' then '05.1.1'
-                when '06' then '06.1.1'
-                when '07' then '07.2.2'
-                when '08' then '08.2.0'
-                when '09' then '09.1.1'
-                when '10' then '10.4.1'
-                when '11' then '11.1.1'
-                when '12' then '12.1.1'
-                else '01.1.1'
-            end
+            {{ coicop_code_from_division("coalesce(ov_b.coicop_division, ov_ns.coicop_division, ov_ng.coicop_division)") }}
         when ai.coicop_code is not null and ai.coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then ai.coicop_code
         when cm.coicop_division is not null then
-            case cm.coicop_division
-                when '01' then '01.1.1'
-                when '02' then '02.1.1'
-                when '03' then '03.1.2'
-                when '04' then '04.1.1'
-                when '05' then '05.1.1'
-                when '06' then '06.1.1'
-                when '07' then '07.2.2'
-                when '08' then '08.2.0'
-                when '09' then '09.5.4'
-                when '10' then '10.4.1'
-                when '11' then '11.1.1'
-                when '12' then '12.1.1'
-                else '01.1.1'
-            end
+            {{ coicop_code_from_division("cm.coicop_division") }}
         when p.store_slug in ('khmer24', 'realestate') then '04.1.1'
         when p.store_slug in ('communitypharma') then '06.1.2'
         when p.store_slug in ('sokhahotel', 'hyyathotel') then '11.2.0'

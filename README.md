@@ -69,6 +69,8 @@
   - `gold.fct_daily_prices`: Conformed daily price fact table at grain `(scrape_date, store_slug, item_id)` with KHR prices, unit prices, promo/outlier/fallback flags, and COICOP attribution.
   - `gold.fct_coicop_class_daily`: Intermediate 4-digit COICOP class-level aggregate mart (e.g. `01.1.1` Bread & Cereals) for sub-division policy drilldown.
   - `gold.fct_cpi_monthly`: Monthly conformed 12-division and national headline/core CPI aggregate mart with Month-over-Month (MoM %) and Year-over-Year (YoY %) inflation rates.
+  - `gold.dim_nis_official_cpi`: Historical official NIS Cambodia monthly CPI releases (Oct–Dec 2006 = 100) used as ground-truth evaluation anchors.
+  - `gold.fct_cpi_nowcast`: Real-time daily nowcasts predicting current month-end inflation ($\pi_t^{\text{MoM}}$) and dual reconstructed indices with narrowing 95% CI fan bands.
 - **Economic Index Calculation Engine (`pipeline/cpi_calculator.py`)**:
   - **Jevons Micro-Index Compilation**: Unweighted geometric mean price ratios across active basket items:
     $$I_{j}^{t/0} = \exp\left(\frac{1}{n_t} \sum_{i=1}^{n_t} \ln P_{i,t} - \frac{1}{n_0} \sum_{i=1}^{n_0} \ln P_{i,0}\right) \times 100.0$$
@@ -77,12 +79,20 @@
   - **Hedonic Quality Adjustment Bridge**: Directly bridges `silver.hedonic_adjusted_prices` to adjust for technology/electronic quality improvements (Division 08/09).
   - **Laspeyres 12-Division Weighting**: Official National Institute of Statistics (NIS) Cambodia expenditure shares compiled into Headline and Core CPI (`gold.fct_cpi_daily` & `gold.fct_cpi_monthly`).
   - **Refined Core CPI**: Excludes volatile food (Division 01) and energy/fuel in accordance with NIS and National Bank of Cambodia core inflation standards.
+- **High-Frequency Inflation Nowcasting Engine (`ml/nowcaster.py`)**:
+  - **Econometric Hybrid Ensemble**: Blends Autoregressive Distributed Lag (ADL, Macias et al. 2023) and Gradient Boosted Trees (Medeiros et al. 2021).
+  - **Sub-Driver Decomposition**: Features dedicated Food (44.775%) and Transport (12.228%) momentum signals (>57% of NIS basket).
+  - **Dual-Index Dynamic Chain-Linking**: Produces pipeline-native index and reconstructed official NIS 2006-base index ($\hat{P}_{\text{NIS}, t}$).
+  - **Dynamic Fan Bands**: 95% Confidence Interval bounds contract via $\sqrt{\max(0.01, 1 - T / D_{\text{month}})}$ as the month progresses.
 - **Serving Views & Metabase Dashboards** (`sql/views.sql`):
+  - `gold.v_nowcast_evaluation`: Automated out-of-sample backtesting tracking nowcast errors vs. official NIS releases.
   - `gold.v_cpi_monthly_summary`: Monthly national headline and core CPI with MoM (%) and YoY (%) inflation indicators.
   - `gold.v_cpi_monthly_divisions`: Monthly 12-division COICOP performance matrix with official NIS expenditure weights.
   - `gold.v_cpi_inflation_summary`: Daily Headline & Core CPI DoD/MoM inflation metrics.
   - `gold.v_coicop_class_breakdown`: 4-digit COICOP class-level granular breakdown.
   - `gold.v_monitor_source_health_matrix`: 20-Source Scraper Live Availability Matrix.
+  - `gold.v_monitor_price_alerts`: Daily price anomaly & extreme shift alerts (> 20% DoD).
+  - `gold.v_monitor_fx_health`: Official MEF USD/KHR Exchange Rate Freshness Monitor.
   - `gold.v_monitor_price_alerts`: Daily price anomaly & extreme shift alerts (> 20% DoD).
   - `gold.v_monitor_fx_health`: Official MEF USD/KHR Exchange Rate Freshness Monitor.
 

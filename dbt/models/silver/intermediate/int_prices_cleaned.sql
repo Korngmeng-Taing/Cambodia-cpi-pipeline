@@ -66,8 +66,20 @@ parsed as (
             when upper(raw.currency) = 'KHR' then raw.original_price_curr
             else raw.original_price_curr * coalesce(er.rate, 4044.0)
         end as original_price_khr,
-        coalesce((regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[1], null)::numeric as size_value,
-        lower(coalesce((regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[2], '')) as size_unit,
+        coalesce(
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[1]::numeric,
+            1
+        ) as pack_qty,
+        coalesce(
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[2]::numeric,
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[1]::numeric,
+            null
+        ) as size_value,
+        lower(coalesce(
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[3],
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[2],
+            ''
+        )) as size_unit,
         case
             when raw.original_price_curr is not null and raw.original_price_curr > raw.price_original_curr
                  and raw.price_original_curr > 0
@@ -80,89 +92,90 @@ parsed as (
         {{ clean_product_name('raw.name_raw') }} as name_clean
     from raw
     left join exchange er on er.execution_date = raw.scrape_date
-),
-with_price_stats as (
-    select
-        p.*,
-        avg(p.price_khr) over () as avg_price_all,
-        stddev_samp(p.price_khr) over () as stddev_price_all,
-        avg(p.price_khr) over (partition by p.store_slug) as avg_price_store,
-        stddev_samp(p.price_khr) over (partition by p.store_slug) as stddev_price_store
-    from parsed p
 )
 select
-    wps.raw_price_id,
-    wps.item_id,
-    wps.match_method,
-    wps.match_confidence,
-    wps.store_slug,
-    wps.source_name,
-    wps.name_raw,
-    trim(wps.name_clean) as name_clean,
-    wps.category_native,
-    wps.brand,
-    wps.barcode,
-    wps.size_norm,
-    wps.currency,
-    wps.price_original_curr,
-    wps.original_price_curr,
-    wps.usd_khr_rate,
-    round(wps.price_khr::numeric, 2)::numeric(14, 2) as price_khr,
-    round(wps.original_price_khr::numeric, 2)::numeric(14, 2) as original_price_khr,
+    p.raw_price_id,
+    p.item_id,
+    p.match_method,
+    p.match_confidence,
+    p.store_slug,
+    p.source_name,
+    p.name_raw,
+    trim(p.name_clean) as name_clean,
+    p.category_native,
+    p.brand,
+    p.barcode,
+    p.size_norm,
+    p.currency,
+    p.price_original_curr,
+    p.original_price_curr,
+    p.usd_khr_rate,
+    round(p.price_khr::numeric, 2)::numeric(14, 2) as price_khr,
+    round(p.original_price_khr::numeric, 2)::numeric(14, 2) as original_price_khr,
+    -- Reconcile discount: prefer raw_discount_pct; if absent, derive from original vs current price
     case
-        when wps.raw_discount_pct is null then null
-        when wps.raw_discount_pct < 0 then 0.00
-        when wps.raw_discount_pct > 95 then 95.00
-        else wps.raw_discount_pct
+        when p.raw_discount_pct is not null then p.raw_discount_pct
+        when p.original_price_khr is not null and p.original_price_khr > p.price_khr and p.price_khr > 0
+        then round((p.original_price_khr - p.price_khr) / p.original_price_khr * 100.0, 2)
+        else 0.00
     end as discount_pct,
-    (wps.original_price_curr is not null
-        and wps.original_price_curr > wps.price_original_curr) as on_promo,
-    wps.size_value,
-    -- Expanded unit normalization: g, ml, l, kg + pack, can, bottle, box, piece, pcs, etc.
-    case when wps.size_unit in ('g', 'gm', 'gram', 'grams') then 'g'
-         when wps.size_unit in ('ml', 'millilitre', 'milliliter', 'millilitres', 'milliliters') then 'ml'
-         when wps.size_unit in ('l', 'ltr', 'litre', 'liter', 'litres', 'liters') then 'l'
-         when wps.size_unit in ('kg', 'kilo', 'kilos', 'kilogram', 'kilograms') then 'kg'
-         when wps.size_unit in ('pack', 'pk', 'pks', 'packs') then 'pack'
-         when wps.size_unit in ('can', 'cans') then 'can'
-         when wps.size_unit in ('bottle', 'bottles', 'btl', 'btls') then 'bottle'
-         when wps.size_unit in ('box', 'boxes', 'bx') then 'box'
-         when wps.size_unit in ('pcs', 'piece', 'pieces', 'pc', 'pce') then 'piece'
-         when wps.size_unit in ('sachet', 'sachets', 'sac') then 'sachet'
-         when wps.size_unit in ('bag', 'bags') then 'bag'
-         when wps.size_unit in ('carton', 'cartons') then 'carton'
-         when wps.size_unit in ('jar', 'jars') then 'jar'
-         when wps.size_unit in ('tube', 'tubes') then 'tube'
-         when wps.size_unit in ('packet', 'packets', 'pkt') then 'packet'
-         when wps.size_unit in ('roll', 'rolls') then 'roll'
-         when wps.size_unit in ('stick', 'sticks') then 'stick'
-         when wps.size_unit in ('pair', 'pairs') then 'pair'
-         when wps.size_unit in ('set', 'sets') then 'set'
-         when wps.size_unit in ('dozen', 'doz') then 'dozen'
-         else wps.size_unit
+    -- on_promo: true if discount >= 1.0% or raw on_promo was set
+    case
+        when coalesce(p.raw_on_promo, false) then true
+        when p.original_price_khr is not null and p.original_price_khr > p.price_khr and p.price_khr > 0
+             and ((p.original_price_khr - p.price_khr) / p.original_price_khr * 100.0) >= 1.0
+        then true
+        else false
+    end as on_promo,
+    p.size_value,
+    case
+         when p.size_unit in ('g', 'gm', 'gram', 'grams') then 'g'
+         when p.size_unit in ('kg', 'kilo', 'kilos', 'kilogram', 'kilograms') then 'kg'
+         when p.size_unit in ('ml', 'millilitre', 'milliliter', 'millilitres', 'milliliters') then 'ml'
+         when p.size_unit in ('l', 'ltr', 'litre', 'liter', 'litres', 'liters') then 'l'
+         when p.size_unit in ('can', 'cans') then 'can'
+         when p.size_unit in ('bottle', 'bottles') then 'bottle'
+         when p.size_unit in ('box', 'boxes') then 'box'
+         when p.size_unit in ('pack', 'packs', 'pk') then 'pack'
+         when p.size_unit in ('bag', 'bags') then 'bag'
+         when p.size_unit in ('piece', 'pieces', 'pc', 'pcs') then 'piece'
+         when p.size_unit in ('cup', 'cups') then 'cup'
+         when p.size_unit in ('bar', 'bars') then 'bar'
+         when p.size_unit in ('tube', 'tubes') then 'tube'
+         when p.size_unit in ('packet', 'packets', 'pkt') then 'packet'
+         when p.size_unit in ('roll', 'rolls') then 'roll'
+         when p.size_unit in ('stick', 'sticks') then 'stick'
+         when p.size_unit in ('pair', 'pairs') then 'pair'
+         when p.size_unit in ('set', 'sets') then 'set'
+         when p.size_unit in ('dozen', 'doz') then 'dozen'
+         else p.size_unit
     end as size_unit,
-    1 as pack_qty,
+    p.pack_qty,
     case
         -- Weight-based unit price (always KHR/kg)
-        when wps.size_unit in ('kg', 'kilo', 'kilos', 'kilogram', 'kilograms') and wps.size_value > 0 then wps.price_khr / wps.size_value
-        when wps.size_unit in ('g', 'gm', 'gram', 'grams') and wps.size_value > 0 then wps.price_khr / (wps.size_value / 1000.0)
+        when p.size_unit in ('kg', 'kilo', 'kilos', 'kilogram', 'kilograms') and p.size_value > 0 
+            then p.price_khr / (p.size_value * coalesce(p.pack_qty, 1))
+        when p.size_unit in ('g', 'gm', 'gram', 'grams') and p.size_value > 0 
+            then p.price_khr / ((p.size_value * coalesce(p.pack_qty, 1)) / 1000.0)
         -- Volume-based unit price (always KHR/l)
-        when wps.size_unit in ('l', 'ltr', 'litre', 'liter', 'litres', 'liters') and wps.size_value > 0 then wps.price_khr / wps.size_value
-        when wps.size_unit in ('ml', 'millilitre', 'milliliter', 'millilitres', 'milliliters') and wps.size_value > 0 then wps.price_khr / (wps.size_value / 1000.0)
+        when p.size_unit in ('l', 'ltr', 'litre', 'liter', 'litres', 'liters') and p.size_value > 0 
+            then p.price_khr / (p.size_value * coalesce(p.pack_qty, 1))
+        when p.size_unit in ('ml', 'millilitre', 'milliliter', 'millilitres', 'milliliters') and p.size_value > 0 
+            then p.price_khr / ((p.size_value * coalesce(p.pack_qty, 1)) / 1000.0)
         else null
     end as unit_price_khr,
     -- Outlier detection: flag extreme pricing anomalies or corrupt inputs
     case
-        when wps.price_khr <= 0 then true
-        when wps.price_khr > 100000000 then true -- Upper bound for consumer retail item (>100M KHR ~ $25,000 USD)
-        when wps.original_price_curr is not null and wps.price_original_curr > 0 
-             and wps.price_original_curr > wps.original_price_curr * 10 then true
+        when p.price_khr <= 0 then true
+        when p.price_khr > 100000000 then true -- Upper bound for consumer retail item (>100M KHR ~ $25,000 USD)
+        when p.original_price_curr is not null and p.price_original_curr > 0 
+             and p.price_original_curr > p.original_price_curr * 10 then true
         else false
     end as is_outlier,
-    (wps.price_khr > 0 and wps.price_khr <= 100000000) as cpi_eligible,
+    (p.price_khr > 0 and p.price_khr <= 100000000) as cpi_eligible,
     -- Carry through is_fallback flag + operator reason from scraper (raw_payload JSONB)
-    coalesce(wps.is_fallback_raw::boolean, false) as is_fallback,
-    wps.fallback_reason,
-    wps.scrape_date,
-    wps.scraped_at
-from with_price_stats wps
+    coalesce(p.is_fallback_raw::boolean, false) as is_fallback,
+    p.fallback_reason,
+    p.scrape_date,
+    p.scraped_at
+from parsed p

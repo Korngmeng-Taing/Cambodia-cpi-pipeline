@@ -53,10 +53,38 @@ def test_nowcaster_synthetic_execution():
     assert res["nowcast_headline_cpi"] > 0
     assert res["nowcast_core_cpi"] > 0
     assert "projected_mom_pct" in res
-    assert "projected_yoy_pct" in res
+    assert "projected_yoy_pct" not in res
+
+    # Check dual-index chain linking: NIS baseline should be linked to official base (192.50)
+    assert "nowcast_nis_headline_cpi" in res
+    assert res["latest_nis_baseline_cpi"] == 192.50
+    expected_nis = round(192.50 * (1.0 + (res["projected_mom_pct"] / 100.0)), 4)
+    assert res["nowcast_nis_headline_cpi"] == expected_nis
 
     # Check 95% Confidence Interval structure (ci_lower < cpi < ci_upper)
     assert res["ci_lower_95"] <= res["nowcast_headline_cpi"] <= res["ci_upper_95"]
+
+
+def test_chain_linking_scale_invariance():
+    """Verify that different official baselines correctly apply the same predicted inflation rate."""
+    nowcaster = CPINowcaster()
+    target_date = date(2026, 8, 20)
+    
+    # Test with custom official baselines (e.g. 189.50 vs 201.20)
+    mock_daily = pd.DataFrame([
+        {"calculation_date": date(2026, 8, 1), "coicop_division": "01", "division_name": "Food", "weight": 0.448, "division_index": 101.0, "headline_cpi": 101.0, "core_cpi": 101.0}
+    ])
+    df_nis_189 = pd.DataFrame([{"cpi_month": date(2026, 7, 1), "headline_cpi": 189.50, "core_cpi": 189.0, "mom_inflation_pct": 0.10}])
+    df_nis_201 = pd.DataFrame([{"cpi_month": date(2026, 7, 1), "headline_cpi": 201.20, "core_cpi": 200.0, "mom_inflation_pct": 0.10}])
+
+    res_189 = nowcaster.nowcast_for_date(target_date, mock_daily, df_nis=df_nis_189)
+    res_201 = nowcaster.nowcast_for_date(target_date, mock_daily, df_nis=df_nis_201)
+
+    # Both must predict identical MoM inflation rate regardless of base level
+    assert res_189["projected_mom_pct"] == res_201["projected_mom_pct"]
+    # Chain-linked values must scale exactly proportionally
+    assert res_189["nowcast_nis_headline_cpi"] == round(189.50 * (1.0 + (res_189["projected_mom_pct"] / 100.0)), 4)
+    assert res_201["nowcast_nis_headline_cpi"] == round(201.20 * (1.0 + (res_201["projected_mom_pct"] / 100.0)), 4)
 
 
 def test_uncertainty_narrows_as_month_progresses():
@@ -79,4 +107,5 @@ def test_execute_nowcasting_pipeline_callable():
     assert isinstance(res, dict)
     assert "nowcast_headline_cpi" in res
     assert "projected_mom_pct" in res
+    assert "nowcast_nis_headline_cpi" in res
 

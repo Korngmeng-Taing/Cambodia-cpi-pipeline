@@ -79,7 +79,7 @@
         case
             when {{ cat_map_code }} is not null
                  and {{ cat_map_code }} ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then {{ cat_map_code }}
-            when {{ cat_map_div }} = '09' then '09.5.4'
+            when {{ cat_map_div }} = '09' then '09.5.1'
             when {{ cat_map_div }} is not null then
                 case {{ cat_map_div }}
                     when '01' then '01.1.1'
@@ -90,7 +90,7 @@
                     when '06' then '06.1.1'
                     when '07' then '07.2.2'
                     when '08' then '08.2.0'
-                    when '10' then '10.4.1'
+                    when '10' then '10.1.0'
                     when '11' then '11.1.1'
                     when '12' then '12.1.1'
                     else '01.1.1'

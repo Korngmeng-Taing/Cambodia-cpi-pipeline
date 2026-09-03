@@ -37,7 +37,8 @@ DEFAULT_ARGS = {
 
 
 def _ingest_callable(source_slug: str, **context) -> dict:
-    ds = context["ds"]
+    dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
+    ds = dag_run_conf.get("ds", context["ds"])
     log.info("Bronze ingestion for '%s' on %s", source_slug, ds)
     result = ingest_source_bronze(source_slug, ds)
     log.info("Ingested '%s' on %s: %s", source_slug, ds, result)
@@ -45,7 +46,8 @@ def _ingest_callable(source_slug: str, **context) -> dict:
 
 
 def _dq_gate_callable(source_slug: str, **context) -> int:
-    ds = context["ds"]
+    dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
+    ds = dag_run_conf.get("ds", context["ds"])
     count = check_bronze_gate(source_slug, ds)
     log.info("Bronze gate OK for '%s' on %s: %d records", source_slug, ds, count)
     return count

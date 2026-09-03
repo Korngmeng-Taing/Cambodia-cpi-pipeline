@@ -102,43 +102,40 @@ class AryStorePhoneScraper(BaseScraper):
         records: list[dict[str, Any]] = []
         page = 1
         max_retries = 3
-        try:
-            while True:
-                resp = None
-                last_err = None
-                for attempt in range(max_retries):
-                    try:
-                        resp = self.session.get(
-                            ARYSTORE_API_URL,
-                            params={"per_page": ARYSTORE_PAGE_SIZE, "page": page},
-                            timeout=60,
-                        )
-                        resp.raise_for_status()
-                        break
-                    except Exception as exc:
-                        last_err = exc
-                        log.warning("AryStore page %d attempt %d failed: %s", page, attempt + 1, exc)
-                        if attempt < max_retries - 1:
-                            time.sleep(2 ** attempt)
-                if resp is None:
-                    log.error("AryStore: all %d retries failed for page %d: %s", max_retries, page, last_err)
-                    break
+        while True:
+            resp = None
+            last_err = None
+            for attempt in range(max_retries):
                 try:
-                    products = resp.json()
-                except Exception:
-                    log.error("AryStore: invalid JSON on page %d", page)
+                    resp = self.session.get(
+                        ARYSTORE_API_URL,
+                        params={"per_page": ARYSTORE_PAGE_SIZE, "page": page},
+                        timeout=60,
+                    )
+                    resp.raise_for_status()
                     break
-                if not products:
-                    break
-                for p in products:
-                    rec = self._to_canonical(p, ds)
-                    if rec:
-                        records.append(rec)
-                if len(products) < ARYSTORE_PAGE_SIZE:
-                    break
-                page += 1
-        finally:
-            self.session.close()
+                except Exception as exc:
+                    last_err = exc
+                    log.warning("AryStore page %d attempt %d failed: %s", page, attempt + 1, exc)
+                    if attempt < max_retries - 1:
+                        time.sleep(2 ** attempt)
+            if resp is None:
+                log.error("AryStore: all %d retries failed for page %d: %s", max_retries, page, last_err)
+                break
+            try:
+                products = resp.json()
+            except Exception:
+                log.error("AryStore: invalid JSON on page %d", page)
+                break
+            if not products:
+                break
+            for p in products:
+                rec = self._to_canonical(p, ds)
+                if rec:
+                    records.append(rec)
+            if len(products) < ARYSTORE_PAGE_SIZE:
+                break
+            page += 1
         if not records:
             raise RuntimeError(f"AryStore: 0 products scraped on {ds}")
         return records

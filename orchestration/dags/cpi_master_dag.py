@@ -43,14 +43,48 @@ WAIT_POKE_INTERVAL = 10
 WAIT_TIMEOUT_SECONDS = 3600
 SILVER_WAIT_TIMEOUT_SECONDS = 7200  # 2 hours for Silver layer
 MIN_SUCCESSFUL_SCRAPERS = int(os.getenv("MIN_SUCCESSFUL_SCRAPERS", "3"))
+WARNING_SCRAPERS_THRESHOLD = int(os.getenv("WARNING_SCRAPERS_THRESHOLD", "10"))
+
+
+def _send_alert(subject: str, message: str, level: str = "warning") -> None:
+    """Dispatches pipeline alerts to Slack and/or Telegram if configured."""
+    slack_webhook = os.getenv("SLACK_WEBHOOK_URL")
+    if slack_webhook:
+        try:
+            import requests
+            emoji = "🚨" if level == "critical" else "⚠️"
+            payload = {"text": f"{emoji} *[{level.upper()}] {subject}*\n{message}"}
+            requests.post(slack_webhook, json=payload, timeout=10)
+            log.info("Alert dispatched to Slack successfully.")
+        except Exception as err:
+            log.warning("Failed to dispatch Slack alert: %s", err)
+
+    telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    if telegram_token and telegram_chat_id:
+        try:
+            import requests
+            emoji = "🚨" if level == "critical" else "⚠️"
+            url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
+            payload = {
+                "chat_id": telegram_chat_id,
+                "text": f"{emoji} *[{level.upper()}] {subject}*\n{message}",
+                "parse_mode": "Markdown",
+            }
+            requests.post(url, json=payload, timeout=10)
+            log.info("Alert dispatched to Telegram successfully.")
+        except Exception as err:
+            log.warning("Failed to dispatch Telegram alert: %s", err)
 
 
 def _verify_minimum_scrapers_success(**context) -> None:
     """Verifies that at least MIN_SUCCESSFUL_SCRAPERS succeeded in the current Bronze run.
 
-    Prevents Silver and Gold from running on 100% empty/failed scrapes.
+    Sends automated Slack/Telegram warning alerts when fewer than WARNING_SCRAPERS_THRESHOLD
+    (10) scrapers succeed, and aborts downstream pipeline if fewer than MIN_SUCCESSFUL_SCRAPERS (3).
     """
     from pipeline.config import get_db_connection
+    from scrapers.sources import SCRAPER_REGISTRY
 
     ds = context["ds"]
     conn = get_db_connection()
@@ -58,22 +92,39 @@ def _verify_minimum_scrapers_success(**context) -> None:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT COUNT(DISTINCT store_slug)
+                SELECT store_slug, record_count
                 FROM staging.raw_scrapes
                 WHERE scrape_date = %s
                   AND record_count > 0
                 """,
                 (ds,),
             )
-            row = cur.fetchone()
-            successful = row[0] if row else 0
+            rows = cur.fetchall()
+            successful_stores = [r[0] for r in rows]
+            successful = len(successful_stores)
+
+        all_stores = set(SCRAPER_REGISTRY.keys())
+        missing_stores = sorted(all_stores - set(successful_stores))
 
         log.info(
-            "Bronze validation for %s: %d distinct sources succeeded (minimum required: %d)",
+            "Bronze validation for %s: %d/%d distinct sources succeeded (minimum required: %d, warning threshold: %d)",
             ds,
             successful,
+            len(all_stores),
             MIN_SUCCESSFUL_SCRAPERS,
+            WARNING_SCRAPERS_THRESHOLD,
         )
+
+        if successful < WARNING_SCRAPERS_THRESHOLD:
+            msg = (
+                f"Scraper intake degraded on *{ds}*: only {successful}/{len(all_stores)} sources succeeded.\n"
+                f"• Successful: {', '.join(sorted(successful_stores)) or 'None'}\n"
+                f"• Missing/Failed: {', '.join(missing_stores) or 'None'}"
+            )
+            level = "critical" if successful < MIN_SUCCESSFUL_SCRAPERS else "warning"
+            log.warning("⚠️ %s", msg)
+            _send_alert("Cambodia CPI Scraper Intake Warning", msg, level=level)
+
         if successful < MIN_SUCCESSFUL_SCRAPERS:
             raise RuntimeError(
                 f"Bronze quality gate failed: only {successful} sources succeeded for {ds} "
@@ -103,7 +154,7 @@ with DAG(
             trigger_dag_id=f"scrape_{store_slug}_dag",
             conf={"ds": "{{ ds }}"},
             wait_for_completion=True,
-            deferrable=True,
+            deferrable=False,
             poke_interval=WAIT_POKE_INTERVAL,
             execution_timeout=timedelta(seconds=WAIT_TIMEOUT_SECONDS),
             reset_dag_run=True,
@@ -115,6 +166,7 @@ with DAG(
     bronze_gate_task = PythonOperator(
         task_id="verify_bronze_quality_gate",
         python_callable=_verify_minimum_scrapers_success,
+        trigger_rule="all_done",
     )
 
     # 3. Trigger Silver DAG
@@ -123,33 +175,33 @@ with DAG(
         trigger_dag_id="silver_dag",
         conf={"ds": "{{ ds }}"},
         wait_for_completion=True,
-        deferrable=True,
+        deferrable=False,
         poke_interval=WAIT_POKE_INTERVAL,
         execution_timeout=timedelta(seconds=SILVER_WAIT_TIMEOUT_SECONDS),
         reset_dag_run=True,
         failed_states=["failed"],
     )
 
-    # 4. Trigger Gold Star Schema DAG
-    trigger_gold_task = TriggerDagRunOperator(
-        task_id="trigger_gold_dag",
-        trigger_dag_id="gold_dag",
+    # 4. Trigger Gold Economic CPI Calculation DAG (Jevons & Laspeyres)
+    trigger_gold_cpi_task = TriggerDagRunOperator(
+        task_id="trigger_gold_cpi_dag",
+        trigger_dag_id="gold_cpi_dag",
         conf={"ds": "{{ ds }}"},
         wait_for_completion=True,
-        deferrable=True,
+        deferrable=False,
         poke_interval=WAIT_POKE_INTERVAL,
         execution_timeout=timedelta(seconds=WAIT_TIMEOUT_SECONDS),
         reset_dag_run=True,
         failed_states=["failed"],
     )
 
-    # 5. Trigger Gold Economic CPI Calculation DAG (Jevons & Laspeyres)
-    trigger_gold_cpi_task = TriggerDagRunOperator(
-        task_id="trigger_gold_cpi_dag",
-        trigger_dag_id="gold_cpi_dag",
+    # 5. Trigger Gold Star Schema DAG
+    trigger_gold_task = TriggerDagRunOperator(
+        task_id="trigger_gold_dag",
+        trigger_dag_id="gold_dag",
         conf={"ds": "{{ ds }}"},
         wait_for_completion=True,
-        deferrable=True,
+        deferrable=False,
         poke_interval=WAIT_POKE_INTERVAL,
         execution_timeout=timedelta(seconds=WAIT_TIMEOUT_SECONDS),
         reset_dag_run=True,
@@ -159,4 +211,4 @@ with DAG(
     end_task = EmptyOperator(task_id="cpi_pipeline_success")
 
     # Wire DAG dependencies
-    start_task >> scraper_trigger_tasks >> bronze_gate_task >> trigger_silver_task >> trigger_gold_task >> trigger_gold_cpi_task >> end_task
+    start_task >> scraper_trigger_tasks >> bronze_gate_task >> trigger_silver_task >> trigger_gold_cpi_task >> trigger_gold_task >> end_task

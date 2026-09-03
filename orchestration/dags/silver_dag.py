@@ -179,7 +179,8 @@ with DAG(
         task_item_matching
         >> task_item_auto_review
         >> task_dbt_seed
-        >> [task_gemini_coicop, task_hedonic_adjustment]
+        >> task_gemini_coicop
         >> task_dbt_silver_run
+        >> task_hedonic_adjustment
         >> task_dbt_silver_test
     )

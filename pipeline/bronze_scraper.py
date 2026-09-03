@@ -183,7 +183,10 @@ class BronzeScraper:
                 ON CONFLICT (scrape_date, store_slug) DO UPDATE
                 SET run_id = EXCLUDED.run_id,
                     record_count = GREATEST(staging.raw_scrapes.record_count, EXCLUDED.record_count),
-                    payload = EXCLUDED.payload;
+                    payload = CASE 
+                        WHEN jsonb_array_length(EXCLUDED.payload) > 0 THEN EXCLUDED.payload 
+                        ELSE staging.raw_scrapes.payload 
+                    END;
                 """,
                 (
                     str(batch_id),

@@ -95,6 +95,9 @@ def extract_nowcasting_features(
                 df_nis_official[col] = pd.to_numeric(df_nis_official[col], errors="coerce")
 
     # ── 1. Intra-Month Observed Dynamics ─────────────────────────────────────
+    food_mom_signal = 0.0
+    transport_mom_signal = 0.0
+
     if df_daily_cpi is None or df_daily_cpi.empty:
         realized_headline = 100.0
         realized_core = 100.0
@@ -111,13 +114,21 @@ def extract_nowcasting_features(
             realized_core = 100.0
             div_means = {d: 100.0 for d in NIS_COICOP_WEIGHTS}
         else:
-            realized_headline = float(curr_month_df["headline_cpi"].mean())
-            realized_core = float(curr_month_df["core_cpi"].dropna().mean()) if "core_cpi" in curr_month_df else realized_headline
+            daily_headline = curr_month_df.groupby("calculation_date")["headline_cpi"].first()
+            realized_headline = float(daily_headline.mean()) if not daily_headline.empty else 100.0
+            daily_core = curr_month_df.groupby("calculation_date")["core_cpi"].first().dropna() if "core_cpi" in curr_month_df else None
+            realized_core = float(daily_core.mean()) if daily_core is not None and not daily_core.empty else realized_headline
 
             div_means = {}
             for div_code in NIS_COICOP_WEIGHTS:
                 sub = curr_month_df[curr_month_df["coicop_division"] == div_code]
                 div_means[div_code] = float(sub["division_index"].mean()) if not sub.empty else 100.0
+
+        # Dedicated Food (Div 01) and Transport (Div 07) Momentum Signals (>57% of NIS Basket)
+        food_index = div_means.get("01", 100.0)
+        transport_index = div_means.get("07", 100.0)
+        food_mom_signal = float(((food_index - 100.0) / 100.0) * 100.0)
+        transport_mom_signal = float(((transport_index - 100.0) / 100.0) * 100.0)
 
     # ── 2. Rolling Moving Averages & Volatility Across Recent Days ────────────
     unique_dates = sorted(df_daily_cpi["calculation_date"].unique()) if df_daily_cpi is not None and not df_daily_cpi.empty else []
@@ -165,7 +176,6 @@ def extract_nowcasting_features(
     # ── 4. Lagged Monthly Ground Truth Inflation & NIS Anchors ────────────────
     prior_month_cpi = 100.0
     lag1_mom_inflation = 0.0
-    lag12_yoy_inflation = 0.0
 
     if df_monthly_cpi is not None and not df_monthly_cpi.empty:
         m_sorted = df_monthly_cpi[df_monthly_cpi["cpi_month"] < target_month_start].sort_values("cpi_month")
@@ -175,14 +185,8 @@ def extract_nowcasting_features(
             
             mom_val = m_sorted.iloc[-1].get("mom_inflation_pct")
             lag1_mom_inflation = float(mom_val) if pd.notna(mom_val) else 0.0
-            
-            if len(m_sorted) >= 12:
-                cpi_year_ago_val = m_sorted.iloc[-12].get("monthly_headline_cpi")
-                cpi_year_ago = float(cpi_year_ago_val) if pd.notna(cpi_year_ago_val) else 0.0
-                if cpi_year_ago > 0:
-                    lag12_yoy_inflation = float(((prior_month_cpi - cpi_year_ago) / cpi_year_ago) * 100.0)
 
-    # Extract official NIS benchmarks if available from database
+    # Extract official NIS benchmarks if available from database (gold.dim_nis_official_cpi)
     latest_nis_cpi = 100.0
     latest_nis_core_cpi = 100.0
     latest_nis_month = target_month_start - timedelta(days=30)
@@ -206,11 +210,6 @@ def extract_nowcasting_features(
                 nis_mom_val = last_nis_row.get("mom_inflation_pct")
                 if pd.notna(nis_mom_val):
                     lag1_mom_inflation = float(nis_mom_val)
-            
-            if lag12_yoy_inflation == 0.0:
-                nis_yoy_val = last_nis_row.get("yoy_inflation_pct")
-                if pd.notna(nis_yoy_val):
-                    lag12_yoy_inflation = float(nis_yoy_val)
 
     # ── 5. Holiday & Calendar Indicators ─────────────────────────────────────
     holiday_dict = get_holiday_features(target_date)
@@ -227,6 +226,8 @@ def extract_nowcasting_features(
         "food_div_index": div_means.get("01", 100.0),
         "housing_div_index": div_means.get("04", 100.0),
         "transport_div_index": div_means.get("07", 100.0),
+        "food_mom_signal": food_mom_signal,
+        "transport_mom_signal": transport_mom_signal,
         "ma7_headline": ma7_headline,
         "ma14_headline": ma14_headline,
         "ma30_headline": ma30_headline,
@@ -235,7 +236,6 @@ def extract_nowcasting_features(
         "fx_change_7d_pct": fx_change_7d_pct,
         "prior_month_cpi": prior_month_cpi,
         "lag1_mom_inflation": lag1_mom_inflation,
-        "lag12_yoy_inflation": lag12_yoy_inflation,
         "latest_nis_cpi": latest_nis_cpi,
         "latest_nis_core_cpi": latest_nis_core_cpi,
         "latest_nis_month": latest_nis_month,

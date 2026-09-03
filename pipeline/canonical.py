@@ -165,7 +165,11 @@ def normalize_record(
     store_name = _first(raw.get("store"), raw.get("store_name"), store) or slug
     ds = _first(raw.get("scrape_date"), raw.get("scraped_date"), scrape_date)
     if ds is None:
-        ds = datetime.now(UTC).strftime("%Y-%m-%d")
+        try:
+            import pendulum
+            ds = str(pendulum.today("Asia/Phnom_Penh").date())
+        except Exception:
+            ds = datetime.now(UTC).strftime("%Y-%m-%d")
 
     name = _first(
         raw.get("name"),
@@ -197,8 +201,12 @@ def normalize_record(
         raise ValueError(f"Price bound violation for '{slug}' ('{name}'): {price}")
 
     if curr is None:
-        # Default currency inference
-        curr = "KHR" if (raw.get("price_khr") is not None or price > 2000.0) else "USD"
+        # Default currency inference: store hints and retail price magnitude
+        khr_stores = {"new_gasoline", "redbus", "bookmebus", "aeon"}
+        if raw.get("price_khr") is not None or slug in khr_stores or price > 50000.0:
+            curr = "KHR"
+        else:
+            curr = "USD"
 
     orig_price = _as_float(
         _first(

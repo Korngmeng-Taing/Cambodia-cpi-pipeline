@@ -24,7 +24,7 @@ with daily_facts as (
         observation_count
     from {{ source('gold', 'fct_cpi_daily') }}
     {% if is_incremental() %}
-        where calculation_date >= (select coalesce(max(cpi_month) - interval '2 months', '2020-01-01'::date) from {{ this }})
+        where calculation_date >= (select coalesce(max(cpi_month) - interval '14 months', '2020-01-01'::date) from {{ this }})
     {% endif %}
 ),
 monthly_aggregated as (
@@ -55,6 +55,8 @@ with_lags as (
         monthly_core_cpi,
         round(((monthly_division_index - lag(monthly_division_index) over (partition by coicop_division order by cpi_month)) / nullif(lag(monthly_division_index) over (partition by coicop_division order by cpi_month), 0) * 100.0)::numeric, 4) as mom_inflation_pct,
         round(((monthly_division_index - lag(monthly_division_index, 12) over (partition by coicop_division order by cpi_month)) / nullif(lag(monthly_division_index, 12) over (partition by coicop_division order by cpi_month), 0) * 100.0)::numeric, 4) as yoy_inflation_pct,
+        round(((monthly_headline_cpi - lag(monthly_headline_cpi) over (partition by coicop_division order by cpi_month)) / nullif(lag(monthly_headline_cpi) over (partition by coicop_division order by cpi_month), 0) * 100.0)::numeric, 4) as headline_mom_inflation_pct,
+        round(((monthly_headline_cpi - lag(monthly_headline_cpi, 12) over (partition by coicop_division order by cpi_month)) / nullif(lag(monthly_headline_cpi, 12) over (partition by coicop_division order by cpi_month), 0) * 100.0)::numeric, 4) as headline_yoy_inflation_pct,
         item_count,
         observation_count,
         active_days_in_month,

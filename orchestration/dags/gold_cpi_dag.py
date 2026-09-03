@@ -25,6 +25,7 @@ from airflow.operators.python import PythonOperator
 from airflow.models import Variable
 
 from pipeline.cpi_calculator import CPICalculationEngine
+from ml.nowcaster import execute_nowcasting_pipeline
 
 DEFAULT_ARGS = {
     "owner": "cpi-data-team",
@@ -146,12 +147,44 @@ def annual_rebase_cpi(**context):
     new_base = obs_by_date.idxmax()
     effective_from = date(run_date.year, 1, 1)
 
+    # Determine prior active base date to evaluate December price level relative to current series
+    import psycopg2
+    from pipeline.config import get_database_url
+    conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://", 1)
+    prior_base = None
+    try:
+        with psycopg2.connect(conn_str) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT base_date FROM gold.cpi_base_dates WHERE effective_from <= %s ORDER BY effective_from DESC LIMIT 1;",
+                    (dec_start,),
+                )
+                row = cur.fetchone()
+                if row and row[0]:
+                    prior_base = row[0]
+    except Exception:
+        pass
+
+    if not prior_base:
+        prior_base_str = Variable.get("cpi_base_date", default_var=None)
+        if prior_base_str:
+            try:
+                prior_base = date.fromisoformat(prior_base_str)
+            except Exception:
+                pass
+
     # Compute average December headline CPI across all days with data
-    dec_dates = df_dec["scrape_date"].unique()
+    dec_dates = sorted(df_dec["scrape_date"].unique())
     cpi_values = []
+
+    if prior_base:
+        df_prior_base = engine.load_clean_prices(prior_base, prior_base)
+        base_df = engine.compute_base_prices(prior_base, df_prior_base) if not df_prior_base.empty else engine.compute_base_prices(new_base, df_dec)
+    else:
+        base_df = engine.compute_base_prices(new_base, df_dec)
+
     for d in dec_dates:
         try:
-            base_df = engine.compute_base_prices(d, df_dec)
             elem = engine.compute_daily_elementary_indices(d, base_df, df_dec)
             _, headline = engine.aggregate_division_and_headline(elem, d)
             cpi_values.append(headline["headline_cpi"])
@@ -211,8 +244,6 @@ with DAG(
         task_id="calculate_monthly_cpi_indices",
         python_callable=execute_monthly_cpi_calculation,
     )
-
-    from ml.nowcaster import execute_nowcasting_pipeline
 
     nowcast_cpi_task = PythonOperator(
         task_id="nowcast_monthly_inflation",

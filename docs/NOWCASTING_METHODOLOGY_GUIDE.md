@@ -38,18 +38,20 @@ Because $\lambda$ cancels out identically, **the rate of inflation is 100% invar
 
 ### 1.2 Model A: Autoregressive Distributed Lag (ADL) Formulation
 
-Following the empirical specification of **Macias, Stelmasiak, & Szafranek (2023)** developed at the National Bank of Poland, Model A combines low-frequency official inflation persistence with high-frequency intra-month momentum and deterministic seasonal dummies:
+Following the empirical specification of **Macias, Stelmasiak, & Szafranek (2023)** developed at the National Bank of Poland, Model A combines low-frequency official inflation persistence with high-frequency intra-month momentum, dedicated sub-driver signals (Food & Transport), and deterministic seasonal dummies:
 
-$$\hat{\pi}_{t}^{\text{ADL}} = \beta \cdot \pi_{t-1} + \gamma \cdot \Delta x_t^{\text{scraped}} + \delta \cdot S_t$$
+$$\hat{\pi}_{t}^{\text{ADL}} = \beta \cdot \pi_{t-1} + \gamma_1 \cdot \Delta x_t^{\text{scraped}} + \gamma_2 \cdot x_{\text{Food}} + \gamma_3 \cdot x_{\text{Transport}} + \delta \cdot S_t$$
 
 #### Components & Parameters:
-1. **Autoregressive Lag ($\beta = 0.25$):**  
+1. **Autoregressive Lag ($\beta = 0.20$):**  
    $\pi_{t-1}$ represents the official month-over-month inflation rate from the prior month. Macroeconomic inflation exhibits autocorrelation due to price stickiness and staggered wage/contract resets.
-2. **High-Frequency Scraped Momentum ($\gamma = 0.65$):**  
-   $\Delta x_t^{\text{scraped}}$ is the intra-month price movement signal derived from daily scraping:
+2. **High-Frequency Scraped Momentum ($\gamma_1 = 0.40$):**  
+   $\Delta x_t^{\text{scraped}}$ is the headline intra-month price movement signal derived from daily scraping:
    $$\Delta x_t^{\text{scraped}} = \frac{\bar{P}_{t}^{\text{realized}} - P_{t-1}}{P_{t-1}} \times 100$$
    where $\bar{P}_{t}^{\text{realized}}$ is the weighted average daily CPI observed in the current month up to target date $t$.
-3. **Seasonal Calendar Drift ($\delta = 0.10$):**  
+3. **Dedicated Sub-Basket Drivers ($\gamma_2 = 0.25, \gamma_3 = 0.10$):**  
+   Food (Division 01: 44.775%) and Transport (Division 07: 12.228%) represent **>57%** of Cambodia's total CPI basket. Including their momentum signals directly captures the dominant inflation shocks.
+4. **Seasonal Calendar Drift ($\delta = 0.05$):**  
    $S_t$ is a seasonal adjustment dummy variable:
    $$S_t = \begin{cases} +0.15 & \text{if } \text{month}(t) \in \{4, 9, 10, 11\} \quad (\text{Khmer New Year, Pchum Ben, Water Festival}) \\ -0.05 & \text{otherwise} \end{cases}$$
 
@@ -64,11 +66,11 @@ Following **Medeiros, Vasconcelos, Veiga, & Zilberman (2021)**, consumer price d
 
 The non-linear ensemble model formulation is expressed as:
 
-$$\hat{\pi}_t^{\text{Tree}} = \Delta x_t^{\text{scraped}} + \psi_{\text{FX}} \cdot \text{Shock}_{\text{FX}}(t) + \theta_{\text{Holiday}} \cdot \mathbb{I}_{\text{Holiday}}(t) + \text{Adj}_{\text{Vol}}(t)$$
+$$\hat{\pi}_t^{\text{Tree}} = 0.60 \cdot \Delta x_t^{\text{scraped}} + \left(0.25 \cdot x_{\text{Food}} + 0.15 \cdot x_{\text{Transport}}\right) + \psi_{\text{FX}} \cdot \text{Shock}_{\text{FX}}(t) + \theta_{\text{Holiday}} \cdot \mathbb{I}_{\text{Holiday}}(t) + \text{Adj}_{\text{Vol}}(t)$$
 
 #### Formulation Mechanics:
-1. **Base Momentum:**  
-   $$\Delta x_t^{\text{scraped}} = \frac{\bar{P}_{t}^{\text{realized}} - P_{t-1}}{P_{t-1}} \times 100$$
+1. **Base Momentum & Sub-Drivers:**  
+   $$\Delta x_t^{\text{scraped}} = \frac{\bar{P}_{t}^{\text{realized}} - P_{t-1}}{P_{t-1}} \times 100, \quad \text{SubDriverEffect} = 0.25 \cdot x_{\text{Food}} + 0.15 \cdot x_{\text{Transport}}$$
 2. **Asymmetric Exchange Rate Pass-Through Shock:**  
    In Cambodia's highly dollarized economy, domestic retail prices denominated in KHR react strongly to dollar appreciation:
    $$\text{Shock}_{\text{FX}}(t) = \max\left(0, \; \frac{\text{FX}_t - \text{FX}_{t-7}}{\text{FX}_{t-7}} \times 100\right)$$
@@ -82,26 +84,20 @@ $$\hat{\pi}_t^{\text{Tree}} = \Delta x_t^{\text{scraped}} + \psi_{\text{FX}} \cd
 
 ---
 
-### 1.4 Inverse-RMSFE Ensemble Blending
+### 1.4 Dual-Index Output & Dynamic Chain-Linking (Inverse-RMSFE Blend)
 
-Rather than relying on a single estimator, the pipeline blends the linear autoregressive signal (Model A) and the non-linear tree ensemble (Model B) using **Inverse Root Mean Squared Forecast Error (RMSFE)** optimal forecast combination (Bates & Granger 1969; Stock & Watson 2004):
-
-$$w_m = \frac{\frac{1}{\text{RMSFE}_m}}{\sum_{k} \frac{1}{\text{RMSFE}_k}}$$
-
-Based on the benchmark empirical literature:
-* $\text{RMSFE}_{\text{ADL}} \approx 0.41\%$ (Macias et al. 2023)
-* $\text{RMSFE}_{\text{Tree}} \approx 0.40\%$ (Medeiros et al. 2021)
-
-This yields normalized blending weights:
+Rather than relying on a single estimator, the pipeline blends Model A and Model B using **Inverse Root Mean Squared Forecast Error (RMSFE)**:
 $$w_{\text{ADL}} = 0.48, \quad w_{\text{Tree}} = 0.52$$
 
-The final blended Month-over-Month (MoM) inflation nowcast is:
-
+The blended Month-over-Month (MoM) inflation nowcast is:
 $$\hat{\pi}_t = \left(0.48 \cdot \hat{\pi}_{t}^{\text{ADL}}\right) + \left(0.52 \cdot \hat{\pi}_{t}^{\text{Tree}}\right)$$
 
-The projected month-end headline CPI index level is derived directly:
-
-$$\hat{P}_t = P_{t-1} \times \left(1 + \frac{\hat{\pi}_t}{100}\right)$$
+#### Dual Reconstructed Indices:
+1. **Pipeline-Native CPI Index:**
+   $$\hat{P}_t = P_{t-1} \times \left(1 + \frac{\hat{\pi}_t}{100}\right)$$
+2. **Official NIS Chain-Linked CPI Index (Base Oct–Dec 2006 = 100):**
+   $$\hat{P}_{\text{NIS}, t} = P_{\text{NIS}, t-1} \times \left(1 + \frac{\hat{\pi}_t}{100}\right)$$
+   where $P_{\text{NIS}, t-1}$ is queried dynamically from `gold.dim_nis_official_cpi` (e.g. July 2026: **219.1**).
 
 ---
 
@@ -251,9 +247,10 @@ $$\hat{P}_t = 102.0000 \times \left(1 + \frac{0.7123}{100}\right) = 102.0000 \ti
 
 ---
 
-## 4. Database Schema & Storage
-
-Computed nowcast vectors are saved daily into PostgreSQL table `gold.fct_cpi_nowcast`:
+## 4. Database Schema, Partitioning & Backtesting Evaluation
+ 
+### 4.1 Fact Table Architecture: `gold.fct_cpi_nowcast`
+Nowcasts are appended daily as an idempotent continuous time-series table. Tables are **not** split by month; instead, the primary key `(nowcast_date, target_month, model_name)` and standard B-Tree indexing ensure sub-millisecond retrieval across multi-year horizons:
 
 ```sql
 CREATE TABLE IF NOT EXISTS gold.fct_cpi_nowcast (
@@ -264,18 +261,46 @@ CREATE TABLE IF NOT EXISTS gold.fct_cpi_nowcast (
     days_in_month INTEGER NOT NULL,                 -- e.g. 30
     realized_cpi_so_far NUMERIC(10, 4),             -- e.g. 102.5000
     projected_remaining_cpi NUMERIC(10, 4),         -- e.g. 102.7265
-    nowcast_headline_cpi NUMERIC(10, 4) NOT NULL,   -- e.g. 102.7265
-    nowcast_core_cpi NUMERIC(10, 4),                -- e.g. 101.9500
-    prior_month_cpi NUMERIC(10, 4),                 -- e.g. 102.0000
-    projected_mom_pct NUMERIC(8, 4),                -- e.g. +0.7123
-    projected_yoy_pct NUMERIC(8, 4),                -- e.g. +2.8500
+    projected_mom_pct NUMERIC(8, 4) NOT NULL,       -- TARGET: Estimated MoM inflation rate (%)
+    nowcast_headline_cpi NUMERIC(10, 4) NOT NULL,   -- Pipeline-native base Headline CPI estimate
+    nowcast_nis_headline_cpi NUMERIC(10, 4),        -- Chain-linked official NIS Headline CPI (Base 2006)
+    nowcast_core_cpi NUMERIC(10, 4),                -- Combined Core CPI estimate (ex-food & fuel)
+    prior_month_cpi NUMERIC(10, 4),                 -- Previous month's final CPI
     ci_lower_95 NUMERIC(10, 4),                     -- e.g. 102.1028
     ci_upper_95 NUMERIC(10, 4),                     -- e.g. 103.3502
-    uncertainty_pct NUMERIC(6, 3),                  -- e.g. 0.500
+    uncertainty_pct NUMERIC(6, 3),                  -- Dynamic uncertainty ratio (days_remaining / days_in_month)
     model_name VARCHAR(50) DEFAULT 'hybrid_adl_gbrt_v1',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (nowcast_date, target_month, model_name)
 );
+```
+
+### 4.2 Automated Out-of-Sample Backtesting View: `gold.v_nowcast_evaluation`
+To quantify prediction accuracy against official NIS ground truth releases (e.g. July 2026: **219.1**), the pipeline automatically provides the evaluation view:
+
+```sql
+CREATE OR REPLACE VIEW gold.v_nowcast_evaluation AS
+SELECT 
+    n.nowcast_date,
+    n.target_month,
+    n.days_observed,
+    n.days_remaining,
+    n.projected_mom_pct AS nowcasted_mom_pct,
+    o.mom_inflation_pct AS actual_nis_mom_pct,
+    ROUND(n.projected_mom_pct - o.mom_inflation_pct, 4) AS mom_forecast_error,
+    n.nowcast_nis_headline_cpi AS nowcasted_nis_cpi,
+    o.headline_cpi AS actual_nis_cpi,
+    ROUND(n.nowcast_nis_headline_cpi - o.headline_cpi, 4) AS cpi_forecast_error,
+    n.ci_lower_95,
+    n.ci_upper_95,
+    CASE 
+        WHEN o.headline_cpi BETWEEN n.ci_lower_95 AND n.ci_upper_95 THEN TRUE 
+        ELSE FALSE 
+    END AS is_within_95_ci,
+    n.model_name
+FROM gold.fct_cpi_nowcast n
+JOIN gold.dim_nis_official_cpi o ON n.target_month = o.cpi_month
+ORDER BY n.nowcast_date DESC;
 ```
 
 ---

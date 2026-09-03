@@ -45,14 +45,14 @@ def main():
             END AS division_name,
             fdp.store_slug,
             fdp.scrape_date,
-            fdp.unit_price_local
+            COALESCE(fdp.unit_price_khr, fdp.price_khr) AS unit_price_local
         FROM silver.canonical_items ci
         LEFT JOIN (
             SELECT DISTINCT ON (item_id::uuid)
                 item_id::uuid AS item_id,
                 coicop_division,
                 coicop_code
-            FROM gold.int_coicop_classified
+            FROM silver.int_coicop_classified
             ORDER BY item_id::uuid,
                      CASE WHEN coicop_division <> 'UNCLASSIFIED' THEN 1 ELSE 2 END,
                      coicop_confidence DESC
@@ -108,14 +108,14 @@ def main():
                 ci.brand,
                 ci.size_norm,
                 COALESCE(cs.coicop_division, 'UNCLASSIFIED') AS coicop_division,
-                fdp.unit_price_local,
+                COALESCE(fdp.unit_price_khr, fdp.price_khr) AS unit_price_local,
                 fdp.store_slug
             FROM silver.canonical_items ci
             LEFT JOIN (
                 SELECT DISTINCT ON (item_id::uuid)
                     item_id::uuid AS item_id,
                     coicop_division
-                FROM gold.int_coicop_classified
+                FROM silver.int_coicop_classified
                 ORDER BY item_id::uuid,
                          CASE WHEN coicop_division <> 'UNCLASSIFIED' THEN 1 ELSE 2 END,
                          coicop_confidence DESC

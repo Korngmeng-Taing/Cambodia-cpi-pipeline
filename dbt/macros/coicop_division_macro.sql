@@ -20,7 +20,7 @@
         when {{ div_expr }} = '07' then '07.2.2'
         when {{ div_expr }} = '08' then '08.2.0'
         when {{ div_expr }} = '09' then '09.1.1'
-        when {{ div_expr }} = '10' then '10.4.1'
+        when {{ div_expr }} = '10' then '10.1.0'
         when {{ div_expr }} = '11' then '11.1.1'
         when {{ div_expr }} = '12' then '12.1.1'
         else '01.1.1'

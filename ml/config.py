@@ -10,20 +10,20 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-# Official NIS Cambodia 12 COICOP Division Weights
+# Official NIS Cambodia 12 COICOP Division Weights (Phnom Penh CSES Oct-Dec 2006 = 100)
 NIS_COICOP_WEIGHTS: dict[str, dict[str, Any]] = {
-    "01": {"name": "Food and non-alcoholic beverages", "weight": 0.44800},
-    "02": {"name": "Alcoholic beverages, tobacco and narcotics", "weight": 0.01500},
-    "03": {"name": "Clothing and footwear", "weight": 0.02900},
-    "04": {"name": "Housing, water, electricity, gas and other fuels", "weight": 0.17100},
-    "05": {"name": "Furnishings, household equipment and routine household maintenance", "weight": 0.03300},
-    "06": {"name": "Health", "weight": 0.05600},
-    "07": {"name": "Transport", "weight": 0.12200},
-    "08": {"name": "Communication", "weight": 0.03900},
-    "09": {"name": "Recreation and culture", "weight": 0.01900},
-    "10": {"name": "Education", "weight": 0.01500},
-    "11": {"name": "Restaurants and hotels", "weight": 0.03100},
-    "12": {"name": "Miscellaneous goods and services", "weight": 0.02200},
+    "01": {"name": "Food and non-alcoholic beverages", "weight": 0.44775},
+    "02": {"name": "Alcoholic beverages, tobacco and narcotics", "weight": 0.01625},
+    "03": {"name": "Clothing and footwear", "weight": 0.03036},
+    "04": {"name": "Housing, water, electricity, gas and other fuels", "weight": 0.17084},
+    "05": {"name": "Furnishings, household equipment and routine household maintenance", "weight": 0.03250},
+    "06": {"name": "Health", "weight": 0.05560},
+    "07": {"name": "Transport", "weight": 0.12180},
+    "08": {"name": "Communication", "weight": 0.03920},
+    "09": {"name": "Recreation and culture", "weight": 0.01910},
+    "10": {"name": "Education", "weight": 0.01510},
+    "11": {"name": "Restaurants and hotels", "weight": 0.03085},
+    "12": {"name": "Miscellaneous goods and services", "weight": 0.02065},
 }
 
 # Major Cambodian Cultural & National Holidays (Month, Day) for seasonal spike detection

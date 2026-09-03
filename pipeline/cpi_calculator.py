@@ -21,20 +21,20 @@ from pipeline.config import get_database_url
 
 log = logging.getLogger(__name__)
 
-# Official NIS Cambodia 12-Division Expenditure Weights (CSES)
+# Official NIS Cambodia 12-Division Expenditure Weights (CSES Oct-Dec 2006 = 100)
 DEFAULT_NIS_WEIGHTS = {
-    "01": 0.44800,  # Food & Non-Alcoholic Beverages (44.80%)
-    "02": 0.01500,  # Alcoholic Beverages & Tobacco (1.50%)
-    "03": 0.02900,  # Clothing & Footwear (2.90%)
-    "04": 0.17100,  # Housing, Water, Electricity, Gas & Fuels (17.10%)
-    "05": 0.03300,  # Furnishings & Household Maintenance (3.30%)
-    "06": 0.05600,  # Health & Pharmaceuticals (5.60%)
-    "07": 0.12200,  # Transport & Automotive Fuels (12.20%)
-    "08": 0.03900,  # Communication & Telecom (3.90%)
-    "09": 0.01900,  # Recreation & Culture (1.90%)
-    "10": 0.01500,  # Education (1.50%)
-    "11": 0.03100,  # Restaurants & Hotels (3.10%)
-    "12": 0.02200,  # Miscellaneous Goods & Services (2.20%)
+    "01": 0.44775,  # Food & Non-Alcoholic Beverages (44.775%)
+    "02": 0.01625,  # Alcoholic Beverages & Tobacco (1.625%)
+    "03": 0.03036,  # Clothing & Footwear (3.036%)
+    "04": 0.17084,  # Housing, Water, Electricity, Gas & Fuels (17.084%)
+    "05": 0.03250,  # Furnishings & Household Maintenance (3.250%)
+    "06": 0.05560,  # Health & Pharmaceuticals (5.560%)
+    "07": 0.12180,  # Transport & Automotive Fuels (12.180%)
+    "08": 0.03920,  # Communication & Telecom (3.920%)
+    "09": 0.01910,  # Recreation & Culture (1.910%)
+    "10": 0.01510,  # Education (1.510%)
+    "11": 0.03085,  # Restaurants & Hotels (3.085%)
+    "12": 0.02065,  # Miscellaneous Goods & Services (2.065%)
 }
 
 DIVISION_NAMES = {
@@ -357,13 +357,21 @@ class CPICalculationEngine:
 
             log.info(f"🔧 No base_date provided; using earliest available date {base_date} as base period.")
 
-        df_history = self.load_clean_prices(base_date, target_date)
+        # Load base period observations separately to compute base prices
+        df_base = self.load_clean_prices(base_date, base_date)
+        if df_base.empty:
+            log.error(f"No clean price data available for base date {base_date}")
+            return
+        base_df = self.compute_base_prices(base_date, df_base)
+
+        # Only load the trailing imputation window (target_date - 9 days to target_date)
+        history_start = target_date - timedelta(days=9)
+        df_history = self.load_clean_prices(history_start, target_date)
 
         if df_history.empty:
-            log.error(f"No clean price data available between {base_date} and {target_date}")
+            log.error(f"No clean price data available between {history_start} and {target_date}")
             return
 
-        base_df = self.compute_base_prices(base_date, df_history)
         elementary_df = self.compute_daily_elementary_indices(target_date, base_df, df_history)
 
         df_div, headline = self.aggregate_division_and_headline(elementary_df, target_date)
@@ -508,6 +516,8 @@ class CPICalculationEngine:
                             monthly_core_cpi,
                             ROUND(((monthly_division_index - LAG(monthly_division_index) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_division_index) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::numeric, 4) AS mom_inflation_pct,
                             ROUND(((monthly_division_index - LAG(monthly_division_index, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_division_index, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::numeric, 4) AS yoy_inflation_pct,
+                            ROUND(((monthly_headline_cpi - LAG(monthly_headline_cpi) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_headline_cpi) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::numeric, 4) AS headline_mom_inflation_pct,
+                            ROUND(((monthly_headline_cpi - LAG(monthly_headline_cpi, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_headline_cpi, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::numeric, 4) AS headline_yoy_inflation_pct,
                             item_count,
                             observation_count,
                             active_days_in_month
@@ -542,12 +552,16 @@ class CPICalculationEngine:
                         monthly_core_cpi NUMERIC(10, 4),
                         mom_inflation_pct NUMERIC(8, 4),
                         yoy_inflation_pct NUMERIC(8, 4),
+                        headline_mom_inflation_pct NUMERIC(8, 4),
+                        headline_yoy_inflation_pct NUMERIC(8, 4),
                         item_count INTEGER,
                         observation_count INTEGER,
                         active_days_in_month INTEGER,
                         created_at TIMESTAMPTZ DEFAULT NOW(),
                         PRIMARY KEY (cpi_month, coicop_division)
                     );
+                    ALTER TABLE gold.fct_cpi_monthly ADD COLUMN IF NOT EXISTS headline_mom_inflation_pct NUMERIC(8, 4);
+                    ALTER TABLE gold.fct_cpi_monthly ADD COLUMN IF NOT EXISTS headline_yoy_inflation_pct NUMERIC(8, 4);
                     CREATE UNIQUE INDEX IF NOT EXISTS uq_fct_cpi_monthly ON gold.fct_cpi_monthly (cpi_month, coicop_division);
                 """)
                 rows = [
@@ -557,6 +571,8 @@ class CPICalculationEngine:
                         float(r["monthly_headline_cpi"]), float(r["monthly_core_cpi"]),
                         None if pd.isna(r["mom_inflation_pct"]) else float(r["mom_inflation_pct"]),
                         None if pd.isna(r["yoy_inflation_pct"]) else float(r["yoy_inflation_pct"]),
+                        None if pd.isna(r.get("headline_mom_inflation_pct")) else float(r["headline_mom_inflation_pct"]),
+                        None if pd.isna(r.get("headline_yoy_inflation_pct")) else float(r["headline_yoy_inflation_pct"]),
                         int(r["item_count"]), int(r["observation_count"]), int(r["active_days_in_month"])
                     )
                     for _, r in monthly_df.iterrows()
@@ -566,8 +582,9 @@ class CPICalculationEngine:
                         cpi_month, coicop_division, division_name, weight,
                         monthly_division_index, monthly_headline_cpi, monthly_core_cpi,
                         mom_inflation_pct, yoy_inflation_pct,
+                        headline_mom_inflation_pct, headline_yoy_inflation_pct,
                         item_count, observation_count, active_days_in_month
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (cpi_month, coicop_division) DO UPDATE
                     SET division_name = EXCLUDED.division_name,
                         weight = EXCLUDED.weight,
@@ -576,6 +593,8 @@ class CPICalculationEngine:
                         monthly_core_cpi = EXCLUDED.monthly_core_cpi,
                         mom_inflation_pct = EXCLUDED.mom_inflation_pct,
                         yoy_inflation_pct = EXCLUDED.yoy_inflation_pct,
+                        headline_mom_inflation_pct = EXCLUDED.headline_mom_inflation_pct,
+                        headline_yoy_inflation_pct = EXCLUDED.headline_yoy_inflation_pct,
                         item_count = EXCLUDED.item_count,
                         observation_count = EXCLUDED.observation_count,
                         active_days_in_month = EXCLUDED.active_days_in_month

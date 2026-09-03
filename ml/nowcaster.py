@@ -72,19 +72,19 @@ class CPINowcaster:
                 cols_monthly = [desc[0] for desc in cur.description]
                 df_monthly = pd.DataFrame(cur.fetchall(), columns=cols_monthly)
 
-                # 4. Fetch official NIS benchmark series
+                # 4. Fetch official NIS benchmark series from gold.dim_nis_official_cpi
                 df_nis = pd.DataFrame()
                 try:
                     cur.execute("""
-                        SELECT cpi_month, headline_cpi, core_cpi, mom_inflation_pct, yoy_inflation_pct, release_date
-                        FROM silver.nis_official_cpi
+                        SELECT cpi_month, headline_cpi, core_cpi, mom_inflation_pct, release_date
+                        FROM gold.dim_nis_official_cpi
                         WHERE cpi_month < %s
                         ORDER BY cpi_month ASC;
                     """, (target_date.replace(day=1),))
                     cols_nis = [desc[0] for desc in cur.description]
                     df_nis = pd.DataFrame(cur.fetchall(), columns=cols_nis)
                 except Exception as e:
-                    log.warning("silver.nis_official_cpi could not be queried: %s", e)
+                    log.warning("gold.dim_nis_official_cpi could not be queried: %s", e)
 
                 return df_daily, df_fx, df_monthly, df_nis
         finally:
@@ -94,14 +94,16 @@ class CPINowcaster:
         """
         Model A: Autoregressive Distributed Lag (ADL) Formulation (Macias et al. 2023).
 
-        pi_t = beta * pi_{t-1} + gamma * x_t + delta * Seasonality
-        where x_t is intra-month food/fuel price movement relative to prior month.
+        pi_t = beta * pi_{t-1} + gamma_1 * x_headline + gamma_2 * x_food + gamma_3 * x_transport + delta * Seasonality
+        where food and transport capture >57% of Cambodia's CPI basket.
         """
         prior_cpi = features.get("prior_month_cpi", 100.0)
         realized_headline = features.get("realized_headline_cpi", prior_cpi)
 
         # Immediate scraped momentum signal
         scraped_mom_signal = float(((realized_headline - prior_cpi) / prior_cpi) * 100.0) if prior_cpi > 0 else 0.0
+        food_mom = features.get("food_mom_signal", scraped_mom_signal)
+        trans_mom = features.get("transport_mom_signal", scraped_mom_signal)
 
         # Autoregressive momentum
         lag1_mom = features.get("lag1_mom_inflation", 0.0)
@@ -110,18 +112,28 @@ class CPINowcaster:
         target_month = features.get("target_month", date.today()).month
         seasonal_drift = 0.15 if target_month in (4, 9, 10, 11) else -0.05
 
-        # Weighted ADL formulation (beta = 0.25, gamma = 0.65, delta = 0.10)
-        predicted_mom = (0.25 * lag1_mom) + (0.65 * scraped_mom_signal) + (0.10 * seasonal_drift)
+        # Weighted ADL formulation (beta = 0.20, headline = 0.40, food = 0.25, transport = 0.10, seasonal = 0.05)
+        predicted_mom = (
+            (0.20 * lag1_mom)
+            + (0.40 * scraped_mom_signal)
+            + (0.25 * food_mom)
+            + (0.10 * trans_mom)
+            + (0.05 * seasonal_drift)
+        )
         return float(predicted_mom)
 
     def run_tree_ensemble_model(self, features: dict[str, Any]) -> float:
         """
         Model B: Non-Linear Gradient Boosted Decision Tree (Medeiros et al. 2021).
-        Incorporates exchange rate pass-through, food volatility, and festival indicators.
+        Incorporates food and fuel momentum, exchange rate pass-through, and festival indicators.
         """
         prior_cpi = features.get("prior_month_cpi", 100.0)
         realized_headline = features.get("realized_headline_cpi", prior_cpi)
         base_mom = float(((realized_headline - prior_cpi) / prior_cpi) * 100.0) if prior_cpi > 0 else 0.0
+
+        food_mom = features.get("food_mom_signal", base_mom)
+        trans_mom = features.get("transport_mom_signal", base_mom)
+        sub_driver_effect = 0.25 * food_mom + 0.15 * trans_mom
 
         # FX pass-through shock (Cambodian dual currency economy)
         fx_change_7d = features.get("fx_change_7d_pct", 0.0)
@@ -135,7 +147,7 @@ class CPINowcaster:
         vol = features.get("volatility14", 0.0)
         vol_adjustment = float(np.sign(base_mom) * min(0.3, vol * 10.0))
 
-        predicted_mom = base_mom + fx_shock + holiday_premium + vol_adjustment
+        predicted_mom = (0.60 * base_mom) + sub_driver_effect + fx_shock + holiday_premium + vol_adjustment
         return float(predicted_mom)
 
     def nowcast_for_date(
@@ -149,32 +161,38 @@ class CPINowcaster:
         """Generates conformed nowcast record combining ADL and Tree Ensembles with Dual-Index Chain-Linking."""
         features = extract_nowcasting_features(target_date, df_daily, df_fx, df_monthly, df_nis)
 
-        # 1. Evaluate Sub-Models
+        # 1. Evaluate Sub-Models (Predicting Stationary MoM Inflation)
         pred_mom_adl = self.run_adl_model(features)
         pred_mom_tree = self.run_tree_ensemble_model(features)
 
-        # 2. Blend with Inverse-RMSFE Ensemble Weights
-        # Historical RMSFE: ADL ~ 0.41, Tree ~ 0.40 (Macias et al. 2023 / Medeiros et al. 2021)
+        # 2. Blend with Inverse-RMSFE Ensemble Weights (ADL ~ 0.48, Tree ~ 0.52)
         w_adl = 0.48
         w_tree = 0.52
         projected_mom_pct = round(float((w_adl * pred_mom_adl) + (w_tree * pred_mom_tree)), 4)
 
-        # 3. Derive Projected Month-End CPI Level
+        # 3. Derive Projected Month-End CPI Level (Pipeline-Native Base)
         prior_month_cpi = float(features.get("prior_month_cpi", 100.0))
-        nowcast_headline_cpi = round(float(prior_month_cpi * (1.0 + (projected_mom_pct / 100.0))), 4)
+        projected_end_cpi = float(prior_month_cpi * (1.0 + (projected_mom_pct / 100.0)))
+        realized_so_far = float(features.get("realized_headline_cpi", prior_month_cpi))
+        observed_ratio = float(features.get("observed_ratio", 0.0))
 
-        # 4. Core CPI Nowcast (excludes food 01, housing/fuel 04, transport/fuel 07)
+        # Blend observed price level with remaining forecast
+        if observed_ratio > 0.0:
+            nowcast_headline_cpi = round(float((observed_ratio * realized_so_far) + ((1.0 - observed_ratio) * projected_end_cpi)), 4)
+        else:
+            nowcast_headline_cpi = round(float(projected_end_cpi), 4)
+
+        # 4. Derive Projected Official NIS CPI via Chain-Linking to 2006 Base
+        latest_nis_cpi = float(features.get("latest_nis_cpi", 100.0))
+        nowcast_nis_headline_cpi = round(float(latest_nis_cpi * (1.0 + (projected_mom_pct / 100.0))), 4)
+
+        # 5. Core CPI Nowcast (excludes food 01, housing/fuel 04, transport/fuel 07)
         realized_core = float(features.get("realized_core_cpi", prior_month_cpi))
         core_mom = float(((realized_core - prior_month_cpi) / prior_month_cpi) * 100.0) if prior_month_cpi > 0 else 0.0
         nowcast_core_cpi = round(float(prior_month_cpi * (1.0 + (core_mom / 100.0))), 4)
 
-        # 5. Projected Year-over-Year (YoY) Inflation
-        lag12_yoy = features.get("lag12_yoy_inflation", 0.0)
-        projected_yoy_pct = round(float(lag12_yoy + projected_mom_pct), 4)
-
         # 6. 95% Confidence Interval Fan Bands
         # Uncertainty scales strictly with sqrt(remaining_days / days_in_month)
-        observed_ratio = features["observed_ratio"]
         uncertainty_factor = float(np.sqrt(max(0.01, 1.0 - observed_ratio)))
         base_sigma = 0.45  # Empirical monthly inflation standard deviation (~0.45%)
         margin_of_error = Z_SCORE_95 * base_sigma * uncertainty_factor
@@ -189,12 +207,13 @@ class CPINowcaster:
             "days_remaining": features["days_remaining"],
             "days_in_month": features["days_in_month"],
             "realized_cpi_so_far": round(float(features["realized_headline_cpi"]), 4),
-            "projected_remaining_cpi": nowcast_headline_cpi,
+            "projected_remaining_cpi": round(float(projected_end_cpi), 4),
+            "projected_mom_pct": projected_mom_pct,
             "nowcast_headline_cpi": nowcast_headline_cpi,
+            "nowcast_nis_headline_cpi": nowcast_nis_headline_cpi,
             "nowcast_core_cpi": nowcast_core_cpi,
             "prior_month_cpi": prior_month_cpi,
-            "projected_mom_pct": projected_mom_pct,
-            "projected_yoy_pct": projected_yoy_pct,
+            "latest_nis_baseline_cpi": latest_nis_cpi,
             "ci_lower_95": ci_lower_95,
             "ci_upper_95": ci_upper_95,
             "uncertainty_pct": round(float(features["days_remaining"] / features["days_in_month"]), 3),
@@ -216,11 +235,11 @@ class CPINowcaster:
                         days_in_month INTEGER NOT NULL,
                         realized_cpi_so_far NUMERIC(10, 4),
                         projected_remaining_cpi NUMERIC(10, 4),
+                        projected_mom_pct NUMERIC(8, 4) NOT NULL,
                         nowcast_headline_cpi NUMERIC(10, 4) NOT NULL,
+                        nowcast_nis_headline_cpi NUMERIC(10, 4),
                         nowcast_core_cpi NUMERIC(10, 4),
                         prior_month_cpi NUMERIC(10, 4),
-                        projected_mom_pct NUMERIC(8, 4),
-                        projected_yoy_pct NUMERIC(8, 4),
                         ci_lower_95 NUMERIC(10, 4),
                         ci_upper_95 NUMERIC(10, 4),
                         uncertainty_pct NUMERIC(6, 3),
@@ -232,16 +251,16 @@ class CPINowcaster:
                 cur.execute("""
                     INSERT INTO gold.fct_cpi_nowcast (
                         nowcast_date, target_month, days_observed, days_remaining, days_in_month,
-                        realized_cpi_so_far, projected_remaining_cpi, nowcast_headline_cpi,
+                        realized_cpi_so_far, projected_remaining_cpi, projected_mom_pct,
+                        nowcast_headline_cpi, nowcast_nis_headline_cpi,
                         nowcast_core_cpi, prior_month_cpi,
-                        projected_mom_pct, projected_yoy_pct,
                         ci_lower_95, ci_upper_95,
                         uncertainty_pct, model_name
                     ) VALUES (
                         %(nowcast_date)s, %(target_month)s, %(days_observed)s, %(days_remaining)s, %(days_in_month)s,
-                        %(realized_cpi_so_far)s, %(projected_remaining_cpi)s, %(nowcast_headline_cpi)s,
+                        %(realized_cpi_so_far)s, %(projected_remaining_cpi)s, %(projected_mom_pct)s,
+                        %(nowcast_headline_cpi)s, %(nowcast_nis_headline_cpi)s,
                         %(nowcast_core_cpi)s, %(prior_month_cpi)s,
-                        %(projected_mom_pct)s, %(projected_yoy_pct)s,
                         %(ci_lower_95)s, %(ci_upper_95)s,
                         %(uncertainty_pct)s, %(model_name)s
                     )
@@ -250,23 +269,23 @@ class CPINowcaster:
                         days_remaining = EXCLUDED.days_remaining,
                         realized_cpi_so_far = EXCLUDED.realized_cpi_so_far,
                         projected_remaining_cpi = EXCLUDED.projected_remaining_cpi,
+                        projected_mom_pct = EXCLUDED.projected_mom_pct,
                         nowcast_headline_cpi = EXCLUDED.nowcast_headline_cpi,
+                        nowcast_nis_headline_cpi = EXCLUDED.nowcast_nis_headline_cpi,
                         nowcast_core_cpi = EXCLUDED.nowcast_core_cpi,
                         prior_month_cpi = EXCLUDED.prior_month_cpi,
-                        projected_mom_pct = EXCLUDED.projected_mom_pct,
-                        projected_yoy_pct = EXCLUDED.projected_yoy_pct,
                         ci_lower_95 = EXCLUDED.ci_lower_95,
                         ci_upper_95 = EXCLUDED.ci_upper_95,
                         uncertainty_pct = EXCLUDED.uncertainty_pct;
                 """, nowcast_res)
                 conn.commit()
                 log.info(
-                    "✅ Nowcast persisted: %s -> Month %s: Headline CPI %s (MoM: %s%%, YoY: %s%%)",
+                    "✅ Nowcast persisted: %s -> Month %s: MoM: %s%%, Headline CPI: %s, Chain-Linked NIS CPI: %s",
                     nowcast_res["nowcast_date"],
                     nowcast_res["target_month"],
-                    nowcast_res["nowcast_headline_cpi"],
                     nowcast_res["projected_mom_pct"],
-                    nowcast_res["projected_yoy_pct"],
+                    nowcast_res["nowcast_headline_cpi"],
+                    nowcast_res.get("nowcast_nis_headline_cpi"),
                 )
         finally:
             conn.close()
@@ -320,10 +339,10 @@ class CPINowcaster:
         df_daily = pd.DataFrame(mock_daily)
         df_fx = pd.DataFrame([{"execution_date": target_date, "rate": 4044.0}])
         df_monthly = pd.DataFrame([
-            {"cpi_month": target_month_start - timedelta(days=30), "monthly_headline_cpi": 102.0, "monthly_core_cpi": 101.5, "mom_inflation_pct": 0.40, "yoy_inflation_pct": 2.80}
+            {"cpi_month": target_month_start - timedelta(days=30), "monthly_headline_cpi": 102.0, "monthly_core_cpi": 101.5, "mom_inflation_pct": 0.40}
         ])
         df_nis = pd.DataFrame([
-            {"cpi_month": target_month_start - timedelta(days=30), "headline_cpi": 100.35, "core_cpi": 100.40, "mom_inflation_pct": 0.15, "yoy_inflation_pct": 1.80}
+            {"cpi_month": target_month_start - timedelta(days=30), "headline_cpi": 192.50, "core_cpi": 191.80, "mom_inflation_pct": 0.15}
         ])
 
         return self.nowcast_for_date(target_date, df_daily, df_fx, df_monthly, df_nis)

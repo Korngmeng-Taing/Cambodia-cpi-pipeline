@@ -36,6 +36,7 @@ with grouped as (
         min(p.size_value) as size_value,
         mode() within group (order by p.size_unit) as size_unit,
         max(p.pack_qty) as pack_qty,
+        count(*) as observation_count,
         bool_and(p.cpi_eligible) as cpi_eligible,
         bool_or(p.is_outlier) as is_outlier,
         bool_or(p.is_fallback) as is_fallback
@@ -66,6 +67,7 @@ select
     size_value,
     size_unit,
     pack_qty,
+    observation_count,
     cpi_eligible,
     is_outlier,
     is_fallback

@@ -1,6 +1,8 @@
 -- test_unit_math
 -- When a parseable size exists, unit_price_khr must equal price_khr / size
--- (converted to the base kg/l unit), within rounding tolerance.
+-- (converted to base kg/l unit and accounting for pack_qty), within rounding tolerance.
+-- For items with multiple SKUs/sizes (observation_count > 1), unit_price_khr is
+-- the geometric mean of distinct package sizes, so single-size division applies to observation_count = 1.
 select
     scrape_date,
     store_slug,
@@ -8,6 +10,7 @@ select
     price_khr,
     size_value,
     size_unit,
+    pack_qty,
     unit_price_khr,
     abs(unit_price_khr - expected_unit_price) as unit_deviation
 from (
@@ -18,16 +21,18 @@ from (
         price_khr,
         size_value,
         size_unit,
+        pack_qty,
         unit_price_khr,
         case
-            when lower(size_unit) = 'kg' and size_value > 0 then price_khr / size_value
-            when lower(size_unit) = 'g'  and size_value > 0 then price_khr / (size_value / 1000.0)
-            when lower(size_unit) = 'l'  and size_value > 0 then price_khr / size_value
-            when lower(size_unit) = 'ml' and size_value > 0 then price_khr / (size_value / 1000.0)
+            when lower(size_unit) = 'kg' and size_value > 0 then price_khr / (size_value * coalesce(pack_qty, 1))
+            when lower(size_unit) = 'g'  and size_value > 0 then price_khr / ((size_value * coalesce(pack_qty, 1)) / 1000.0)
+            when lower(size_unit) = 'l'  and size_value > 0 then price_khr / (size_value * coalesce(pack_qty, 1))
+            when lower(size_unit) = 'ml' and size_value > 0 then price_khr / ((size_value * coalesce(pack_qty, 1)) / 1000.0)
             else null
         end as expected_unit_price
     from {{ ref('fct_daily_prices') }}
     where cpi_eligible = true
+      and coalesce(observation_count, 1) = 1
 ) t
 where expected_unit_price is not null
   and unit_price_khr is not null

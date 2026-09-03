@@ -123,12 +123,16 @@ CREATE TABLE IF NOT EXISTS silver.canonical_items (
     brand VARCHAR(256),
     barcode VARCHAR(64),
     size_norm VARCHAR(32),
+    coicop_division VARCHAR(16),
+    coicop_code VARCHAR(16),
     first_seen TIMESTAMPTZ DEFAULT NOW(),
     last_seen TIMESTAMPTZ DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
--- Backwards-compatibility: drop the unused `category` column on existing installs.
+-- Backwards-compatibility: drop the unused `category` column on existing installs; ensure coicop columns exist.
 ALTER TABLE silver.canonical_items DROP COLUMN IF EXISTS category;
+ALTER TABLE silver.canonical_items ADD COLUMN IF NOT EXISTS coicop_division VARCHAR(16);
+ALTER TABLE silver.canonical_items ADD COLUMN IF NOT EXISTS coicop_code VARCHAR(16);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_canonical_items_barcode ON silver.canonical_items(barcode) WHERE barcode IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_canonical_items_name ON silver.canonical_items(canonical_name);
 CREATE INDEX IF NOT EXISTS idx_canonical_name_trgm ON silver.canonical_items USING gin (canonical_name gin_trgm_ops);

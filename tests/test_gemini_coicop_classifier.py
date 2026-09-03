@@ -90,7 +90,7 @@ def _sqlite_engine():
                 "reasoning TEXT, model_version TEXT, classified_at TEXT)"
             )
         )
-        # staging.int_prices_cleaned is only consulted in the AI-first broad
+        # silver.int_prices_cleaned is only consulted in the AI-first broad
         # sweep (fetch_unclassified tier 2). Tests that exercise tier 1 (the
         # queue) don't need it; the no-candidates test below intentionally
         # leaves both empty.

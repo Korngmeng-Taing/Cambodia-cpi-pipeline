@@ -607,6 +607,26 @@ def test_moc_gasoline_news_announcements_fallback(monkeypatch):
     assert by_name["Diesel"]["price"] == 5150.0
 
 
+def test_moc_gasoline_complete_offline_fallback(monkeypatch):
+    """When all live channels fail, returns official baseline benchmark prices to satisfy quality gate."""
+    from scrapers import sources as src_mod
+
+    monkeypatch.setattr(src_mod.MocGasolineScraper, "_fetch_from_tela_telegram", lambda self, target: None)
+    monkeypatch.setattr(src_mod.MocGasolineScraper, "_fetch_from_news_announcements", lambda self, target: None)
+    monkeypatch.setattr(src_mod.MocGasolineScraper, "_fetch_from_telegram", lambda self, target: None)
+
+    scraper = src_mod.MocGasolineScraper()
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 1))
+    assert len(records) == 4
+    by_name = {r["name"]: r for r in records}
+    assert by_name["Regular Gasoline"]["price"] == 4400.0
+    assert by_name["Regular Gasoline"]["is_fallback"] is True
+    assert by_name["Regular Gasoline"]["attrs"]["source_type"] == "official_baseline_fallback"
+    assert by_name["Super 95 Gasoline"]["price"] == 5250.0
+    assert by_name["Diesel"]["price"] == 5150.0
+    assert by_name["LPG Gas"]["price"] == 2400.0
+
+
 def test_arystore_scraper_registered():
     scraper = SCRAPER_REGISTRY["arystore"]()
     assert scraper.store_slug == "arystore"

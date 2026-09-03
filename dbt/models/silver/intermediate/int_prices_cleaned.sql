@@ -51,7 +51,7 @@ raw as (
         on iml.raw_price_id = rp.raw_price_id
     where rp.price > 0
     {% if is_incremental() %}
-        {% if var('ds', '') != '' %}
+        {% if var('ds', '') and var('ds') != 'None' and var('ds') != 'null' and var('ds') != 'none' %}
             and rp.scraped_at::date = '{{ var("ds") }}'::date
         {% else %}
             and rp.scraped_at::date >= (select coalesce(max(scrape_date) - interval '7 days', '2020-01-01'::date) from {{ this }})

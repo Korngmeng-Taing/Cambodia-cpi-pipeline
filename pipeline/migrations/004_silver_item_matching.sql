@@ -7,10 +7,14 @@ CREATE TABLE IF NOT EXISTS silver.canonical_items (
     barcode VARCHAR(64),
     size_norm VARCHAR(32),
     category VARCHAR(64),
+    coicop_division VARCHAR(16),
+    coicop_code VARCHAR(16),
     first_seen TIMESTAMPTZ DEFAULT NOW(),
     last_seen TIMESTAMPTZ DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE silver.canonical_items ADD COLUMN IF NOT EXISTS coicop_division VARCHAR(16);
+ALTER TABLE silver.canonical_items ADD COLUMN IF NOT EXISTS coicop_code VARCHAR(16);
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_canonical_items_barcode ON silver.canonical_items(barcode) WHERE barcode IS NOT NULL;
 

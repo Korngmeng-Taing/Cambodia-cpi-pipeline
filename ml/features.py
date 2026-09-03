@@ -127,8 +127,37 @@ def extract_nowcasting_features(
         # Dedicated Food (Div 01) and Transport (Div 07) Momentum Signals (>57% of NIS Basket)
         food_index = div_means.get("01", 100.0)
         transport_index = div_means.get("07", 100.0)
-        food_mom_signal = float(((food_index - 100.0) / 100.0) * 100.0)
-        transport_mom_signal = float(((transport_index - 100.0) / 100.0) * 100.0)
+
+        # Baseline anchor: compare against prior month division index or prior month headline CPI
+        prior_food_idx = None
+        prior_trans_idx = None
+        if df_daily_cpi is not None and not df_daily_cpi.empty:
+            prior_df = df_daily_cpi[df_daily_cpi["calculation_date"] < target_month_start]
+            if not prior_df.empty:
+                f_sub = prior_df[prior_df["coicop_division"] == "01"]
+                if not f_sub.empty:
+                    val = f_sub["division_index"].mean()
+                    if pd.notna(val) and float(val) > 0:
+                        prior_food_idx = float(val)
+                t_sub = prior_df[prior_df["coicop_division"] == "07"]
+                if not t_sub.empty:
+                    val = t_sub["division_index"].mean()
+                    if pd.notna(val) and float(val) > 0:
+                        prior_trans_idx = float(val)
+
+        if prior_food_idx is None and df_monthly_cpi is not None and not df_monthly_cpi.empty:
+            m_prior = df_monthly_cpi[df_monthly_cpi["cpi_month"] < target_month_start].sort_values("cpi_month")
+            if not m_prior.empty:
+                prior_val = m_prior.iloc[-1].get("monthly_headline_cpi")
+                if pd.notna(prior_val) and float(prior_val) > 0:
+                    prior_food_idx = float(prior_val)
+                    prior_trans_idx = float(prior_val)
+
+        food_anchor = prior_food_idx if (prior_food_idx and prior_food_idx > 0) else 100.0
+        trans_anchor = prior_trans_idx if (prior_trans_idx and prior_trans_idx > 0) else 100.0
+
+        food_mom_signal = float(((food_index - food_anchor) / food_anchor) * 100.0)
+        transport_mom_signal = float(((transport_index - trans_anchor) / trans_anchor) * 100.0)
 
     # ── 2. Rolling Moving Averages & Volatility Across Recent Days ────────────
     unique_dates = sorted(df_daily_cpi["calculation_date"].unique()) if df_daily_cpi is not None and not df_daily_cpi.empty else []

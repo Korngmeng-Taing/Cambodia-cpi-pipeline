@@ -48,16 +48,16 @@ def main():
             COALESCE(fdp.unit_price_khr, fdp.price_khr) AS unit_price_local
         FROM silver.canonical_items ci
         LEFT JOIN (
-            SELECT DISTINCT ON (item_id::uuid)
-                item_id::uuid AS item_id,
+            SELECT DISTINCT ON (item_id::text)
+                item_id::text AS item_id,
                 coicop_division,
                 coicop_code
             FROM silver.int_coicop_classified
-            ORDER BY item_id::uuid,
+            ORDER BY item_id::text,
                      CASE WHEN coicop_division <> 'UNCLASSIFIED' THEN 1 ELSE 2 END,
                      coicop_confidence DESC
-        ) cs ON cs.item_id = ci.item_id
-        LEFT JOIN gold.fct_daily_prices fdp ON fdp.item_id = ci.item_id::uuid
+        ) cs ON cs.item_id = ci.item_id::text
+        LEFT JOIN gold.fct_daily_prices fdp ON fdp.item_id = ci.item_id::text
         WHERE fdp.store_slug IN ('aeon', 'aeon3')
           AND fdp.scrape_date = (SELECT MAX(scrape_date) FROM gold.fct_daily_prices WHERE store_slug IN ('aeon', 'aeon3'))
     )
@@ -112,15 +112,15 @@ def main():
                 fdp.store_slug
             FROM silver.canonical_items ci
             LEFT JOIN (
-                SELECT DISTINCT ON (item_id::uuid)
-                    item_id::uuid AS item_id,
+                SELECT DISTINCT ON (item_id::text)
+                    item_id::text AS item_id,
                     coicop_division
                 FROM silver.int_coicop_classified
-                ORDER BY item_id::uuid,
+                ORDER BY item_id::text,
                          CASE WHEN coicop_division <> 'UNCLASSIFIED' THEN 1 ELSE 2 END,
                          coicop_confidence DESC
-            ) cs ON cs.item_id = ci.item_id
-            LEFT JOIN gold.fct_daily_prices fdp ON fdp.item_id = ci.item_id::uuid
+            ) cs ON cs.item_id = ci.item_id::text
+            LEFT JOIN gold.fct_daily_prices fdp ON fdp.item_id = ci.item_id::text
             WHERE fdp.store_slug IN ('aeon', 'aeon3')
               AND fdp.scrape_date = (SELECT MAX(scrape_date) FROM gold.fct_daily_prices WHERE store_slug IN ('aeon', 'aeon3'))
         )

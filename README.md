@@ -36,7 +36,7 @@
 │ Ucare Pharmacy  │   rates           │   (Cleaned Append / Dedup)│ gold.fct_daily_prices    │   - Inflation Trendline       │
 │ Ary & Samnang   │                   │ silver.classification_    │ gold.fct_elementary_     │   - 12-Division COICOP Table  │
 │ Community Pharma│ staging.raw_      │   queue (AI triage)       │   indices (Jevons micro) │   - Top Basket Price Movers   │
-│ Cellcard & Smart│   scrapes         │ staging.int_prices_cleaned│ gold.fct_cpi_daily       │ • 02: Pipeline & Scraper Ops  │
+│ Cellcard & Smart│   scrapes         │ silver.int_prices_cleaned │ gold.fct_cpi_daily       │ • 02: Pipeline & Scraper Ops  │
 │ redBus &        │                   │ Vector Item Matcher       │   (12-Division Laspeyres)│   - Live Store Volume (Ranked)│
 │  BookMeBus      │ (Typed Ingestion) │ 3-Key Gemini Pool +       │                          │   - Ingestion Matrix (14D)    │
 │ Sokha & Hyatt   │ Atomic & Typed    │ 12-Division Reference     │ Jevons Micro-Index +     │   - Official MEF FX Rate Today│

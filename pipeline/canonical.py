@@ -202,7 +202,15 @@ def normalize_record(
 
     if curr is None:
         # Default currency inference: store hints and retail price magnitude
-        khr_stores = {"new_gasoline", "redbus", "bookmebus", "aeon"}
+        khr_stores = {
+            "new_gasoline",
+            "aeon",
+            "aeon3",
+            "grab_lucky",
+            "grab_chipmong",
+            "grab_ucare",
+            "mef_fx",
+        }
         if raw.get("price_khr") is not None or slug in khr_stores or price > 50000.0:
             curr = "KHR"
         else:

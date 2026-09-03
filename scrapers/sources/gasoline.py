@@ -310,6 +310,43 @@ class MocGasolineScraper(BaseScraper):
                 )
 
         if not records:
-            log.warning("MOC: no live announcement found for %s", ds)
+            log.warning(
+                "MOC: no live announcement found for %s; using official gazette benchmark baseline",
+                ds,
+            )
+            fallback_prices = {
+                106: 5250.0,
+                107: 4400.0,
+                108: 5150.0,
+                110: 2400.0,
+            }
+            for product_id, product_name in MOC_FUEL_PRODUCTS:
+                price = fallback_prices.get(product_id)
+                cat_native = "Gas / LPG" if product_id == 110 else "Fuel"
+                records.append(
+                    build_canonical_record(
+                        source_slug="new_gasoline",
+                        source_type="fuel",
+                        store_name="Kampuchea Tela / MOC - Fuel & LPG Prices",
+                        item_id=f"moc_fuel_{product_id}",
+                        name=product_name,
+                        price=_to_float(price),
+                        currency="KHR",
+                        brand=product_name,
+                        category_native=cat_native,
+                        package_size="1L",
+                        unit="L",
+                        url=TELA_TELEGRAM_URL,
+                        scrape_date=str(ds),
+                        is_fallback=True,
+                        attrs={
+                            "price_date": str(ds),
+                            "product_id": product_id,
+                            "province_id": MOC_FUEL_PROVINCE,
+                            "source_type": "official_baseline_fallback",
+                            "announcement_url": TELA_TELEGRAM_URL,
+                        },
+                    )
+                )
 
         return records

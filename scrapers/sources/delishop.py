@@ -86,7 +86,7 @@ class DelishopScraper(BaseScraper):
                         if page > 1:
                             raise RuntimeError(
                                 f"Delishop scrape failed mid-pagination on page {page} after {len(records)} items: {e}"
-                            )
+                            ) from e
                         break
 
             if not body:

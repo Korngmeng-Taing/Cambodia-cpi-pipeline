@@ -233,8 +233,15 @@ class CPICalculationEngine:
             ]
 
             if not recent_obs.empty:
-                recent_sorted = recent_obs.sort_values("scrape_date", ascending=False)
-                last_prices = recent_sorted.groupby("item_id")["unit_price_khr"].first().to_dict()
+                # Find the most recent active scrape date for each missing item
+                latest_dates = recent_obs.groupby("item_id")["scrape_date"].max().reset_index()
+                latest_obs = pd.merge(
+                    recent_obs, latest_dates, on=["item_id", "scrape_date"], how="inner"
+                )
+                # Compute geometric mean across stores on that latest date (Jevons elementary aggregation)
+                last_prices = latest_obs.groupby("item_id")["unit_price_khr"].agg(
+                    lambda x: float(np.exp(np.mean(np.log(x[x > 0])))) if len(x[x > 0]) > 0 else np.nan
+                ).to_dict()
 
                 for idx, row in merged[missing_mask].iterrows():
                     item_id = row["item_id"]

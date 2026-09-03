@@ -84,8 +84,9 @@ def run_health_audit(scrape_date: str | None = None, send_notifications: bool = 
             ingested_stores = {r["store_slug"]: r["record_count"] for r in scrapes}
             total_records = sum(ingested_stores.values())
 
-            report_lines.append("\n📦 1. 20-SOURCE INGESTION STATUS:")
-            report_lines.append(f"   Total Daily Observations: {total_records:,} rows across {len(ingested_stores)}/20 sources")
+            total_sources = len(SCRAPER_REGISTRY)
+            report_lines.append(f"\n📦 1. {total_sources}-SOURCE INGESTION STATUS:")
+            report_lines.append(f"   Total Daily Observations: {total_records:,} rows across {len(ingested_stores)}/{total_sources} sources")
             
             missing_sources = []
             zero_sources = []

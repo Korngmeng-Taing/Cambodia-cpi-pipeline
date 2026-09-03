@@ -22,11 +22,11 @@ flowchart TD
         B8 -- "Score < 0.75" --> B11["SPLIT_NEW\n(Create silver.canonical_items)"]
     end
 
-    subgraph Stage1["Stage 1: Ingestion Hygiene (staging.int_prices_cleaned)"]
+    subgraph Stage1["Stage 1: Ingestion Hygiene (silver.int_prices_cleaned)"]
         H1["Joined Observations + MEF Daily FX Rate"] --> H2["• USD to KHR Conversion (MEF daily rate, fallback 4044)\n• Khmer Digits Translation (0-9)\n• HTML Decode & Promo Buzzword Stripping\n• Size & Unit Regex Parsing (g, kg, ml, L, pack)\n• Derived unit_price_khr (price_khr / size_value)\n• Promo Clamping (0% to 95%) & Outlier Flags (>100M KHR)"]
     end
 
-    subgraph Stage2["Stage 2: 4-Tier Hybrid COICOP Ladder (staging.int_coicop_classified)"]
+    subgraph Stage2["Stage 2: 4-Tier Hybrid COICOP Ladder (silver.int_coicop_classified)"]
         C0["Unclassified / Changed Items"] --> C1{"Resolution Ladder"}
         C1 -- "Tier 1" --> C2["Human Authority Overrides (coicop_override.csv, conf = 1.000)"]
         C1 -- "Tier 2" --> C3["15 Pure Store Domain Locks (Gas->07, Telecom->08, conf = 0.850)"]

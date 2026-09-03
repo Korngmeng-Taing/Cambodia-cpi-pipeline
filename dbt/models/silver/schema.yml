@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: int_prices_cleaned
-    description: Intermediate price cleaning model (stored in staging schema). Cleans prices, converts USD to KHR, clamps promos, calculates unit prices.
+    description: Intermediate price cleaning model (stored in silver schema). Cleans prices, converts USD to KHR, clamps promos, calculates unit prices.
     columns:
       - name: raw_price_id
         description: FK to bronze.raw_prices

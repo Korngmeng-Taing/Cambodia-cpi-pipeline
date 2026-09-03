@@ -75,7 +75,7 @@
                         ' ',
                         'g'
                     ),
-                    '\b(SALE|PROMO|PROMOTION|DISCOUNT|CLEARANCE|HOT\s*DEAL|BEST\s*SELLER|NEW\s*ARRIVAL|LIMITED|SPECIAL\s*OFFER|FLASH\s*SALE|BUY\s*\d+\s*GET\s*\d+|FREE\s*SHIPPING|BUNDLE)\b',
+                    '\y(SALE|PROMO|PROMOTION|DISCOUNT|CLEARANCE|HOT\s*DEAL|BEST\s*SELLER|NEW\s*ARRIVAL|LIMITED|SPECIAL\s*OFFER|FLASH\s*SALE|BUY\s*\d+\s*GET\s*\d+|FREE\s*SHIPPING|BUNDLE)\y',
                     ' ',
                     'gi'
                 ),

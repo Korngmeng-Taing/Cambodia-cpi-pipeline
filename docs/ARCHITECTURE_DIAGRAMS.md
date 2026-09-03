@@ -111,7 +111,7 @@ The Silver layer transforms noisy, multilingual raw data into standardized obser
 
 ```mermaid
 flowchart TD
-    subgraph Stage1["Stage 1: Ingestion Hygiene (staging.int_prices_cleaned)"]
+    subgraph Stage1["Stage 1: Ingestion Hygiene (silver.int_prices_cleaned)"]
         A1["Raw Strings from Bronze"] --> A2["• Decode HTML & Strip Promo Buzzwords\n• Translate Khmer Numerals (០..៩ -> 0..9)\n• Convert USD -> KHR via MEF Daily Rate\n• Extract Base Units (g, kg, ml, L) & unit_price_khr"]
     end
 

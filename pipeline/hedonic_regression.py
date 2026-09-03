@@ -195,13 +195,13 @@ def fetch_hedonic_items(
             )
         except Exception:
             try:
-                # Fallback to int_prices_cleaned in staging if silver table is building
+                # Fallback to int_prices_cleaned in silver if clean_store_prices table is building
                 fallback_query = text(
                     """
                     SELECT f.scrape_date, f.item_id::text AS item_id, f.store_slug,
                            f.name_clean AS canonical_name, f.price_khr AS raw_price,
                            coalesce(c.coicop_division, '08') AS coicop_code
-                    FROM staging.int_prices_cleaned f
+                    FROM silver.int_prices_cleaned f
                     LEFT JOIN silver.clean_store_prices c ON c.raw_price_id = f.raw_price_id
                     WHERE f.price_khr > 0
                       AND f.scrape_date >= :cutoff::DATE

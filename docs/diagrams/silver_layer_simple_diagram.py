@@ -52,7 +52,7 @@ STEPS = [
         "desc": "USD to KHR MEF Conversion\nKhmer Text Normalization\nUnit Pricing (g, kg, ml, L)",
         "border": "#7C3AED",
         "bg": "#F5F3FF",
-        "tag": "staging.int_prices_cleaned",
+        "tag": "silver.int_prices_cleaned",
         "tag_bg": "#EDE9FE",
         "tag_col": "#6D28D9"
     },

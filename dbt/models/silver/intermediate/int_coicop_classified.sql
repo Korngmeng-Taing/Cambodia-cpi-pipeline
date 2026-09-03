@@ -38,7 +38,7 @@ with items as materialized (
         from {{ ref('int_prices_cleaned') }}
         where item_id is not null
           {% if var('reclassify_all', false) %}
-          {% elif var('ds', none) %}
+          {% elif var('ds', '') and var('ds') != 'None' and var('ds') != 'null' and var('ds') != 'none' %}
           and scrape_date = '{{ var("ds") }}'::date
           {% else %}
           and scrape_date = (select max(scrape_date) from {{ ref('int_prices_cleaned') }})

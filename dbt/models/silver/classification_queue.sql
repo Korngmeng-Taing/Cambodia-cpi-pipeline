@@ -3,7 +3,7 @@
 -- This model appends NEW pending rows so re-runs do not duplicate and historical rows are preserved.
 {{ config(
     materialized='incremental',
-    strategy='append',
+    incremental_strategy='append',
     on_schema_change='append_new_columns'
 ) }}
 

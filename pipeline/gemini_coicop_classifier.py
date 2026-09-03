@@ -10,7 +10,7 @@ Pipeline:
     1. Read still-unclassified product names from silver.classification_queue
        (the triage queue populated by int_coicop_classified.sql whenever a row
        falls through every rule tier), with an AI-first fallback that joins
-       staging.int_prices_cleaned against silver.canonical_items to surface any
+       silver.int_prices_cleaned against silver.canonical_items to surface any
        cached-miss product name from the current scrape.
     2. Consult silver.dim_coicop_ai_cache first — a cached product name never
        triggers an API call (memoization saves API cost on re-scrapes).
@@ -622,7 +622,7 @@ def fetch_unclassified(
     Two-tier source order:
       1. silver.classification_queue (PENDING rows) — products the dbt ladder
          routed to human review because no rule tier matched.
-      2. AI sweep over staging.int_prices_cleaned ⋈ silver.canonical_items for the
+      2. AI sweep over silver.int_prices_cleaned ⋈ silver.canonical_items for the
          specified scrape_date where the canonical name has no entry in
          silver.dim_coicop_ai_cache (or only a stale negative cache entry > 24h old).
          Pure single-division stores are skipped (store purity outranks AI in
@@ -656,7 +656,7 @@ def fetch_unclassified(
         # Tier 2: Sweep every uncached product scraped on this specific scrape_date
         if not items:
             try:
-                date_filter = "p.scrape_date = CAST(:ds AS DATE)" if scrape_date else "p.scrape_date = (SELECT max(scrape_date) FROM staging.int_prices_cleaned)"
+                date_filter = "p.scrape_date = CAST(:ds AS DATE)" if scrape_date else "p.scrape_date = (SELECT max(scrape_date) FROM silver.int_prices_cleaned)"
                 # Phase 4: Exclude recently negative-cached items (< 24h old)
                 interval_clause = _get_24h_interval_sql(engine)
                 # Phase 6: Order by observation count DESC (most-seen products first)
@@ -667,7 +667,7 @@ def fetch_unclassified(
                                COUNT(*) OVER (PARTITION BY p.item_id) AS observation_count
                         FROM (
                             SELECT DISTINCT item_id, store_slug, scrape_date
-                            FROM staging.int_prices_cleaned p
+                            FROM silver.int_prices_cleaned p
                             WHERE {date_filter}
                               AND p.item_id IS NOT NULL
                               AND p.store_slug NOT IN (

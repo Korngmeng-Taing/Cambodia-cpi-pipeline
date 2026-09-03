@@ -22,7 +22,7 @@ with match_stats as (
 ),
 fact_stats as (
     select
-        item_id::uuid as item_id,
+        item_id::text as item_id,
         count(distinct store_slug) as store_count,
         mode() within group (order by size_unit) as unit_of_measure,
         min(scrape_date) as first_seen,
@@ -31,16 +31,16 @@ fact_stats as (
         -- bool_and would permanently deactivate items after a single bad anomaly.
         bool_or(cpi_eligible) as is_active
     from {{ ref('fct_daily_prices') }}
-    group by item_id
+    group by item_id::text
 ),
 coicop_stats as (
-    select distinct on (item_id::uuid)
-        item_id::uuid as item_id,
+    select distinct on (item_id::text)
+        item_id::text as item_id,
         coicop_division,
         coicop_code
     from {{ ref('int_coicop_classified') }}
     order by
-        item_id::uuid,
+        item_id::text,
         case when coicop_division <> 'UNCLASSIFIED' then 1 else 2 end,
         coicop_confidence desc
 )
@@ -71,6 +71,6 @@ select
     end as lifecycle_status,
     (current_date - coalesce(fs.last_seen, ci.last_seen::date)) as days_since_last_seen
 from {{ source('silver', 'canonical_items') }} ci
-left join match_stats ms on ms.item_id = ci.item_id
-left join fact_stats fs on fs.item_id = ci.item_id
-left join coicop_stats cs on cs.item_id = ci.item_id
+left join match_stats ms on ms.item_id::text = ci.item_id::text
+left join fact_stats fs on fs.item_id = ci.item_id::text
+left join coicop_stats cs on cs.item_id = ci.item_id::text

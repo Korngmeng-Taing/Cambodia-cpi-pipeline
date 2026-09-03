@@ -129,3 +129,19 @@ def test_validate_record_promo_requires_payload():
     rec["on_promo"] = True
     rec["promo"] = None
     assert any("promo" in i for i in validate_record(rec))
+
+
+def test_currency_inference_defaults():
+    # Transport portals default to USD
+    rec_bus = normalize_record({"name": "Bus ticket", "price": 12.0, "source_slug": "redbus"})
+    assert rec_bus["currency"] == "USD"
+    rec_bmb = normalize_record({"name": "Bus ticket", "price": 8.5, "source_slug": "bookmebus"})
+    assert rec_bmb["currency"] == "USD"
+
+    # GrabMart and AEON stores default to KHR
+    rec_grab = normalize_record({"name": "Milk 1L", "price": 8500.0, "source_slug": "grab_lucky"})
+    assert rec_grab["currency"] == "KHR"
+    rec_ucare = normalize_record({"name": "Panadol", "price": 6000.0, "source_slug": "grab_ucare"})
+    assert rec_ucare["currency"] == "KHR"
+    rec_aeon3 = normalize_record({"name": "Shirt", "price": 35000.0, "source_slug": "aeon3"})
+    assert rec_aeon3["currency"] == "KHR"

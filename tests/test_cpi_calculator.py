@@ -167,4 +167,41 @@ def test_monthly_cpi_aggregation():
     assert monthly_summary.iloc[0]["total_obs"] == 330
 
 
+def test_seven_day_imputation_multistore_geometric_mean(cpi_engine):
+    """Verifies that missing item imputation computes unweighted geometric mean across stores on latest observed date."""
+    base_date = date(2026, 8, 18)
+    day_1 = date(2026, 8, 19)
+    day_2 = date(2026, 8, 20)
+
+    item1_id = uuid4()
+    item2_id = uuid4()
+
+    base_df = pd.DataFrame([
+        {"item_id": item1_id, "coicop_division": "01", "coicop_code": "01.1.1", "base_price_khr": 1000.0, "base_obs_count": 1},
+        {"item_id": item2_id, "coicop_division": "01", "coicop_code": "01.1.1", "base_price_khr": 2000.0, "base_obs_count": 1},
+    ])
+
+    # On day 1, Item 2 is observed at both store_a (1800) and store_b (2000)
+    # Expected geometric mean on day 1 = sqrt(1800 * 2000) = 1897.3666
+    df_history = pd.DataFrame([
+        # Base date
+        {"scrape_date": base_date, "item_id": item1_id, "coicop_division": "01", "coicop_code": "01.1.1", "unit_price_khr": 1000.0, "is_outlier": False, "price_khr": 1000.0, "store_slug": "store_a", "name_clean": "Item 1"},
+        {"scrape_date": base_date, "item_id": item2_id, "coicop_division": "01", "coicop_code": "01.1.1", "unit_price_khr": 2000.0, "is_outlier": False, "price_khr": 2000.0, "store_slug": "store_a", "name_clean": "Item 2"},
+        # Day 1
+        {"scrape_date": day_1, "item_id": item1_id, "coicop_division": "01", "coicop_code": "01.1.1", "unit_price_khr": 1000.0, "is_outlier": False, "price_khr": 1000.0, "store_slug": "store_a", "name_clean": "Item 1"},
+        {"scrape_date": day_1, "item_id": item2_id, "coicop_division": "01", "coicop_code": "01.1.1", "unit_price_khr": 1800.0, "is_outlier": False, "price_khr": 1800.0, "store_slug": "store_a", "name_clean": "Item 2"},
+        {"scrape_date": day_1, "item_id": item2_id, "coicop_division": "01", "coicop_code": "01.1.1", "unit_price_khr": 2000.0, "is_outlier": False, "price_khr": 2000.0, "store_slug": "store_b", "name_clean": "Item 2"},
+        # Day 2: Only item 1 is present at 1100 (10% increase)
+        {"scrape_date": day_2, "item_id": item1_id, "coicop_division": "01", "coicop_code": "01.1.1", "unit_price_khr": 1100.0, "is_outlier": False, "price_khr": 1100.0, "store_slug": "store_a", "name_clean": "Item 1"},
+    ])
+
+    elem_df = cpi_engine.compute_daily_elementary_indices(day_2, base_df, df_history, imputation_window_days=7)
+    item2_row = elem_df[elem_df["item_id"] == item2_id].iloc[0]
+
+    assert item2_row["is_imputed"] is True or item2_row["is_imputed"] == True
+    expected_geom_mean = np.exp((np.log(1800.0) + np.log(2000.0)) / 2)
+    expected_imputed = expected_geom_mean * (1100.0 / 1000.0)
+    assert pytest.approx(item2_row["current_price_khr"], 0.01) == expected_imputed
+
+
 

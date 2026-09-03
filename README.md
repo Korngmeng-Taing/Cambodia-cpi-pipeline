@@ -11,13 +11,13 @@
 
 | Layer | Tool | Why |
 |:---|:---|:---|
-| **Orchestration** | **Apache Airflow 2.9.3** | Schedules the daily `cpi_master_dag` (20 per-source scraper DAGs → `silver_dag` → `gold_dag` → `gold_cpi_dag`), handles retries, and provides automated end-to-end Medallion execution. |
+| **Orchestration** | **Apache Airflow 2.9.3** | Schedules the daily `cpi_master_dag` (23 per-source scraper DAGs → `silver_dag` → `gold_dag` → `gold_cpi_dag`), handles retries, and provides automated end-to-end Medallion execution. |
 | **Storage & Warehouse** | **PostgreSQL 16** (`bronze`/`staging`/`silver`/`gold`/`ops` schemas) | Pure relational data warehouse hosting typed atomic raw listings, item-matching state, cleaned facts, operational control tables, and the analytical star schema. |
 | **Transformation** | **dbt-core** (Silver & Gold) | Turns raw price records, entity-matching outputs, pack-size conversions, and COICOP classification into version-controlled, testable SQL models. |
 | **Multi-Key API Pool** | **GeminiKeyPool** (`pipeline/key_pool.py`) | Thread-safe round-robin API key pool supporting 3+ free Gemini keys (4,500 req/day, 45 RPM) with automatic 429 failover. |
 | **Semantic Item Matching** | **VectorItemMatcher** (`pipeline/vector_item_matcher.py`) | High-speed multilingual vector embeddings (local MiniLM / deterministic synonym vectorizer + cached `gemini-embedding-2`), deterministic spec guards (RAM/Storage, pack size, volume ≤ 10%), and batch AI review for borderline pairs. |
 | **Hybrid COICOP Engine** | **HybridCOICOPClassifier** (`pipeline/hybrid_embeddings_classifier.py`) | 4-tier ladder: human authority overrides → 15 pure store domain locks (0.001ms) → 12-division reference vector cosine matching (resolving Community Pharma 06/12 split & AEON variety) → Gemini Pro AI fallback & Postgres memoization. |
-| **Scraper Observability** | **Metabase v0.49** | Real-time operational monitoring: 20-Source Live Health Matrix, daily ingestion volume trends, and price anomaly alerts. |
+| **Scraper Observability** | **Metabase v0.49** | Real-time operational monitoring across 3 consolidated dashboards (Port 3001/3000): Macro CPI Analytics, Operations & Scraper Health, and Silver Data Quality. |
 | **Interactive Analytics** | **Microsoft Power BI** | Executive BI dashboards over the gold star schema: retailer and item-level price trends, promo analytics. |
 
 ---
@@ -26,33 +26,31 @@
 
 ```
 ┌─────────────────┬───────────────────┬───────────────────────────┬──────────────────────────┬───────────────────────────────┐
-│   20 SOURCES    │      BRONZE       │          SILVER           │           GOLD           │         SERVING & BI          │
+│   23 SOURCES    │      BRONZE       │          SILVER           │           GOLD           │         SERVING & BI          │
 │                 │  (Raw Ingestion)  │     (Clean & Resolve)     │  (Star Schema & Jevons)  │     (Observability & BI)      │
 ├─────────────────┼───────────────────┼───────────────────────────┼──────────────────────────┼───────────────────────────────┤
 │ AEON 1 & AEON 3 │                   │                           │                          │                               │
-│ Delishop Asia   │ bronze.raw_prices │ silver.canonical_items    │ gold.dim_items           │ METABASE (Port 3000):         │
-│ Ary & Samnang   ├──────────────────►│ silver.item_match_log     ├─────────────────────────►│ • 01: Daily CPI Dashboard     │
-│ Community Pharma│ staging.exchange_ │ silver.clean_store_prices │ gold.dim_stores          │   - Headline & Core Tickers   │
-│ Cellcard & Smart│   rates           │   (Cleaned Append / Dedup)│ gold.fct_daily_prices    │   - Inflation Trendline       │
-│ redBus &        │                   │ silver.classification_    │ gold.fct_elementary_     │   - 12-Division COICOP Table  │
-│  BookMeBus      │ staging.raw_      │   queue (AI triage)       │   indices (Jevons micro) │   - Top Basket Price Movers   │
-│ Sokha & Hyatt   │   scrapes         │ staging.int_prices_cleaned│ gold.fct_cpi_daily       │ • 02: Pipeline Monitoring     │
-│ MOC Fuel (Gas)  │                   │ Vector Item Matcher       │   (12-Division Laspeyres)│   - 20 Scraper Status & Vol   │
-│ MEF FX Daily    │ (Typed Ingestion) │ 3-Key Gemini Pool +       │                          │   - Airflow Real-Time DAGs    │
-│ ... (20 total)  │ Atomic & Typed    │ 12-Division Reference     │ Jevons Micro-Index +     │   - MEF FX Exchange Rate      │
-│                 │ Rows in Postgres  │ Vector Cosine & Memo Cache│ 7-Day Imputation Engine  │   - Retail Fuel Prices Feed   │
-│                 │                   │                           │                          │ • 03: Scraper Ingestion & QA  │
-│                 │                   │                           │                          │   - Daily Ingestion Volume    │
-│                 │                   │                           │                          │   - 14-Day Store Matrix       │
-│                 │                   │                           │                          │   - Field Completeness (%)    │
-│                 │                   │                           │                          │   - Outlier & Fallback Audit  │
-│                 │                   │                           │                          │   - Classification Methods    │
+│ Delishop Asia   │ bronze.raw_prices │ silver.canonical_items    │ gold.dim_items           │ METABASE (Port 3001/3000):    │
+│ Chip Mong Mart  ├──────────────────►│ silver.item_match_log     ├─────────────────────────►│ • 01: Macro CPI Analytics     │
+│ Lucky Supermkt  │ staging.exchange_ │ silver.clean_store_prices │ gold.dim_stores          │   - Headline & Core Tickers   │
+│ Ucare Pharmacy  │   rates           │   (Cleaned Append / Dedup)│ gold.fct_daily_prices    │   - Inflation Trendline       │
+│ Ary & Samnang   │                   │ silver.classification_    │ gold.fct_elementary_     │   - 12-Division COICOP Table  │
+│ Community Pharma│ staging.raw_      │   queue (AI triage)       │   indices (Jevons micro) │   - Top Basket Price Movers   │
+│ Cellcard & Smart│   scrapes         │ staging.int_prices_cleaned│ gold.fct_cpi_daily       │ • 02: Pipeline & Scraper Ops  │
+│ redBus &        │                   │ Vector Item Matcher       │   (12-Division Laspeyres)│   - Live Store Volume (Ranked)│
+│  BookMeBus      │ (Typed Ingestion) │ 3-Key Gemini Pool +       │                          │   - Ingestion Matrix (14D)    │
+│ Sokha & Hyatt   │ Atomic & Typed    │ 12-Division Reference     │ Jevons Micro-Index +     │   - Official MEF FX Rate Today│
+│ MOC Fuel (Gas)  │ Rows in Postgres  │ Vector Cosine & Memo Cache│ 7-Day Imputation Engine  │   - Airflow Real-Time DAGs    │
+│ MEF FX Daily    │                   │                           │                          │ • 03: Silver Quality & Review │
+│ ... (23 total)  │                   │                           │                          │   - 12-Div Product Distr.     │
+│                 │                   │                           │                          │   - Log-Price Relative Dist.  │
+│                 │                   │                           │                          │   - Outlier & Review Queues   │
 └─────────────────┴───────────────────┴───────────────────────────┴──────────────────────────┴───────────────────────────────┘
 ```
 
 ### Bronze (Raw Ingestion & Staging)
 - **Tables**: `bronze.raw_prices` (atomic typed listings with barcodes, brands, sizes, and prices), `staging.exchange_rates` (MEF USD/KHR official daily rate), `staging.raw_scrapes`.
-- **Scraper Registry**: 20 production scrapers (`scrapers/sources/`) extracting native categories, automated fallbacks, and zero-product circuit breakers.
+- **Scraper Registry**: 23 production scrapers (`scrapers/sources/`) extracting native categories, automated fallbacks, and zero-product circuit breakers.
 
 ### Silver (Clean, Standardize & Resolve Observations)
 - **Clean Store Observations**: `silver.clean_store_prices` — unified daily appended table containing cleaned, standardized prices across all stores with exchange rates applied (KHR), unit normalization, promo clamping, and zero-price filtering.
@@ -226,10 +224,30 @@ cpi_pipeline_success
   - Replaced row-by-row LLM arbitration with local score thresholding, keeping Gemini Flash LLM for large batch review jobs.
   - Fixed `ops.coicop_override_manual` database view binding and unit test numeric precision typing in `dbt`.
 
-### MocGasolineScraper Resilience (2026-08-27)
-- **File**: `scrapers/sources/gasoline.py`
-- **Issue**: `datetime.date` type incompatibility when `bronze_ingestion.py` passes raw date objects to scrapers.
-- **Fix**: Added pendulum date conversion with 3x retry with exponential backoff, switched from `requests.post` to `_cffi_post`, added `MOC_FUEL_BASELINE` fallback catalog (5000/4050/3950 KHR) for API failures.
+### Database Table Pruning & Metabase Dashboard Consolidation (2026-09-03)
+- **Database (`cpi_db`)**: Dropped 7 dead, duplicate, and legacy tables across Silver and Gold layers:
+  - `gold.price_anomalies` (0 rows, replaced by `gold.mart_price_anomalies`)
+  - `gold.coicop_weights` (legacy, replaced by `gold.category_weights`)
+  - `silver.cambodia_cpi_coicop_weights_breakdown` (duplicate seed, official maintained in `gold`)
+  - `silver.classification_ground_truth` (0 rows, deprecated)
+  - `silver.coicop_override_manual` (0 rows, superseded by `silver.coicop_override`)
+  - `silver.dim_canonical_products` (0 rows, superseded by `silver.canonical_items`)
+  - `silver.coicop_keywords` (legacy keyword lookup, superseded by regex text rules and vector matching)
+- **Metabase Dashboards**: Consolidated 5 fragmented dashboards (41 cards) into 3 streamlined operational dashboards (34 cards):
+  - **Dashboard 01**: `🇰🇭 Cambodia Daily Consumer Price Index (CPI) Dashboard` (Macro CPI, Core Inflation, 12-Division COICOP Matrix, Nowcast Projections)
+  - **Dashboard 02**: `🚀 Pipeline Operations & Scraper Data Health Dashboard` (Airflow DAG monitor, Freshness SLAs, Ranked Store Product Counts including Lucky, Chip Mong, Ucare, and live MEF USD/KHR rate)
+  - **Dashboard 03**: `🏷️ Silver Data Quality & Classification Intelligence Dashboard` (COICOP coverage, log-relative distributions, pre-flight outliers, and human review queues)
+- **FX Rate Card Fix**: Updated `Official MEF USD/KHR Rate Today` on Dashboard 02 to correctly query `staging.exchange_rates` (rendering live `4,047.00 KHR`).
+
+### MocGasolineScraper Tela Telegram Fuel & LPG Ingestion (2026-09-03)
+- **Files**: `scrapers/sources/gasoline.py`, `tests/test_sources.py`, `docs/SCRAPER_METHODOLOGY_GUIDE.md`
+- **Issue**: MOC web portal and GraphQL backend (`graphql.moc.gov.kh`) ceased updating retail fuel prices, freezing at stale placeholders, while MOC and retail distributors regularly post 10-day price ceiling notices on Telegram and Facebook. In addition, static hardcoded baseline fallbacks masked live scraper failures.
+- **Fix**:
+  - Removed frozen MOC GraphQL endpoint (`_query_line_report`, `_is_graphql_stale`) and static baseline fallbacks (`MOC_FUEL_BASELINE`).
+  - Implemented direct official announcement cascade starting from Kampuchea Tela's official Telegram channel (`https://t.me/s/telakhmerofficial`) with a 4-layer heuristic filter (Header + Period + Units + Fuels) that discards marketing promotions and extracts all 4 major consumer fuels: Super 95 (`5,250 KHR`), Regular 92 (`4,400 KHR`), Diesel (`5,150 KHR`), and LPG AutoGas (`2,400 KHR`).
+  - Maintained deterministic Khmer numeral mapping (`០-៩` $\rightarrow$ `0-9`).
+  - Maintained secondary news mirror fallback (Khmer Times) and Telegram mirror (`t.me/s/freshnewsasia`).
+  - Updated unit tests (`test_moc_gasoline_tela_telegram_extraction` and `test_moc_gasoline_news_announcements_fallback`).
 
 ### Gemini Model Updates (2026-08-27)
 - **Files**: `pipeline/hybrid_embeddings_classifier.py`, `pipeline/vector_item_matcher.py`
@@ -362,9 +380,9 @@ MIN_SUCCESSFUL_SCRAPERS=3
 |:---|:---|:---|
 | `bronze` | Raw store listings | `raw_prices`, `scrape_errors` |
 | `staging` | Ingestion staging | `raw_scrapes`, `exchange_rates`, `bronze_ingestion_stats` |
-| `silver` | Clean observations & dims | `canonical_items`, `clean_store_prices`, `item_match_log`, `needs_review`, `dim_coicop_ai_cache`, `coicop_override`, `coicop_override_manual`, `coicop_category_map`, `classification_queue` |
-| `gold` | Analytical star schema | `dim_items`, `dim_stores`, `fct_daily_prices`, `fct_elementary_indices`, `fct_cpi_daily` |
-| `ops` | Control-flow tables | Pass-through views over `silver.*` + `coicop_override_manual` table |
+| `silver` | Clean observations & dims | `canonical_items`, `clean_store_prices`, `item_match_log`, `needs_review`, `dim_coicop_ai_cache`, `coicop_override`, `coicop_store_defaults`, `coicop_category_map`, `classification_queue` |
+| `gold` | Analytical star schema | `dim_items`, `dim_stores`, `category_weights`, `cambodia_cpi_coicop_weights_breakdown`, `fct_daily_prices`, `fct_elementary_indices`, `fct_cpi_daily`, `fct_cpi_monthly`, `fct_cpi_nowcast` |
+| `ops` | Control-flow tables | Operational views over `silver.*` + classifier review queues |
 
 ---
 

@@ -10,9 +10,9 @@ This macro-level diagram illustrates the full data journey from 20 external Camb
 
 ```mermaid
 flowchart LR
-    subgraph S0["20 SOURCES"]
-        A1["Supermarkets & Malls\n(AEON 1 & 3, Delishop, L192)"]
-        A2["Pharmacies & Tech\n(Community Pharma, Samnang, Ary)"]
+    subgraph S0["23 SOURCES"]
+        A1["Supermarkets & Malls\n(AEON 1 & 3, Delishop, Lucky, Chip Mong, L192)"]
+        A2["Pharmacies & Tech\n(Community Pharma, Ucare, Samnang, Ary)"]
         A3["Telecom & Utilities\n(Cellcard, Smart, Fuel, Housing)"]
         A4["Transit & Hotels\n(redBus, Sokha, MEF FX)"]
     end
@@ -37,9 +37,9 @@ flowchart LR
     end
 
     subgraph S4["SERVING & ANALYTICS"]
-        E1["Metabase v0.49\n(20-Source Health & Anomaly Feeds)"]
+        E1["Metabase v0.49\n(3 Streamlined Dashboards:\nMacro, Ops, Quality)"]
         E2["Power BI DirectQuery\n(Executive Inflation Dashboards)"]
-        E3["ML Nowcasting Engine\n(LightGBM / XGBoost Flash Nowcasts)"]
+        E3["ML Nowcasting Engine\n(Hybrid ADL + GBRT Nowcasts)"]
     end
 
     S0 --> S1
@@ -179,7 +179,7 @@ flowchart TD
 
     subgraph Serving["4. Executive BI & Operational Observability"]
         M4 & M5 --> B1["Power BI Analytics\n• Real-Time Inflation Tracking\n• Category Price Elasticity\n• Promo Impact BI"]
-        StarSchema --> B2["Metabase v0.49\n• 20-Source Health Matrix\n• Price Anomaly Triage Feed\n• Coverage & Barcode Monitors"]
+        StarSchema --> B2["Metabase v0.49\n• 3 Consolidated Dashboards\n• Macro CPI & Inflation Analytics\n• Operations & 23-Source Telemetry\n• Silver Data Quality Screener"]
     end
 
     classDef gldBox fill:#fffde7,stroke:#f57f17,stroke-width:2px,color:#e65100;

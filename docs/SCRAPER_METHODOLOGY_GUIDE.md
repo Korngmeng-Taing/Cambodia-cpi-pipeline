@@ -1,7 +1,7 @@
 > **[!NOTE]**
 > **IMPLEMENTATION STATUS (LIVE IN PRODUCTION):** The Gold-layer CPI Calculation Engine is fully operational in production.
 > Live components:
-> - **Bronze Ingestion:** 20 scrapers (`scrapers/sources/`) extracting atomic prices and official MEF USD/KHR rates into `bronze.raw_prices`.
+> - **Bronze Ingestion:** 23 scrapers (`scrapers/sources/`) extracting atomic prices and official MEF USD/KHR rates into `bronze.raw_prices`.
 > - **Silver Processing:** Data cleaning (`int_prices_cleaned.sql`), hybrid vector matching (`pipeline/vector_item_matcher.py`), 12-division COICOP classification (`pipeline/hybrid_embeddings_classifier.py`), and log-linear hedonic quality adjustment (`pipeline/hedonic_regression.py`).
 > - **Gold Econometric Layer:** Kimball star schema (`gold.dim_items`, `gold.dim_stores`, `gold.fct_daily_prices`), Jevons micro-indices with 7-day imputation (`gold.fct_elementary_indices`), and Laspeyres 12-division daily aggregates (`gold.fct_cpi_daily`).
 > - **Observability & Analytics:** Metabase dashboards (Port 3000) and Power BI models.
@@ -14,12 +14,12 @@
 
 ## 1. Architectural Overview & Ingestion Standards
 
-Every night at 07:00, Airflow orchestrates daily data extraction across **19 Cambodian retail, telecom, transport, housing, hospitality, fuel, electronics, and dining sources** alongside official USD/KHR exchange rates from the Ministry of Economy & Finance (MEF).
+Every night at 07:00, Airflow orchestrates daily data extraction across **22 Cambodian retail, grocery, telecom, transport, housing, hospitality, fuel, electronics, and dining sources** alongside official USD/KHR exchange rates from the Ministry of Economy & Finance (MEF).
 
 ```
                       ┌──────────────────────────────────────────────────────────┐
-                      │               20 Daily Scraper DAGs                      │
-                      │  (scrape_{source}_dag: 19 sources + MEF FX, fan-out from │
+                      │               23 Daily Scraper DAGs                      │
+                      │  (scrape_{source}_dag: 22 sources + MEF FX, fan-out from │
                       │   cpi_master_dag at 07:00 Asia/Phnom_Penh)               │
                       └────────────────────────────┬─────────────────────────────┘
                                                    │
@@ -300,15 +300,21 @@ Every night at 07:00, Airflow orchestrates daily data extraction across **19 Cam
 
 ---
 
-### 19. MOC Daily Fuel Prices (`new_gasoline`)
+### 19. MOC Daily Fuel & LPG Prices (`new_gasoline`)
 
-- **Category / Source Type**: Macroeconomic Fuel Pricing (`fuel`)
+- **Category / Source Type**: Macroeconomic Fuel & Energy Pricing (`fuel`)
 - **COICOP Division**: `07` (Transport — Fuels & Lubricants, class `07.2.2`)
-- **Target Source**: Ministry of Commerce (MOC) commodity-values portal
-- **Best Scraping Method**: **Official MOC GraphQL Line Report**
-  - **Endpoint**: `POST https://graphql.moc.gov.kh/graphql` (`publicCommodityPriceLineReport`)
-  - **Products**: Regular Gasoline, Diesel, Petroleum — published in **KHR/litre**, filtered by province (default `MOC_FUEL_PROVINCE_ID=1` = Phnom Penh).
-  - **Trading-day resolution**: Fuel prices are published only on trading days, so a 14-day rolling window ending at the scrape date is queried and the most recent price on/before the requested day is recorded. When the underlying price date is older than the scrape date, the record is flagged `is_fallback=True`.
+- **Target Sources**: Ministry of Commerce (MOC) portal, Kampuchea Tela Telegram (`t.me/s/telakhmerofficial`), Press Gazettes & Telegram Mirrors
+- **Scraping Architecture**: **Direct Official Announcement Cascade (Tela Telegram & Gazette Mirrors)**
+  - **Primary — Kampuchea Tela Telegram Feed (`https://t.me/s/telakhmerofficial`)**: Ingests official 10-day gazette announcements published by Cambodia's largest petroleum network. Uses a 4-layer heuristic check (Header + Period + Units + Fuels) to filter marketing and extract:
+    - `Super 95 Gasoline` (106): e.g. `5,250 KHR/L`
+    - `Regular 92 Gasoline` (107): e.g. `4,400 KHR/L` (MOC official ceiling)
+    - `Diesel` (108): e.g. `5,150 KHR/L` (MOC official ceiling)
+    - `Petroleum` (109): e.g. `3,950 KHR/L`
+    - `LPG Gas` (110): e.g. `2,400 KHR/L` (AutoGas retail price)
+  - **Secondary — Official Gazette Media Mirror (Khmer Times)**: Secondary fallback parsing published article body text via regex (`regular gasoline` $\rightarrow$ `4,400`, `diesel` $\rightarrow$ `5,150`).
+  - **Tertiary — Public Telegram Channel Preview**: Scrapes `https://t.me/s/freshnewsasia` with Khmer numeral conversion (`០-៩` $\rightarrow$ `0-9`) as third network fallback.
+  - **Trading-day resolution**: Fuel & LPG prices apply for 10-day gazette cycles (1st–10th, 11th–20th, 21st–end of month). When the underlying price date differs from the scrape date, the record is flagged `is_fallback=True` with `attrs.source_type='tela_telegram'`.
 
 ---
 
@@ -321,6 +327,42 @@ Every night at 07:00, Airflow orchestrates daily data extraction across **19 Cam
   - **Endpoint**: `GET https://arystorephone.com/wp-json/wc/store/v1/products?per_page=100&page={n}`
   - **Pagination**: Sequential pages of 100 until an empty or short (< page_size) page is returned (~1,352 products, 14 pages).
   - **Extracted Fields**: Name, USD price / regular price / on-sale flag, HTML descriptions (stripped to plain text), images, brands, native categories, tags, SKU, weight, average rating, review count, stock status, and permalink.
+
+---
+
+### 21. Ucare Pharmacy Chroy Changva (`grab_ucare`)
+
+- **Category / Source Type**: Pharmaceuticals, Health & Personal Care (`pharmacy`)
+- **COICOP Division**: `06` (Health / Medical Products) & `12` (Personal Care)
+- **Target Platform**: [GrabMart Cambodia](https://mart.grab.com/kh/en/merchant/ucare-pharmacy-chroy-changva/10-C7CGV2AFNNEAGJ)
+- **Best Scraping Method**: **Next.js Server-Side Embedded JSON (`__NEXT_DATA__`)**
+  - **Extraction**: Reads `merchantApi.getMerchant` from preloaded state to extract department item hierarchies (OTC Medicine, Skincare, Vitamins, First Aid, Oral, etc.).
+  - **Price Currency**: KHR (`priceInMinorUnit / 100.0`).
+  - **Extracted Fields**: Item ID, Name, Price (KHR), Currency, Barcode, SKU, Brand, Category, Image URL, Availability.
+
+---
+
+### 22. Lucky Supermarket Chroy Changva (`grab_lucky`)
+
+- **Category / Source Type**: Supermarket & Groceries (`grocery`)
+- **COICOP Division**: `01` (Food & Non-Alcoholic Beverages), `02` (Alcohol & Tobacco), `05` (Household Maintenance), `12` (Personal Care)
+- **Target Platform**: [GrabMart Cambodia](https://mart.grab.com/kh/en/merchant/lucky-supermarket-chroy-changva/10-C7CGVZEFJ76BJN)
+- **Best Scraping Method**: **Next.js Server-Side Embedded JSON (`__NEXT_DATA__`)**
+  - **Extraction**: Reads `merchantApi.getMerchant` covering 46 supermarket departments (Fresh Produce, Meat & Seafood, Dairy, Bakery, Breakfast, Canned Goods, Beverages, Cooking Essentials, etc.).
+  - **Price Currency**: KHR (`priceInMinorUnit / 100.0`).
+  - **Extracted Fields**: Item ID, Name, Price (KHR), Currency, Barcode, SKU, Department, Image URL.
+
+---
+
+### 23. Chip Mong Supermarket Eden (`grab_chipmong`)
+
+- **Category / Source Type**: Supermarket & Groceries (`grocery`)
+- **COICOP Division**: `01` (Food & Non-Alcoholic Beverages), `02` (Alcohol), `05` (Household Maintenance)
+- **Target Platform**: [GrabMart Cambodia](https://mart.grab.com/kh/en/merchant/chip-mong-supermarket-eden/10-C7CGVPK3TJ3AEX)
+- **Best Scraping Method**: **Next.js Server-Side Embedded JSON (`__NEXT_DATA__`)**
+  - **Extraction**: Reads `merchantApi.getMerchant` covering 27 grocery departments with query-aware exponential retry.
+  - **Price Currency**: KHR (`priceInMinorUnit / 100.0`).
+  - **Extracted Fields**: Item ID, Name, Price (KHR), Currency, Barcode, SKU, Department, Image URL.
 
 ---
 
@@ -395,7 +437,7 @@ docker compose exec airflow-scheduler dbt test --project-dir /opt/airflow/dbt
 
 ```bash
 docker exec airflow-scheduler airflow dags trigger cpi_master_dag
-# (fans out to 20 scraper DAGs → silver_dag → gold_dag)
+# (fans out to 23 scraper DAGs → silver_dag → gold_dag)
 ```
 
 ---

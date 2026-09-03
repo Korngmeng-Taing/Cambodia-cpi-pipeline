@@ -81,78 +81,6 @@ CELLCARD_MOBILE_PLANS = [
     },
 ]
 
-
-class CellcardMobileScraper(BaseScraper):
-    def __init__(self):
-        super().__init__(store_slug="cellcard", source_type="telecom")
-
-    def fetch_records(
-        self, scrape_date: pendulum.Date | None = None
-    ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
-        records: list[dict[str, Any]] = []
-        try:
-            resp = _cffi_get(CELLCARD_MOBILE_URL, timeout=15)
-            if resp.status_code == 200 and HAS_BS4:
-                soup = BeautifulSoup(resp.text, "html.parser")
-                script = soup.find("script", id="__NEXT_DATA__")
-                if script and script.string:
-                    next_data = json.loads(script.string)
-                    props = next_data.get("props", {}).get("pageProps", {})
-                    for key in ("plans", "mobilePlans", "data"):
-                        plans = props.get(key)
-                        if isinstance(plans, list) and plans:
-                            for idx, plan in enumerate(plans):
-                                name = plan.get("name") or plan.get("title") or ""
-                                price = _to_float(
-                                    plan.get("price") or plan.get("monthly_price")
-                                )
-                                if price and name:
-                                    records.append(
-                                        build_canonical_record(
-                                            source_slug="cellcard",
-                                            source_type="telecom",
-                                            store_name="Cellcard Cambodia Mobile",
-                                            item_id=str(
-                                                plan.get("id", f"cell_mob_{idx}")
-                                            ),
-                                            name=name,
-                                            price=price,
-                                            currency="USD",
-                                            category_native=plan.get("type")
-                                            or "Mobile Prepaid",
-                                            package_size=plan.get("data"),
-                                            url=CELLCARD_MOBILE_URL,
-                                            scrape_date=ds,
-                                        )
-                                    )
-        except Exception as exc:
-            log.warning("Cellcard Mobile live scrape error: %s", exc)
-
-        if not records:
-            for plan in CELLCARD_MOBILE_PLANS:
-                records.append(
-                    build_canonical_record(
-                        source_slug="cellcard",
-                        source_type="telecom",
-                        store_name="Cellcard Cambodia Mobile",
-                        item_id=plan["id"],
-                        name=plan["name"],
-                        price=plan["price"],
-                        currency="USD",
-                        category_native=plan["type"],
-                        package_size=plan["data"],
-                        url=CELLCARD_MOBILE_URL,
-                        scrape_date=ds,
-                        is_fallback=True,
-                    )
-                )
-        return records
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 8. Cellcard Home Internet & Fiber (Telecom)
-# ═══════════════════════════════════════════════════════════════════════════
 CELLCARD_WIFI_URL = "https://www.cellcard.com.kh/en/home-internet/"
 
 CELLCARD_WIFI_PLANS = [
@@ -180,7 +108,105 @@ CELLCARD_WIFI_PLANS = [
 ]
 
 
+class CellcardScraper(BaseScraper):
+    """Combined Cellcard Scraper covering both Mobile and Home Internet / Fiber plans."""
+
+    def __init__(self, store_slug: str = "cellcard"):
+        super().__init__(store_slug=store_slug, source_type="telecom")
+
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
+        records: list[dict[str, Any]] = []
+
+        # 1. Scrape Mobile Plans
+        try:
+            resp = _cffi_get(CELLCARD_MOBILE_URL, timeout=15)
+            if resp.status_code == 200 and HAS_BS4:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                script = soup.find("script", id="__NEXT_DATA__")
+                if script and script.string:
+                    next_data = json.loads(script.string)
+                    props = next_data.get("props", {}).get("pageProps", {})
+                    for key in ("plans", "mobilePlans", "data"):
+                        plans = props.get(key)
+                        if isinstance(plans, list) and plans:
+                            for idx, plan in enumerate(plans):
+                                name = plan.get("name") or plan.get("title") or ""
+                                price = _to_float(
+                                    plan.get("price") or plan.get("monthly_price")
+                                )
+                                if price and name:
+                                    records.append(
+                                        build_canonical_record(
+                                            source_slug=self.store_slug,
+                                            source_type="telecom",
+                                            store_name="Cellcard Cambodia Mobile",
+                                            item_id=str(
+                                                plan.get("id", f"cell_mob_{idx}")
+                                            ),
+                                            name=name,
+                                            price=price,
+                                            currency="USD",
+                                            category_native=plan.get("type")
+                                            or "Mobile Prepaid",
+                                            package_size=plan.get("data"),
+                                            url=CELLCARD_MOBILE_URL,
+                                            scrape_date=ds,
+                                        )
+                                    )
+        except Exception as exc:
+            log.warning("Cellcard Mobile live scrape error: %s", exc)
+
+        if not records:
+            for plan in CELLCARD_MOBILE_PLANS:
+                records.append(
+                    build_canonical_record(
+                        source_slug=self.store_slug,
+                        source_type="telecom",
+                        store_name="Cellcard Cambodia Mobile",
+                        item_id=plan["id"],
+                        name=plan["name"],
+                        price=plan["price"],
+                        currency="USD",
+                        category_native=plan["type"],
+                        package_size=plan["data"],
+                        url=CELLCARD_MOBILE_URL,
+                        scrape_date=ds,
+                        is_fallback=True,
+                    )
+                )
+
+        # 2. Add Home Internet / WiFi plans
+        for plan in CELLCARD_WIFI_PLANS:
+            records.append(
+                build_canonical_record(
+                    source_slug=self.store_slug,
+                    source_type="telecom",
+                    store_name="Cellcard Home Internet",
+                    item_id=plan["id"],
+                    name=plan["name"],
+                    price=plan["price"],
+                    currency="USD",
+                    category_native=plan["type"],
+                    package_size=plan["speed"],
+                    url=CELLCARD_WIFI_URL,
+                    scrape_date=ds,
+                    is_fallback=True,
+                )
+            )
+
+        return records
+
+
+# Aliases for backwards compatibility
+CellcardMobileScraper = CellcardScraper
+
+
 class CellcardWifiScraper(BaseScraper):
+    """Retained for backwards compatibility if referenced directly."""
+
     def __init__(self):
         super().__init__(store_slug="cellcard_wifi", source_type="telecom")
 

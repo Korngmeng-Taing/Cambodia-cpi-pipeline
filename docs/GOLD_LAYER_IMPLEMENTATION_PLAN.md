@@ -43,7 +43,7 @@ flowchart TD
 
     subgraph Phase 2 [2. Item Relatives & Division Marts]
         G_Cat[("gold.cpi_category_daily<br>12 COICOP Division Indices")]
-        G_Weights[("gold.coicop_weights<br>NIS Household Weights w_d")]
+        G_Weights[("gold.category_weights<br>NIS Household Weights w_d")]
         G_Stats --> G_Cat
         G_Weights --> G_Cat
     end

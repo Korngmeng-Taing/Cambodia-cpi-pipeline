@@ -683,7 +683,7 @@ def provision_all():
         },
         {
             "name": "Daily Store Scraper Ingestion Progress",
-            "desc": "Real-time checklist of all 20 retail store scrapers running today.",
+            "desc": "Real-time checklist of all 21 retail store scrapers running today.",
             "display": "table",
             "sql": """
                 WITH latest_scrape AS (
@@ -717,6 +717,7 @@ def provision_all():
                 FROM gold.dim_stores s
                 LEFT JOIN latest_scrape ls ON ls.store_slug = s.store_slug
                 LEFT JOIN dag_states d ON d.store_key = s.store_slug
+                WHERE s.is_active = TRUE
                 ORDER BY "Raw Records Today" DESC;
             """,
             "viz": {"table.pivot_column": None},
@@ -753,11 +754,11 @@ def provision_all():
     scrape_cards = [
         {
             "name": "Scraper Ingestion Success Rate (%)",
-            "desc": "Percentage of 20 scrapers that successfully delivered data today.",
+            "desc": "Percentage of 21 scrapers that successfully delivered data today.",
             "display": "scalar",
             "sql": """
                 SELECT 
-                    ROUND((COUNT(DISTINCT store_slug) * 100.0 / 20.0)::numeric, 1) AS "Scraper Success Rate (%)"
+                    ROUND((COUNT(DISTINCT store_slug) * 100.0 / 21.0)::numeric, 1) AS "Scraper Success Rate (%)"
                 FROM silver.clean_store_prices
                 WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
             """,

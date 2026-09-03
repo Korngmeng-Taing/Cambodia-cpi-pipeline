@@ -1,86 +1,98 @@
-﻿\section*{Appendix A: 12 UN COICOP Division Expenditure Weights and Baseline Items}
-\addcontentsline{toc}{section}{Appendix A: 12 UN COICOP Division Expenditure Weights}
+\section*{Appendix A: 12 UN COICOP Divisions and Cambodia Expenditure Weights}
+\addcontentsline{toc}{section}{Appendix A: 12 UN COICOP Divisions and Cambodia Expenditure Weights}
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{|c|p{7cm}|r|c|}
+\begin{tabular}{|c|>{\raggedright\arraybackslash}p{7.5cm}|r|>{\raggedright\arraybackslash}p{4cm}|}
 \hline
 \rowcolor{blue!20}
-\textbf{Division} & \textbf{Official UN COICOP Division Name} & \textbf{NIS Weight (\%)} & \textbf{Core Inflation Status} \\ \hline
-\textbf{01} & Food and Non-Alcoholic Beverages & 44.800\% & Excluded from Core CPI \\ \hline
-\textbf{02} & Alcoholic Beverages and Tobacco & 1.500\% & Included in Core CPI \\ \hline
-\textbf{03} & Clothing and Footwear & 2.900\% & Included in Core CPI \\ \hline
-\textbf{04} & Housing, Water, Electricity, Gas and Other Fuels & 17.100\% & Excluded (Energy/Fuels) \\ \hline
-\textbf{05} & Furnishings, Household Equipment \& Maintenance & 3.300\% & Included in Core CPI \\ \hline
-\textbf{06} & Health and Pharmaceuticals & 5.600\% & Included in Core CPI \\ \hline
-\textbf{07} & Transport and Automotive Fuels & 12.200\% & Excluded (Gasoline/Diesel) \\ \hline
-\textbf{08} & Communication and Telecommunications & 3.900\% & Included in Core CPI \\ \hline
-\textbf{09} & Recreation and Culture & 1.900\% & Included in Core CPI \\ \hline
-\textbf{10} & Education & 1.500\% & Included in Core CPI \\ \hline
-\textbf{11} & Restaurants and Hotels & 3.100\% & Included in Core CPI \\ \hline
-\textbf{12} & Miscellaneous Goods and Services & 2.200\% & Included in Core CPI \\ \hline
-\rowcolor{blue!10}
-\textbf{Total} & \textbf{National Basket Headline CPI} & \textbf{100.000\%} & \textbf{Core CPI: 52.200\%} \\ \hline
+\textbf{Division} & \textbf{COICOP Classification Title} & \textbf{Weight (\%)} & \textbf{Basket Type} \\ \hline
+01 & Food and Non-Alcoholic Beverages & 44.775\% & Headline Only \\ \hline
+02 & Alcoholic Beverages, Tobacco and Narcotics & 1.625\% & Headline \& Core \\ \hline
+03 & Clothing and Footwear & 3.036\% & Headline \& Core \\ \hline
+04 & Housing, Water, Electricity, Gas and Other Fuels & 17.084\% & Headline \& Core \\ \hline
+05 & Furnishings, Household Equipment \& Maintenance & 3.250\% & Headline \& Core \\ \hline
+06 & Health & 5.560\% & Headline \& Core \\ \hline
+07 & Transport & 12.180\% & Excl. Fuel in Core \\ \hline
+08 & Communication & 3.920\% & Headline \& Core \\ \hline
+09 & Recreation and Culture & 1.910\% & Headline \& Core \\ \hline
+10 & Education & 1.510\% & Headline \& Core \\ \hline
+11 & Restaurants and Hotels & 3.085\% & Headline \& Core \\ \hline
+12 & Miscellaneous Goods and Services & 2.065\% & Headline \& Core \\ \hline
+\textbf{Total} & \textbf{National Consumer Expenditure Basket} & \textbf{100.000\%} & \textbf{Headline: 100\% | Core: 52.2\%} \\ \hline
 \end{tabular}
-\caption{Official National Institute of Statistics (NIS) Cambodia 12-Division Expenditure Weights}
-\label{tab:app_coicop_weights}
+\caption{Official United Nations COICOP Divisions and Normalized CSES 2023 Weights}
+\label{tab:appendix_coicop_weights}
 \end{table}
 
-\newpage
-\section*{Appendix B: Machine Learning and Transformer Hyperparameter Configurations}
-\addcontentsline{toc}{section}{Appendix B: Machine Learning Hyperparameters}
+\section*{Appendix B: Daily Multi-Source Data Ingestion Operational Schedule}
+\addcontentsline{toc}{section}{Appendix B: Daily Multi-Source Data Ingestion Operational Schedule}
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{|l|l|l|}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{5.5cm}|c|>{\raggedright\arraybackslash}p{4.2cm}|>{\raggedright\arraybackslash}p{3.8cm}|}
 \hline
 \rowcolor{blue!20}
-\textbf{Model / Architecture} & \textbf{Hyperparameter} & \textbf{Configured Value / Search Space} \\ \hline
-\multirow{4}{*}{\textbf{Embedding Engine}} & Model Name & \texttt{text-embedding-004} (Gemini) \\ \cline{2-3}
- & Embedding Dimension & 768 float32 dimensions \\ \cline{2-3}
- & Similarity Metric & Cosine Similarity ($S = \frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\|_2 \|\mathbf{v}\|_2}$) \\ \cline{2-3}
- & Similarity Threshold & $\tau_{\text{match}} = 0.82$, $\tau_{\text{coicop}} = 0.72$ \\ \hline
-\multirow{5}{*}{\textbf{XGBoost Inflation Model}} & \texttt{n\_estimators} & 500 \\ \cline{2-3}
- & \texttt{learning\_rate} & 0.05 \\ \cline{2-3}
- & \texttt{max\_depth} & 6 \\ \cline{2-3}
- & \texttt{subsample} & 0.80 \\ \cline{2-3}
- & \texttt{colsample\_bytree} & 0.80 \\ \hline
-\multirow{4}{*}{\textbf{LSTM Neural Network}} & Hidden Units & 128 (Layer 1), 64 (Layer 2) \\ \cline{2-3}
- & Sequence Length & 30 daily timesteps \\ \cline{2-3}
- & Optimizer / Learning Rate & Adam ($lr = 1\times 10^{-3}$) \\ \cline{2-3}
- & Dropout Rate & 0.20 \\ \hline
-\multirow{3}{*}{\textbf{Prophet Time-Series}} & Growth & Linear \\ \cline{2-3}
- & Changepoint Prior Scale & 0.05 \\ \cline{2-3}
- & Seasonality Mode & Multiplicative \\ \hline
+\textbf{Data Collection Workflow} & \textbf{Schedule (ICT)} & \textbf{Target Platform} & \textbf{Ingestion Method} \\ \hline
+Supermarket Retail Ingestion & 01:00 AM & AEON Stores 1 \& 3 & Automated Web Parser \\ \hline
+Online Grocery Ingestion & 01:15 AM & DeliShop Asia Cambodia & Dynamic DOM Crawler \\ \hline
+E-Commerce Marketplace Extraction & 01:30 AM & L192 Marketplace & Mobile Feed Extractor \\ \hline
+Pharmaceutical Products Monitor & 01:45 AM & Community Pharmacy & Structured Web Scraper \\ \hline
+Housing and Rental Listings & 02:00 AM & Khmer24 Real Estate & Real Estate Crawler \\ \hline
+Passenger Inter-Provincial Fares & 02:15 AM & redBus \& BookMeBus & Transit Search Extractor \\ \hline
+Telecommunication Service Tariffs & 02:30 AM & Cellcard, Smart, Metfone & Tariff Portal Monitor \\ \hline
+Regulated Retail Fuel Prices & 06:00 AM & Ministry of Commerce & Official Data Endpoint \\ \hline
+Official Foreign Exchange Rates & 06:30 AM & Ministry of Economy & Official Daily Currency Feed \\ \hline
+Econometric Mart Transformations & 07:00 AM & Central Database & Automated Analytics Engine \\ \hline
 \end{tabular}
-\caption{Hyperparameter Search Space and Optimal Pipeline Configurations}
-\label{tab:app_hyperparameters}
+\caption{Operational Schedule for Automated Daily Market Data Ingestion}
+\label{tab:appendix_airflow_dags}
 \end{table}
 
-\newpage
-\section*{Appendix C: Database Star-Schema and Relational Entities}
-\addcontentsline{toc}{section}{Appendix C: Database Star-Schema and Relational Entities}
+\section*{Appendix C: Mathematical Proof of Axiomatic Index Properties}
+\addcontentsline{toc}{section}{Appendix C: Mathematical Proof of Axiomatic Index Properties}
+
+\subsection*{Time-Reversal Axiom Proof for Jevons Geometric Mean}
+\hs The Time-Reversal Test requires that an index measuring price change from period $0$ to period $t$ must be the reciprocal of the index measuring price change from period $t$ to period $0$, satisfying $I_{0,t} \times I_{t,0} = 1$.
+\begin{align}
+    I_{0,t}^{\text{Jevons}} &= \prod_{i=1}^n \left( \frac{p_{i,t}}{p_{i,0}} \right)^{\frac{1}{n}} \\
+    I_{t,0}^{\text{Jevons}} &= \prod_{i=1}^n \left( \frac{p_{i,0}}{p_{i,t}} \right)^{\frac{1}{n}} \\
+    I_{0,t}^{\text{Jevons}} \times I_{t,0}^{\text{Jevons}} &= \prod_{i=1}^n \left( \frac{p_{i,t}}{p_{i,0}} \right)^{\frac{1}{n}} \times \prod_{i=1}^n \left( \frac{p_{i,0}}{p_{i,t}} \right)^{\frac{1}{n}} = \prod_{i=1}^n \left( \frac{p_{i,t}}{p_{i,0}} \times \frac{p_{i,0}}{p_{i,t}} \right)^{\frac{1}{n}} = \prod_{i=1}^n (1)^{\frac{1}{n}} = 1 \quad \blacksquare
+\end{align}
+
+\subsection*{Failure of Time-Reversal in Carli Arithmetic Mean (Formula Bias)}
+\hs By contrast, the Carli arithmetic index fails this fundamental test due to Jensen's inequality:
+\begin{equation}
+    I_{0,t}^{\text{Carli}} = \frac{1}{n}\sum_{i=1}^n \left( \frac{p_{i,t}}{p_{i,0}} \right), \quad I_{t,0}^{\text{Carli}} = \frac{1}{n}\sum_{i=1}^n \left( \frac{p_{i,0}}{p_{i,t}} \right)
+\end{equation}
+\hs By the Cauchy-Schwarz and Arithmetic-Harmonic Mean inequalities:
+\begin{equation}
+    I_{0,t}^{\text{Carli}} \times I_{t,0}^{\text{Carli}} \ge 1
+\end{equation}
+with strict inequality holding whenever price ratios $p_{i,t}/p_{i,0}$ are not strictly identical across all items $i$, causing systematic upward compounding index drift.
+
+\section*{Appendix D: Real-Time Inflation Nowcasting Feature Dictionary}
+\addcontentsline{toc}{section}{Appendix D: Real-Time Inflation Nowcasting Feature Dictionary}
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{|l|l|p{7.5cm}|}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{4.5cm}|c|>{\raggedright\arraybackslash}p{4.5cm}|>{\raggedright\arraybackslash}p{4.5cm}|}
 \hline
 \rowcolor{blue!20}
-\textbf{Schema} & \textbf{Table Name} & \textbf{Grain / Primary Function} \\ \hline
-\texttt{bronze} & \texttt{raw\_prices} & Immutable raw scraped payload per listing with raw JSONB \\ \hline
-\texttt{staging} & \texttt{raw\_scrapes} & Daily batch execution health log, store slug, row count \\ \hline
-\texttt{staging} & \texttt{exchange\_rates} & Daily official MEF USD/KHR foreign exchange rates \\ \hline
-\texttt{silver} & \texttt{canonical\_items} & Resolved product identities with barcode and canonical title \\ \hline
-\texttt{silver} & \texttt{clean\_store\_prices} & Standardized daily prices in KHR with unit price normalization \\ \hline
-\texttt{silver} & \texttt{dim\_coicop\_ai\_cache} & PostgreSQL vector memoization cache for Gemini AI outputs \\ \hline
-\texttt{gold} & \texttt{dim\_items} & Curated item master dimension with UN COICOP attribution \\ \hline
-\texttt{gold} & \texttt{dim\_stores} & Conformed store and digital retailer master dimension \\ \hline
-\texttt{gold} & \texttt{fct\_daily\_prices} & Daily price fact table at \texttt{(scrape\_date, store\_slug, item\_id)} \\ \hline
-\texttt{gold} & \texttt{fct\_cpi\_daily} & Aggregated Jevons micro-index, 12-division \& National CPI \\ \hline
+\textbf{Feature Name} & \textbf{Frequency} & \textbf{Economic Concept} & \textbf{Transformation Method} \\ \hline
+Headline Scraped Momentum & Daily & Broad retail price changes & Percentage change from baseline \\ \hline
+Food Sub-Driver Signal & Daily & Staple food price movements & Weighted food division change \\ \hline
+Transport Sub-Driver Signal & Daily & Transit fare fluctuations & Weighted transport division change \\ \hline
+Official Fuel Price Resets & Bi-Weekly & Regulated retail gasoline costs & Ministry of Commerce adjustments \\ \hline
+Foreign Exchange Movement & Daily & USD/KHR bilateral rate & Daily change in central rate \\ \hline
+Rolling Price Volatility & 14-Day & Price turbulence indicator & Standard deviation of price changes \\ \hline
+Prior Month Official Inflation & Monthly & Macroeconomic price inertia & Official release ground truth \\ \hline
+Festival Calendar Window & Daily & Cultural demand surge & Cambodian holiday indicator \\ \hline
+Day-of-Month Indicator & Daily & Intra-month progress marker & Integer tracking days elapsed \\ \hline
 \end{tabular}
-\caption{PostgreSQL 16 Medallion Star-Schema and Conformed Entities}
-\label{tab:app_database_schema}
+\caption{Economic Feature Store for Machine Learning Inflation Nowcasting}
+\label{tab:appendix_feature_store}
 \end{table}

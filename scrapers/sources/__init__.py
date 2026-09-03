@@ -42,9 +42,12 @@ from scrapers.sources._common import (
 )
 from scrapers.sources.aeon import AeonFashionScraper, AeonSupermarketScraper
 from scrapers.sources.arystore import AryStorePhoneScraper
+from scrapers.sources.ucare import GrabUcarePharmacyScraper
+from scrapers.sources.lucky import GrabLuckySupermarketScraper
+from scrapers.sources.chipmong import GrabChipMongSupermarketScraper
 from scrapers.sources.bayon import BayonRestaurantScraper
 from scrapers.sources.bookmebus import BookMeBusScraper
-from scrapers.sources.cellcard import CellcardMobileScraper, CellcardWifiScraper
+from scrapers.sources.cellcard import CellcardMobileScraper, CellcardScraper, CellcardWifiScraper
 from scrapers.sources.communitypharma import CommunityPharmaScraper
 from scrapers.sources.delishop import DelishopScraper
 from scrapers.sources.gasoline import MOC_FUEL_PROVINCE, MocGasolineScraper
@@ -55,7 +58,7 @@ from scrapers.sources.mef_fx import MefExchangeRateScraper
 from scrapers.sources.realestate import RealestateKhScraper
 from scrapers.sources.redbus import RedBusKhScraper
 from scrapers.sources.samnangshop import SamnangShopScraper
-from scrapers.sources.smart import SmartMobileScraper, SmartWifiScraper
+from scrapers.sources.smart import SmartMobileScraper, SmartScraper, SmartWifiScraper
 from scrapers.sources.sokhahotel import SokhaHotelScraper
 
 SCRAPER_REGISTRY: dict[str, type[BaseScraper]] = {
@@ -65,10 +68,8 @@ SCRAPER_REGISTRY: dict[str, type[BaseScraper]] = {
     "l192": L192Scraper,
     "communitypharma": CommunityPharmaScraper,
     "samnangshop": SamnangShopScraper,
-    "cellcard": CellcardMobileScraper,
-    "cellcard_wifi": CellcardWifiScraper,
-    "smart": SmartMobileScraper,
-    "smart_wifi": SmartWifiScraper,
+    "cellcard": CellcardScraper,
+    "smart": SmartScraper,
     "khmer24": Khmer24Scraper,
     "realestate": RealestateKhScraper,
     "redbus": RedBusKhScraper,
@@ -79,6 +80,9 @@ SCRAPER_REGISTRY: dict[str, type[BaseScraper]] = {
     "mef_fx": MefExchangeRateScraper,
     "new_gasoline": MocGasolineScraper,
     "arystore": AryStorePhoneScraper,
+    "grab_ucare": GrabUcarePharmacyScraper,
+    "grab_lucky": GrabLuckySupermarketScraper,
+    "grab_chipmong": GrabChipMongSupermarketScraper,
 }
 
 __all__ = [
@@ -89,8 +93,10 @@ __all__ = [
     "L192Scraper",
     "CommunityPharmaScraper",
     "SamnangShopScraper",
+    "CellcardScraper",
     "CellcardMobileScraper",
     "CellcardWifiScraper",
+    "SmartScraper",
     "SmartMobileScraper",
     "SmartWifiScraper",
     "Khmer24Scraper",
@@ -103,6 +109,9 @@ __all__ = [
     "MefExchangeRateScraper",
     "MocGasolineScraper",
     "AryStorePhoneScraper",
+    "GrabUcarePharmacyScraper",
+    "GrabLuckySupermarketScraper",
+    "GrabChipMongSupermarketScraper",
     "MOC_FUEL_PROVINCE",
     "build_canonical_record",
     "_cffi_get",

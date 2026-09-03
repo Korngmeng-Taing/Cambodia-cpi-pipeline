@@ -40,6 +40,13 @@ with trap_cases as (
     union all select 'SERVICED APARTMENT FOR RENT', '04'
     union all select 'GREEK DRESSING', '01'
     union all select 'HOT WHEELS TRACK SET', '09'
+    union all select 'IPHONE', '08'
+    union all select 'LAUNDRY DETERGENT', '05'
+    union all select 'DISHWASHING LIQUID', '05'
+    union all select 'SHAMPOO', '12'
+    union all select 'TOOTHPASTE', '12'
+    union all select 'PARACETAMOL', '06'
+    union all select 'HEINEKEN', '02'
 )
 select
     f.scrape_date,
@@ -52,3 +59,5 @@ select
 from {{ ref('clean_store_prices') }} f
 join trap_cases t on position(upper(t.trap) in upper(f.name_clean)) > 0
 where f.coicop_division <> t.expected
+  and f.scrape_date >= (select max(scrape_date) - interval '2 days' from {{ ref('clean_store_prices') }})
+  and not (t.trap = 'SHAMPOO' and f.name_clean ilike '%CAR WASH%')

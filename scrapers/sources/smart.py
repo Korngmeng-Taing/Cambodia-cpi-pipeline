@@ -81,39 +81,6 @@ SMART_MOBILE_PLANS = [
     },
 ]
 
-
-class SmartMobileScraper(BaseScraper):
-    def __init__(self):
-        super().__init__(store_slug="smart", source_type="telecom")
-
-    def fetch_records(
-        self, scrape_date: pendulum.Date | None = None
-    ) -> list[dict[str, Any]]:
-        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
-        records: list[dict[str, Any]] = []
-        for plan in SMART_MOBILE_PLANS:
-            records.append(
-                build_canonical_record(
-                    source_slug="smart",
-                    source_type="telecom",
-                    store_name="Smart Cambodia Mobile",
-                    item_id=plan["id"],
-                    name=plan["name"],
-                    price=plan["price"],
-                    currency="USD",
-                    category_native=plan["type"],
-                    package_size=plan["data"],
-                    url="https://www.smart.com.kh/plans",
-                    scrape_date=ds,
-                    is_fallback=True,
-                )
-            )
-        return records
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 10. Smart Home Internet & WiFi (Telecom)
-# ═══════════════════════════════════════════════════════════════════════════
 SMART_WIFI_PLANS = [
     {
         "id": "smart_athome_40m",
@@ -139,7 +106,66 @@ SMART_WIFI_PLANS = [
 ]
 
 
+class SmartScraper(BaseScraper):
+    """Combined Smart Axiata Scraper covering both Mobile and Home Internet / WiFi plans."""
+
+    def __init__(self, store_slug: str = "smart"):
+        super().__init__(store_slug=store_slug, source_type="telecom")
+
+    def fetch_records(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
+        records: list[dict[str, Any]] = []
+
+        # 1. Mobile Plans
+        for plan in SMART_MOBILE_PLANS:
+            records.append(
+                build_canonical_record(
+                    source_slug=self.store_slug,
+                    source_type="telecom",
+                    store_name="Smart Cambodia Mobile",
+                    item_id=plan["id"],
+                    name=plan["name"],
+                    price=plan["price"],
+                    currency="USD",
+                    category_native=plan["type"],
+                    package_size=plan["data"],
+                    url="https://www.smart.com.kh/plans",
+                    scrape_date=ds,
+                    is_fallback=True,
+                )
+            )
+
+        # 2. Home Internet / WiFi Plans
+        for plan in SMART_WIFI_PLANS:
+            records.append(
+                build_canonical_record(
+                    source_slug=self.store_slug,
+                    source_type="telecom",
+                    store_name="Smart Home Internet",
+                    item_id=plan["id"],
+                    name=plan["name"],
+                    price=plan["price"],
+                    currency="USD",
+                    category_native=plan["type"],
+                    package_size=plan["speed"],
+                    url="https://www.smart.com.kh/home-internet",
+                    scrape_date=ds,
+                    is_fallback=True,
+                )
+            )
+
+        return records
+
+
+# Aliases for backwards compatibility
+SmartMobileScraper = SmartScraper
+
+
 class SmartWifiScraper(BaseScraper):
+    """Retained for backwards compatibility if referenced directly."""
+
     def __init__(self):
         super().__init__(store_slug="smart_wifi", source_type="telecom")
 

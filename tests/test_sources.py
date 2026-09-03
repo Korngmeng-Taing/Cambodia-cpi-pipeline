@@ -102,6 +102,7 @@ def _arystore_page(page: int) -> list[dict]:
 # ── Canned data per source ─────────────────────────────────────────────────
 
 _CANNED = {
+    "ucare_html": """<html><head><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"preloadedState":{"merchantApi":{"queries":{"q1":{"data":{"merchant":{"name":"Ucare Pharmacy Chroy Changva","currency":{"code":"KHR"},"menu":{"departments":[{"name":"OTC Medicine","items":[{"ID":"KHITE001","name":"Panadol - Extra 500mg","priceInMinorUnit":850000,"available":true,"barcode":"885012345678","SKU":"SKU001","imgHref":"https://img.grab.com/1.jpg"}]}]}}}}}}}}}</script></head><body></body></html>""",
     "aeon": {
         "products": {
             "data": [
@@ -396,6 +397,12 @@ def _mock_all_http(monkeypatch):
             return _FakeResponse({}, text=_CANNED["bayonbkk_html"])
         if "mef.gov.kh" in url_str:
             return _FakeResponse(_CANNED["mef_fx"])
+        if "10-C7CGVPK3TJ3AEX" in url_str or "chip-mong" in url_str:
+            return _FakeResponse({}, text=_CANNED.get("chipmong_html", _CANNED.get("ucare_html")))
+        if "10-C7CGVZEFJ76BJN" in url_str or "lucky" in url_str:
+            return _FakeResponse({}, text=_CANNED.get("lucky_html", _CANNED.get("ucare_html")))
+        if "mart.grab.com" in url_str:
+            return _FakeResponse({}, text=_CANNED["ucare_html"])
         if "communitypharma.com.kh" in url_str and "assets/" in url_str:
             return _FakeResponse(
                 {}, text="var x='eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSJ9.test';"
@@ -410,10 +417,6 @@ def _mock_all_http(monkeypatch):
         url_str = str(url)
         if "graph-fs.l192.com" in url_str:
             return _FakeResponse(_CANNED["l192"])
-        if "graphql.moc.gov.kh" in url_str:
-            return _FakeResponse(
-                {"data": {"publicCommodityPriceLineReport": {"items": []}}}
-            )
         return _FakeResponse([], status_code=404)
 
     def _requests_get(url, **kwargs):
@@ -446,21 +449,23 @@ def _mock_all_http(monkeypatch):
 
     monkeypatch.setattr(requests.Session, "get", _session_get)
 
-    # For MOC — mock _query_line_report directly
-    def fake_moc_query(self, start_date, end_date, province_id, product_ids):
-        return [
-            {
-                "data": [
-                    {"x": "17 Aug, 2026", "y": "5000"},
-                    {"x": "18 Aug, 2026", "y": "5100"},
-                ]
+    # For MOC / Gasoline — mock _fetch_from_tela_telegram directly
+    def fake_tela_fetch(self, target_date):
+        return {
+            "source_url": "https://t.me/s/telakhmerofficial",
+            "price_date": target_date,
+            "prices": {
+                106: 5250.0,
+                107: 4400.0,
+                108: 5150.0,
+                109: 3950.0,
+                110: 2400.0,
             },
-            {"data": [{"x": "18 Aug, 2026", "y": "4100"}]},
-            {"data": [{"x": "18 Aug, 2026", "y": "4000"}]},
-        ]
+            "source_type": "tela_telegram",
+        }
 
     monkeypatch.setattr(
-        src_mod.MocGasolineScraper, "_query_line_report", fake_moc_query
+        src_mod.MocGasolineScraper, "_fetch_from_tela_telegram", fake_tela_fetch
     )
 
     # For CommunityPharma — mock _extract_dynamic_key
@@ -484,9 +489,7 @@ def test_scraper_registry_complete():
         "communitypharma",
         "samnangshop",
         "cellcard",
-        "cellcard_wifi",
         "smart",
-        "smart_wifi",
         "khmer24",
         "realestate",
         "redbus",
@@ -497,10 +500,13 @@ def test_scraper_registry_complete():
         "mef_fx",
         "new_gasoline",
         "arystore",
+        "grab_ucare",
+        "grab_lucky",
+        "grab_chipmong",
     ]
     for src in expected_sources:
         assert src in SCRAPER_REGISTRY, f"Missing scraper source in registry: {src}"
-    assert len(SCRAPER_REGISTRY) == 20
+    assert len(SCRAPER_REGISTRY) == 21
 
 
 @pytest.mark.parametrize("source_slug,scraper_cls", SCRAPER_REGISTRY.items())
@@ -540,40 +546,65 @@ def test_moc_gasoline_scraper_registered():
     assert scraper.source_type == "fuel"
 
 
-def test_moc_gasoline_picks_latest_and_flags_fallback(monkeypatch):
+def test_moc_gasoline_tela_telegram_extraction(monkeypatch):
+    """Verifies that Tela Telegram post extracts all 4 fuels + LPG."""
     from scrapers import sources as src_mod
 
-    def fake_query(self, start_date, end_date, province_id, product_ids):
-        assert province_id == src_mod.MOC_FUEL_PROVINCE
-        # Batch query returns all 3 products in input order
-        assert product_ids == [107, 108, 109]
-        return [
-            {
-                "data": [
-                    {"x": "14 Aug, 2026", "y": "5000"},
-                    {"x": "18 Aug, 2026", "y": "5100"},
-                ]
-            },
-            {"data": [{"x": "18 Aug, 2026", "y": "4100"}]},
-            {"data": [{"x": "18 Aug, 2026", "y": "4000"}]},
-        ]
+    canned_post = {
+        "source_url": "https://t.me/s/telakhmerofficial",
+        "price_date": pendulum.date(2026, 9, 1),
+        "prices": {
+            106: 5250.0,
+            107: 4400.0,
+            108: 5150.0,
+            110: 2400.0,
+        },
+        "source_type": "tela_telegram",
+    }
 
-    monkeypatch.setattr(src_mod.MocGasolineScraper, "_query_line_report", fake_query)
+    monkeypatch.setattr(src_mod.MocGasolineScraper, "_fetch_from_tela_telegram", lambda self, target: canned_post)
+
     scraper = src_mod.MocGasolineScraper()
-
-    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 8, 18))
-    assert len(records) == 3
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 3))
+    assert len(records) == 4
     by_name = {r["name"]: r for r in records}
-    assert by_name["Regular Gasoline"]["price"] == 5100.0
-    assert by_name["Regular Gasoline"]["currency"] == "KHR"
-    assert by_name["Regular Gasoline"]["is_fallback"] is False
-    assert by_name["Regular Gasoline"]["attrs"]["price_date"] == "2026-08-18"
+    assert by_name["Regular Gasoline"]["price"] == 4400.0
+    assert by_name["Regular Gasoline"]["is_fallback"] is True
+    assert by_name["Diesel"]["price"] == 5150.0
+    assert by_name["Super 95 Gasoline"]["price"] == 5250.0
+    assert by_name["LPG Gas"]["price"] == 2400.0
+    assert by_name["LPG Gas"]["category_native"] == "Gas / LPG"
+    assert by_name["LPG Gas"]["attrs"]["source_type"] == "tela_telegram"
 
-    weekend = scraper.fetch_records(scrape_date=pendulum.date(2026, 8, 15))
-    by_name_w = {r["name"]: r for r in weekend}
-    assert by_name_w["Regular Gasoline"]["price"] == 5000.0
-    assert by_name_w["Regular Gasoline"]["is_fallback"] is True
-    assert by_name_w["Regular Gasoline"]["attrs"]["price_date"] == "2026-08-14"
+
+def test_moc_gasoline_news_announcements_fallback(monkeypatch):
+    """When Tela Telegram is unavailable, falls back to news announcements mirror."""
+    from scrapers import sources as src_mod
+
+    def fake_announcements(self, target_date):
+        return {
+            "source_url": "https://example.com/moc-gas-notice",
+            "price_date": pendulum.date(2026, 9, 1),
+            "prices": {
+                106: 5250.0,
+                107: 4400.0,
+                108: 5150.0,
+                110: 2400.0,
+            },
+            "source_type": "official_announcement_mirror",
+        }
+
+    monkeypatch.setattr(src_mod.MocGasolineScraper, "_fetch_from_tela_telegram", lambda self, target: None)
+    monkeypatch.setattr(src_mod.MocGasolineScraper, "_fetch_from_news_announcements", fake_announcements)
+
+    scraper = src_mod.MocGasolineScraper()
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 1))
+    assert len(records) == 4
+    by_name = {r["name"]: r for r in records}
+    assert by_name["Regular Gasoline"]["price"] == 4400.0
+    assert by_name["Regular Gasoline"]["is_fallback"] is False
+    assert by_name["Regular Gasoline"]["attrs"]["source_type"] == "official_announcement_mirror"
+    assert by_name["Diesel"]["price"] == 5150.0
 
 
 def test_arystore_scraper_registered():
@@ -663,3 +694,324 @@ def test_arystore_scraper_paginates_until_empty(monkeypatch):
 
     assert calls == [1, 2, 3]
     assert len(records) == 200
+
+
+# --- GrabMart Ucare Pharmacy Scraper Tests ---
+
+
+def test_grab_ucare_in_registry():
+    assert "grab_ucare" in SCRAPER_REGISTRY
+    scraper = SCRAPER_REGISTRY["grab_ucare"]()
+    assert scraper.store_slug == "grab_ucare"
+    assert scraper.source_type == "pharmacy"
+
+
+def test_grab_ucare_fetch_records_mock(monkeypatch):
+    import scrapers.sources.ucare as ucare_mod
+
+    mock_html = """
+    <html>
+      <head>
+        <script id="__NEXT_DATA__" type="application/json">
+        {
+          "props": {
+            "pageProps": {
+              "preloadedState": {
+                "merchantApi": {
+                  "queries": {
+                    "q1": {
+                      "data": {
+                        "merchant": {
+                          "name": "Ucare Pharmacy Chroy Changva",
+                          "currency": {"code": "KHR"},
+                          "menu": {
+                            "departments": [
+                              {
+                                "name": "OTC Medicine",
+                                "items": [
+                                  {
+                                    "ID": "ITEM123",
+                                    "name": "Panadol - Extra 500mg 24 Tablets",
+                                    "priceInMinorUnit": 850000,
+                                    "available": true,
+                                    "barcode": "885012345678",
+                                    "SKU": "SKU123",
+                                    "imgHref": "https://img.grab.com/123.jpg"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        </script>
+      </head>
+      <body></body>
+    </html>
+    """
+
+    def _mock_get(url, **kwargs):
+        return _FakeResponse(None, status_code=200, text=mock_html)
+
+    monkeypatch.setattr(ucare_mod, "_cffi_get", _mock_get)
+    scraper = ucare_mod.GrabUcarePharmacyScraper()
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 3))
+
+    assert len(records) == 1
+    rec = records[0]
+    assert rec["source_slug"] == "grab_ucare"
+    assert rec["source_type"] == "pharmacy"
+    assert rec["store"] == "Ucare Pharmacy Chroy Changva"
+    assert rec["item_id"] == "ITEM123"
+    assert rec["name"] == "Panadol - Extra 500mg 24 Tablets"
+    assert rec["price"] == 8500.0
+    assert rec["currency"] == "KHR"
+    assert rec["brand"] == "Panadol"
+    assert rec["category_native"] == "OTC Medicine"
+    assert rec["barcode"] == "885012345678"
+    assert rec["is_fallback"] is False
+
+
+def test_grab_ucare_fetch_records_fallback(monkeypatch):
+    import scrapers.sources.ucare as ucare_mod
+
+    def _mock_err(url, **kwargs):
+        raise requests.RequestException("Connection refused")
+
+    monkeypatch.setattr(ucare_mod, "_cffi_get", _mock_err)
+    scraper = ucare_mod.GrabUcarePharmacyScraper()
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 3))
+
+    assert len(records) > 0
+    assert all(r["is_fallback"] is True for r in records)
+    assert all(r["source_slug"] == "grab_ucare" for r in records)
+
+
+# --- GrabMart Lucky Supermarket Scraper Tests ---
+
+
+def test_grab_lucky_in_registry():
+    assert "grab_lucky" in SCRAPER_REGISTRY
+    scraper = SCRAPER_REGISTRY["grab_lucky"]()
+    assert scraper.store_slug == "grab_lucky"
+    assert scraper.source_type == "grocery"
+
+
+def test_grab_lucky_fetch_records_mock(monkeypatch):
+    import scrapers.sources.lucky as lucky_mod
+
+    mock_html = """
+    <html>
+      <head>
+        <script id="__NEXT_DATA__" type="application/json">
+        {
+          "props": {
+            "pageProps": {
+              "preloadedState": {
+                "merchantApi": {
+                  "queries": {
+                    "q1": {
+                      "data": {
+                        "merchant": {
+                          "name": "Lucky Supermarket Chroy Changva",
+                          "currency": {"code": "KHR"},
+                          "menu": {
+                            "departments": [
+                              {
+                                "name": "Fruits & Veggies",
+                                "items": [
+                                  {
+                                    "ID": "LUCKY001",
+                                    "name": "Fresh Kiwi Gold Jumbo 2s",
+                                    "priceInMinorUnit": 1840000,
+                                    "available": true,
+                                    "barcode": "885098765432",
+                                    "SKU": "SKULUCKY1",
+                                    "imgHref": "https://img.grab.com/kiwi.jpg"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        </script>
+      </head>
+      <body></body>
+    </html>
+    """
+
+    def _mock_get(url, **kwargs):
+        return _FakeResponse(None, status_code=200, text=mock_html)
+
+    monkeypatch.setattr(lucky_mod, "_cffi_get", _mock_get)
+    scraper = lucky_mod.GrabLuckySupermarketScraper()
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 3))
+
+    assert len(records) == 1
+    rec = records[0]
+    assert rec["source_slug"] == "grab_lucky"
+    assert rec["source_type"] == "grocery"
+    assert rec["store"] == "Lucky Supermarket Chroy Changva"
+    assert rec["item_id"] == "LUCKY001"
+    assert rec["name"] == "Fresh Kiwi Gold Jumbo 2s"
+    assert rec["price"] == 18400.0
+    assert rec["currency"] == "KHR"
+    assert rec["category_native"] == "Fruits & Veggies"
+    assert rec["is_fallback"] is False
+
+
+def test_grab_lucky_fetch_records_fallback(monkeypatch):
+    import scrapers.sources.lucky as lucky_mod
+
+    def _mock_err(url, **kwargs):
+        raise requests.RequestException("Timeout")
+
+    monkeypatch.setattr(lucky_mod, "_cffi_get", _mock_err)
+    scraper = lucky_mod.GrabLuckySupermarketScraper()
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 3))
+
+    assert len(records) > 0
+    assert all(r["is_fallback"] is True for r in records)
+    assert all(r["source_slug"] == "grab_lucky" for r in records)
+
+
+# --- GrabMart Chip Mong Supermarket Scraper Tests ---
+
+
+def test_grab_chipmong_in_registry():
+    assert "grab_chipmong" in SCRAPER_REGISTRY
+    scraper = SCRAPER_REGISTRY["grab_chipmong"]()
+    assert scraper.store_slug == "grab_chipmong"
+    assert scraper.source_type == "grocery"
+
+
+def test_grab_chipmong_fetch_records_mock(monkeypatch):
+    import scrapers.sources.chipmong as chipmong_mod
+
+    mock_html = """
+    <html>
+      <head>
+        <script id="__NEXT_DATA__" type="application/json">
+        {
+          "props": {
+            "pageProps": {
+              "preloadedState": {
+                "merchantApi": {
+                  "queries": {
+                    "q1": {
+                      "data": {
+                        "merchant": {
+                          "name": "Chip Mong Supermarket Eden",
+                          "currency": {"code": "KHR"},
+                          "menu": {
+                            "departments": [
+                              {
+                                "name": "Canned Foods",
+                                "items": [
+                                  {
+                                    "ID": "CHIP001",
+                                    "name": "Yummi Cook Sardines 240g",
+                                    "priceInMinorUnit": 1123000,
+                                    "available": true,
+                                    "barcode": "885077711223",
+                                    "SKU": "SKUCHIP1",
+                                    "imgHref": "https://img.grab.com/sardines.jpg"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        </script>
+      </head>
+      <body></body>
+    </html>
+    """
+
+    def _mock_get(url, **kwargs):
+        return _FakeResponse(None, status_code=200, text=mock_html)
+
+    monkeypatch.setattr(chipmong_mod, "_cffi_get", _mock_get)
+    scraper = chipmong_mod.GrabChipMongSupermarketScraper()
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 3))
+
+    assert len(records) == 1
+    rec = records[0]
+    assert rec["source_slug"] == "grab_chipmong"
+    assert rec["source_type"] == "grocery"
+    assert rec["store"] == "Chip Mong Supermarket Eden"
+    assert rec["item_id"] == "CHIP001"
+    assert rec["name"] == "Yummi Cook Sardines 240g"
+    assert rec["price"] == 11230.0
+    assert rec["currency"] == "KHR"
+    assert rec["category_native"] == "Canned Foods"
+    assert rec["is_fallback"] is False
+
+
+def test_grab_chipmong_fetch_records_fallback(monkeypatch):
+    import scrapers.sources.chipmong as chipmong_mod
+
+    def _mock_err(url, **kwargs):
+        raise requests.RequestException("Server Error")
+
+    monkeypatch.setattr(chipmong_mod, "_cffi_get", _mock_err)
+    scraper = chipmong_mod.GrabChipMongSupermarketScraper()
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 3))
+
+    assert len(records) > 0
+    assert all(r["is_fallback"] is True for r in records)
+    assert all(r["source_slug"] == "grab_chipmong" for r in records)
+
+
+def test_cellcard_combined_records(monkeypatch):
+    """Verifies combined Cellcard scraper returns both mobile plans and home internet/wifi plans."""
+    _mock_all_http(monkeypatch)
+    from scrapers.sources.cellcard import CellcardScraper
+
+    scraper = CellcardScraper()
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 3))
+    assert len(records) >= 5  # mocked live: 2 mobile + 3 wifi plans; fallback: 5 mobile + 3 wifi
+    assert all(r["source_slug"] == "cellcard" for r in records)
+    names = [r["name"] for r in records]
+    # Check both mobile and wifi plan names are present
+    assert any("AO Mobile" in name or "Big Love" in name or "Serey" in name for name in names)
+    assert any("Home Wi-Fi" in name or "Fiber" in name for name in names)
+
+
+def test_smart_combined_records(monkeypatch):
+    """Verifies combined Smart scraper returns both mobile plans and home internet/wifi plans."""
+    _mock_all_http(monkeypatch)
+    from scrapers.sources.smart import SmartScraper
+
+    scraper = SmartScraper()
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 3))
+    assert len(records) >= 8  # 5 mobile + 3 wifi plans
+    assert all(r["source_slug"] == "smart" for r in records)
+    names = [r["name"] for r in records]
+    # Check both mobile and wifi plan names are present
+    assert any("Smart Laor" in name or "Flexi" in name for name in names)
+    assert any("Home Wi-Fi" in name or "Fiber" in name for name in names)
+

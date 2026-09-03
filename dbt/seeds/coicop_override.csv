@@ -266,3 +266,48 @@ name,PRESSED PRETZELS,,01,Food - brand MACY AND TAILOR trips tailor trap
 name,AVENE TRIXETA,,12,Misc - dermo-cosmetic lotion; NUT here means nutrition not nuts
 name,TOAD IN THE HOLD,delishop,01,Food - frozen grocery item; Gemini misread dish name as restaurant meal
 name,NATURAL CHARCOAL STICKS,delishop,09,Recreation - art drawing charcoal sticks
+name,IPHONE,,08,Electronics - smartphone
+name,SAMSUNG GALAXY,,08,Electronics - smartphone
+name,SMARTPHONE,,08,Electronics - smartphone
+name,POWER BANK,,08,Electronics - accessories
+name,EARPHONE,,08,Electronics - audio
+name,HEADPHONE,,08,Electronics - audio
+name,CHARGER CABLE,,08,Electronics - accessories
+name,USB-C CABLE,,08,Electronics - accessories
+name,LIGHTNING CABLE,,08,Electronics - accessories
+name,DETERGENT,,05,Household - cleaning laundry
+name,LAUNDRY DETERGENT,,05,Household - cleaning laundry
+name,LIQUID DETERGENT,,05,Household - cleaning laundry
+name,DISHWASHING LIQUID,,05,Household - cleaning dish
+name,DISHWASHING,,05,Household - cleaning dish
+name,DISHWASHER,,05,Household - cleaning
+name,FLOOR CLEANER,,05,Household - cleaning floor
+name,BLEACH,,05,Household - cleaning bleach
+name,FABRIC SOFTENER,,05,Household - laundry
+name,SOFTENER,,05,Household - laundry
+name,TOOTHPASTE,,12,Personal care - oral hygiene
+name,TOOTHBRUSH,,12,Personal care - oral hygiene
+name,SHAMPOO,,12,Personal care - hair care
+name,BODY WASH,,12,Personal care - hygiene
+name,SHOWER GEL,,12,Personal care - hygiene
+name,DEODORANT,,12,Personal care - grooming
+name,SUNSCREEN,,12,Personal care - skincare
+name,SUNBLOCK,,12,Personal care - skincare
+name,FACIAL CLEANSER,,12,Personal care - skincare
+name,MICELLAR WATER,,12,Personal care - skincare
+name,DIAPER,,12,Personal care - infant hygiene
+name,PAMPERS,,12,Personal care - infant hygiene
+name,HUGGIES,,12,Personal care - infant hygiene
+name,BABY WIPES,,12,Personal care - infant hygiene
+name,PARACETAMOL,,06,Health - pain relief
+name,PANADOL,,06,Health - pain relief
+name,IBUPROFEN,,06,Health - pain relief
+name,COUGH SYRUP,,06,Health - medicine
+name,MEDICAL OIL,,06,Health - medicine
+name,HEINEKEN,,02,Alcohol - beer
+name,VODKA,,02,Alcohol - spirits
+name,WHISKEY,,02,Alcohol - spirits
+name,WHISKY,,02,Alcohol - spirits
+name,TEQUILA,,02,Alcohol - spirits
+name,CHIVAS REGAL,,02,Alcohol - spirits
+name,JOHNNIE WALKER,,02,Alcohol - spirits

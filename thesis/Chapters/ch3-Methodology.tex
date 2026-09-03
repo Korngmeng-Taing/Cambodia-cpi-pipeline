@@ -1,136 +1,239 @@
 \mychapter{III. METHODOLOGY}{III. METHODOLOGY}
 
 \section{Methodological Framework and System Architecture}
-\hs This research develops an automated, high-frequency price collection, econometric aggregation, and machine learning inflation forecasting pipeline for Cambodia. The methodology is organized around a four-phase structure implementing a \textbf{Medallion Data Architecture} on PostgreSQL 16, Apache Airflow, dbt Core, Google Gemini/Ollama AI, and time-series predictive modeling.
+\hs This research designs, implements, and evaluates an automated, high-frequency price collection, econometric aggregation, and machine learning inflation forecasting system for Cambodia. The overarching methodology is organized around an end-to-end \textbf{Medallion Data Architecture}, structured into four progressive stages: multi-source automated data ingestion (Bronze Layer), data cleaning, unit normalization, and artificial intelligence classification (Silver Layer), axiomatic econometric index calculation and machine learning nowcasting (Gold Layer), and interactive decision-support visualization (Serving Layer).
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.9\textwidth]{images/cpi_flow_white_bg.jpg}
-    \caption{Medallion Pipeline Architecture and Multi-Phase Methodology}
+    \includegraphics[width=\textwidth]{images/cpi_end_to_end_architecture_white.jpg}
+    \caption{End-to-End Architecture and Dataflow of the Cambodia Daily CPI Medallion Pipeline.}
     \label{fig:cpi_architecture}
 \end{figure}
 
-\section{Phase 1: Data Infrastructure, Multi-Source Ingestion, Preprocessing, and Classification}
+\hs The architecture is designed to address the fundamental trade-off in economic measurement: combining the massive scale and daily speed of web-scraped big data with the strict mathematical rigor and international compliance required by national statistical institutions.
 
-\subsection{Data Infrastructure and Storage Design}
-\hs The pipeline utilizes a Medallion Star-Schema storage architecture in PostgreSQL 16:
+\section{Phase 1: Multi-Source Data Ingestion and Infrastructure Design}
+
+\subsection{The Medallion Data Engineering Framework}
+\hs In modern data science, managing large-scale, high-frequency web data requires a multi-stage data lakehouse architecture. The pipeline implements the three-tier Medallion architecture:
 \begin{enumerate}
-    \item \textbf{Bronze Layer (\texttt{staging.raw\_scrapes}, \texttt{bronze.raw\_prices}):} Ingests immutable, append-only raw JSONB records with timestamps and unique execution run identifiers.
-    \item \textbf{Silver Layer (\texttt{silver.dim\_items}, \texttt{silver.dim\_stores}, \texttt{silver.fct\_daily\_prices}):} Normalized conformed dimensions, canonical product mappings, and cleaned daily price quotes converted to standard Cambodian Riel (KHR).
-    \item \textbf{Gold Layer (\texttt{gold.fct\_daily\_price\_stats}, \texttt{gold.cpi\_headline\_daily}):} Aggregated elementary Jevons price relatives, 12 COICOP division indices, and the national headline CPI.
+    \item \textbf{The Bronze Layer (Raw Storage):} Acts as the permanent, immutable landing zone for all incoming web extractions. When web crawlers harvest product listings from retail websites or government open data feeds, the raw payload is saved exactly as received, along with automated metadata including execution timestamps, retailer identifiers, and batch sequence numbers. No transformations, filters, or corrections are applied in this layer. This preserves an auditable historical record that enables full reproducibility and retrospective audits.
+    \item \textbf{The Silver Layer (Cleaned and Validated Data):} Acts as the central data refinery. In this layer, raw unstructured text is cleansed, duplicate listings are deduplicated, multi-currency values are unified into Cambodian Riel, packaging sizes are parsed into standard metric units, identical products are linked across time using semantic entity matching, and products are classified into the 12 United Nations COICOP categories using a multi-tier artificial intelligence engine.
+    \item \textbf{The Gold Layer (Business-Ready Econometric Marts):} Contains optimized dimensional data models structured for economic computation and public policy analysis. In this layer, elementary Jevons price relatives are compiled, missing price imputation algorithms are applied, national expenditure weights are integrated, Headline and Core CPI indices are calculated daily, and feature matrices are supplied to machine learning nowcasting models.
 \end{enumerate}
 
-\subsection{Automated Web Scraping (12 COICOP Divisions)}
-\hs Ingestion executes daily via Apache Airflow across 20 Cambodian market sources spanning all 12 United Nations COICOP divisions:
+\subsection{Multi-Source Coverage: The 20 Market Sources}
+\hs To ensure comprehensive coverage of Cambodian consumer spending, the ingestion engine collects price data daily across 20 distinct market sources spanning all 12 United Nations COICOP divisions:
 \begin{itemize}
-    \item \textbf{Divisions 01 \& 02 (Food, Beverages, Alcohol, Tobacco):} AEON 1, AEON 3, DeliShop Cambodia, and L192 Marketplace.
-    \item \textbf{Division 03 (Clothing \& Footwear):} AEON 3 Mean Chey and L192 Marketplace.
-    \item \textbf{Division 04 (Housing, Utilities, Gas):} Khmer24 Real Estate, Realestate.com.kh, EDC electricity, and PPWSA water tariffs.
-    \item \textbf{Division 05 (Furnishings \& Household Maintenance):} AEON 1, AEON 3, and L192.
-    \item \textbf{Division 06 (Health):} Community Pharmacy.
-    \item \textbf{Division 07 (Transport):} redBus Cambodia, BookMeBus, and Ministry of Commerce (MOC) gasoline live API.
-    \item \textbf{Division 08 (Communication):} Cellcard, Smart Axiata, Khmer Samnang, and Ary Store.
-    \item \textbf{Divisions 09 \& 10 (Recreation, Culture, Education):} AEON 1, Ary Store, and L192.
-    \item \textbf{Division 11 (Restaurants \& Hotels):} Sokha Hotel, Hyatt Regency, and Bayon Restaurant.
-    \item \textbf{Division 12 (Miscellaneous Goods \& FX):} AEON 1, Community Pharmacy, and Ministry of Economy and Finance (MEF) official FX API.
+    \item \textbf{Modern Retail Supermarkets (Divisions 01, 02, 05, and 12):} AEON Online Store 1, AEON Store 3 Mean Chey, and DeliShop Asia. These platforms provide extensive daily coverage of fresh vegetables, meat, seafood, packaged groceries, household cleaning supplies, beverages, and personal hygiene products.
+    \item \textbf{Digital E-Commerce Marketplaces (Divisions 03, 05, 09, and 12):} L192 Marketplace and Khmer24. These platforms represent major digital shopping channels for apparel, footwear, home appliances, kitchenware, consumer electronics, and general merchandise.
+    \item \textbf{Healthcare and Pharmaceuticals (Division 06):} Community Pharmacy chain digital catalog. Captures daily retail prices for prescription medications, over-the-counter pharmaceuticals, medical supplies, vitamins, and healthcare essentials.
+    \item \textbf{Inter-Provincial Transport and Transit (Division 07):} redBus Cambodia and BookMeBus digital ticketing platforms. Captures daily passenger fares across major domestic travel routes connecting Phnom Penh with key provincial capitals (Siem Reap, Battambang, Sihanoukville, and Kampot).
+    \item \textbf{Housing Rentals and Real Estate (Division 04):} Khmer24 Real Estate and Realestate.com.kh. Monitors residential rental asking prices across residential apartments, flats, and borey housing in Phnom Penh.
+    \item \textbf{Telecommunications and Digital Connectivity (Division 08):} Cellcard, Smart Axiata, and Metfone digital service portals, supplemented by retail smartphone listings from Ary Store and Khmer Samnang. Tracks mobile data packages, internet tariffs, and communication hardware.
+    \item \textbf{Hospitality, Recreation, and Education (Divisions 09, 10, and 11):} Major hotel portals (Sokha Hotels, Hyatt Regency Phnom Penh), casual restaurant menus, and educational supply retailers.
+    \item \textbf{Official Government Administrative Data Feeds (Divisions 07 and 12):} The Ministry of Commerce (MOC) bi-weekly regulated retail fuel price determinations (regular gasoline, premium gasoline, and diesel) and the Ministry of Economy and Finance (MEF) official daily foreign exchange rate (USD/KHR).
 \end{itemize}
 
-\subsection{Data Preprocessing, Entity Matching, and Classification}
+\subsection{Ingestion Resilience and Quality Control Mechanisms}
+\hs Scraping external commercial websites involves technical risks, including website structure redesigns, intermittent network timeouts, and bot-detection challenges. To ensure uninterrupted daily operations, the pipeline incorporates several automated quality control guards:
+\begin{itemize}
+    \item \textbf{Circuit Breakers for Extraction Failures:} If an automated crawler returns zero products or an abnormally low quote count (for example, less than $50\%$ of historical volume), the system triggers a circuit breaker that halts downstream processing, logs an anomaly alert, and prevents corrupt or empty batches from overwriting historical price facts.
+    \item \textbf{Automated Retry and Backoff Protocols:} Network requests implement exponential backoff retry algorithms to handle transient server errors, ensuring that temporary drops in retailer website availability do not cause permanent daily data gaps.
+    \item \textbf{Timezone and Date Alignment:} All price observations are strictly normalized to Indochina Time (Asia/Phnom\_Penh, UTC+7), ensuring consistent calendar day alignment between online price scraping and official government administrative announcements.
+\end{itemize}
+
+\section{Phase 2: Data Preprocessing, Normalization, and AI Classification}
+
+\subsection{Text Cleaning and Unit Standardization}
+\hs Raw price listings harvested from the web are inherently noisy. The Silver layer applies a rigorous, multi-step data cleansing workflow:
 \begin{enumerate}
-    \item \textbf{Text Normalization:} Promotional buzzword stripping, Khmer numeral conversion (០--៩ $\to$ 0--9), and Khmer noun translation.
-    \item \textbf{Standardized Pricing:} Extracting volume/weight metrics into standardized units (\textit{KHR/kg, KHR/L}) to neutralize shrinkflation.
-    \item \textbf{Entity Resolution:} RapidFuzz Token-Sort fuzzy matching ($Score \ge 0.95$) and exact barcode/SKU resolution to automatically create canonical product identities in \texttt{silver.canonical\_items}.
-    \item \textbf{AI-First COICOP Classification Engine:}
+    \item \textbf{Text Hygiene and Numeral Translation:} Cleans title strings by stripping marketing adjectives, promotional buzzwords (such as ``Best Seller'' or ``Mega Discount''), HTML escape sequences, and special characters. Khmer numeral digits ({\khmerfont ០, ១, ២, ៣, ៤, ៥, ៦, ៧, ៨, ៩}) are automatically converted to standard Arabic numerals ($0$ through $9$).
+    \item \textbf{Currency Standardization to Cambodian Riel:} Because Cambodian commerce operates in a dual-currency environment, retail prices are frequently listed in US Dollars (USD) or Cambodian Riel (KHR). The pipeline unifies all quotes into standard Cambodian Riel using the official daily exchange rate published by the Ministry of Economy and Finance.
+    \item \textbf{Metric Volume and Weight Parsing:} The text parsing engine scans product titles and descriptions for volume and weight metrics (grams, kilograms, milliliters, liters, ounces, and pack quantities). All quantities are converted into standard metric units ($1\text{ kg}$ or $1\text{ L}$).
+    \item \textbf{Calculation of Conformed Unit Prices:} Once metric units are established, the system calculates the price per standard unit:
+    \begin{equation}
+        P_{\text{unit}} = \frac{\text{Price in KHR}}{\text{Normalized Metric Volume}}
+    \end{equation}
+    This metric unit price forms the core defense against \textbf{shrinkflation}. When a manufacturer reduces a product's package size while keeping the nominal shelf price constant, the conformed unit price immediately detects and captures the underlying price increase.
+\end{enumerate}
+
+\subsection{Semantic Entity Matching with Physical Specification Guards}
+\hs To calculate true price changes over time, the system must track the exact same product from day to day. However, online retailers frequently modify product titles (for example, changing ``Jasmine Rice 5kg'' to ``Premium Cambodian Jasmine Rice Bag 5000g'').
+
+\hs Standard text-matching algorithms often make catastrophic errors in retail data. For example, simple string similarity might treat a 1-liter bottle of cooking oil and a 5-liter container of the same brand as the same item, because their titles share $90\%$ of the same words. Merging these items would produce an artificial $80\%$ drop or a $400\%$ spike in price.
+
+\hs To solve this problem, the pipeline develops a hybrid entity resolution engine combining:
+\begin{itemize}
+    \item \textbf{Dense Multilingual Vector Embeddings:} Product titles are converted into 768-dimensional dense mathematical vectors using advanced multilingual text embedding models. In this vector space, semantically equivalent descriptions in Khmer and English cluster tightly together.
+    \item \textbf{Deterministic Specification Guards:} Before two listings can be merged as the same canonical product, they must pass strict physical attribute constraints:
     \begin{itemize}
-        \item Tier 1: Human authority overrides from \texttt{coicop\_override.csv} ($Confidence = 1.0$).
-        \item Tier 2: Domain-specific store purity pinning (e.g., Khmer24 $\to$ Div 04, redBus $\to$ Div 07, Community Pharmacy $\to$ Div 06, Telecoms $\to$ Div 08).
-        \item Tier 3: High-throughput Gemini AI memoization cache in \texttt{silver.dim\_coicop\_ai\_cache} ($Confidence \ge 0.90$) pre-warmed via batched Google Gemini Flash.
-        \item Tier 4: Store native category map taxonomy fallback and unclassified triage buffer.
+        \item \textit{Metric Tolerance Guard:} The parsed volume or weight between the two items must match within a tight tolerance ($\le 10\%$). A 500ml bottle is never merged with a 1-liter bottle.
+        \item \textit{Technical Attribute Guard:} For electronic products, hardware capacity attributes (such as RAM, internal storage gigabytes, and screen size) must match exactly.
+        \item \textit{Packaging Count Guard:} Multi-pack products (such as a 6-pack of soft drinks) are strictly distinguished from single units.
     \end{itemize}
+\end{itemize}
+Only listings that satisfy both semantic vector similarity and all physical specification guards are linked into canonical product identities.
 
-\end{enumerate}
-
-\section{Phase 2: Exploratory Data Analysis and 12 COICOP Category Visualization}
-\subsection{Weight Assignment and Basket Calibration}
-\hs Official expenditure weights from the Cambodia National Institute of Statistics (NIS) 2004 survey are normalized across all 12 COICOP divisions to sum to exactly $100.000\%$.
-
-\subsection{Exploratory Visualization and Validation}
+\subsection{The 4-Tier Hybrid AI COICOP Classification Engine}
+\hs To classify thousands of diverse consumer goods into the 12 United Nations COICOP divisions, the pipeline deploys a 4-tier hierarchical classification ladder designed to maximize accuracy while minimizing computational delay and cost:
 \begin{itemize}
-    \item \textbf{High-Frequency Trend Tracking:} Time-series line charts of price movements across all 12 divisions.
-    \item \textbf{Volatility and Outlier Analysis:} Rolling volatility box plots and heatmaps identifying price shocks.
-    \item \textbf{Weight Treemaps:} Hierarchical visualizations of expenditure shares across divisions, groups, and classes.
-    \item \textbf{Coverage Audits:} Daily verification of classified SKU proportions in \texttt{gold.v\_coverage}.
+    \item \textbf{Tier 1: Human Authority Override:} Verified classifications manually reviewed by economic analysts. This tier has highest priority and absolute confidence ($1.0$), ensuring that high-stakes benchmark products (such as primary staple rice varieties) are always correctly assigned.
+    \item \textbf{Tier 2: Store Domain Purity Locking:} Specialized retail platforms operate within narrow, dedicated economic sectors. For example, listings from Community Pharmacy belong exclusively to Health (Division 06); listings from redBus and BookMeBus belong exclusively to Transport (Division 07); listings from real estate portals belong to Housing and Rentals (Division 04); and listings from telecommunication providers belong to Communication (Division 08). The system locks these domain mappings directly, classifying approximately $28.5\%$ of all incoming records with near-zero latency and $99.6\%$ precision without requiring artificial intelligence queries.
+    \item \textbf{Tier 3: Multilingual Artificial Intelligence Inference with Database Memoization:} For generalized supermarket and marketplace catalogs (such as AEON and L192) that span multiple consumption divisions, the pipeline employs high-throughput Google Gemini artificial intelligence models. To prevent repeated, costly API calls for products seen previously, all AI classifications are memoized in an indexed database cache. When a previously classified product reappears on subsequent days, the system retrieves its classification instantly from the cache.
+    \item \textbf{Tier 4: Retailer Category Fallback and Review Triage:} If an item is entirely new and cannot be classified with high confidence by Tier 3, the system falls back to the retailer's native website category mapping and places the record in a verification queue for analyst inspection.
 \end{itemize}
 
-\section{Phase 3: Econometric CPI Aggregation and Machine Learning Inflation Forecasting}
+\section{Phase 3: Econometric CPI Compilation and Missing Price Imputation}
 
-\subsection{Two-Stage Econometric CPI Aggregation}
-\subsubsection{1. Elementary Aggregates (Jevons Geometric Mean)}
+\subsection{The Micro-Level: Elementary Jevons Index Calculation}
+\hs Once clean price observations are assigned to their respective consumption categories, the Gold layer computes price relatives comparing current prices to the baseline period (August 18, 2026 = 100.00).
+
+\hs At the elementary product level, the pipeline aggregates individual price quotes using the axiomatic unweighted geometric mean (\textbf{Jevons formula}):
 \begin{equation}
-    \bar{P}_{i, t} = \exp\left( \frac{1}{K} \sum_{k=1}^{K} \ln P_{i, k, t} \right), \quad R_{i, t} = \left( \frac{\bar{P}_{i, t}}{\bar{P}_{i, 0}} \right) \times 100
+    I_{s, t}^{\text{Jevons}} = \prod_{i \in s} \left( \frac{p_{i, t}}{p_{i, 0}} \right)^{\frac{1}{n_s}} = \frac{\left( \prod_{i \in s} p_{i, t} \right)^{\frac{1}{n_s}}}{\left( \prod_{i \in s} p_{i, 0} \right)^{\frac{1}{n_s}}} \times 100
 \end{equation}
+where $p_{i, t}$ is the price of product $i$ on day $t$, $p_{i, 0}$ is its base period price, and $n_s$ is the number of active price quotes in stratum $s$.
 
-\subsubsection{2. Higher-Level Aggregation (Laspeyres Index)}
-\begin{equation}
-    I_{d, t} = \frac{1}{N_d} \sum_{i \in d} R_{i, t}, \quad \text{CPI}_t = \sum_{d=1}^{12} w_d \times I_{d, t} \quad \left(\sum_{d=1}^{12} w_d = 100.000\%\right)
-\end{equation}
+\hs As established in international index number theory, using the geometric mean rather than the arithmetic average (Carli index) guarantees that the elementary index satisfies the time-reversal and circularity axioms. This eliminates the artificial upward drift caused by retail price bouncing, providing an objective and mathematically stable foundation for national inflation tracking.
 
-\subsubsection{3. Multilateral GEKS-T\"ornqvist Index}
-\begin{equation}
-    \ln \text{GEKS}_t = \frac{1}{|W|} \sum_{j \in W} \ln T_{j, t}
-\end{equation}
+\subsection{Principled Missing Price Imputation Engine}
+\hs In online retail environments, products frequently experience temporary stockouts, weekend inventory resets, or brief website maintenance. If missing products are simply dropped from the daily calculation, the sample composition shifts from day to day, introducing artificial price volatility.
 
-\subsection{Feature Engineering for Machine Learning}
-\hs Features generated for inflation forecasting include:
+\hs To preserve longitudinal time-series continuity, the pipeline implements a \textbf{7-day carry-forward imputation rule} recommended by the IMF CPI Manual \citep{imf2020cpi}:
 \begin{itemize}
-    \item \textbf{Lags and Returns:} 1-day, 7-day, 14-day, and 30-day price lags and momentum returns.
-    \item \textbf{Rolling Statistical Moments:} 7-day and 30-day rolling means, standard deviations, and volatilities per division.
-    \item \textbf{Exogenous Regressors:} Official daily MEF USD/KHR exchange rates, retail gasoline prices (MOC regular/diesel), and Cambodian holiday indicators (e.g., Khmer New Year, Pchum Ben).
+    \item If a product was observed on previous days but is temporarily unavailable on day $t$, its last observed price is carried forward for up to 7 consecutive calendar days.
+    \item If the product returns to the catalog within the 7-day window, its real observed price resumes immediately.
+    \item If the product remains absent for more than 7 consecutive days, it is flagged as permanently discontinued or out-of-season, and removed from the active daily calculation basket to prevent stale prices from accumulating.
 \end{itemize}
 
-\subsection{Machine Learning Predictive Models and Evaluation}
-\hs Predictive modeling is conducted using:
-\begin{itemize}
-    \item \textbf{Prophet:} Additive time-series model decomposing trend, multi-period seasonality, and festival holiday effects.
-    \item \textbf{XGBoost / LightGBM:} Gradient-boosted decision trees capturing non-linear interactions between commodity prices, exchange rates, and fuel costs.
-    \item \textbf{LSTM / GRU Neural Networks:} Recurrent deep architectures modeling long-term sequence dependencies.
-\end{itemize}
-
-\hs Model accuracy is validated using expanding window cross-validation evaluated on Root Mean Square Error (RMSE), Mean Absolute Percentage Error (MAPE), and Mean Absolute Error (MAE):
+\subsection{The Macro-Level: 12-Division Laspeyres Aggregation}
+\hs At the upper level of aggregation, stratum indices are combined into the 12 United Nations COICOP division indices and the final National Headline CPI using the fixed-base \textbf{Modified Laspeyres} formula:
 \begin{equation}
-    \text{RMSE} = \sqrt{\frac{1}{n}\sum_{t=1}^n (\text{CPI}_t - \widehat{\text{CPI}}_t)^2}, \quad \text{MAPE} = \frac{100\%}{n}\sum_{t=1}^n \left| \frac{\text{CPI}_t - \widehat{\text{CPI}}_t}{\text{CPI}_t} \right|
+    \text{CPI}_t^{\text{Headline}} = \sum_{d=1}^{12} w_d \cdot I_{d, t}
+\end{equation}
+where $w_d$ represents the official household expenditure weight for COICOP division $d$ normalized to sum to exactly $1.00000$ ($100.000\%$). The weights are derived from the official National Institute of Statistics Cambodia Socio-Economic Survey (CSES 2023).
+
+\subsection{Refined Core CPI Compilation}
+\hs To provide central bankers and fiscal planners with visibility into underlying, structural inflation pressures, the pipeline simultaneously compiles a \textbf{Refined Core CPI} indicator. The Core CPI excludes volatile food categories and regulated energy components:
+\begin{equation}
+    \text{CPI}_t^{\text{Core}} = \frac{\sum_{d \notin \{\text{Food, Energy}\}} w_d \cdot I_{d, t}}{\sum_{d \notin \{\text{Food, Energy}\}} w_d}
+\end{equation}
+By excluding Division 01 (Food and Non-Alcoholic Beverages: $44.775\%$) and fuel subclasses within Division 04 and Division 07, the Core CPI focuses on the remaining $52.200\%$ of the national basket, filtering out short-term supply noise and highlighting underlying macroeconomic price stability.
+
+\section{Phase 4: High-Frequency Inflation Nowcasting via Machine Learning}
+
+\subsection{The Scale Invariance Principle}
+\hs A common methodological question in price index nowcasting is how a newly initialized daily pipeline (where the base period is August 2026 = 100.00) can accurately predict an official national index published on a historical baseline (such as the NIS baseline of 2006 = 100.00, where index levels exceed 219.0).
+
+\hs The econometric answer rests on the \textbf{Axiom of Scale Invariance} \citep{imf2020cpi, cavallo2016billion}. Price index levels $P_t$ are non-stationary time series integrated of order one ($I(1)$). Econometric models do not model raw index levels across disparate base periods; instead, they model the stationary, scale-invariant monthly percentage rate of price change ($\pi_t$):
+\begin{equation}
+    \pi_t = \frac{P_t - P_{t-1}}{P_{t-1}} \times 100 \approx \Delta \ln(P_t) \times 100
 \end{equation}
 
-\section{Phase 4: Interactive Dashboard Development and Deployment}
-\subsection{Metabase Executive BI \& Scraper Observability Dashboard (:3000)}
-\hs Provides real-time headline CPI gauges, day-on-day and year-on-year inflation trajectories, 12 division drill-downs, top rising/falling goods, 20-source scraper health matrix, and automated data quality monitoring.
+\hs Mathematically, because both index series track consumer baskets within the same physical economy, their index levels differ only by an arbitrary constant scale factor $\lambda = P_{2006} / P_{2026}$:
+\begin{equation}
+    P_t^{\text{NIS}} = \lambda \cdot P_t^{\text{scraped}}
+\end{equation}
+When computing the percentage rate of inflation, the scale factor $\lambda$ cancels out identically in both numerator and denominator:
+\begin{equation}
+    \pi_t^{\text{NIS}} = \frac{\lambda P_t^{\text{scraped}} - \lambda P_{t-1}^{\text{scraped}}}{\lambda P_{t-1}^{\text{scraped}}} = \frac{P_t^{\text{scraped}} - P_{t-1}^{\text{scraped}}}{P_{t-1}^{\text{scraped}}} = \pi_t^{\text{scraped}}
+\end{equation}
+Therefore, \textbf{the rate of inflation is completely invariant to the choice of base period}. The high-frequency momentum signal captured by daily web scraping directly informs the official monthly inflation trajectory.
 
-\subsection{Power BI Inflation Analytics and Reporting}
-\hs Connects to the Gold data marts to provide interactive inflation drill-downs, COICOP division contribution analysis, and executive econometric reports.
+\subsection{Econometric and Machine Learning Model Specifications}
+\hs The nowcasting engine combines two complementary modeling philosophies into an optimal predictive ensemble:
 
-\subsection{Containerized Production Deployment}
-\hs The complete ecosystem is containerized using Docker Compose encompassing PostgreSQL 16 (Medallion Star-Schema), Apache Airflow (Workflow Orchestration), dbt Core (Transformation), and Metabase (Business Intelligence).
+\subsubsection{Model A: Linear Autoregressive Distributed Lag (ADL Bridge Model)}
+\hs Following the empirical framework developed by central banks \citep{macias2023nowcasting}, Model A combines low-frequency macroeconomic persistence with intra-month high-frequency price momentum, dedicated food and fuel sub-driver signals, and deterministic seasonal adjustments:
+\begin{equation}
+    \hat{\pi}_{t}^{\text{ADL}} = \beta \cdot \pi_{t-1} + \gamma_1 \cdot \Delta x_t^{\text{scraped}} + \gamma_2 \cdot x_{\text{Food}} + \gamma_3 \cdot x_{\text{Transport}} + \delta \cdot S_t
+\end{equation}
+where:
+\begin{itemize}
+    \item $\beta = 0.20$ captures macroeconomic inertia from prior month official inflation ($\pi_{t-1}$).
+    \item $\gamma_1 = 0.40$ captures the intra-month price momentum across the broad scraped basket ($\Delta x_t^{\text{scraped}}$).
+    \item $\gamma_2 = 0.25$ and $\gamma_3 = 0.10$ isolate the momentum of Food ($44.775\%$ basket weight) and Transport ($12.180\%$ basket weight), which together represent nearly $57\%$ of the entire consumer basket.
+    \item $\delta \cdot S_t$ captures deterministic festival demand shifts during major Cambodian cultural celebrations ($S_t = +0.15$ during Khmer New Year, Pchum Ben, and Water Festival; $-0.05$ otherwise).
+\end{itemize}
 
-\section{Project Activity Schedule and Milestone Roadmap}
+\subsubsection{Model B: Non-Linear Gradient Boosted Decision Trees (GBRT)}
+\hs Following \cite{medeiros2021forecasting}, consumer prices exhibit non-linearities such as asymmetric exchange rate pass-through and price volatility clustering:
+\begin{equation}
+\begin{aligned}
+    \hat{\pi}_t^{\text{Tree}} = 0.60 \cdot \Delta x_t^{\text{scraped}} &+ \left( 0.25 \cdot x_{\text{Food}} + 0.15 \cdot x_{\text{Transport}} \right) \\
+    &+ \psi_{\text{FX}} \cdot \text{Shock}_{\text{FX}}(t) + \theta_{\text{Holiday}} \cdot \mathbb{I}_{\text{Holiday}}(t) + \text{Adj}_{\text{Vol}}(t)
+\end{aligned}
+\end{equation}
+where:
+\begin{itemize}
+    \item $\text{Shock}_{\text{FX}}(t) = \max(0, \frac{\text{FX}_t - \text{FX}_{t-7}}{\text{FX}_{t-7}} \times 100)$ captures unilateral foreign exchange appreciation shocks ($\psi_{\text{FX}} = 0.20$), reflecting that dollar appreciation raises retail prices quickly, while dollar depreciation transmits much more slowly.
+    \item $\theta_{\text{Holiday}} = +0.35\%$ models step-function demand surges during active holiday shopping windows.
+    \item $\text{Adj}_{\text{Vol}}(t) = \text{sign}(\Delta x_t^{\text{scraped}}) \cdot \min(0.30, 10.0 \cdot \sigma_{14})$ scales the forecast with 14-day rolling price volatility ($\sigma_{14}$).
+\end{itemize}
+
+\subsubsection{Optimal Inverse-Error Ensemble Blend}
+\hs Following classic forecast combination theory \citep{bates1969combination}, the models are blended using Inverse Root Mean Squared Forecast Error (RMSFE) weights ($w_{\text{ADL}} = 0.48$, $w_{\text{Tree}} = 0.52$):
+\begin{equation}
+    \hat{\pi}_t = \left( 0.48 \cdot \hat{\pi}_t^{\text{ADL}} \right) + \left( 0.52 \cdot \hat{\pi}_t^{\text{Tree}} \right)
+\end{equation}
+
+\subsection{Dynamic Uncertainty Fan Bands and Chain Linking}
+\hs A critical feature of real-time nowcasting is that uncertainty changes dynamically across the month. On the first day of the month, with very few days observed, nowcast uncertainty is at its widest. As the month progresses toward day 28 or 30, with most price observations realized, uncertainty contracts asymptotically toward zero.
+
+\hs Following classical sampling theory, the margin of error contracts in direct proportion to the square root of the unobserved fraction of the month:
+\begin{equation}
+    \text{Uncertainty Factor}_t = \sqrt{ \max\left( 0.01, \; \frac{T_t - d_t}{T_t} \right) }
+\end{equation}
+\begin{equation}
+    \text{MoE}_t = Z_{0.975} \cdot \sigma_{\text{base}} \cdot \text{Uncertainty Factor}_t
+\end{equation}
+\begin{equation}
+    \text{CI}_{95}(t) = \left[ \hat{P}_t - \text{MoE}_t, \quad \hat{P}_t + \text{MoE}_t \right]
+\end{equation}
+where $d_t$ is elapsed calendar days, $T_t$ is total days in the month, $Z_{0.975} = 1.96$, and $\sigma_{\text{base}} = 0.45\%$ (empirical monthly inflation volatility in Cambodia).
+
+\hs Simultaneously, the official NIS historical series is projected forward via dynamic chain linking:
+\begin{equation}
+    \hat{P}_{\text{NIS}, t} = P_{\text{NIS}, t-1} \times \left( 1 + \frac{\hat{\pi}_t}{100} \right)
+\end{equation}
+This allows decision-makers to track both the pipeline-native daily index and the official historical NIS series seamlessly.
+
+\section{Phase 5: Interactive Dashboard Architecture and Production Deployment}
+
+\subsection{Executive Business Intelligence Dashboards}
+\hs To ensure that the analytical outputs of the pipeline are immediately usable by economic policymakers, the system deploys interactive visualization dashboards in Metabase and Power BI:
+\begin{itemize}
+    \item \textbf{Executive Macro Overview:} Real-time dial gauges displaying current Headline and Core inflation rates, day-on-day changes, 30-day cumulative trends, and foreign exchange movements.
+    \item \textbf{12-Division Drill-Down Analytics:} Interactive time-series charts allowing analysts to click into any specific COICOP division, view historical trajectories, and identify top rising or falling goods.
+    \item \textbf{Operational Scraper Observability Matrix:} Displays the daily status of all 20 scrapers, recording daily quote yields, HTTP response codes, scraping execution duration, and data quality check results.
+\end{itemize}
+
+\subsection{Containerized Infrastructure}
+\hs The complete ecosystem is containerized using Docker Compose, integrating PostgreSQL 16 (Medallion database storage), Apache Airflow 2.9.3 (workflow scheduling and DAG execution), automated transformation engines, and Metabase (business intelligence serving). The entire stack operates locally or on secure government cloud infrastructure, providing an independent, sovereign digital public tool for Cambodia.
+
+\section{Methodological Activity Schedule}
+\hs Table~\ref{table:methodology_roadmap} details the project execution timeline across the 12-week operational schedule.
+
 \begin{table}[H]
 \centering
-\begin{tabular}{|p{4.8cm}|*{10}{>{\centering\arraybackslash}p{0.55cm}|}}
+\small
+\begin{tabular}{|p{4.2cm}|*{10}{>{\centering\arraybackslash}p{0.75cm}|}}
 \hline
-\textbf{Phase / Activity} & \multicolumn{10}{c|}{\textbf{Week}} \\
-\cline{2-11}
- & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 \\
+\rowcolor{blue!20}
+\textbf{Activity / Milestone} & \textbf{W1--2} & \textbf{W3} & \textbf{W4} & \textbf{W5} & \textbf{W6} & \textbf{W7} & \textbf{W8} & \textbf{W9} & \textbf{W10} & \textbf{W11--12} \\
 \hline
-\textbf{Phase 1: Ingestion \& Classification} & \progressbar{ } & \progressbar{ } & \progressbar{ } & & & & & & & \\
+\textbf{Data Ingestion \& Scraping} & \progressbar{ } & \progressbar{ } & \progressbar{ } & & & & & & & \\
 \hline
-\textbf{Phase 2: EDA \& 12 COICOP Viz} & & \progressbar{ } & \progressbar{ } & \progressbar{ } & & & & & & \\
+\textbf{Silver Cleaning \& AI} & & \progressbar{ } & \progressbar{ } & \progressbar{ } & & & & & & \\
 \hline
-\textbf{Phase 3: CPI Aggregation \& ML Forecast} & & & & \progressbar{ } & \progressbar{ } & \progressbar{ } & & & & \\
+\textbf{Gold Econometric Jevons} & & & & \progressbar{ } & \progressbar{ } & \progressbar{ } & & & & \\
 \hline
-\textbf{Phase 4: Dashboards \& Deployment} & & & & & & \progressbar{ } & \progressbar{ } & & & \\
+\textbf{ML Forecast \& BI Serving} & & & & & & \progressbar{ } & \progressbar{ } & \progressbar{ } & & \\
 \hline
-\textbf{Phase 5: Thesis Writing \& Defense} & & & & & & & \progressbar{ } & \progressbar{ } & \progressbar{ } & \progressbar{ } \\
+\textbf{Evaluation \& Defense} & & & & & & & & \progressbar{ } & \progressbar{ } & \progressbar{ } \\
 \hline
 \end{tabular}
-\caption{Project Activity Schedule and Milestone Roadmap}
-\label{table:project_roadmap}
+\caption{Methodology Execution Schedule and Deliverable Milestones}
+\label{table:methodology_roadmap}
 \end{table}

@@ -63,7 +63,7 @@ PURE_STORE_MAP: dict[str, tuple[str, str]] = {
 }
 
 # 5 Multi-Category Stores requiring Vector Semantic Classification
-MULTI_CATEGORY_STORES = {"aeon", "aeon3", "delishop", "l192", "communitypharma"}
+MULTI_CATEGORY_STORES = {"aeon", "aeon3", "delishop", "l192", "communitypharma", "grab_ucare", "grab_lucky", "grab_chipmong"}
 
 # 12 UN COICOP Official Division Reference Definitions (Bilingual English & Khmer)
 COICOP_12_REFERENCE_DEFINITIONS = [

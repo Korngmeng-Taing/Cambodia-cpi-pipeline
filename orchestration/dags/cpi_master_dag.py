@@ -4,12 +4,12 @@ orchestration/dags/cpi_master_dag.py
 Master Orchestrator for the Cambodia CPI Medallion Pipeline.
 
 Daily 02:00 Asia/Phnom_Penh (or manual trigger):
-    Stage 1 (Bronze): Trigger all 20 per-source scraper DAGs in parallel.
+    Stage 1 (Bronze): Trigger all per-source scraper DAGs in SCRAPER_REGISTRY in parallel.
     Stage 2 (Silver): Trigger silver_dag (Item matching + Vector & Gemini AI Classification + Log-Linear Hedonic + dbt Silver).
     Stage 3 (Gold):   Trigger gold_dag (dbt Gold star-schema models + tests).
 
 Visual & Execution Lineage:
-    start ─► [20 Scrapers] ─► bronze_complete ─► silver_dag ─► silver_complete
+    start ─► [All Registered Scrapers] ─► bronze_complete ─► silver_dag ─► silver_complete
           ─► gold_dag ─► cpi_pipeline_success
 """
 
@@ -136,7 +136,7 @@ def _verify_minimum_scrapers_success(**context) -> None:
 
 with DAG(
     dag_id=DAG_ID,
-    description="Daily Cambodia CPI Master DAG: Fans out to 20 scrapers, then runs Silver and Gold layers sequentially.",
+    description="Daily Cambodia CPI Master DAG: Fans out to all registered scrapers, then runs Silver and Gold layers sequentially.",
     start_date=pendulum.datetime(2024, 1, 1, tz=local_tz),
     schedule="0 2 * * *",  # 02:00 AM Phnom Penh time daily
     catchup=False,
@@ -146,7 +146,7 @@ with DAG(
 
     start_task = EmptyOperator(task_id="start_pipeline")
 
-    # 1. Trigger all 20 Scraper DAGs dynamically
+    # 1. Trigger all registered Scraper DAGs dynamically
     scraper_trigger_tasks = []
     for store_slug in sorted(SCRAPER_REGISTRY.keys()):
         trigger_op = TriggerDagRunOperator(

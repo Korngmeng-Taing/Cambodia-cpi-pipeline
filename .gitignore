@@ -56,3 +56,15 @@ Thumbs.db
 *.tmp
 *.bak
 .agents/
+
+# ── LaTeX build artifacts ───────────────────────────────────────────────────
+thesis/*.aux
+thesis/*.bbl
+thesis/*.blg
+thesis/*.fdb_latexmk
+thesis/*.fls
+thesis/*.lof
+thesis/*.lot
+thesis/*.out
+thesis/*.synctex.gz
+thesis/*.toc

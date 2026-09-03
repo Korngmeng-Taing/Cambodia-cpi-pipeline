@@ -135,9 +135,10 @@ select
     p.pack_qty,
     p.unit_price_khr,
     coalesce(
-        c.coicop_division,
         ov_b.coicop_division,
         ov_ns.coicop_division,
+        ov_ng.coicop_division,
+        case when c.coicop_method <> 'store_default' then c.coicop_division end,
         case
             when p.store_slug in ('khmer24', 'realestate') then '04'
             when p.store_slug in ('communitypharma') then '06'
@@ -145,7 +146,6 @@ select
             when p.store_slug in ('bookmebus', 'redbus', 'new_gasoline') then '07'
             when p.store_slug in ('arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then '08'
         end,
-        ov_ng.coicop_division,
         case
             when ai.coicop_division is not null and coalesce(ai.confidence_score, 0.90) >= 0.50 then
                 case
@@ -156,49 +156,51 @@ select
                 end
         end,
         cm.coicop_division,
+        c.coicop_division,
         case
-            when p.store_slug in ('delishop', 'aeon') then '01'
+            when p.store_slug in ('delishop', 'aeon', 'grab_lucky', 'grab_chipmong') then '01'
+            when p.store_slug in ('grab_ucare') then '06'
             when p.store_slug in ('aeon3') then '03'
             when p.store_slug in ('l192') then '05'
         end,
         'UNCLASSIFIED'
     ) as coicop_division,
     case
-        when c.coicop_code is not null and c.coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then c.coicop_code
-        when c.coicop_code is not null and c.coicop_code <> '' and c.coicop_code <> 'UNCLASSIFIED' then c.coicop_code
         when coalesce(ov_b.coicop_division, ov_ns.coicop_division, ov_ng.coicop_division) is not null then
             {{ coicop_code_from_division("coalesce(ov_b.coicop_division, ov_ns.coicop_division, ov_ng.coicop_division)") }}
+        when c.coicop_code is not null and c.coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' and c.coicop_method <> 'store_default' then c.coicop_code
         when ai.coicop_code is not null and ai.coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then ai.coicop_code
         when cm.coicop_division is not null then
             {{ coicop_code_from_division("cm.coicop_division") }}
+        when c.coicop_code is not null and c.coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then c.coicop_code
+        when c.coicop_code is not null and c.coicop_code <> '' and c.coicop_code <> 'UNCLASSIFIED' then c.coicop_code
         when p.store_slug in ('khmer24', 'realestate') then '04.1.1'
-        when p.store_slug in ('communitypharma') then '06.1.2'
+        when p.store_slug in ('communitypharma', 'grab_ucare') then '06.1.2'
         when p.store_slug in ('sokhahotel', 'hyyathotel') then '11.2.0'
         when p.store_slug in ('bayonbkk') then '11.1.1'
         when p.store_slug in ('bookmebus', 'redbus') then '07.3.1'
         when p.store_slug in ('new_gasoline') then '07.2.2'
         when p.store_slug in ('cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then '08.3.0'
         when p.store_slug in ('arystore', 'samnangshop') then '08.2.0'
-        when p.store_slug in ('delishop', 'aeon') then '01.1.1'
+        when p.store_slug in ('delishop', 'aeon', 'grab_lucky', 'grab_chipmong') then '01.1.1'
         when p.store_slug in ('aeon3') then '03.1.2'
         when p.store_slug in ('l192') then '05.1.1'
         else 'UNCLASSIFIED'
     end as coicop_code,
-    coalesce(
-        c.coicop_method,
-        case
-            when ov_b.coicop_division is not null or ov_ns.coicop_division is not null or ov_ng.coicop_division is not null then 'override'
-            when p.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'bayonbkk', 'bookmebus', 'redbus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then 'store_default'
-            when ai.coicop_division is not null and coalesce(ai.confidence_score, 0.90) >= 0.50 then 'gemini_ai'
-            when cm.coicop_division is not null then 'category_map'
-            else 'store_default'
-        end
-    ) as coicop_method,
+    case
+        when ov_b.coicop_division is not null or ov_ns.coicop_division is not null or ov_ng.coicop_division is not null then 'override'
+        when c.coicop_method is not null and c.coicop_method <> 'store_default' then c.coicop_method
+        when p.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'bayonbkk', 'bookmebus', 'redbus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then 'store_default'
+        when ai.coicop_division is not null and coalesce(ai.confidence_score, 0.90) >= 0.50 then 'gemini_ai'
+        when cm.coicop_division is not null then 'category_map'
+        when c.coicop_method is not null then c.coicop_method
+        else 'store_default'
+    end as coicop_method,
     coalesce(
         c.coicop_confidence,
         case
             when ov_b.coicop_division is not null or ov_ns.coicop_division is not null or ov_ng.coicop_division is not null then 1.000
-            when p.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'bayonbkk', 'bookmebus', 'redbus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'aeon3', 'delishop', 'aeon', 'l192') then 0.850
+            when p.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'bayonbkk', 'bookmebus', 'redbus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'aeon3', 'delishop', 'aeon', 'l192', 'grab_ucare', 'grab_lucky', 'grab_chipmong') then 0.850
             when ai.coicop_division is not null and coalesce(ai.confidence_score, 0.90) >= 0.50 then coalesce(ai.confidence_score, 0.900)
             when cm.coicop_division is not null then 0.900
             else 0.800

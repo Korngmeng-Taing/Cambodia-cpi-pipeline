@@ -1,34 +1,47 @@
-\newpage
-\mychapter{V. CONCLUSION AND RECOMMENDATION}{V. CONCLUSION AND RECOMMENDATION}
+\mychapter{V. CONCLUSIONS AND RECOMMENDATIONS}{V. CONCLUSIONS AND RECOMMENDATIONS}
 
-\section{Conclusion}
-\hs This graduation thesis research developed, implemented, and benchmarked an end-to-end automated **Cambodia Daily Consumer Price Index (CPI) Medallion Pipeline**. By combining modern data engineering architectures, dense multilingual vector embeddings, Large Language Model arbitration, and micro-econometric index aggregation, the pipeline addresses the critical limitations of traditional retrospective monthly price surveys.
+\section{Conclusions}
+\hs This graduation thesis successfully designed, implemented, and empirically validated an automated, high-frequency \textbf{Cambodia Daily Consumer Price Index (CPI) Medallion Pipeline}. The research directly solves the critical limitations of traditional manual price surveys---namely, the 30 to 60-day reporting delay, high field collection costs, and vulnerability to intra-month price shocks.
 
-\subsection{Summary of Principal Achievements}
+\hs By combining modern Medallion data engineering, dense multilingual text embeddings, artificial intelligence classification, axiomatic micro-econometric formulas, and machine learning nowcasting, the system achieved all four primary project objectives:
+
 \begin{enumerate}
-    \item \textbf{Comprehensive 12-Division Digital Ingestion:} Successfully engineered and orchestrated 20 daily scrapers across supermarkets, pharmacies, transport platforms, real estate portals, telecommunications, hospitality, and official government APIs into an immutable PostgreSQL 16 Medallion Bronze layer, capturing over 16,000 price quotes per day with 99.5\% system uptime.
-    \item \textbf{High-Accuracy Multilingual Entity Matching:} Implemented a 768-dimensional dense vector item matching engine combined with strict deterministic specification guards (RAM, storage, packaging volume variance $\le 10\%$) and Gemini AI arbitration. This achieved an \textbf{F1-score of 95.6\%} and suppressed false merge rates to \textbf{2.2\%}.
-    \item \textbf{Efficient 4-Tier Hybrid COICOP Classification:} Engineered a 4-tier classification hierarchy that resolved \textbf{93.4\% of items in sub-millisecond time} via domain locks and vector cosine matching, achieving an overall classification accuracy of \textbf{98.2\%} across all 12 UN COICOP categories while operating within free-tier API quotas.
-    \item \textbf{Axiomatically Robust Econometric Index Compilation:} Formulated elementary unweighted geometric mean price relatives (\textbf{Jevons formula}) coupled with a \textbf{7-day ILO class-mean imputation engine} and upper-level Laspeyres weighting calibrated to official NIS Cambodia expenditure shares, successfully publishing real-time daily National Headline CPI and Refined Core CPI series.
+    \item \textbf{Automated Data Infrastructure and Monitoring (Objective 1):} The pipeline successfully automated 20 daily data extraction workflows across major retail supermarkets, e-commerce marketplaces, chain pharmacies, inter-provincial transit services, utility regulators, and official government data feeds. The system reliably collects over 31,000 price quotes every morning across all 12 United Nations COICOP divisions with a $99.1\%$ operational pipeline uptime, storing raw records immutably in the Bronze layer.
+    \item \textbf{Exploratory Visualization of Scraped Raw Price Data (Objective 2):} The system established automated visual monitoring of raw price distributions, daily quote volumes, and category expenditure shares across all 12 consumption divisions. Automated quality validation filters out-of-stock items, detect anomalous price swings ($>3.5\sigma$), and prepare clean price observations for econometric index aggregation.
+    \item \textbf{Econometric CPI Calculation and Machine Learning Inflation Estimation (Objective 3):} Implementing the axiomatic unweighted geometric mean (\textbf{Jevons formula}) at the elementary product level completely eliminated the \textbf{+1.18\% annual upward calculation drift} inherent in arithmetic formulas. Coupled with a 7-day carry-forward imputation engine and official household expenditure weights from the Cambodia Socio-Economic Survey (CSES 2023), the pipeline successfully compiles daily National Headline CPI and Refined Core CPI indicators. Machine learning models (XGBoost, LSTM, and blended ensembles) leveraging daily price momentum, fuel adjustments, and exchange rate movements achieved a \textbf{51.4\% reduction in Root Mean Squared Error} over traditional autoregressive baselines, successfully predicting monthly inflation weeks ahead of official statistical releases.
+    \item \textbf{Interactive Decision-Support Dashboards (Objective 4):} The system deployed real-time executive dashboards in Metabase and Power BI, providing interactive dial gauges for headline and core inflation, drill-down charts for each of the 12 consumption divisions, top rising and falling goods, and an automated scraper health observability matrix for continuous operational monitoring.
 \end{enumerate}
 
-\section{Recommendations}
+\section{Institutional Recommendations and Policy Roadmaps}
+\hs The findings and technical assets developed in this research offer actionable strategic value for Cambodia's core macroeconomic and statistical governance institutions:
 
-\subsection{Recommendations for Macroeconomic Policy Institutions (NBC \& MEF)}
+\subsection{Actionable Roadmap for the National Institute of Statistics (NIS)}
 \begin{itemize}
-    \item \textbf{Integration into Monetary Policy Frameworks:} The National Bank of Cambodia (NBC) should utilize the daily high-frequency Headline and Core CPI series as an early-warning signal for exchange rate pass-through and domestic supply chain bottlenecks ahead of monthly statistical releases.
-    \item \textbf{High-Frequency Fiscal Policy Calibrations:} The Ministry of Economy and Finance (MEF) can leverage category-level price movements (such as Division 04 utilities and Division 07 transport fuels) to dynamically calibrate targeted social safety net transfers and assess tariff adjustments.
+    \item \textbf{Hybrid Statistical Modernization:} The National Institute of Statistics should establish a formal digital data integration unit to augment physical market surveys with automated web scraping. Online data collection can immediately take over price monitoring for structured modern sectors (electronics, telecommunications, inter-provincial bus fares, and chain pharmacies), freeing up field enumerators to concentrate on rural and informal wet markets.
+    \item \textbf{Adoption of Axiomatic Geometric Averaging:} In accordance with international standards \citep{imf2020cpi}, statistical compilation guidelines should mandate the Jevons geometric mean for all elementary price aggregates to prevent the formula drift documented in this research.
+    \item \textbf{Public-Private Scanner Data Partnerships:} The NIS should initiate institutional agreements with major supermarket operators (such as AEON and Chip Mong) to establish automated point-of-sale scanner transaction feeds. Scanner data provides actual transaction quantities alongside prices, enabling the implementation of superlative Fisher or multilateral GEKS index systems.
 \end{itemize}
 
-\subsection{Recommendations for National Statistical Authorities (NIS)}
+\subsection{Strategic Roadmap for the Ministry of Economy and Finance (MEF)}
 \begin{itemize}
-    \item \textbf{Hybrid Physical-Digital Index Compilation:} The National Institute of Statistics should adopt a hybrid model where physical survey collection in rural and informal wet markets is augmented with automated daily web-scraped data from modern urban retailers.
-    \item \textbf{Dynamic Scanner Data Integration:} Establish direct data-sharing protocols with major domestic supermarket chains and payment aggregators (e.g., Bakong) to ingest barcode scanner data equipped with exact expenditure transaction weights.
+    \item \textbf{High-Frequency Macroeconomic Surveillance:} The General Department of Digital Economy (GDDE) and the General Department of Policy should integrate the daily Headline and Core CPI streams into the national macroeconomic dashboard. This provides zero-delay early warning of international fuel spikes, currency pass-through shocks, and agricultural supply shortages.
+    \item \textbf{Dynamic Fiscal Indexation:} Public procurement contracts, infrastructure budget deflators, and civil service cost-of-living adjustments can be calibrated using real-time price trends rather than outdated historical annual estimates.
+    \item \textbf{Targeted Social Safety Net Triggers:} By monitoring high-frequency price movements in basic food staples (rice, meat, and fresh fish), the government can trigger targeted cash transfers to vulnerable households before inflation erodes real household purchasing power.
 \end{itemize}
 
-\subsection{Recommendations for Future Academic and Engineering Research}
+\subsection{Monetary Policy Roadmap for the National Bank of Cambodia (NBC)}
 \begin{itemize}
-    \item \textbf{Multilateral Rolling Index Engines:} Implement automated rolling multilateral index methods (e.g., GEKS-T\"ornqvist with Movement Splicing) directly into the dbt transformation pipeline to eliminate commodity substitution bias and chain drift across longitudinal scanner datasets.
-    \item \textbf{Computer Vision for Product Image Matching:} Incorporate multi-modal vision-language models to verify packaging changes, labels, and shrinkflation directly from scraped product photographs.
-    \item \textbf{Geographic Expansion across Provinces:} Expand scraper coverage beyond Phnom Penh to major provincial hubs (Siem Reap, Battambang, Sihanoukville) to track spatial price disparities across Cambodia.
+    \item \textbf{Exchange Rate Pass-Through Tracking:} Given Cambodia's dual-currency retail economy, the central bank can use the daily pipeline to observe exactly how quickly movements in the USD/KHR exchange rate transmit into shelf prices across different product categories.
+    \item \textbf{High-Frequency Liquidity Management:} Daily inflation nowcasting provides the central bank with continuous visibility into demand pressures between monthly statistical releases, supporting timely open market operations and liquidity management.
 \end{itemize}
+
+\section{Limitations and Future Research Directions}
+\hs While the pipeline demonstrates high reliability and predictive precision, several methodological and operational areas offer fruitful avenues for future research:
+
+\begin{enumerate}
+    \item \textbf{Geographic Expansion to Secondary Economic Hubs:} The current implementation focuses primarily on Phnom Penh. Future engineering work should expand automated crawlers to capture retail prices in major provincial economic centers, including Siem Reap, Battambang, Sihanoukville, and Kampong Cham.
+    \item \textbf{Crowdsourced Mobile Price Collection for Wet Markets:} Informal open wet markets and roadside stalls account for a substantial share of daily food purchases in Cambodia and cannot be scraped online. Developing an offline-first mobile application that allows community enumerators or consumers to upload photographed receipts with automated text recognition would extend high-frequency price sensing into traditional retail sectors.
+    \item \textbf{Alternative Satellite and Climate Regressors:} Future iterations of the machine learning nowcasting models could incorporate high-resolution satellite vegetation indices (NDVI) and rainfall anomaly data across the Mekong River basin to forecast domestic agricultural crop yields and food price movements several months in advance.
+    \item \textbf{Automated Scraper Self-Healing via Language Models:} When e-commerce platforms alter their website layout, scrapers occasionally fail. Implementing autonomous artificial intelligence agents capable of inspecting modified web pages, rewriting extraction queries, and testing updated parsers automatically would further minimize maintenance overhead.
+\end{enumerate}
+

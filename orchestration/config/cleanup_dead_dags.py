@@ -30,6 +30,8 @@ DEAD_DAG_IDS = [
     "myphsar_dag",  # scraper removed
     "spark_cpi_analytics_dag",  # superseded by spark_etl_dag (ran with wrong image, no pyspark)
     "spark_etl_dag",  # superseded by silver_dag (no _SUCCESS sensors, lower retries)
+    "scrape_cellcard_wifi_dag",  # merged into scrape_cellcard_dag
+    "scrape_smart_wifi_dag",  # merged into scrape_smart_dag
 ]
 
 

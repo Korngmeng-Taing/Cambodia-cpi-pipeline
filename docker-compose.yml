@@ -94,6 +94,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d
       - ./sql:/sql
+      - ./pipeline/migrations:/migrations
     deploy:
       resources:
         limits:

@@ -109,6 +109,22 @@ class CPINowcaster:
                 except Exception as e_nis:
                     log.debug("NIS benchmark table query skipped: %s", e_nis)
 
+                # Ensure Postgres Decimal columns are coerced to numeric floats for calculations
+                if not df_daily.empty:
+                    for col in ["weight", "division_index", "headline_cpi", "core_cpi"]:
+                        if col in df_daily.columns:
+                            df_daily[col] = pd.to_numeric(df_daily[col], errors="coerce")
+                if not df_fx.empty and "rate" in df_fx.columns:
+                    df_fx["rate"] = pd.to_numeric(df_fx["rate"], errors="coerce")
+                if not df_monthly.empty:
+                    for col in ["monthly_headline_cpi", "monthly_core_cpi", "mom_inflation_pct"]:
+                        if col in df_monthly.columns:
+                            df_monthly[col] = pd.to_numeric(df_monthly[col], errors="coerce")
+                if df_nis is not None and not df_nis.empty:
+                    for col in ["headline_cpi", "core_cpi", "mom_inflation_pct", "yoy_inflation_pct"]:
+                        if col in df_nis.columns:
+                            df_nis[col] = pd.to_numeric(df_nis[col], errors="coerce")
+
                 return df_daily, df_fx, df_monthly, df_nis
         finally:
             conn.close()
@@ -237,8 +253,8 @@ class CPINowcaster:
         uncertainty_ratio = round(float(days_remaining / days_in_month), 3)
         margin_of_error = Z_SCORE_95 * daily_volatility * np.sqrt(days_remaining / days_in_month)
 
-        ci_lower_95 = round(max(0.0, nowcast_headline_cpi - margin_of_error), 4)
-        ci_upper_95 = round(nowcast_headline_cpi + margin_of_error, 4)
+        ci_lower_95 = float(round(max(0.0, nowcast_headline_cpi - margin_of_error), 4))
+        ci_upper_95 = float(round(nowcast_headline_cpi + margin_of_error, 4))
 
         return {
             "nowcast_date": target_date,

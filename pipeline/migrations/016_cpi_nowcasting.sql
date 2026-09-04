@@ -50,6 +50,21 @@ CREATE TABLE IF NOT EXISTS gold.fct_cpi_nowcast (
     PRIMARY KEY (nowcast_date, target_month, model_name)
 );
 
+-- Ensure column compatibility if table was created in an earlier prototype revision
+ALTER TABLE gold.fct_cpi_nowcast ADD COLUMN IF NOT EXISTS nowcast_nis_headline_cpi NUMERIC(10, 4);
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'gold' AND table_name = 'fct_cpi_nowcast' AND column_name = 'nowcast_chained_nis_2006_cpi'
+    ) THEN
+        UPDATE gold.fct_cpi_nowcast
+        SET nowcast_nis_headline_cpi = nowcast_chained_nis_2006_cpi
+        WHERE nowcast_nis_headline_cpi IS NULL;
+    END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_fct_cpi_nowcast_target_month ON gold.fct_cpi_nowcast(target_month);
 CREATE INDEX IF NOT EXISTS idx_fct_cpi_nowcast_date ON gold.fct_cpi_nowcast(nowcast_date);
 

@@ -68,7 +68,8 @@
   - `gold.fct_coicop_class_daily`: Intermediate 4-digit COICOP class-level aggregate mart (e.g. `01.1.1` Bread & Cereals) for sub-division policy drilldown.
   - `gold.fct_cpi_monthly`: Monthly conformed 12-division and national headline/core CPI aggregate mart with Month-over-Month (MoM %) and Year-over-Year (YoY %) inflation rates.
   - `gold.dim_nis_official_cpi`: Historical official NIS Cambodia monthly CPI releases (Oct–Dec 2006 = 100) used as ground-truth evaluation anchors.
-  - `gold.fct_cpi_nowcast`: Real-time daily nowcasts predicting current month-end inflation ($\pi_t^{\text{MoM}}$) and dual reconstructed indices with narrowing 95% CI fan bands.
+  - `gold.fct_cpi_nowcast`: Daily generated current-month inflation nowcasts with dynamic 95% confidence intervals, uncertainty decay ratios, and official NIS chain-linking.
+  - `gold.fct_cpi_forecast`: Multi-horizon forward inflation forecasts (7-day, 14-day, 30-day cumulative inflation) and projected CPI index levels.
 - **Economic Index Calculation Engine (`pipeline/cpi_calculator.py`)**:
   - **Jevons Micro-Index Compilation**: Unweighted geometric mean price ratios across active basket items:
     $$I_{j}^{t/0} = \exp\left(\frac{1}{n_t} \sum_{i=1}^{n_t} \ln P_{i,t} - \frac{1}{n_0} \sum_{i=1}^{n_0} \ln P_{i,0}\right) \times 100.0$$
@@ -77,13 +78,19 @@
   - **Hedonic Quality Adjustment Bridge**: Directly bridges `silver.hedonic_adjusted_prices` to adjust for technology/electronic quality improvements (Division 08/09).
   - **Laspeyres 12-Division Weighting**: Official National Institute of Statistics (NIS) Cambodia expenditure shares compiled into Headline and Core CPI (`gold.fct_cpi_daily` & `gold.fct_cpi_monthly`).
   - **Refined Core CPI**: Excludes volatile food (Division 01) and energy/fuel in accordance with NIS and National Bank of Cambodia core inflation standards.
-- **High-Frequency Inflation Nowcasting Engine (`ml/nowcaster.py`)**:
-  - **Econometric Hybrid Ensemble**: Blends Autoregressive Distributed Lag (ADL, Macias et al. 2023) and Gradient Boosted Trees (Medeiros et al. 2021).
-  - **Sub-Driver Decomposition**: Features dedicated Food (44.775%) and Transport (12.228%) momentum signals (>57% of NIS basket).
-  - **Dual-Index Dynamic Chain-Linking**: Produces pipeline-native index and reconstructed official NIS 2006-base index ($\hat{P}_{\text{NIS}, t}$).
-  - **Dynamic Fan Bands**: 95% Confidence Interval bounds contract via $\sqrt{\max(0.01, 1 - T / D_{\text{month}})}$ as the month progresses.
+- **Machine Learning-Assisted Daily Inflation Nowcasting Engine (`ml/nowcaster.py`)**:
+  - **Expanding-Window MTD Aggregation**: Partitions the current month into observed days ($1 \dots t$) and projected days ($t+1 \dots T$), aggregating daily facts from `gold.fct_cpi_daily`.
+  - **Cross-Division Momentum Projection**: Projects remaining days using high-frequency Division 01 (Food, 44.8%) and Division 07 (Transport, 12.2%) momentum (*Macias et al., 2023*).
+  - **Official Benchmark Chain-Linking**: Translates pipeline growth rates into chain-linked official NIS Phnom Penh index numbers (Base Oct–Dec 2006 = 100).
+  - **Uncertainty Decay Modeling**: Computes dynamic 95% confidence intervals that narrow as the month progresses ($U_t = \sqrt{(T-t)/T}$).
+- **High-Frequency Daily Inflation ML Forecasting Engine (`ml/forecaster.py`)**:
+  - **Gradient Boosted Tree Architecture**: Trains production `LightGBMRegressor` on high-frequency daily price facts from `gold.fct_cpi_daily`.
+  - **Multi-Horizon Forward Projections**: Direct multi-step forecasts for $H \in [7, 14, 30]$ days forward cumulative inflation and projected CPI levels ($\widehat{\text{CPI}}_{t+H}$).
+  - **Sub-Driver Momentum Signals**: Leverages dedicated Food (44.775%) and Transport (12.228%) momentum features (>57% of NIS basket) as leading indicators.
+  - **Walk-Forward Validation**: Evaluates out-of-sample RMSE and MAE via `TimeSeriesSplit` cross-validation (*Babii et al., 2022*) to prevent look-ahead bias.
 - **Serving Views & Metabase Dashboards** (`sql/views.sql`):
-  - `gold.v_nowcast_evaluation`: Automated out-of-sample backtesting tracking nowcast errors vs. official NIS releases.
+  - `gold.v_nowcast_evaluation`: Real-time out-of-sample audit tracking daily nowcast error vs. official NIS monthly releases.
+  - `gold.v_cpi_forecast_chart`: Unions actual daily CPI with latest ML forward forecast points for seamless continuous visualization.
   - `gold.v_cpi_monthly_summary`: Monthly national headline and core CPI with MoM (%) and YoY (%) inflation indicators.
   - `gold.v_cpi_monthly_divisions`: Monthly 12-division COICOP performance matrix with official NIS expenditure weights.
   - `gold.v_cpi_inflation_summary`: Daily Headline & Core CPI DoD/MoM inflation metrics.
@@ -122,6 +129,11 @@ CPI PIPELINE/
 │   ├── canonical.py       # Record normalization (Schema v1.0)
 │   ├── config.py          # Database connection & environment config
 │   └── migrations/        # PostgreSQL DDL migration scripts
+├── ml/                    # High-frequency ML inflation nowcasting & forecasting engine
+│   ├── config.py          # Forecast horizons (7d, 14d, 30d), holiday calendars & weights
+│   ├── features.py        # Autoregressive lags, rolling MA, volatility & momentum signals
+│   ├── nowcaster.py       # High-frequency daily inflation nowcasting & NIS chain-linking engine
+│   └── forecaster.py      # Production LightGBM multi-horizon forecasting pipeline
 ├── scripts/               # Maintenance & operational CLI utilities
 │   ├── run_cpi_backtest.py # Runs historical CPI backtest across all dates
 │   ├── evaluate_accuracy_benchmark.py # End-to-end accuracy benchmark utility
@@ -234,7 +246,7 @@ cpi_pipeline_success
   - `silver.dim_canonical_products` (0 rows, superseded by `silver.canonical_items`)
   - `silver.coicop_keywords` (legacy keyword lookup, superseded by regex text rules and vector matching)
 - **Metabase Dashboards**: Consolidated 5 fragmented dashboards (41 cards) into 3 streamlined operational dashboards (34 cards):
-  - **Dashboard 01**: `🇰🇭 Cambodia Daily Consumer Price Index (CPI) Dashboard` (Macro CPI, Core Inflation, 12-Division COICOP Matrix, Nowcast Projections)
+  - **Dashboard 01**: `🇰🇭 Cambodia Daily Consumer Price Index (CPI) Dashboard` (Macro CPI, Core Inflation, 12-Division COICOP Matrix, ML Forward Projections [7d, 14d, 30d])
   - **Dashboard 02**: `🚀 Pipeline Operations & Scraper Data Health Dashboard` (Airflow DAG monitor, Freshness SLAs, Ranked Store Product Counts including Lucky, Chip Mong, Ucare, and live MEF USD/KHR rate)
   - **Dashboard 03**: `🏷️ Silver Data Quality & Classification Intelligence Dashboard` (COICOP coverage, log-relative distributions, pre-flight outliers, and human review queues)
 - **FX Rate Card Fix**: Updated `Official MEF USD/KHR Rate Today` on Dashboard 02 to correctly query `staging.exchange_rates` (rendering live `4,047.00 KHR`).
@@ -381,7 +393,7 @@ MIN_SUCCESSFUL_SCRAPERS=3
 | `bronze` | Raw store listings | `raw_prices`, `scrape_errors` |
 | `staging` | Ingestion staging | `raw_scrapes`, `exchange_rates`, `bronze_ingestion_stats` |
 | `silver` | Clean observations & dims | `canonical_items`, `clean_store_prices`, `item_match_log`, `needs_review`, `dim_coicop_ai_cache`, `coicop_override`, `coicop_store_defaults`, `coicop_category_map`, `classification_queue` |
-| `gold` | Analytical star schema | `dim_items`, `dim_stores`, `category_weights`, `cambodia_cpi_coicop_weights_breakdown`, `fct_daily_prices`, `fct_elementary_indices`, `fct_cpi_daily`, `fct_cpi_monthly`, `fct_cpi_nowcast` |
+| `gold` | Analytical star schema | `dim_items`, `dim_stores`, `category_weights`, `cambodia_cpi_coicop_weights_breakdown`, `fct_daily_prices`, `fct_elementary_indices`, `fct_cpi_daily`, `fct_cpi_monthly`, `fct_cpi_forecast` |
 | `ops` | Control-flow tables | Operational views over `silver.*` + classifier review queues |
 
 ---

@@ -6,7 +6,7 @@ This document contains the complete set of architecture diagrams for the Cambodi
 
 ## 🌐 1. High-Level End-to-End Pipeline Overview
 
-This macro-level diagram illustrates the full data journey from 20 external Cambodian retail sources through the Medallion architecture to executive dashboards and real-time ML inflation nowcasting.
+This macro-level diagram illustrates the full data journey from 20 external Cambodian retail sources through the Medallion architecture to executive dashboards and multi-horizon ML forward inflation forecasting.
 
 ```mermaid
 flowchart LR
@@ -39,7 +39,7 @@ flowchart LR
     subgraph S4["SERVING & ANALYTICS"]
         E1["Metabase v0.49\n(3 Streamlined Dashboards:\nMacro, Ops, Quality)"]
         E2["Power BI DirectQuery\n(Executive Inflation Dashboards)"]
-        E3["ML Nowcasting Engine\n(Hybrid ADL + GBRT Nowcasts)"]
+        E3["ML Forecasting Engine\n(LightGBM Multi-Horizon Forecasts)"]
     end
 
     S0 --> S1
@@ -148,9 +148,9 @@ flowchart TD
 
 ---
 
-## 🥇 4. Gold Layer Detail (Star Schema, Jevons Math & ML Nowcast)
+## 🥇 4. Gold Layer Detail (Star Schema, Jevons Math & ML Multi-Horizon Forecast)
 
-The Gold layer structures data into a Kimball dimensional star schema, applies Jevons geometric mean elementary aggregation, 7-day missing price imputation, 12-division Laspeyres compilation, and produces real-time ML inflation nowcasts.
+The Gold layer structures data into a Kimball dimensional star schema, applies Jevons geometric mean elementary aggregation, 7-day missing price imputation, 12-division Laspeyres compilation, and produces multi-horizon ML forward inflation forecasts (7d, 14d, 30d).
 
 ```mermaid
 flowchart TD
@@ -171,10 +171,10 @@ flowchart TD
         M4 --> M5["National Headline & Core CPI Compilation\ngold.fct_cpi_daily"]
     end
 
-    subgraph FeatureStore["3. ML Nowcasting Feature Mart (gold.fct_ml_nowcast_features)"]
-        M4 & M5 --> F1["Feature Engineering Table\n• 7d, 14d, 30d Momentum for Food (01) & Fuel (07)\n• USD/KHR Volatility & Promo Share\n• Historical CPI Lag Regressors"]
-        F1 --> F2["Machine Learning Models\n(LightGBM / XGBoost Regressors)"]
-        F2 --> F3["T+0 Real-Time Flash CPI Nowcast\n(Weeks ahead of official NIS release)"]
+    subgraph FeatureStore["3. ML Forecasting Engine (gold.fct_cpi_forecast)"]
+        M4 & M5 --> F1["Feature Engineering (ml/features.py)\n• 7d, 14d, 30d Lags & Moving Averages\n• Food (01) & Fuel (07) Momentum Signals\n• Cambodian Expenditure Festival Windows"]
+        F1 --> F2["Machine Learning Models (ml/forecaster.py)\n(Production LightGBM Regressors)"]
+        F2 --> F3["Multi-Horizon Forward Forecasts (H=7, 14, 30d)\ngold.fct_cpi_forecast & gold.v_cpi_forecast_chart"]
     end
 
     subgraph Serving["4. Executive BI & Operational Observability"]

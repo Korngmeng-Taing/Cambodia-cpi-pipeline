@@ -84,7 +84,7 @@ with DAG(
     tags=["gold", "star-schema", "dbt", "cpi"],
 ) as dag:
 
-    _dbt_vars = '{"ds": "{{ ds }}"}'
+    _dbt_vars = '{"ds": "{{ (dag_run.conf.get(\'ds\') if dag_run and dag_run.conf else None) or ds }}"}'
     _dbt_flags = f"--project-dir {DBT_PROJECT_DIR} --target-path /tmp/dbt/target --log-path /tmp/dbt/logs"
 
     t_dbt_gold_run = BashOperator(

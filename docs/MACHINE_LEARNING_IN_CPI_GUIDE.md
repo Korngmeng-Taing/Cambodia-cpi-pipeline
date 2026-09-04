@@ -1,4 +1,4 @@
-﻿# Machine Learning in CPI Measurement: Literature, Models & Implementation Guide
+# Machine Learning in CPI Measurement: Literature, Models & Implementation Guide
 
 In modern economic statistics and price intelligence pipelines, Machine Learning (ML) operates across **two distinct domains**:
 
@@ -130,17 +130,18 @@ To achieve maximum accuracy, speed, and cost efficiency in the Cambodia CPI Meda
 ├─────────────────────────────────────────┬────────────────────────────────────────────────┤
 │ 1. Silver Layer (Classification)        │ 3-Tier Ladder: Store Lock -> Vector -> LLM     │
 │ 2. Silver Layer (Entity Matching)       │ Regex Spec Guards + Cosine Similarity          │
-│ 3. Serving / BI Layer (Nowcasting)      │ LightGBM / MIDAS Daily Inflation Regressors    │
+│ 3. Gold / BI Layer (Nowcasting)         │ Intra-Month MTD Expanding Nowcaster            │
+│ 4. Serving / BI Layer (Forecasting)     │ LightGBM Multi-Horizon Inflation Regressors    │
 └─────────────────────────────────────────┴────────────────────────────────────────────────┘
-`
+```
 
 ### Module 1: 3-Tier Classification Ladder (pipeline/hybrid_embeddings_classifier.py)
 - **Tier 1 (Store Domain Lock - 0ms, 100% precision)**:
-  - Fuel stations (petronas, 	otalenergies, caltex) -> **Division 07 (Transport/Fuels)**.
+  - Fuel stations (petronas, totalenergies, caltex) -> **Division 07 (Transport/Fuels)**.
   - Pharmacies (pharmacy_u-care, pharmacie-de-la-gare) -> **Division 06 (Health)**.
   - Telcos (cellcard, smart) -> **Division 08 (Communication)**.
 - **Tier 2 (Vector Embedding Cosine Search - 5ms)**:
-  - Generate 768-dimensional text embeddings for grocery and supermarket items (eon, chip_mong, makro).
+  - Generate 768-dimensional text embeddings for grocery and supermarket items (aeon, chip_mong, makro).
   - Calculate cosine similarity against the 12 reference COICOP division centroids. If >= 0.85, auto-assign.
 - **Tier 3 (Google Gemini AI Fallback - Only for ambiguous items)**:
   - Prompt Gemini with: *"Classify this Cambodian retail item into UN COICOP (01-12)"*.
@@ -150,9 +151,16 @@ To achieve maximum accuracy, speed, and cost efficiency in the Cambodia CPI Meda
 - Extract volume, weight, and hardware memory specifications (e.g. 128GB, 256GB, 500ml, 1kg) via deterministic regex.
 - If two items share a similar title but have conflicting specs (128GB vs 256GB), **strictly reject matching** to eliminate artificial price index spikes.
 
-### Module 3: Pre-Publication Macroeconomic Nowcasting (scripts/setup_metabase_dashboards.py)
-- Use daily price aggregates for **Division 01 (Food - 44.800% weight)**, **Division 04 (Housing/Gas - 17.100%)**, and **Division 07 (Transport/Fuel - 12.200%)** alongside MEF exchange rates.
-- Train LightGBM regressors to predict official National Institute of Statistics (NIS) monthly inflation 20–30 days in advance.
+### Module 3: Machine Learning-Assisted Daily Inflation Nowcasting (ml/nowcaster.py)
+- Aggregates daily facts from `gold.fct_cpi_daily` for the active calendar month ($1 \dots t_{\text{observed}}$).
+- Projects remaining days ($t+1 \dots T$) using 7-day momentum in **Division 01 (Food - 44.8% weight)** and **Division 07 (Transport - 12.2% weight)** following *Macias et al. (2023)*.
+- Derives Month-over-Month (MoM %) estimated inflation and chain-links to official National Institute of Statistics (NIS) Phnom Penh benchmark levels in `gold.fct_cpi_nowcast`.
+- Computes dynamic 95% confidence intervals based on daily price dispersion and uncertainty decay ($U_t = \sqrt{(T-t)/T}$).
+
+### Module 4: Multi-Horizon Daily Inflation Forecasting (ml/forecaster.py)
+- Use daily price facts from `gold.fct_cpi_daily` for Food, Housing, and Transport alongside Cambodian cultural holiday calendars.
+- Train production `LightGBMRegressor` models across walk-forward cross-validation splits (*Babii et al., 2022*) to project 7-day, 14-day, and 30-day forward cumulative inflation rates and projected index levels in `gold.fct_cpi_forecast`.
+- Render continuous actual-to-forecast trends via `gold.v_cpi_forecast_chart` on Metabase Dashboard 01.
 
 ---
 

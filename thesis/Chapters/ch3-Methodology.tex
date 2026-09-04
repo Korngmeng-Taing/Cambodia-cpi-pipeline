@@ -1,7 +1,7 @@
 \mychapter{III. METHODOLOGY}{III. METHODOLOGY}
 
 \section{Methodological Framework and System Architecture}
-\hs This research designs, implements, and evaluates an automated, high-frequency price collection, econometric aggregation, and machine learning inflation forecasting system for Cambodia. The overarching methodology is organized around an end-to-end \textbf{Medallion Data Architecture}, structured into four progressive stages: multi-source automated data ingestion (Bronze Layer), data cleaning, unit normalization, and artificial intelligence classification (Silver Layer), axiomatic econometric index calculation and machine learning nowcasting (Gold Layer), and interactive decision-support visualization (Serving Layer).
+\hs This research designs, implements, and evaluates an automated, high-frequency price collection, econometric aggregation, and machine learning inflation forecasting system for Cambodia. The overarching methodology is organized around an end-to-end \textbf{Medallion Data Architecture}, structured into four progressive stages: multi-source automated data ingestion (Bronze Layer), data cleaning, unit normalization, and artificial intelligence classification (Silver Layer), axiomatic econometric index calculation and machine learning forecasting (Gold Layer), and interactive decision-support visualization (Serving Layer).
 
 \begin{figure}[H]
     \centering
@@ -19,7 +19,7 @@
 \begin{enumerate}
     \item \textbf{The Bronze Layer (Raw Storage):} Acts as the permanent, immutable landing zone for all incoming web extractions. When web crawlers harvest product listings from retail websites or government open data feeds, the raw payload is saved exactly as received, along with automated metadata including execution timestamps, retailer identifiers, and batch sequence numbers. No transformations, filters, or corrections are applied in this layer. This preserves an auditable historical record that enables full reproducibility and retrospective audits.
     \item \textbf{The Silver Layer (Cleaned and Validated Data):} Acts as the central data refinery. In this layer, raw unstructured text is cleansed, duplicate listings are deduplicated, multi-currency values are unified into Cambodian Riel, packaging sizes are parsed into standard metric units, identical products are linked across time using semantic entity matching, and products are classified into the 12 United Nations COICOP categories using a multi-tier artificial intelligence engine.
-    \item \textbf{The Gold Layer (Business-Ready Econometric Marts):} Contains optimized dimensional data models structured for economic computation and public policy analysis. In this layer, elementary Jevons price relatives are compiled, missing price imputation algorithms are applied, national expenditure weights are integrated, Headline and Core CPI indices are calculated daily, and feature matrices are supplied to machine learning nowcasting models.
+    \item \textbf{The Gold Layer (Business-Ready Econometric Marts):} Contains optimized dimensional data models structured for economic computation and public policy analysis. In this layer, elementary Jevons price relatives are compiled, missing price imputation algorithms are applied, national expenditure weights are integrated, Headline and Core CPI indices are calculated daily, and feature matrices are supplied to machine learning forecasting models.
 \end{enumerate}
 
 \subsection{Multi-Source Coverage: The 20 Market Sources}
@@ -121,83 +121,116 @@ where $w_d$ represents the official household expenditure weight for COICOP divi
 \end{equation}
 By excluding Division 01 (Food and Non-Alcoholic Beverages: $44.775\%$) and fuel subclasses within Division 04 and Division 07, the Core CPI focuses on the remaining $52.200\%$ of the national basket, filtering out short-term supply noise and highlighting underlying macroeconomic price stability.
 
-\section{Phase 4: High-Frequency Inflation Nowcasting via Machine Learning}
+\section{Phase 4: High-Frequency Inflation Forecasting via Machine Learning}
 
-\subsection{The Scale Invariance Principle}
-\hs A common methodological question in price index nowcasting is how a newly initialized daily pipeline (where the base period is August 2026 = 100.00) can accurately predict an official national index published on a historical baseline (such as the NIS baseline of 2006 = 100.00, where index levels exceed 219.0).
+\subsection{Direct Multi-Horizon Forecasting Formulation}
+\hs While traditional macroeconomic forecasting relies on low-frequency quarterly or monthly aggregates, high-frequency price intelligence demands real-time predictive models capable of projecting price trajectories over multi-day horizons \citep{medeiros2021forecasting, gouletcoulombe2022machine}. To deliver actionable foresight to central bankers and fiscal planners, the pipeline deploys an autonomous supervised machine learning forecasting engine directly driven by high-frequency daily price facts from \texttt{gold.fct\_cpi\_daily}.
 
-\hs The econometric answer rests on the \textbf{Axiom of Scale Invariance} \citep{imf2020cpi, cavallo2016billion}. Price index levels $P_t$ are non-stationary time series integrated of order one ($I(1)$). Econometric models do not model raw index levels across disparate base periods; instead, they model the stationary, scale-invariant monthly percentage rate of price change ($\pi_t$):
+\hs Rather than employing iterative recursive autoregressions---which suffer from rapid error compounding across extended horizons---the system implements a \textbf{Direct Multi-Horizon Forecasting Strategy}. For each reference calculation date $t$ and forecast horizon $H \in \{7, 14, 30\}$ days, the supervised target variable $y_t^{(H)}$ is defined as the forward cumulative percentage change in the National Headline CPI:
 \begin{equation}
-    \pi_t = \frac{P_t - P_{t-1}}{P_{t-1}} \times 100 \approx \Delta \ln(P_t) \times 100
+    y_t^{(H)} = \left( \frac{\text{CPI}_{t+H} - \text{CPI}_t}{\text{CPI}_t} \right) \times 100\%
 \end{equation}
+Given the estimated forward inflation rate $\hat{y}_t^{(H)}$, the projected CPI index level at horizon $H$ is computed directly as:
+\begin{equation}
+    \widehat{\text{CPI}}_{t+H} = \text{CPI}_t \times \left( 1 + \frac{\hat{y}_t^{(H)}}{100} \right)
+\end{equation}
+This formulation ensures that forecasts are tied directly to realized index levels, providing both relative rate and absolute index projections for 7-day (weekly), 14-day (bi-weekly), and 30-day (monthly) policy planning windows.
 
-\hs Mathematically, because both index series track consumer baskets within the same physical economy, their index levels differ only by an arbitrary constant scale factor $\lambda = P_{2006} / P_{2026}$:
-\begin{equation}
-    P_t^{\text{NIS}} = \lambda \cdot P_t^{\text{scraped}}
-\end{equation}
-When computing the percentage rate of inflation, the scale factor $\lambda$ cancels out identically in both numerator and denominator:
-\begin{equation}
-    \pi_t^{\text{NIS}} = \frac{\lambda P_t^{\text{scraped}} - \lambda P_{t-1}^{\text{scraped}}}{\lambda P_{t-1}^{\text{scraped}}} = \frac{P_t^{\text{scraped}} - P_{t-1}^{\text{scraped}}}{P_{t-1}^{\text{scraped}}} = \pi_t^{\text{scraped}}
-\end{equation}
-Therefore, \textbf{the rate of inflation is completely invariant to the choice of base period}. The high-frequency momentum signal captured by daily web scraping directly informs the official monthly inflation trajectory.
+\subsection{High-Frequency Feature Engineering and Econometric Signals}
+\hs The predictive power of machine learning models in macroeconomic environments depends fundamentally on feature representation \citep{babii2022machine}. The pipeline extracts a rich multidimensional feature vector $\mathbf{x}_t \in \mathbb{R}^D$ from the daily price history, strictly shifted by one observation ($t-1$) to guarantee zero look-ahead bias:
 
-\subsection{Econometric and Machine Learning Model Specifications}
-\hs The nowcasting engine combines two complementary modeling philosophies into an optimal predictive ensemble:
+\begin{enumerate}
+    \item \textbf{Base Daily Returns and Autoregressive Lags:} The immediate day-over-day price return is computed as:
+    \begin{equation}
+        r_t = \left( \frac{\text{CPI}_t - \text{CPI}_{t-1}}{\text{CPI}_{t-1}} \right) \times 100\%
+    \end{equation}
+    To capture short-term price memory and momentum persistence, autoregressive lag features are constructed across expanding intervals:
+    \begin{equation}
+        L_k(t) = r_{t-k}, \quad \text{for } k \in \{1, 2, 3, 7, 14, 30\}
+    \end{equation}
 
-\subsubsection{Model A: Linear Autoregressive Distributed Lag (ADL Bridge Model)}
-\hs Following the empirical framework developed by central banks \citep{macias2023nowcasting}, Model A combines low-frequency macroeconomic persistence with intra-month high-frequency price momentum, dedicated food and fuel sub-driver signals, and deterministic seasonal adjustments:
-\begin{equation}
-    \hat{\pi}_{t}^{\text{ADL}} = \beta \cdot \pi_{t-1} + \gamma_1 \cdot \Delta x_t^{\text{scraped}} + \gamma_2 \cdot x_{\text{Food}} + \gamma_3 \cdot x_{\text{Transport}} + \delta \cdot S_t
-\end{equation}
-where:
-\begin{itemize}
-    \item $\beta = 0.20$ captures macroeconomic inertia from prior month official inflation ($\pi_{t-1}$).
-    \item $\gamma_1 = 0.40$ captures the intra-month price momentum across the broad scraped basket ($\Delta x_t^{\text{scraped}}$).
-    \item $\gamma_2 = 0.25$ and $\gamma_3 = 0.10$ isolate the momentum of Food ($44.775\%$ basket weight) and Transport ($12.180\%$ basket weight), which together represent nearly $57\%$ of the entire consumer basket.
-    \item $\delta \cdot S_t$ captures deterministic festival demand shifts during major Cambodian cultural celebrations ($S_t = +0.15$ during Khmer New Year, Pchum Ben, and Water Festival; $-0.05$ otherwise).
-\end{itemize}
+    \item \textbf{Multi-Horizon Moving Averages and Trend Velocity:} To filter high-frequency noise from structural trends, trailing simple moving averages are computed over 7-day, 14-day, and 30-day windows:
+    \begin{equation}
+        \text{MA}_k(t) = \frac{1}{k} \sum_{i=1}^{k} \text{CPI}_{t-i}, \quad k \in \{7, 14, 30\}
+    \end{equation}
+    The relative velocity between short-term and medium-term price trends is captured by the normalized momentum spread:
+    \begin{equation}
+        \text{Spread}_{7,30}(t) = \left( \frac{\text{MA}_7(t) - \text{MA}_{30}(t)}{\text{MA}_{30}(t)} \right) \times 100\%
+    \end{equation}
 
-\subsubsection{Model B: Non-Linear Gradient Boosted Decision Trees (GBRT)}
-\hs Following \cite{medeiros2021forecasting}, consumer prices exhibit non-linearities such as asymmetric exchange rate pass-through and price volatility clustering:
-\begin{equation}
-\begin{aligned}
-    \hat{\pi}_t^{\text{Tree}} = 0.60 \cdot \Delta x_t^{\text{scraped}} &+ \left( 0.25 \cdot x_{\text{Food}} + 0.15 \cdot x_{\text{Transport}} \right) \\
-    &+ \psi_{\text{FX}} \cdot \text{Shock}_{\text{FX}}(t) + \theta_{\text{Holiday}} \cdot \mathbb{I}_{\text{Holiday}}(t) + \text{Adj}_{\text{Vol}}(t)
-\end{aligned}
-\end{equation}
-where:
-\begin{itemize}
-    \item $\text{Shock}_{\text{FX}}(t) = \max(0, \frac{\text{FX}_t - \text{FX}_{t-7}}{\text{FX}_{t-7}} \times 100)$ captures unilateral foreign exchange appreciation shocks ($\psi_{\text{FX}} = 0.20$), reflecting that dollar appreciation raises retail prices quickly, while dollar depreciation transmits much more slowly.
-    \item $\theta_{\text{Holiday}} = +0.35\%$ models step-function demand surges during active holiday shopping windows.
-    \item $\text{Adj}_{\text{Vol}}(t) = \text{sign}(\Delta x_t^{\text{scraped}}) \cdot \min(0.30, 10.0 \cdot \sigma_{14})$ scales the forecast with 14-day rolling price volatility ($\sigma_{14}$).
-\end{itemize}
+    \item \textbf{Rolling Volatility Estimators:} High-frequency market turbulence and price dispersion are measured by the rolling sample standard deviation of daily returns:
+    \begin{equation}
+        \sigma_k(t) = \sqrt{\frac{1}{k-1} \sum_{i=1}^{k} \left( r_{t-i} - \bar{r}_k(t) \right)^2}, \quad k \in \{7, 14\}
+    \end{equation}
 
-\subsubsection{Optimal Inverse-Error Ensemble Blend}
-\hs Following classic forecast combination theory \citep{bates1969combination}, the models are blended using Inverse Root Mean Squared Forecast Error (RMSFE) weights ($w_{\text{ADL}} = 0.48$, $w_{\text{Tree}} = 0.52$):
-\begin{equation}
-    \hat{\pi}_t = \left( 0.48 \cdot \hat{\pi}_t^{\text{ADL}} \right) + \left( 0.52 \cdot \hat{\pi}_t^{\text{Tree}} \right)
-\end{equation}
+    \item \textbf{Cross-Division Leading Momentum Signals:} In developing economies, aggregate inflation is predominantly led by supply-side shocks in food and energy \citep{cavallo2016billion, macias2023nowcasting}. The pipeline computes dedicated 7-day cumulative momentum signals for Division 01 (Food and Non-Alcoholic Beverages, $44.775\%$ basket weight) and Division 07 (Transport, $12.180\%$ basket weight):
+    \begin{equation}
+        M_{\text{Food}, t}^{(7)} = \left( \frac{I_{\text{Food}, t-1} - I_{\text{Food}, t-8}}{I_{\text{Food}, t-8}} \right) \times 100\%
+    \end{equation}
+    \begin{equation}
+        M_{\text{Trans}, t}^{(7)} = \left( \frac{I_{\text{Trans}, t-1} - I_{\text{Trans}, t-8}}{I_{\text{Trans}, t-8}} \right) \times 100\%
+    \end{equation}
+    These two divisions account for nearly $57\%$ of the entire consumer basket, allowing their localized dynamics to serve as high-conviction leading indicators for headline movements.
 
-\subsection{Dynamic Uncertainty Fan Bands and Chain Linking}
-\hs A critical feature of real-time nowcasting is that uncertainty changes dynamically across the month. On the first day of the month, with very few days observed, nowcast uncertainty is at its widest. As the month progresses toward day 28 or 30, with most price observations realized, uncertainty contracts asymptotically toward zero.
+    \item \textbf{Calendar Dynamics and Cambodian Cultural Festivals:} Seasonal consumer demand shifts are modeled using calendar indicators (day-of-week, weekend dummy, day-of-month) and smooth cyclical trigonometric encodings:
+    \begin{equation}
+        \sin_m(t) = \sin\left( \frac{2\pi \cdot m_t}{12} \right), \quad \cos_m(t) = \cos\left( \frac{2\pi \cdot m_t}{12} \right)
+    \end{equation}
+    where $m_t \in \{1, \dots, 12\}$ is the calendar month. Furthermore, binary indicators $\mathbb{I}_{\text{Festival}}(t)$ flag active expenditure windows surrounding major Cambodian holidays (Khmer New Year in mid-April, Pchum Ben in September/October, and the Water Festival in November), capturing documented seasonal retail demand surges.
+\end{enumerate}
 
-\hs Following classical sampling theory, the margin of error contracts in direct proportion to the square root of the unobserved fraction of the month:
+\subsection{Non-Linear Gradient Boosted Decision Trees (LightGBM Architecture)}
+\hs Empirical macroeconomic research demonstrates that tree-based ensemble algorithms systematically outperform traditional linear and deep learning models on tabular economic time series with sharp regime shifts \citep{medeiros2021forecasting, gouletcoulombe2022machine}. The pipeline implements \textbf{LightGBM} (Light Gradient Boosting Machine), which optimizes an ensemble of $M$ decision trees:
 \begin{equation}
-    \text{Uncertainty Factor}_t = \sqrt{ \max\left( 0.01, \; \frac{T_t - d_t}{T_t} \right) }
+    \hat{y}_t^{(H)} = \sum_{m=1}^{M} f_m(\mathbf{x}_t), \quad f_m \in \mathcal{F}
 \end{equation}
+At each boosting iteration $m$, the model minimizes a second-order Taylor approximation of the Mean Squared Error (MSE) objective with $L_2$ tree regularization:
 \begin{equation}
-    \text{MoE}_t = Z_{0.975} \cdot \sigma_{\text{base}} \cdot \text{Uncertainty Factor}_t
+    \mathcal{L}^{(m)} \approx \sum_{i=1}^{N} \left[ g_i f_m(\mathbf{x}_i) + \frac{1}{2} h_i f_m^2(\mathbf{x}_i) \right] + \gamma T + \frac{1}{2} \lambda \sum_{j=1}^{T} w_j^2
 \end{equation}
-\begin{equation}
-    \text{CI}_{95}(t) = \left[ \hat{P}_t - \text{MoE}_t, \quad \hat{P}_t + \text{MoE}_t \right]
-\end{equation}
-where $d_t$ is elapsed calendar days, $T_t$ is total days in the month, $Z_{0.975} = 1.96$, and $\sigma_{\text{base}} = 0.45\%$ (empirical monthly inflation volatility in Cambodia).
+where $g_i$ and $h_i$ represent the first and second-order loss gradients, $T$ denotes the number of terminal leaves, $w_j$ are the leaf weights, and $\lambda = 1.0$ penalizes model complexity. LightGBM utilizes Gradient-based One-Side Sampling (GOSS) and Exclusive Feature Bundling (EFB), ensuring sub-second model training and low latency during daily production runs. Hyperparameters are tuned with learning rate $\eta = 0.05$, max leaves $J = 31$, and minimum child samples $= 5$ to mitigate overfitting on limited time-series horizons.
 
-\hs Simultaneously, the official NIS historical series is projected forward via dynamic chain linking:
+\subsection{Walk-Forward Cross-Validation and Out-of-Sample Evaluation}
+\hs A critical hazard in financial and economic forecasting is data leakage: standard randomized $K$-fold cross-validation uses future observations to predict the past, producing severely over-optimistic accuracy metrics. To ensure empirical validity, the pipeline enforces strict \textbf{Walk-Forward Time-Series Cross-Validation} via \texttt{TimeSeriesSplit} \citep{babii2022machine}.
+
+\hs The historical sample is partitioned into $K$ sequential expanding temporal folds. In each fold $k$, the model trains exclusively on historical facts up to date $t_k$ and evaluates out-of-sample predictions on the subsequent window $[t_k + 1, t_k + H]$. Out-of-sample performance is tracked using Root Mean Squared Error (RMSE) and Mean Absolute Error (MAE):
 \begin{equation}
-    \hat{P}_{\text{NIS}, t} = P_{\text{NIS}, t-1} \times \left( 1 + \frac{\hat{\pi}_t}{100} \right)
+    \text{RMSE}^{(H)} = \sqrt{\frac{1}{N_H} \sum_{i=1}^{N_H} \left( y_i^{(H)} - \hat{y}_i^{(H)} \right)^2}
 \end{equation}
-This allows decision-makers to track both the pipeline-native daily index and the official historical NIS series seamlessly.
+\begin{equation}
+    \text{MAE}^{(H)} = \frac{1}{N_H} \sum_{i=1}^{N_H} \left| y_i^{(H)} - \hat{y}_i^{(H)} \right|
+\end{equation}
+This rigorous backtesting framework guarantees that all reported metrics reflect genuine out-of-sample predictive capability.
+
+\subsection{Automated Production Serving and Database Persistence}
+\hs Following feature generation, walk-forward validation, and full-sample re-fitting, the resulting multi-horizon predictions are upserted into the PostgreSQL Gold analytical mart:
+\begin{equation}
+    \texttt{gold.fct\_cpi\_forecast} \left( \text{execution\_date}, \text{target\_date}, H, \text{current\_cpi}, \hat{y}^{(H)}, \widehat{\text{cpi}}^{(H)}, \text{rmse}, \text{mae} \right)
+\end{equation}
+The forecasts are exposed via the analytical view \texttt{gold.v\_cpi\_forecast\_chart}, connecting historical daily CPI observations with forward 7-day, 14-day, and 30-day projection curves for direct consumption by BI dashboards and policy analysts.
+
+\subsection{High-Frequency Inflation Nowcasting and Benchmark Chain-Linking}
+\hs While multi-horizon machine learning models project forward price paths, fiscal authorities and the central bank require zero-lag estimates of the official monthly inflation rate before statistical agencies publish delayed reports \citep{cavallo2016billion, macias2023nowcasting}. To solve this 30-to-60-day reporting delay, the pipeline incorporates an intra-month \textbf{High-Frequency Inflation Nowcasting Engine} (\texttt{ml/nowcaster.py}).
+
+\hs For an active calendar month $M$ with $T$ total days, on any calculation day $t \le T$, the full-month nowcast $\widehat{\text{CPI}}_M(t)$ is computed by partitioning the month into observed and unobserved days:
+\begin{equation}
+    \widehat{\text{CPI}}_M(t) = \left( \frac{t}{T} \right) \overline{\text{CPI}}_{\text{realized}}(t) + \left( \frac{T - t}{T} \right) \widehat{\text{CPI}}_{\text{remaining}}
+\end{equation}
+where $\overline{\text{CPI}}_{\text{realized}}(t) = \frac{1}{t} \sum_{\tau=1}^t \text{CPI}_\tau$ represents the mean of daily facts accumulated so far, and $\widehat{\text{CPI}}_{\text{remaining}}$ is projected using the high-frequency momentum of Food (Division 01) and Transport (Division 07). 
+
+\hs The estimated Month-over-Month (MoM \%) nowcast is then derived relative to the prior month's monthly CPI:
+\begin{equation}
+    \widehat{\pi}_{\text{MoM}, M}(t) = \left( \frac{\widehat{\text{CPI}}_M(t) - \text{CPI}_{M-1}}{\text{CPI}_{M-1}} \right) \times 100\%
+\end{equation}
+To make the output directly comparable to official government releases, the nowcast is chain-linked to the historical National Institute of Statistics (NIS) Phnom Penh benchmark (Base Oct--Dec 2006 = 100):
+\begin{equation}
+    \widehat{\text{CPI}}_{\text{NIS}, M}(t) = \text{CPI}_{\text{NIS}, M-1} \times \left( 1 + \frac{\widehat{\pi}_{\text{MoM}, M}(t)}{100} \right)
+\end{equation}
+Dynamic 95\% confidence intervals are calculated using daily return volatility $\sigma_{\text{daily}}$ and the uncertainty decay ratio $U_t = \sqrt{(T - t)/T}$:
+\begin{equation}
+    \text{CI}_{95\%} = \widehat{\text{CPI}}_M(t) \pm 1.96 \cdot \sigma_{\text{daily}} \sqrt{\frac{T - t}{T}}
+\end{equation}
+All computed nowcasts are automatically persisted into \texttt{gold.fct\_cpi\_nowcast} and audited against official NIS publications in \texttt{gold.v\_nowcast\_evaluation}.
 
 \section{Phase 5: Interactive Dashboard Architecture and Production Deployment}
 

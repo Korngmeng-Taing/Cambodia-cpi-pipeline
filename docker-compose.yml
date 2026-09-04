@@ -25,6 +25,8 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__PARALLELISM: "32"
     AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "24"
     AIRFLOW__WEBSERVER__WORKERS: "2"
+    AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: "300"
+    AIRFLOW__WEBSERVER__WEB_SERVER_WORKER_TIMEOUT: "300"
     AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
     PYTHONPATH: /opt/airflow:/opt/airflow/dags

@@ -6,7 +6,7 @@
     \item \textbf{The Transition from Physical Price Surveys to Automated Big Data Ingestion:} The theoretical and operational shift from traditional in-person enumerator surveys to automated daily web collection systems.
     \item \textbf{Natural Language Processing and Artificial Intelligence in Product Classification:} Modern semantic representations, vector similarity methods, and supervised classification frameworks for mapping raw retail listings into standard international consumption taxonomies.
     \item \textbf{Econometric Index Number Theory and Mathematical Axioms:} Elementary price relatives, axiomatic comparisons between geometric and arithmetic aggregation, missing price imputation principles, and the elimination of calculation bias.
-    \item \textbf{High-Frequency Economic Nowcasting and Machine Learning:} Methodological foundations for closing the observation gap in official macroeconomic statistics using high-frequency daily price signals, foreign exchange dynamics, and non-linear predictive algorithms.
+    \item \textbf{High-Frequency Inflation Forecasting via Machine Learning:} Methodological foundations for forward-looking consumer price prediction using high-frequency daily price signals, gradient boosted tree architectures, and non-linear lag dynamics.
     \item \textbf{Emerging Market Context and Research Gap:} Synthesizing findings from global implementations and highlighting the critical research gap in dollarized developing economies such as Cambodia.
 \end{enumerate}
 
@@ -26,10 +26,8 @@
     \item \textbf{Statistical Truth and Anomaly Detection:} In countries experiencing severe inflation or official statistical distortions (such as Argentina during the 2007 to 2015 period), the Billion Prices Project demonstrated that online price crawling accurately tracked actual annual inflation of approximately $20.0\%$, while official statistical publications reported only $8.0\%$. This proved the objective value of automated public web data as an independent, tamper-proof source of macroeconomic intelligence.
 \end{itemize}
 
-\subsection{Institutional Adoption by European and International Statistical Offices}
-\hs Following the success of academic initiatives, major national statistical institutes (NSIs) began actively evaluating the incorporation of web scraping into official statistical production. At the Italian National Institute of Statistics (ISTAT), \cite{polidoro2015webscraping} conducted large-scale pilot studies demonstrating that daily web crawling could expand the volume of observed price quotes by more than two orders of magnitude while reducing the field collection labor overhead by more than $80\%$. Their work established formal protocols for data cleaning, store sampling, and outlier detection that became a benchmark for statistical modernizers.
-
-\hs Recognizing the growing importance of digital data, the Statistical Office of the European Communities formalized these practices in the official practical guidelines for European statistical authorities \citep{eurostat2022webscraping}. The Eurostat framework outlines operational standards for web scraping in the production of the Harmonised Index of Consumer Prices (HICP), emphasizing transparency, legal compliance, automated quality validation, and the need for robust data engineering architectures capable of managing volatile online product catalogs.
+\subsection{Institutional Adoption and Practical Web Scraping Standards}
+\hs Following the success of academic initiatives, major national statistical institutes and international bodies began actively evaluating the incorporation of web scraping into official statistical production. Recognizing the growing importance of digital data, the Statistical Office of the European Communities formalized operational standards for statistical authorities \citep{eurostat2022webscraping}. The Eurostat framework outlines best practices for web scraping in the production of consumer price indices, emphasizing legal compliance, automated quality validation, robust crawler scheduling, and the need for resilient data engineering architectures capable of managing volatile online product catalogs.
 
 \section{Natural Language Processing and Artificial Intelligence in Product Classification}
 \subsection{The Challenge of Multilingual and Unstructured Product Data}
@@ -58,9 +56,7 @@
 \end{itemize}
 
 \subsection{Human-in-the-Loop Operational Architectures}
-\hs Despite the high accuracy of modern machine learning, national statistical integrity requires mechanisms to handle ambiguous or borderline cases. The UK Office for National Statistics (ONS) Data Science Campus \citep{ons2020clothing} introduced a Human-in-the-Loop (HITL) framework for machine learning classification of scraped clothing prices.
-
-\hs By establishing a statistical confidence threshold (such as $80\%$ confidence), the ONS system automatically accepts predictions that exceed the threshold while routing ambiguous items to human statistical reviewers. This hybrid design automated more than $70\%$ of the total data volume while maintaining the rigorous quality standards required for official economic publications.
+\hs Despite the high accuracy of modern artificial intelligence and machine learning models, national statistical integrity requires robust fallback mechanisms to handle ambiguous product descriptions, rare marketplace items, or low-confidence predictions. In high-frequency operational pipelines, this is achieved through Human-in-the-Loop (HITL) architectural design. By establishing statistical confidence thresholds, the pipeline automatically processes high-confidence classifications while flagging borderline items for expert review or deterministic rule overrides. This ensures that the automated system operates with maximum throughput without compromising the econometric consistency required for official price measurement.
 
 \section{Econometric Index Number Theory and Axiomatic Foundations}
 \subsection{The Elementary Level: Why Mathematical Formulas Matter}
@@ -92,45 +88,51 @@
 
 \hs Because the Jevons formula satisfies all fundamental axiomatic tests and models consumer substitution behavior under unitary elasticity, the IMF CPI Manual \citep{imf2020cpi} explicitly recommends the Jevons geometric mean as the standard elementary aggregator for unweighted price quotes.
 
-\subsection{Upper-Level Aggregation and Substitution Bias}
-\hs Once elementary indices are calculated for each product variety, they must be combined into category indices and a final national headline index. In national accounting, this is performed using the \textbf{Laspeyres} or \textbf{Modified Laspeyres} formula, which weights each category by its share of total household expenditure as determined by periodic national expenditure surveys.
+\subsection{Macro-Level Aggregation and National Expenditure Weights}
+\hs Once elementary price relatives are calculated for each product variety using the axiomatic Jevons formula, they must be combined into division-level indices and the final national Headline CPI. In online web scraping environments, transaction volumes and physical sales quantities for individual online listings are unobservable. Consequently, superlative index numbers requiring simultaneous high-frequency price and quantity data cannot be computed at the elementary level.
 
-\hs In their seminal micro-econometric analysis, \cite{diewert2020substitution} examined the phenomenon of \textbf{commodity substitution bias} in scanner and online datasets. When relative prices change, consumers naturally substitute away from items that have become relatively expensive toward items that have become relatively cheaper. Fixed-basket Laspeyres indices assume that consumer purchasing patterns remain completely rigid, which overstates the true increase in the cost of living by approximately \textbf{0.30\% to 0.85\% per annum}. \cite{diewert2020substitution} proved that superlative index numbers (such as the Fisher Ideal Index and the T\"ornqvist Index) provide exact second-order approximations to consumer utility, establishing a theoretical benchmark for future high-frequency statistical systems.
+\hs Following the standard international methodology established by the IMF CPI Manual \citep{imf2020cpi}, high-frequency online systems bridge this gap through a two-tier aggregation architecture: elementary strata are compiled using unweighted geometric Jevons indices, while macro-level aggregation applies fixed expenditure weights derived from periodic national household surveys. In Cambodia, these weights are officially established by the Cambodia Socio-Economic Survey (CSES 2023), conducted by the National Institute of Statistics (NIS). This ensures that the high-frequency daily price series accurately reflects household expenditure patterns across all 12 UN COICOP divisions while remaining mathematically immune to formula drift.
 
-\subsection{Multilateral Systems for Managing Product Churn}
-\hs When processing high-frequency retail scanner data, economists face another challenge: high product turnover, clearance markdowns, and temporary stockouts. If traditional bilateral price indices are chained on a daily or weekly frequency, the frequent entry and exit of products causes severe \textbf{chain drift}.
+\section{High-Frequency Inflation Forecasting via Machine Learning}
 
-\hs To solve this problem, \cite{chessa2016methodology} at Statistics Netherlands (CBS) developed the Quality-Adjusted Unit Value GEKS (QU-GEKS) and GEKS-T\"ornqvist rolling multilateral index systems combined with movement splicing. By evaluating price relatives simultaneously across a multi-month window, multilateral methods eliminate chain drift and provide stable long-term price trajectories. This method has been officially adopted by several European statistical agencies for processing supermarket scanner big data.
+\subsection{The Micro-Price Revolution: Real-Time Baskets and Frequency Advantages}
+\hs In macroeconomic forecasting, official inflation series have historically been modeled using low-frequency monthly or quarterly econometric specifications, such as Vector Autoregressions (VAR), Autoregressive Integrated Moving Average (ARIMA), and structural Phillips Curves. However, low-frequency models suffer from severe temporal inertia. In dynamic developing economies, by the time monthly official survey reports are compiled and published (typically 30 to 60 days after the reference period), supply chain shocks, fuel price shifts, or exchange rate fluctuations may have already propagated through the domestic retail economy.
 
-\section{High-Frequency Economic Nowcasting and Machine Learning}
-\subsection{The Concept of Nowcasting in Modern Macroeconomics}
-\hs In macroeconomics, a sharp conceptual distinction exists between \textbf{forecasting} and \textbf{nowcasting}:
+\hs The advent of automated daily web scraping has catalyzed a fundamental paradigm shift toward \textbf{high-frequency micro-price forecasting} \citep{cavallo2016billion}. Rather than waiting for retrospective monthly aggregations, researchers can harvest continuous daily price trajectories across thousands of retail items. In their foundational work with the MIT Billion Prices Project, \cite{cavallo2016billion} demonstrated that daily web-scraped price series across 22 countries exhibited a Pearson correlation exceeding $0.98$ with official monthly CPI series in open economies, while detecting macroeconomic turning points and international commodity shocks 3 to 14 days after their occurrence.
+
+\hs Extending this methodology to targeted consumption baskets, \cite{aparicio2021targeted} demonstrated that high-frequency web-scraped price microdata captures retail price stickiness, promotional markdowns, and intra-month expenditure shifts weeks before traditional statistical agencies publish monthly figures. Their empirical analysis showed that tracking targeted supermarket baskets in real time provides central banks with continuous early-warning surveillance, transforming inflation estimation from an episodic historical audit into an active, high-frequency predictive system.
+
+\subsection{Non-Linear Machine Learning and the Superiority of Tree Ensembles}
+\hs When modeling inflation from high-frequency multi-division price feeds, traditional linear regressions face severe theoretical and empirical limitations. Economic relationships in retail consumer markets are inherently non-linear and subject to structural regime shifts.
+
+\hs In a comprehensive benchmark evaluation, \cite{medeiros2021forecasting} compared traditional econometric specifications against modern machine learning architectures (including LASSO, Ridge regression, Elastic Net, Factor Models, Random Forests, and Gradient Boosted Regression Trees) across multiple forecasting horizons. Their empirical findings revealed that \textbf{Gradient Boosted Regression Trees (GBRT) and Random Forests systematically outperformed traditional econometric benchmarks}, achieving a \textbf{10\% to 25\% reduction in Mean Squared Forecast Error (MSFE)} over standard autoregressions and Phillips Curve baselines. They established that non-linear algorithms excel because macroeconomic price formation is governed by complex threshold effects that linear shrinkage models cannot capture.
+
+\hs In an extensive theoretical inquiry into why machine learning methods excel in macroeconomic prediction, \cite{gouletcoulombe2022machine} identified three structural advantages that explain why tree-based ensembles systematically dominate linear specifications:
 \begin{itemize}
-    \item \textbf{Forecasting} aims to predict economic aggregates in distant future periods (such as 6, 12, or 24 months ahead), relying on macroeconomic structural models, expectations surveys, and scenario assumptions.
-    \item \textbf{Nowcasting} exploits real-time, high-frequency intra-month data realized up to the current day to estimate the current, yet unpublished, official macroeconomic aggregate, effectively eliminating the 30-day reporting delay.
+    \item \textbf{Asymmetric Input-Cost Pass-Through (``Rockets and Feathers'' Pricing):} Consumer prices frequently respond asymmetrically to input cost shocks. For example, retail fuel price surges trigger rapid, sharp upward price increases in transport and distribution (Division 07), whereas price declines transmit at a significantly slower rate. Decision trees naturally isolate these non-linear thresholds through recursive binary partitioning.
+    \item \textbf{Automatic Multi-Way Interactions:} Tree ensembles discover complex interactions between concurrent macroeconomic shocks without requiring explicit polynomial feature engineering. In retail markets, a cost shock occurring during a major cultural celebration (such as Khmer New Year or Pchum Ben) exerts a compounding effect on final prices that linear additive terms fail to capture.
+    \item \textbf{Robustness against Collinear High-Frequency Regressors:} In daily time-series feature stores containing dense multi-day autoregressive lags ($L_1, L_2, \dots, L_{30}$), linear models suffer from severe multicollinearity and variance inflation. Gradient boosted trees select the single most informative feature split at each node, maintaining robust generalizability across correlated high-frequency regressors.
 \end{itemize}
 
-\hs In central banking and fiscal planning, nowcasting provides critical visibility. Policymakers cannot afford to wait 30 to 45 days to learn whether an international fuel price surge or an agricultural supply disruption is driving up consumer prices. High-frequency nowcasting provides continuous, daily updates on the inflation trajectory as the month unfolds.
+\subsection{High-Frequency Food Price Dynamics and Central Bank Leading Indicators}
+\hs In emerging and developing economies, aggregate inflation is predominantly led by supply-side shocks in agriculture and retail food distribution. In an extensive empirical study, \cite{macias2023nowcasting} analyzed over 2.4 million daily supermarket price quotes harvested across major retail chains in Poland. By integrating daily price microdata into recursive time-series and bridge forecasting models, their high-frequency food tracking framework achieved a \textbf{15\% to 35\% reduction in Root Mean Squared Forecast Error (RMSFE)} compared to traditional statistical baselines.
 
-\subsection{Mixed-Frequency Econometric Models}
-\hs A key challenge in nowcasting is combining data that arrives at different frequencies: official inflation is published once a month, while web-scraped prices, foreign exchange rates, and fuel tariffs arrive daily.
+\hs The findings of \cite{macias2023nowcasting} provide two critical insights for high-frequency inflation forecasting:
+\begin{enumerate}
+    \item \textbf{Food as the Primary Leading Driver:} Food prices adjust with significantly higher daily frequency than sticky categories (such as housing or education), making high-frequency food price momentum the single strongest leading indicator for overall headline inflation.
+    \item \textbf{Intra-Month Predictive Power:} The majority of the predictive gain from high-frequency scraping is realized within the first 10 to 14 days of the reference month. Tracking retail price arrivals during the first half of the month enables statistical analysts to project final monthly inflation with high precision weeks before official statistical releases.
+\end{enumerate}
 
-\hs \cite{macias2023nowcasting} examined this problem using an 11-year dataset of daily supermarket food prices in Poland, comprising over 2 million quotes. By integrating daily price aggregates into Mixed-Data Sampling (MIDAS) and Autoregressive Distributed Lag (ARDL) models, they demonstrated a \textbf{15\% to 35\% reduction in Root Mean Squared Forecast Error (RMSFE)} compared to traditional monthly time-series benchmarks. Their work confirmed that intra-month daily price movements contain powerful predictive signals that explain official statistical outcomes before they are formally published.
+\subsection{Time-Series Econometrics, Validation Rigor, and Look-Ahead Discipline}
+\hs Integrating high-frequency daily price series into predictive machine learning models requires strict methodological discipline to avoid data leakage and spurious correlation. In standard cross-sectional machine learning, randomized $k$-fold cross-validation is ubiquitous. However, in macroeconomic time series, random shuffling violates temporal ordering and leaks future price information into past training folds.
 
-\subsection{Machine Learning in High-Dimensional Macroeconomic Environments}
-\hs As the number of high-frequency data inputs grows, traditional linear regressions face limitations in handling collinearity, complex calendar effects, and non-linear economic relationships.
+\hs \cite{babii2022machine} addressed this challenge by formalizing high-frequency time-series machine learning regressions under strict expanding-window (\textbf{walk-forward}) cross-validation protocols. By training exclusively on historical data points $1, \dots, t$ and evaluating out-of-sample performance strictly on forward horizons $t+1, \dots, t+H$, machine learning models provide genuine, unbiased out-of-sample generalization metrics (Root Mean Squared Error and Mean Absolute Error). Furthermore, direct multi-horizon target formulation avoids iterative compounding errors, ensuring stable projections across weekly, bi-weekly, and monthly horizons.
 
-\hs \cite{medeiros2021forecasting} conducted an extensive empirical comparison between traditional econometric models (such as the Phillips Curve and Autoregressive models) and modern machine learning algorithms (including LASSO, Ridge regression, Random Forests, and Gradient Boosted Regression Trees). Evaluating inflation forecasts across multiple time horizons, they proved that \textbf{Gradient Boosted Regression Trees and Random Forests consistently outperformed all traditional econometric benchmarks}, reducing forecast error by \textbf{10\% to 25\%}.
-
-\hs The superior performance of machine learning in inflation nowcasting is driven by several key factors:
-\begin{itemize}
-    \item \textbf{Asymmetric Shocks:} Retail prices frequently respond asymmetrically to cost increases and decreases. For instance, retail prices rise quickly when import costs spike, but adjust downward more slowly when costs fall. Tree-based algorithms naturally capture these non-linear threshold effects.
-    \item \textbf{Calendar and Holiday Dynamics:} Consumer spending and retail pricing in many countries follow distinct seasonal and holiday patterns. In Cambodia, major national festivals (such as Khmer New Year and Pchum Ben) generate predictable temporary price surges that machine learning models can learn directly from calendar features.
-    \item \textbf{High-Dimensional Regressor Integration:} Machine learning models can seamlessly incorporate multiple high-frequency exogenous series (such as daily exchange rates, gasoline prices, and international commodity indices) alongside domestic price momentum without suffering from overfitting.
-\end{itemize}
+\subsection{Architectural Synthesis and Methodological Blueprint for Cambodia}
+\hs The theoretical and empirical findings from these landmark studies establish the econometric and computational foundation for the Cambodia Daily CPI Medallion Pipeline. From \cite{cavallo2016billion} and \cite{aparicio2021targeted}, the pipeline adopts the principle of high-frequency daily retail price harvesting to bypass the standard 30 to 60-day official survey delays. From \cite{medeiros2021forecasting} and \cite{gouletcoulombe2022machine}, the pipeline deploys non-linear tree-based ensembles (LightGBM) to capture asymmetric pass-through and holiday interaction effects across dense autoregressive lags. From \cite{macias2023nowcasting}, the pipeline leverages high-frequency food price momentum (COICOP Division 01) as the primary leading indicator for aggregate consumer price fluctuations. Finally, following \cite{babii2022machine}, the forecasting engine enforces strict walk-forward cross-validation (\texttt{TimeSeriesSplit}) and direct multi-horizon targets ($H \in \{7, 14, 30\}$) to eliminate look-ahead bias and avoid compounding recursive forecast errors.
 
 \section{The Emerging Market Context and Research Gap}
-\hs While the integration of web scraping, artificial intelligence, and machine learning nowcasting has advanced rapidly in Europe, North America, and parts of Latin America, very little empirical research has been conducted in developing Southeast Asian economies, and specifically in Cambodia.
+\hs While the integration of web scraping, artificial intelligence, and machine learning inflation forecasting has advanced rapidly in Europe, North America, and parts of Latin America, very little empirical research has been conducted in developing Southeast Asian economies, and specifically in Cambodia.
 
 \hs Cambodia presents a uniquely compelling economic context for high-frequency digital price measurement:
 \begin{enumerate}
@@ -139,30 +141,30 @@
     \item \textbf{Rapid E-Commerce Expansion:} Over the past five years, the widespread adoption of smartphones, high-speed mobile internet, and the National Bank of Cambodia's digital payment system (Bakong) has catalyzed the growth of modern online supermarkets, digital pharmacies, and ride-hailing services.
 \end{enumerate}
 
-\hs Despite these unique conditions, national inflation tracking in Cambodia has continued to rely exclusively on monthly in-person market surveys. Prior to this research, no automated, end-to-end data engineering pipeline existed to continuously harvest, classify, calculate, and nowcast daily consumer prices across all 12 UN COICOP divisions in Cambodia. This graduation thesis directly addresses this critical gap, providing both an academic contribution to applied econometric data science and a practical digital tool for national economic governance.
+\hs Despite these unique conditions, national inflation tracking in Cambodia has continued to rely exclusively on monthly in-person market surveys. Prior to this research, no automated, end-to-end data engineering pipeline existed to continuously harvest, classify, calculate, and forecast daily consumer prices across all 12 UN COICOP divisions in Cambodia. This graduation thesis directly addresses this critical gap, providing both an academic contribution to applied econometric data science and a practical digital tool for national economic governance.
 
 \section{Comparative Literature Matrix and Methodological Synthesis}
-\hs Table~\ref{tab:literature_matrix} synthesizes the key academic publications, institutional technical reports, and central bank studies reviewed in this chapter, highlighting their core methodologies, empirical performance metrics, and direct relationship to the architecture developed in this research.
+\hs Table~\ref{tab:literature_matrix} synthesizes the seminal academic publications, international statistical standards, and central bank studies that directly inform the four operational pillars of the Cambodia Daily CPI Medallion Pipeline, mapping each theoretical framework to its concrete implementation in the Cambodian system.
 
 \begin{table}[H]
 \centering
 \scriptsize
-\begin{tabular}{|>{\raggedright\arraybackslash}p{2.8cm}|>{\raggedright\arraybackslash}p{2.4cm}|c|>{\raggedright\arraybackslash}p{4.8cm}|>{\raggedright\arraybackslash}p{3.8cm}|}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{2.5cm}|>{\centering\arraybackslash}p{1.7cm}|>{\raggedright\arraybackslash}p{3.3cm}|>{\raggedright\arraybackslash}p{3.2cm}|>{\raggedright\arraybackslash}p{3.5cm}|}
 \hline
 \rowcolor{blue!20}
-\textbf{Paper / Study} & \textbf{Authors} & \textbf{Year} & \textbf{Key Methodology} & \textbf{Reported Metric / Result} \\ \hline
-\textbf{Billion Prices Project} \citep{cavallo2016billion} & Cavallo \& Rigobon & 2016 & Daily web crawlers, Jevons geometric mean, 22 countries & $>0.98$ correlation with official CPI; 3--14 day shock detection \\ \hline
-\textbf{BERT COICOP NLP} \citep{berki2025nlp} & Berki, Andicsova, \& Oravec & 2025 & Fine-tuned BERT transformer on scraped e-commerce titles & 94.56\% classification accuracy; 94.07\% precision \\ \hline
-\textbf{Project Spectrum} \citep{bis2024spectrum} & BIS, ECB, Bundesbank & 2024 & Generative AI LLMs, dense embeddings, relational caching & $>95\%$ classification precision; latency $<3$ minutes \\ \hline
-\textbf{Food Inflation Nowcast} \citep{macias2023nowcasting} & Macias, Stelmasiak, \& Szafranek & 2023 & Daily food quotes, MIDAS, mixed-frequency recursive time-series & 15\%--35\% RMSE reduction over AR/ARIMA benchmarks \\ \hline
-\textbf{NSI Web Scraping} \citep{polidoro2015webscraping} & Polidoro, Giannini, Lo Conte, \& Rossetti & 2015 & E-commerce crawlers, TF-IDF, Naive Bayes, SVM classifiers & 82\%--92.5\% classification accuracy; 100x sample size \\ \hline
-\textbf{Scanner Multilateral} \citep{chessa2016methodology} & Chessa (CBS) & 2016 & Rolling GEKS-T\"ornqvist, QU-GEKS, Movement Splice & Eliminates chain drift ($5\%$--$10\%$ annual divergence fixed) \\ \hline
-\textbf{Substitution Bias} \citep{diewert2020substitution} & Diewert \& Fox & 2020 & Superlative Fisher \& T\"ornqvist on high-frequency barcode scanner data & Quantified Laspeyres substitution bias ($0.3\%$--$0.85\%$/year) \\ \hline
-\textbf{Clothing ML Class.} \citep{ons2020clothing} & ONS Data Science Campus & 2020 & FastText, XGBoost, Human-in-the-Loop confidence thresholding & 87\%--91\% Macro F1; $>70\%$ volume fully automated \\ \hline
-\textbf{ML Inflation Forecast} \citep{medeiros2021forecasting} & Medeiros, Vasconcelos, Veiga, \& Zilberman & 2021 & Random Forests, GBRT, LASSO with high-dimensional macro features & 10\%--25\% lower MSFE/RMSE over Phillips Curve and AR \\ \hline
-\textbf{CPI Manual} \citep{imf2020cpi} & IMF, ILO, OECD, Eurostat, UN, World Bank & 2020 & Axiomatic index theory, elementary Jevons, 7-day imputation, hedonic OLS & Global standard establishing Jevons and GEKS for big data \\ \hline
+\textbf{Paper / Study} & \textbf{Pipeline Pillar} & \textbf{Key Methodology \& Dataset} & \textbf{Reported Metric / Result} & \textbf{Implementation in Cambodia Pipeline} \\ \hline
+\textbf{Billion Prices Project} \citep{cavallo2016billion} & Bronze Ingestion & Daily web crawlers, Jevons geometric mean, 22 countries & $>0.98$ correlation with official CPI; 3--14 day shock detection & Automated daily scraping of 20 retail sources across Cambodia \\ \hline
+\textbf{Targeted Price Baskets} \citep{aparicio2021targeted} & Bronze Ingestion & Targeted online price baskets, high-frequency microdata sensing & Early detection of turning points and micro-price stickiness & Standardized daily basket tracking across all 12 UN COICOP divisions \\ \hline
+\textbf{BERT COICOP NLP} \citep{berki2025nlp} & Silver AI Classification & Fine-tuned BERT transformer on scraped e-commerce titles & 94.56\% classification accuracy; 94.07\% precision & Multilingual vector embeddings mapping raw scraped listings into COICOP \\ \hline
+\textbf{Project Spectrum} \citep{bis2024spectrum} & Silver AI Classification & Generative AI LLMs, dense embeddings, relational caching & $>95\%$ classification precision; latency $<3$ minutes & Tier 3 AI categorization with database vector caching for Cambodia \\ \hline
+\textbf{CPI Manual} \citep{imf2020cpi} & Gold Axiomatic Index & Axiomatic index theory, elementary Jevons, missing price imputation & Global standard eliminating Carli upward drift (+1.18\%/yr) & Gold layer daily Jevons elementary index with CSES 2023 weights \\ \hline
+\textbf{ML Inflation Forecast} \citep{medeiros2021forecasting} & Gold ML Forecasting & Random Forests, GBRT, LASSO with high-dimensional macro features & 10\%--25\% lower MSFE/RMSE over Phillips Curve and AR & Production LightGBM regressor predicting forward inflation \\ \hline
+\textbf{Macro ML Forecasting} \citep{gouletcoulombe2022machine} & Gold ML Forecasting & GBRT, Random Forest, non-linear feature interaction analysis & Superiority of tree ensembles under economic shocks and holiday demand & Gradient boosted trees handling fuel resets and Cambodian holiday surges \\ \hline
+\textbf{High-Freq Food Inflation} \citep{macias2023nowcasting} & Gold ML Forecasting & 2.4M daily food quotes, recursive time-series modeling & 15\%--35\% RMSE reduction over AR/ARIMA benchmarks & Food Division 01 7-day momentum computed as primary leading signal \\ \hline
+\textbf{High-Freq ML Regress.} \citep{babii2022machine} & Gold ML Forecasting & Machine learning time-series regressions, walk-forward validation & Robust out-of-sample multi-horizon inflation forecasting & Enforced \texttt{TimeSeriesSplit} cross-validation across 7d, 14d, 30d horizons \\ \hline
 \end{tabular}
-\caption{Comprehensive Academic Literature Review and Methodological Matrix}
+\caption{Methodological Matrix of Literature Directly Informing the Cambodia Daily CPI Medallion Pipeline}
 \label{tab:literature_matrix}
 \end{table}
 

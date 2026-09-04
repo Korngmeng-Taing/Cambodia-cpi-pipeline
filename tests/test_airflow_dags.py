@@ -2,7 +2,9 @@ import ast
 import os
 import pytest
 
-DAGS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orchestration", "dags")
+_host_dags = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orchestration", "dags")
+_container_dags = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dags")
+DAGS_DIR = _host_dags if os.path.exists(_host_dags) else _container_dags
 
 DAG_FILES = [
     "cpi_master_dag.py",

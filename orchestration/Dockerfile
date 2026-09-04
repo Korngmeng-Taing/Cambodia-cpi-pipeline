@@ -39,6 +39,8 @@ RUN pip install --no-cache-dir \
     numpy>=1.26.0 \
     scipy>=1.12.0 \
     statsmodels>=0.14.0 \
+    scikit-learn>=1.4.0 \
+    lightgbm>=4.3.0 \
     rapidfuzz>=3.6.0 \
     curl_cffi>=0.6.0 \
     beautifulsoup4>=4.12.0 \

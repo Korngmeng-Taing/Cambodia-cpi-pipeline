@@ -1,12 +1,12 @@
 """
 ml/features.py
 ──────────────
-High-Frequency Feature Engineering Engine for Inflation Nowcasting.
+High-Frequency Feature Engineering Engine for Machine Learning Inflation Forecasting.
 
 Extracts:
-1. Intra-month realized price averages and elapsed completion ratios.
-2. Short, medium, and long-term moving averages (MA7, MA14, MA30) and volatility (sigma14).
-3. MEF official USD/KHR exchange rate momentum (DoD and 7-day relative changes).
+1. Day-over-Day price returns and multi-horizon autoregressive lags.
+2. Short, medium, and long-term moving averages (MA7, MA14, MA30) and volatility (sigma7, sigma14).
+3. Cross-division leading signals (Food 01 and Transport 07 momentum).
 4. Cambodian cultural expenditure festival indicators (Khmer New Year, Pchum Ben, Water Festival).
 """
 
@@ -22,6 +22,8 @@ import pandas as pd
 from ml.config import (
     CAMBODIA_ANNUAL_HOLIDAYS,
     FEATURE_WINDOWS,
+    FORECAST_HORIZONS,
+    ML_LAG_INTERVALS,
     NIS_COICOP_WEIGHTS,
 )
 
@@ -53,222 +55,124 @@ def get_holiday_features(target_date: date) -> dict[str, int]:
     }
 
 
-def extract_nowcasting_features(
-    target_date: date,
-    df_daily_cpi: pd.DataFrame,
-    df_exchange_rates: pd.DataFrame | None = None,
-    df_monthly_cpi: pd.DataFrame | None = None,
-    df_nis_official: pd.DataFrame | None = None,
-) -> dict[str, Any]:
-    """
-    Constructs a comprehensive feature vector for target_date within its month.
-    Extracts intra-month scraped signals, macroeconomic indicators, and official NIS anchors.
-    """
-    target_month_start = target_date.replace(day=1)
-    _, total_days_in_month = calendar.monthrange(target_date.year, target_date.month)
-    days_observed = target_date.day
-    days_remaining = total_days_in_month - days_observed
-    observed_ratio = float(days_observed / total_days_in_month)
 
-    # Ensure numeric columns are cast to float from database Decimals
-    if df_daily_cpi is not None and not df_daily_cpi.empty:
-        df_daily_cpi = df_daily_cpi.copy()
+
+def extract_daily_forecasting_features(
+    df_daily: pd.DataFrame, forward_days: int = 30
+) -> pd.DataFrame:
+    """
+    Constructs an end-to-end high-frequency feature matrix from gold.fct_cpi_daily facts.
+    Aggregates division-level observations per date, calculates lags, moving averages,
+    volatilities, cross-division leading signals, and the forward inflation target.
+    """
+    if df_daily is None or df_daily.empty:
+        return pd.DataFrame()
+
+    df = df_daily.copy()
+
+    # If df_daily contains multi-row division observations per calculation_date, pivot/aggregate
+    if "coicop_division" in df.columns and "calculation_date" in df.columns:
+        # Standardize types
         for col in ["headline_cpi", "core_cpi", "division_index", "weight"]:
-            if col in df_daily_cpi.columns:
-                df_daily_cpi[col] = pd.to_numeric(df_daily_cpi[col], errors="coerce")
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    if df_exchange_rates is not None and not df_exchange_rates.empty:
-        df_exchange_rates = df_exchange_rates.copy()
-        if "rate" in df_exchange_rates.columns:
-            df_exchange_rates["rate"] = pd.to_numeric(df_exchange_rates["rate"], errors="coerce")
-
-    if df_monthly_cpi is not None and not df_monthly_cpi.empty:
-        df_monthly_cpi = df_monthly_cpi.copy()
-        for col in ["monthly_headline_cpi", "monthly_core_cpi", "mom_inflation_pct", "yoy_inflation_pct"]:
-            if col in df_monthly_cpi.columns:
-                df_monthly_cpi[col] = pd.to_numeric(df_monthly_cpi[col], errors="coerce")
-
-    if df_nis_official is not None and not df_nis_official.empty:
-        df_nis_official = df_nis_official.copy()
-        for col in ["headline_cpi", "core_cpi", "mom_inflation_pct", "yoy_inflation_pct"]:
-            if col in df_nis_official.columns:
-                df_nis_official[col] = pd.to_numeric(df_nis_official[col], errors="coerce")
-
-    # ── 1. Intra-Month Observed Dynamics ─────────────────────────────────────
-    food_mom_signal = 0.0
-    transport_mom_signal = 0.0
-
-    if df_daily_cpi is None or df_daily_cpi.empty:
-        realized_headline = 100.0
-        realized_core = 100.0
-        div_means = {d: 100.0 for d in NIS_COICOP_WEIGHTS}
+        agg_df = (
+            df.groupby("calculation_date")
+            .agg(
+                headline_cpi=("headline_cpi", "max"),
+                core_cpi=("core_cpi", "max"),
+                food_index=(
+                    "division_index",
+                    lambda s: s[df.loc[s.index, "coicop_division"] == "01"].max()
+                    if (df.loc[s.index, "coicop_division"] == "01").any()
+                    else np.nan,
+                ),
+                housing_index=(
+                    "division_index",
+                    lambda s: s[df.loc[s.index, "coicop_division"] == "04"].max()
+                    if (df.loc[s.index, "coicop_division"] == "04").any()
+                    else np.nan,
+                ),
+                transport_index=(
+                    "division_index",
+                    lambda s: s[df.loc[s.index, "coicop_division"] == "07"].max()
+                    if (df.loc[s.index, "coicop_division"] == "07").any()
+                    else np.nan,
+                ),
+            )
+            .reset_index()
+        )
     else:
-        month_mask = (
-            (df_daily_cpi["calculation_date"] >= target_month_start)
-            & (df_daily_cpi["calculation_date"] <= target_date)
-        )
-        curr_month_df = df_daily_cpi[month_mask]
+        agg_df = df.copy()
 
-        if curr_month_df.empty:
-            realized_headline = 100.0
-            realized_core = 100.0
-            div_means = {d: 100.0 for d in NIS_COICOP_WEIGHTS}
+    agg_df["calculation_date"] = pd.to_datetime(agg_df["calculation_date"])
+    agg_df = agg_df.sort_values("calculation_date").reset_index(drop=True)
+
+    # Fill division fallback if missing
+    for div_col in ["food_index", "housing_index", "transport_index"]:
+        if div_col in agg_df.columns:
+            agg_df[div_col] = agg_df[div_col].fillna(agg_df["headline_cpi"])
         else:
-            daily_headline = curr_month_df.groupby("calculation_date")["headline_cpi"].first()
-            realized_headline = float(daily_headline.mean()) if not daily_headline.empty else 100.0
-            daily_core = curr_month_df.groupby("calculation_date")["core_cpi"].first().dropna() if "core_cpi" in curr_month_df else None
-            realized_core = float(daily_core.mean()) if daily_core is not None and not daily_core.empty else realized_headline
+            agg_df[div_col] = agg_df["headline_cpi"]
 
-            div_means = {}
-            for div_code in NIS_COICOP_WEIGHTS:
-                sub = curr_month_df[curr_month_df["coicop_division"] == div_code]
-                div_means[div_code] = float(sub["division_index"].mean()) if not sub.empty else 100.0
+    # 1. Base Daily Returns (DoD %)
+    agg_df["dod_pct"] = agg_df["headline_cpi"].pct_change() * 100.0
+    agg_df["food_dod_pct"] = agg_df["food_index"].pct_change() * 100.0
+    agg_df["transport_dod_pct"] = agg_df["transport_index"].pct_change() * 100.0
 
-        # Dedicated Food (Div 01) and Transport (Div 07) Momentum Signals (>57% of NIS Basket)
-        food_index = div_means.get("01", 100.0)
-        transport_index = div_means.get("07", 100.0)
+    # Fill initial NaN in returns
+    agg_df["dod_pct"] = agg_df["dod_pct"].fillna(0.0)
+    agg_df["food_dod_pct"] = agg_df["food_dod_pct"].fillna(0.0)
+    agg_df["transport_dod_pct"] = agg_df["transport_dod_pct"].fillna(0.0)
 
-        # Baseline anchor: compare against prior month division index or prior month headline CPI
-        prior_food_idx = None
-        prior_trans_idx = None
-        if df_daily_cpi is not None and not df_daily_cpi.empty:
-            prior_df = df_daily_cpi[df_daily_cpi["calculation_date"] < target_month_start]
-            if not prior_df.empty:
-                f_sub = prior_df[prior_df["coicop_division"] == "01"]
-                if not f_sub.empty:
-                    val = f_sub["division_index"].mean()
-                    if pd.notna(val) and float(val) > 0:
-                        prior_food_idx = float(val)
-                t_sub = prior_df[prior_df["coicop_division"] == "07"]
-                if not t_sub.empty:
-                    val = t_sub["division_index"].mean()
-                    if pd.notna(val) and float(val) > 0:
-                        prior_trans_idx = float(val)
+    # 2. Autoregressive Lags (Shifted by 1 so no look-ahead bias!)
+    for lag in ML_LAG_INTERVALS:
+        agg_df[f"lag_{lag}_dod"] = agg_df["dod_pct"].shift(lag)
 
-        if prior_food_idx is None and df_monthly_cpi is not None and not df_monthly_cpi.empty:
-            m_prior = df_monthly_cpi[df_monthly_cpi["cpi_month"] < target_month_start].sort_values("cpi_month")
-            if not m_prior.empty:
-                prior_val = m_prior.iloc[-1].get("monthly_headline_cpi")
-                if pd.notna(prior_val) and float(prior_val) > 0:
-                    prior_food_idx = float(prior_val)
-                    prior_trans_idx = float(prior_val)
+    # 3. Moving Averages & Trend Indicators
+    agg_df["ma_7"] = agg_df["headline_cpi"].shift(1).rolling(7, min_periods=1).mean()
+    agg_df["ma_14"] = agg_df["headline_cpi"].shift(1).rolling(14, min_periods=1).mean()
+    agg_df["ma_30"] = agg_df["headline_cpi"].shift(1).rolling(30, min_periods=1).mean()
 
-        food_anchor = prior_food_idx if (prior_food_idx and prior_food_idx > 0) else 100.0
-        trans_anchor = prior_trans_idx if (prior_trans_idx and prior_trans_idx > 0) else 100.0
+    # Trend Momentum: relative velocity between short and medium moving averages
+    agg_df["momentum_7_30"] = (
+        (agg_df["ma_7"] - agg_df["ma_30"]) / agg_df["ma_30"] * 100.0
+    ).fillna(0.0)
 
-        food_mom_signal = float(((food_index - food_anchor) / food_anchor) * 100.0)
-        transport_mom_signal = float(((transport_index - trans_anchor) / trans_anchor) * 100.0)
+    # 4. Rolling Volatility
+    agg_df["volatility_7d"] = agg_df["dod_pct"].shift(1).rolling(7, min_periods=2).std().fillna(0.0)
+    agg_df["volatility_14d"] = agg_df["dod_pct"].shift(1).rolling(14, min_periods=2).std().fillna(0.0)
 
-    # ── 2. Rolling Moving Averages & Volatility Across Recent Days ────────────
-    unique_dates = sorted(df_daily_cpi["calculation_date"].unique()) if df_daily_cpi is not None and not df_daily_cpi.empty else []
-    recent_dates = [d for d in unique_dates if d <= target_date]
+    # 5. Division Leading Signals (7-day cumulative momentum)
+    agg_df["food_momentum_7d"] = (
+        agg_df["food_index"].pct_change(7).shift(1) * 100.0
+    ).fillna(0.0)
+    agg_df["transport_momentum_7d"] = (
+        agg_df["transport_index"].pct_change(7).shift(1) * 100.0
+    ).fillna(0.0)
 
-    ma7_headline = realized_headline
-    ma14_headline = realized_headline
-    ma30_headline = realized_headline
-    volatility14 = 0.0
+    # 6. Calendar & Seasonality
+    agg_df["day_of_week"] = agg_df["calculation_date"].dt.dayofweek
+    agg_df["is_weekend"] = agg_df["day_of_week"].isin([5, 6]).astype(int)
+    agg_df["day_of_month"] = agg_df["calculation_date"].dt.day
+    agg_df["month_sin"] = np.sin(2 * np.pi * agg_df["calculation_date"].dt.month / 12)
+    agg_df["month_cos"] = np.cos(2 * np.pi * agg_df["calculation_date"].dt.month / 12)
 
-    if recent_dates:
-        daily_headline = (
-            df_daily_cpi[df_daily_cpi["calculation_date"].isin(recent_dates)]
-            .groupby("calculation_date")["headline_cpi"]
-            .first()
-            .astype(float)
-            .sort_index()
-        )
+    # Holiday indicators
+    holiday_rows = [get_holiday_features(d.date()) for d in agg_df["calculation_date"]]
+    df_holidays = pd.DataFrame(holiday_rows)
+    for col in df_holidays.columns:
+        agg_df[col] = df_holidays[col].values
 
-        n_pts = len(daily_headline)
-        ma7_headline = float(daily_headline.tail(min(n_pts, FEATURE_WINDOWS["short_ma"])).mean())
-        ma14_headline = float(daily_headline.tail(min(n_pts, FEATURE_WINDOWS["medium_ma"])).mean())
-        ma30_headline = float(daily_headline.tail(min(n_pts, FEATURE_WINDOWS["long_ma"])).mean())
+    # 7. Supervised Target: Cumulative Inflation over next forward_days
+    # target = ((CPI_{t + H} - CPI_t) / CPI_t) * 100
+    if forward_days > 0:
+        agg_df["target"] = (
+            (agg_df["headline_cpi"].shift(-forward_days) - agg_df["headline_cpi"])
+            / agg_df["headline_cpi"]
+        ) * 100.0
 
-        if n_pts >= 2:
-            vol_tail = daily_headline.tail(min(n_pts, FEATURE_WINDOWS["volatility_window"]))
-            volatility14 = float(vol_tail.pct_change().dropna().std())
-            if np.isnan(volatility14):
-                volatility14 = 0.0
-
-    # ── 3. High-Frequency Exchange Rate Dynamics ─────────────────────────────
-    fx_rate_today = 4044.0
-    fx_change_7d_pct = 0.0
-
-    if df_exchange_rates is not None and not df_exchange_rates.empty:
-        rates_sorted = df_exchange_rates.sort_values("execution_date")
-        prior_fx = rates_sorted[rates_sorted["execution_date"] <= target_date]
-        if not prior_fx.empty:
-            fx_rate_today = float(prior_fx.iloc[-1]["rate"])
-            if len(prior_fx) >= 7:
-                rate_7d_ago = float(prior_fx.iloc[-7]["rate"])
-                if rate_7d_ago > 0:
-                    fx_change_7d_pct = float(((fx_rate_today - rate_7d_ago) / rate_7d_ago) * 100.0)
-
-    # ── 4. Lagged Monthly Ground Truth Inflation & NIS Anchors ────────────────
-    prior_month_cpi = 100.0
-    lag1_mom_inflation = 0.0
-
-    if df_monthly_cpi is not None and not df_monthly_cpi.empty:
-        m_sorted = df_monthly_cpi[df_monthly_cpi["cpi_month"] < target_month_start].sort_values("cpi_month")
-        if not m_sorted.empty:
-            prior_val = m_sorted.iloc[-1].get("monthly_headline_cpi")
-            prior_month_cpi = float(prior_val) if pd.notna(prior_val) else 100.0
-            
-            mom_val = m_sorted.iloc[-1].get("mom_inflation_pct")
-            lag1_mom_inflation = float(mom_val) if pd.notna(mom_val) else 0.0
-
-    # Extract official NIS benchmarks if available from database (gold.dim_nis_official_cpi)
-    latest_nis_cpi = 100.0
-    latest_nis_core_cpi = 100.0
-    latest_nis_month = target_month_start - timedelta(days=30)
-
-    if df_nis_official is not None and not df_nis_official.empty:
-        nis_sorted = df_nis_official[df_nis_official["cpi_month"] < target_month_start].sort_values("cpi_month")
-        if not nis_sorted.empty:
-            last_nis_row = nis_sorted.iloc[-1]
-            nis_head_val = last_nis_row.get("headline_cpi")
-            if pd.notna(nis_head_val):
-                latest_nis_cpi = float(nis_head_val)
-            
-            nis_core_val = last_nis_row.get("core_cpi")
-            if pd.notna(nis_core_val):
-                latest_nis_core_cpi = float(nis_core_val)
-            
-            latest_nis_month = last_nis_row.get("cpi_month", latest_nis_month)
-
-            # Check if official lag should supplement or override
-            if lag1_mom_inflation == 0.0:
-                nis_mom_val = last_nis_row.get("mom_inflation_pct")
-                if pd.notna(nis_mom_val):
-                    lag1_mom_inflation = float(nis_mom_val)
-
-    # ── 5. Holiday & Calendar Indicators ─────────────────────────────────────
-    holiday_dict = get_holiday_features(target_date)
-
-    return {
-        "target_date": target_date,
-        "target_month": target_month_start,
-        "days_observed": days_observed,
-        "days_remaining": days_remaining,
-        "days_in_month": total_days_in_month,
-        "observed_ratio": observed_ratio,
-        "realized_headline_cpi": realized_headline,
-        "realized_core_cpi": realized_core,
-        "food_div_index": div_means.get("01", 100.0),
-        "housing_div_index": div_means.get("04", 100.0),
-        "transport_div_index": div_means.get("07", 100.0),
-        "food_mom_signal": food_mom_signal,
-        "transport_mom_signal": transport_mom_signal,
-        "ma7_headline": ma7_headline,
-        "ma14_headline": ma14_headline,
-        "ma30_headline": ma30_headline,
-        "volatility14": volatility14,
-        "fx_rate_today": fx_rate_today,
-        "fx_change_7d_pct": fx_change_7d_pct,
-        "prior_month_cpi": prior_month_cpi,
-        "lag1_mom_inflation": lag1_mom_inflation,
-        "latest_nis_cpi": latest_nis_cpi,
-        "latest_nis_core_cpi": latest_nis_core_cpi,
-        "latest_nis_month": latest_nis_month,
-        **holiday_dict,
-    }
+    return agg_df
 
 

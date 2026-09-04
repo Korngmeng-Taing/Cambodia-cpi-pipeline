@@ -47,7 +47,8 @@ DEFAULT_ARGS = {
 
 
 def _run_item_matching(**context) -> dict:
-    ds = context["ds"]
+    dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
+    ds = dag_run_conf.get("ds") or context["ds"]
     log.info("Executing Silver Item Matching service (Vector + RapidFuzz + Spec Guard) for %s", ds)
     matcher = ItemMatcher()
     matched_stats = matcher.process_unmatched_batch(limit=100000, scrape_date=ds)
@@ -77,7 +78,8 @@ def _safe_run_item_auto_review(**context) -> dict:
 
 
 def _run_coicop_ai_classification(**context) -> dict:
-    ds = context["ds"]
+    dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
+    ds = dag_run_conf.get("ds") or context["ds"]
     log.info("Executing Hybrid Vector & Gemini AI COICOP Classification for %s", ds)
     res = classify_unclassified_with_gemini(scrape_date=ds)
     log.info("COICOP AI Classification stats: %s", res)
@@ -100,7 +102,8 @@ def _safe_run_gemini(**context) -> dict:
 
 
 def _run_hedonic_adjustment(**context) -> dict:
-    ds = context["ds"]
+    dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
+    ds = dag_run_conf.get("ds") or context["ds"]
     log.info("Executing Log-Linear Hedonic Quality Adjustment for %s", ds)
     try:
         res = run_hedonic_regression(scrape_date=ds)
@@ -155,13 +158,14 @@ with DAG(
     )
 
     # 6. dbt Run
+    dbt_ds_expr = "{{ (dag_run.conf.get('ds') if dag_run and dag_run.conf else None) or ds }}"
     task_dbt_silver_run = BashOperator(
         task_id="dbt_silver_run",
         trigger_rule="none_failed",
         bash_command=(
             f"dbt run {_dbt_flags} "
             "--select silver staging "
-            '--vars \'{"ds": "{{ ds }}"}\''
+            f'--vars \'{{"ds": "{dbt_ds_expr}"}}\''
         ),
     )
 

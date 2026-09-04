@@ -22,6 +22,7 @@
 \textbf{Author / Student} & TAING KORNGMENG \\ \hline
 \textbf{Academic Advisor} & Mr. CHHEANG Vinha \\ \hline
 \textbf{Company Supervisor} & Mr. LUK Chamnan \\ \hline
+\textbf{Company Co-Supervisor} & Mr. SEK Sovannarath \\ \hline
 \textbf{Host Organization} & General Department of Digital Economy (GDDE) \\ \hline
 \textbf{Parent Ministry} & Ministry of Economy and Finance (MEF), Cambodia \\ \hline
 \textbf{Degree Program} & Engineering in Applied Mathematics and Statistics (Data Science) \\ \hline
@@ -83,7 +84,7 @@ Although web-scraped retail data offers high frequency and granular visibility, 
 
 \section{Project Goal and Research Objectives}
 \subsection{Project Goal}
-\hs The main goal of this project is to develop an automated system that collects consumer price data from online sources in Cambodia on a daily basis and uses the collected data to support Consumer Price Index (CPI) estimation, price trend monitoring, and inflation nowcasting.
+\hs The main goal of this project is to develop an automated system that collects consumer price data from online sources in Cambodia on a daily basis and uses the collected data to support Consumer Price Index (CPI) estimation, price trend monitoring, and machine learning inflation forecasting.
 
 \subsection{General Objective}
 \hs The objective of this project is to design and implement an end-to-end data platform for collecting, storing, processing, monitoring, and analyzing price data related to selected COICOP basket categories. The system supports web-based data collection, structured Medallion data storage, query processing, data quality monitoring, visualization, and machine learning models for CPI estimation and inflation analysis.
@@ -93,8 +94,8 @@ Although web-scraped retail data offers high frequency and granular visibility, 
 \begin{enumerate}
     \item \textbf{Build an Automated Data Infrastructure and Monitoring System:} Set up an automated data pipeline and database to collect, store, and continuously monitor price scrape data from online retail sources.
     \item \textbf{Visualize the Scraped Raw Price Data:} Create clear visual charts and graphs to display the raw price and expenditure data across all consumer categories to prepare for CPI calculation.
-    \item \textbf{Calculate CPI for Inflation Estimation Using Machine Learning Models:} Apply machine learning algorithms and index aggregation methods to analyze consumption categories, predict future price trends, and estimate overall inflation.
-    \item \textbf{Build an Interactive Dashboard:} Develop an interactive dashboard to display real-time CPI metrics, machine learning inflation forecasts, and drill-down visualizations for each consumption category.
+    \item \textbf{Formulate Machine Learning-Assisted Inflation Nowcasting and Forward Forecasting:} Apply axiomatic micro-econometric index aggregation (Jevons) to compile daily price relatives, formulate an intra-month nowcasting engine to eliminate official reporting delays, and deploy gradient-boosted machine learning algorithms (LightGBM) to forecast forward multi-horizon inflation trends.
+    \item \textbf{Build an Interactive Decision-Support Dashboard:} Develop interactive executive dashboards to display real-time CPI metrics, high-frequency nowcasted inflation, machine learning forward forecasts, and drill-down category analytics.
 \end{enumerate}
 
 
@@ -136,7 +137,7 @@ Although web-scraped retail data offers high frequency and granular visibility, 
 \textbf{Phase 1: Ingestion \& Raw Storage} & Developing 20 automated market extractions, daily workflow scheduling, immutable raw storage & Automated web crawling, asynchronous data pipelines, relational storage \\ \hline
 \textbf{Phase 2: Cleaning \& AI Classification} & Text cleaning, unit standardization, semantic vector entity matching, 4-tier COICOP ladder & Dense multilingual vector embeddings, language models, attribute validation guards \\ \hline
 \textbf{Phase 3: Econometric Index Marts} & Dimensional data modeling, Jevons micro-indices, 7-day imputation, CSES 2023 Laspeyres weighting & Micro-econometric index aggregation, time-series imputation algorithms \\ \hline
-\textbf{Phase 4: ML Nowcast \& Dashboards} & Feature engineering (lags, FX, fuel), time-series forecasting, interactive decision dashboards & Linear bridge models, gradient-boosted decision trees, business intelligence \\ \hline
+\textbf{Phase 4: ML Forecasting \& Dashboards} & High-frequency daily feature engineering, multi-horizon inflation forecasting ($H=7, 14, 30$ days), interactive dashboards & Gradient-boosted decision trees (LightGBM), walk-forward time-series cross-validation, business intelligence \\ \hline
 \textbf{Phase 5: Evaluation \& Thesis} & Historical backtesting, accuracy benchmarks across horizons, academic documentation & Out-of-sample empirical evaluation, cross-validation, thesis synthesis \\ \hline
 \end{tabular}
 \caption{Project Work Breakdown Structure (WBS)}
@@ -169,9 +170,9 @@ Although web-scraped retail data offers high frequency and granular visibility, 
 \section{Organization of the Thesis}
 \hs The remainder of this thesis is structured as follows:
 \begin{itemize}
-    \item \textbf{Chapter II (Literature Review):} Reviews the academic, central banking, and international statistical literature on high-frequency web scraping, natural language processing for product classification, axiomatic index number theory, and machine learning nowcasting.
-    \item \textbf{Chapter III (Methodology):} Details the end-to-end Medallion data engineering architecture, the 20 market data sources, data cleaning and unit standardization procedures, the 4-tier artificial intelligence classification engine, axiomatic Jevons aggregation, and the machine learning nowcasting models.
-    \item \textbf{Chapter IV (Results and Discussion):} Presents the empirical findings, data ingestion reliability metrics, classification accuracy benchmarks, formula drift analysis, category volatility findings, out-of-sample nowcasting performance, and real-world policy case studies.
+    \item \textbf{Chapter II (Literature Review):} Reviews the academic, central banking, and international statistical literature on high-frequency web scraping, natural language processing for product classification, axiomatic index number theory, and machine learning inflation forecasting.
+    \item \textbf{Chapter III (Methodology):} Details the end-to-end Medallion data engineering architecture, the 20 market data sources, data cleaning and unit standardization procedures, the 4-tier artificial intelligence classification engine, axiomatic Jevons aggregation, and the machine learning multi-horizon inflation forecasting models.
+    \item \textbf{Chapter IV (Results and Discussion):} Presents the empirical findings, data ingestion reliability metrics, classification accuracy benchmarks, formula drift analysis, category volatility findings, out-of-sample machine learning forecasting performance, and real-world policy case studies.
     \item \textbf{Chapter V (Conclusions and Recommendations):} Synthesizes the core contributions of the research, provides strategic policy roadmaps for the National Institute of Statistics, Ministry of Economy and Finance, and National Bank of Cambodia, and identifies directions for future research.
 \end{itemize}
 

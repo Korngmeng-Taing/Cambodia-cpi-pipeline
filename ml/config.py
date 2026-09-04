@@ -2,7 +2,7 @@
 ml/config.py
 ────────────
 Configuration parameters, official NIS expenditure weights, Cambodian holiday calendars,
-and feature engineering definitions for Inflation Nowcasting and Forecasting.
+and feature engineering definitions for Machine Learning Inflation Forecasting.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ CAMBODIA_ANNUAL_HOLIDAYS = [
     {"name": "International New Year", "month": 1, "peak_days": [1], "window_days": 2},
 ]
 
-# Rolling window parameters for nowcasting features
+# Rolling window parameters for time-series features
 FEATURE_WINDOWS = {
     "short_ma": 7,
     "medium_ma": 14,
@@ -47,4 +47,27 @@ FEATURE_WINDOWS = {
 # Default Confidence Interval settings
 CI_ALPHA = 0.05  # 95% Confidence Interval (z = 1.96)
 Z_SCORE_95 = 1.95996
+
+# Multi-horizon forecasting parameters (Days Forward)
+FORECAST_HORIZONS = {
+    "short": 7,     # 1 week forward
+    "medium": 14,   # 2 weeks forward
+    "monthly": 30,  # 1 month forward
+}
+
+# Daily lag intervals (in days) for autoregressive features
+ML_LAG_INTERVALS = [1, 2, 3, 5, 7, 14, 21, 30]
+
+# Production LightGBM regressor hyperparameters
+LGBM_DEFAULT_PARAMS: dict[str, Any] = {
+    "n_estimators": 120,
+    "learning_rate": 0.03,
+    "max_depth": 4,
+    "num_leaves": 15,
+    "min_child_samples": 5,
+    "subsample": 0.85,
+    "colsample_bytree": 0.85,
+    "random_state": 42,
+    "verbosity": -1,
+}
 

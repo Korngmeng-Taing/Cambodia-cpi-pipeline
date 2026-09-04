@@ -7,6 +7,7 @@ CREATE SCHEMA IF NOT EXISTS bronze;
 CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS silver;
 CREATE SCHEMA IF NOT EXISTS gold;
+CREATE SCHEMA IF NOT EXISTS ops;
 
 -- Required for trigram GIN indexes and high-dimensional vector search
 DO $$
@@ -559,7 +560,59 @@ CREATE TABLE IF NOT EXISTS gold.mart_price_anomalies (
     is_reviewed BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_mart_anomalies_unreviewed ON gold.mart_price_anomalies(is_reviewed, scrape_date DESC);
+-- Historical Official NIS Monthly CPI Records for Ground-Truth Benchmarking
+CREATE TABLE IF NOT EXISTS gold.dim_nis_official_cpi (
+    cpi_month DATE NOT NULL PRIMARY KEY,
+    headline_cpi NUMERIC(10, 4) NOT NULL,
+    core_cpi NUMERIC(10, 4),
+    mom_inflation_pct NUMERIC(8, 4),
+    yoy_inflation_pct NUMERIC(8, 4),
+    release_date DATE,
+    source_notes TEXT DEFAULT 'NIS Cambodia Official CPI Release',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Machine Learning-Assisted Daily Inflation Nowcasting Mart
+CREATE TABLE IF NOT EXISTS gold.fct_cpi_nowcast (
+    nowcast_date DATE NOT NULL,
+    target_month DATE NOT NULL,
+    days_observed INTEGER NOT NULL,
+    days_remaining INTEGER NOT NULL,
+    days_in_month INTEGER NOT NULL,
+    realized_cpi_so_far NUMERIC(10, 4),
+    projected_remaining_cpi NUMERIC(10, 4),
+    projected_mom_pct NUMERIC(8, 4) NOT NULL,
+    nowcast_headline_cpi NUMERIC(10, 4) NOT NULL,
+    nowcast_nis_headline_cpi NUMERIC(10, 4),
+    nowcast_core_cpi NUMERIC(10, 4),
+    prior_month_cpi NUMERIC(10, 4),
+    ci_lower_95 NUMERIC(10, 4),
+    ci_upper_95 NUMERIC(10, 4),
+    uncertainty_pct NUMERIC(6, 3),
+    model_name VARCHAR(50) DEFAULT 'ml_assisted_nowcaster_v1',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (nowcast_date, target_month, model_name)
+);
+CREATE INDEX IF NOT EXISTS idx_fct_cpi_nowcast_target_month ON gold.fct_cpi_nowcast(target_month);
+CREATE INDEX IF NOT EXISTS idx_fct_cpi_nowcast_date ON gold.fct_cpi_nowcast(nowcast_date);
+
+-- Machine Learning Multi-Horizon Daily Inflation Forecasts (LightGBM)
+CREATE TABLE IF NOT EXISTS gold.fct_cpi_forecast (
+    forecast_execution_date DATE NOT NULL,
+    target_date DATE NOT NULL,
+    horizon_days INT NOT NULL,
+    current_headline_cpi NUMERIC(10, 4) NOT NULL,
+    predicted_inflation_pct NUMERIC(8, 4) NOT NULL,
+    projected_headline_cpi NUMERIC(10, 4) NOT NULL,
+    model_name VARCHAR(50) NOT NULL,
+    model_rmse NUMERIC(8, 4),
+    model_mae NUMERIC(8, 4),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (forecast_execution_date, target_date, horizon_days, model_name)
+);
+CREATE INDEX IF NOT EXISTS idx_fct_cpi_forecast_date ON gold.fct_cpi_forecast(forecast_execution_date);
+CREATE INDEX IF NOT EXISTS idx_fct_cpi_forecast_target ON gold.fct_cpi_forecast(target_date);
+CREATE INDEX IF NOT EXISTS idx_fct_cpi_forecast_horizon ON gold.fct_cpi_forecast(horizon_days);
 
 -- Performance Indexes for Silver Fact & Bronze Tables
 -- Performance Indexes for Gold Fact & Dimensions, Silver Store Prices, and Bronze Tables

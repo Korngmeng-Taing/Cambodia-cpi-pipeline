@@ -6,10 +6,11 @@ Master Orchestrator for the Cambodia CPI Medallion Pipeline.
 Daily 02:00 Asia/Phnom_Penh (or manual trigger):
     Stage 1 (Bronze): Trigger all per-source scraper DAGs in SCRAPER_REGISTRY in parallel.
     Stage 2 (Silver): Trigger silver_dag (Item matching + Vector & Gemini AI Classification + Log-Linear Hedonic + dbt Silver).
-    Stage 3 (Gold):   Trigger gold_dag (dbt Gold star-schema models + tests).
+    Stage 3 (Gold CPI): Trigger gold_cpi_dag (Jevons elementary indices + 12-division Laspeyres + ML-Assisted Nowcasting + LightGBM Multi-Horizon Forecasting).
+    Stage 4 (Gold Star): Trigger gold_dag (dbt Gold star-schema models + tests).
 
 Visual & Execution Lineage:
-    start ─► [All Registered Scrapers] ─► bronze_complete ─► silver_dag ─► silver_complete
+    start ─► [All Registered Scrapers] ─► bronze_gate ─► silver_dag ─► gold_cpi_dag (Nowcast & Forecast)
           ─► gold_dag ─► cpi_pipeline_success
 """
 
@@ -86,7 +87,15 @@ def _verify_minimum_scrapers_success(**context) -> None:
     from pipeline.config import get_db_connection
     from scrapers.sources import SCRAPER_REGISTRY
 
-    ds = context["ds"]
+    dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
+    ds = (
+        dag_run_conf.get("ds")
+        or (
+            context["data_interval_end"].in_timezone("Asia/Phnom_Penh").to_date_string()
+            if "data_interval_end" in context
+            else context["ds"]
+        )
+    )
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -146,13 +155,15 @@ with DAG(
 
     start_task = EmptyOperator(task_id="start_pipeline")
 
+    target_date_expr = "{{ (dag_run.conf.get('ds') if dag_run and dag_run.conf else None) or data_interval_end.in_timezone('Asia/Phnom_Penh').to_date_string() }}"
+
     # 1. Trigger all registered Scraper DAGs dynamically
     scraper_trigger_tasks = []
     for store_slug in sorted(SCRAPER_REGISTRY.keys()):
         trigger_op = TriggerDagRunOperator(
             task_id=f"trigger_scraper_{store_slug}",
             trigger_dag_id=f"scrape_{store_slug}_dag",
-            conf={"ds": "{{ ds }}"},
+            conf={"ds": target_date_expr},
             wait_for_completion=True,
             deferrable=False,
             poke_interval=WAIT_POKE_INTERVAL,
@@ -173,7 +184,7 @@ with DAG(
     trigger_silver_task = TriggerDagRunOperator(
         task_id="trigger_silver_dag",
         trigger_dag_id="silver_dag",
-        conf={"ds": "{{ ds }}"},
+        conf={"ds": target_date_expr},
         wait_for_completion=True,
         deferrable=False,
         poke_interval=WAIT_POKE_INTERVAL,
@@ -186,7 +197,7 @@ with DAG(
     trigger_gold_cpi_task = TriggerDagRunOperator(
         task_id="trigger_gold_cpi_dag",
         trigger_dag_id="gold_cpi_dag",
-        conf={"ds": "{{ ds }}"},
+        conf={"ds": target_date_expr},
         wait_for_completion=True,
         deferrable=False,
         poke_interval=WAIT_POKE_INTERVAL,
@@ -199,7 +210,7 @@ with DAG(
     trigger_gold_task = TriggerDagRunOperator(
         task_id="trigger_gold_dag",
         trigger_dag_id="gold_dag",
-        conf={"ds": "{{ ds }}"},
+        conf={"ds": target_date_expr},
         wait_for_completion=True,
         deferrable=False,
         poke_interval=WAIT_POKE_INTERVAL,

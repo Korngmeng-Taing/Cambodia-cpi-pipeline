@@ -315,49 +315,97 @@ def provision_all():
             "grid": (0, 19, 24, 8)
         },
         {
-            "name": "Projected Month-End Inflation Nowcast (MoM %)",
-            "desc": "Real-time Machine Learning (ADL + GBRT) projection of current month's final MoM inflation rate.",
+            "name": "Projected 7-Day Forward Inflation Forecast (%)",
+            "desc": "Machine Learning (LightGBM) projection of 7-day forward cumulative inflation rate.",
             "display": "scalar",
             "sql": """
                 SELECT 
-                    ROUND(projected_mom_pct::numeric, 2) AS "Projected MoM Inflation (%)"
-                FROM gold.fct_cpi_nowcast
-                WHERE nowcast_date = (SELECT MAX(nowcast_date) FROM gold.fct_cpi_nowcast)
-                ORDER BY nowcast_date DESC
+                    ROUND(predicted_inflation_pct::numeric, 2) AS "Projected 7-Day Inflation (%)"
+                FROM gold.fct_cpi_forecast
+                WHERE forecast_execution_date = (SELECT MAX(forecast_execution_date) FROM gold.fct_cpi_forecast)
+                  AND horizon_days = 7
+                ORDER BY forecast_execution_date DESC
                 LIMIT 1;
             """,
             "viz": {},
             "grid": (0, 27, 8, 3)
         },
         {
-            "name": "Projected Month-End Headline CPI",
-            "desc": "Real-time Machine Learning projection of current month's final conformed Headline CPI index level.",
+            "name": "Projected 30-Day Forward Headline CPI",
+            "desc": "Machine Learning (LightGBM) projection of 30-day forward Headline CPI index level.",
             "display": "scalar",
             "sql": """
                 SELECT 
-                    ROUND(nowcast_headline_cpi::numeric, 2) AS "Projected Month-End CPI"
-                FROM gold.fct_cpi_nowcast
-                WHERE nowcast_date = (SELECT MAX(nowcast_date) FROM gold.fct_cpi_nowcast)
-                ORDER BY nowcast_date DESC
+                    ROUND(projected_headline_cpi::numeric, 2) AS "Projected 30-Day CPI"
+                FROM gold.fct_cpi_forecast
+                WHERE forecast_execution_date = (SELECT MAX(forecast_execution_date) FROM gold.fct_cpi_forecast)
+                  AND horizon_days = 30
+                ORDER BY forecast_execution_date DESC
                 LIMIT 1;
             """,
             "viz": {},
             "grid": (8, 27, 8, 3)
         },
         {
-            "name": "Nowcasting Horizon & Uncertainty Status",
-            "desc": "Number of days observed vs days remaining in month and 95% Confidence Interval band.",
+            "name": "ML Forward Forecast Model Status",
+            "desc": "Forecast model architecture and out-of-sample cross-validation error metrics.",
             "display": "scalar",
             "sql": """
                 SELECT 
-                    CONCAT(days_observed, ' Days Observed / ', days_remaining, ' Remaining (±', ROUND(((ci_upper_95 - ci_lower_95) / 2.0)::numeric, 2), ' pts)') AS "Nowcasting Status"
+                    CONCAT(model_name, ' (RMSE: ±', ROUND(COALESCE(model_rmse, 0)::numeric, 3), ' pts, MAE: ', ROUND(COALESCE(model_mae, 0)::numeric, 3), ')') AS "Model Accuracy"
+                FROM gold.fct_cpi_forecast
+                WHERE forecast_execution_date = (SELECT MAX(forecast_execution_date) FROM gold.fct_cpi_forecast)
+                  AND horizon_days = 30
+                ORDER BY forecast_execution_date DESC
+                LIMIT 1;
+            """,
+            "viz": {},
+            "grid": (16, 27, 8, 3)
+        },
+        {
+            "name": "Current Month Inflation Nowcast (MoM %)",
+            "desc": "Real-time daily Month-to-Date inflation nowcast estimating current month outcome before official NIS release.",
+            "display": "scalar",
+            "sql": """
+                SELECT 
+                    ROUND(projected_mom_pct::numeric, 2) AS "Nowcast MoM Inflation (%)"
                 FROM gold.fct_cpi_nowcast
                 WHERE nowcast_date = (SELECT MAX(nowcast_date) FROM gold.fct_cpi_nowcast)
                 ORDER BY nowcast_date DESC
                 LIMIT 1;
             """,
             "viz": {},
-            "grid": (16, 27, 8, 3)
+            "grid": (0, 30, 8, 3)
+        },
+        {
+            "name": "Chain-Linked Official NIS CPI Estimate",
+            "desc": "Estimated current month National Institute of Statistics official index level (Base Oct-Dec 2006 = 100).",
+            "display": "scalar",
+            "sql": """
+                SELECT 
+                    ROUND(COALESCE(nowcast_nis_headline_cpi, nowcast_headline_cpi)::numeric, 2) AS "Nowcast NIS CPI (2006=100)"
+                FROM gold.fct_cpi_nowcast
+                WHERE nowcast_date = (SELECT MAX(nowcast_date) FROM gold.fct_cpi_nowcast)
+                ORDER BY nowcast_date DESC
+                LIMIT 1;
+            """,
+            "viz": {},
+            "grid": (8, 30, 8, 3)
+        },
+        {
+            "name": "Nowcast Uncertainty & 95% Confidence Interval",
+            "desc": "Intra-month observed day progress and dynamic 95% confidence interval bounds.",
+            "display": "scalar",
+            "sql": """
+                SELECT 
+                    CONCAT(days_observed, '/', days_in_month, ' Days | 95% CI: [', ROUND(ci_lower_95::numeric, 1), ' - ', ROUND(ci_upper_95::numeric, 1), ']') AS "Nowcast Confidence"
+                FROM gold.fct_cpi_nowcast
+                WHERE nowcast_date = (SELECT MAX(nowcast_date) FROM gold.fct_cpi_nowcast)
+                ORDER BY nowcast_date DESC
+                LIMIT 1;
+            """,
+            "viz": {},
+            "grid": (16, 30, 8, 3)
         }
     ]
 

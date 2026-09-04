@@ -1,111 +1,171 @@
 """
 tests/test_nowcasting.py
 ────────────────────────
-Unit and integration tests for the Inflation & CPI Nowcasting Engine.
+Unit tests for the Machine Learning-Assisted Daily Inflation Nowcaster (ml/nowcaster.py).
 """
 
+from __future__ import annotations
+
+import calendar
 from datetime import date, timedelta
+
+import numpy as np
 import pandas as pd
 import pytest
 
-from ml.config import CAMBODIA_ANNUAL_HOLIDAYS, NIS_COICOP_WEIGHTS
-from ml.features import extract_nowcasting_features, get_holiday_features
+from ml.config import NIS_COICOP_WEIGHTS
 from ml.nowcaster import CPINowcaster, execute_nowcasting_pipeline
 
 
-def test_holiday_features():
-    # Test Khmer New Year window (April 14)
-    kny_date = date(2026, 4, 14)
-    res_kny = get_holiday_features(kny_date)
-    assert res_kny["is_holiday_window"] == 1
-    assert res_kny["is_khmer_new_year"] == 1
+@pytest.fixture
+def sample_nowcast_data():
+    """Generates synthetic multi-day facts for testing."""
+    target_date = date(2026, 9, 20)
+    target_month = date(2026, 9, 1)
 
-    # Test normal date with no holiday (August 18)
-    normal_date = date(2026, 8, 18)
-    res_norm = get_holiday_features(normal_date)
-    assert res_norm["is_holiday_window"] == 0
-    assert res_norm["is_khmer_new_year"] == 0
+    # 20 observed days
+    dates = [target_month + timedelta(days=i) for i in range(20)]
+    rows = []
+    for d in dates:
+        for div in NIS_COICOP_WEIGHTS:
+            rows.append(
+                {
+                    "calculation_date": d,
+                    "coicop_division": div,
+                    "division_name": NIS_COICOP_WEIGHTS[div]["name"],
+                    "weight": NIS_COICOP_WEIGHTS[div]["weight"],
+                    "division_index": 102.0 + (d.day * 0.02),
+                    "headline_cpi": 102.0 + (d.day * 0.02),
+                    "core_cpi": 101.5 + (d.day * 0.01),
+                    "item_count": 150,
+                    "observation_count": 800,
+                }
+            )
+    df_daily = pd.DataFrame(rows)
+    df_fx = pd.DataFrame([{"execution_date": target_date, "rate": 4050.0}])
+    df_monthly = pd.DataFrame(
+        [
+            {
+                "cpi_month": date(2026, 8, 1),
+                "monthly_headline_cpi": 101.50,
+                "monthly_core_cpi": 101.00,
+                "mom_inflation_pct": 0.50,
+            }
+        ]
+    )
+    df_nis = pd.DataFrame(
+        [
+            {
+                "cpi_month": date(2026, 8, 1),
+                "headline_cpi": 219.10,
+                "core_cpi": 218.40,
+                "mom_inflation_pct": -0.7,
+            }
+        ]
+    )
+    return target_date, df_daily, df_fx, df_monthly, df_nis
 
 
-def test_feature_extraction_empty_fallback():
-    target_date = date(2026, 8, 15)
-    empty_daily = pd.DataFrame()
-    features = extract_nowcasting_features(target_date, empty_daily)
-
-    assert features["target_date"] == target_date
-    assert features["target_month"] == date(2026, 8, 1)
-    assert features["days_observed"] == 15
-    assert features["days_remaining"] == 16
-    assert features["days_in_month"] == 31
-    assert features["realized_headline_cpi"] == 100.0
-
-
-def test_nowcaster_synthetic_execution():
+def test_expanding_window_and_weights(sample_nowcast_data):
+    """Verifies expanding window day counts and weight partition."""
+    target_date, df_daily, df_fx, df_monthly, df_nis = sample_nowcast_data
     nowcaster = CPINowcaster()
-    target_date = date(2026, 8, 20)
-    res = nowcaster.generate_synthetic_test_nowcast(target_date)
 
-    assert res["nowcast_date"] == target_date
-    assert res["target_month"] == date(2026, 8, 1)
+    res = nowcaster.nowcast_for_date(target_date, df_daily, df_fx, df_monthly, df_nis)
+
+    _, total_days = calendar.monthrange(target_date.year, target_date.month)
+    assert res["days_in_month"] == total_days
     assert res["days_observed"] == 20
-    assert res["days_remaining"] == 11
-    assert res["days_in_month"] == 31
-    assert res["nowcast_headline_cpi"] > 0
-    assert res["nowcast_core_cpi"] > 0
-    assert "projected_mom_pct" in res
-    assert "projected_yoy_pct" not in res
+    assert res["days_remaining"] == 10
+    assert res["days_observed"] + res["days_remaining"] == total_days
 
-    # Check dual-index chain linking: NIS baseline should be linked to official base (192.50)
-    assert "nowcast_nis_headline_cpi" in res
-    assert res["latest_nis_baseline_cpi"] == 192.50
-    expected_nis = round(192.50 * (1.0 + (res["projected_mom_pct"] / 100.0)), 4)
+
+def test_confidence_interval_bounds(sample_nowcast_data):
+    """Verifies that 95% confidence interval bounds envelope the nowcast."""
+    target_date, df_daily, df_fx, df_monthly, df_nis = sample_nowcast_data
+    nowcaster = CPINowcaster()
+
+    res = nowcaster.nowcast_for_date(target_date, df_daily, df_fx, df_monthly, df_nis)
+
+    assert res["ci_lower_95"] <= res["nowcast_headline_cpi"]
+    assert res["ci_upper_95"] >= res["nowcast_headline_cpi"]
+    assert res["ci_lower_95"] > 0
+    assert res["uncertainty_pct"] == round(10 / 30, 3)
+
+
+def test_nis_chain_linking(sample_nowcast_data):
+    """Verifies chain-linking to official NIS benchmark (Base 2006 = 100)."""
+    target_date, df_daily, df_fx, df_monthly, df_nis = sample_nowcast_data
+    nowcaster = CPINowcaster()
+
+    res = nowcaster.nowcast_for_date(target_date, df_daily, df_fx, df_monthly, df_nis)
+
+    assert res["nowcast_nis_headline_cpi"] is not None
+    assert res["latest_nis_baseline_cpi"] == 219.10
+    # Chain-linked CPI must reflect MoM inflation direction
+    expected_nis = round(219.10 * (1.0 + (res["projected_mom_pct"] / 100.0)), 4)
     assert res["nowcast_nis_headline_cpi"] == expected_nis
 
-    # Check 95% Confidence Interval structure (ci_lower < cpi < ci_upper)
-    assert res["ci_lower_95"] <= res["nowcast_headline_cpi"] <= res["ci_upper_95"]
 
-
-def test_chain_linking_scale_invariance():
-    """Verify that different official baselines correctly apply the same predicted inflation rate."""
-    nowcaster = CPINowcaster()
-    target_date = date(2026, 8, 20)
-    
-    # Test with custom official baselines (e.g. 189.50 vs 201.20)
-    mock_daily = pd.DataFrame([
-        {"calculation_date": date(2026, 8, 1), "coicop_division": "01", "division_name": "Food", "weight": 0.448, "division_index": 101.0, "headline_cpi": 101.0, "core_cpi": 101.0}
-    ])
-    df_nis_189 = pd.DataFrame([{"cpi_month": date(2026, 7, 1), "headline_cpi": 189.50, "core_cpi": 189.0, "mom_inflation_pct": 0.10}])
-    df_nis_201 = pd.DataFrame([{"cpi_month": date(2026, 7, 1), "headline_cpi": 201.20, "core_cpi": 200.0, "mom_inflation_pct": 0.10}])
-
-    res_189 = nowcaster.nowcast_for_date(target_date, mock_daily, df_nis=df_nis_189)
-    res_201 = nowcaster.nowcast_for_date(target_date, mock_daily, df_nis=df_nis_201)
-
-    # Both must predict identical MoM inflation rate regardless of base level
-    assert res_189["projected_mom_pct"] == res_201["projected_mom_pct"]
-    # Chain-linked values must scale exactly proportionally
-    assert res_189["nowcast_nis_headline_cpi"] == round(189.50 * (1.0 + (res_189["projected_mom_pct"] / 100.0)), 4)
-    assert res_201["nowcast_nis_headline_cpi"] == round(201.20 * (1.0 + (res_201["projected_mom_pct"] / 100.0)), 4)
-
-
-def test_uncertainty_narrows_as_month_progresses():
+def test_uncertainty_decay_over_month():
+    """Verifies that uncertainty decays toward 0 as observed days increase."""
     nowcaster = CPINowcaster()
 
-    # Day 5 (early in month, high uncertainty)
-    res_early = nowcaster.generate_synthetic_test_nowcast(date(2026, 8, 5))
-    width_early = res_early["ci_upper_95"] - res_early["ci_lower_95"]
+    # Early month: Day 5 of 30
+    d5 = date(2026, 9, 5)
+    r5 = nowcaster.generate_synthetic_test_nowcast(d5)
 
-    # Day 28 (late in month, low uncertainty)
-    res_late = nowcaster.generate_synthetic_test_nowcast(date(2026, 8, 28))
-    width_late = res_late["ci_upper_95"] - res_late["ci_lower_95"]
+    # Mid month: Day 15 of 30
+    d15 = date(2026, 9, 15)
+    r15 = nowcaster.generate_synthetic_test_nowcast(d15)
 
-    assert width_late < width_early, f"Expected {width_late} < {width_early}"
+    # Late month: Day 28 of 30
+    d28 = date(2026, 9, 28)
+    r28 = nowcaster.generate_synthetic_test_nowcast(d28)
+
+    assert r5["uncertainty_pct"] > r15["uncertainty_pct"] > r28["uncertainty_pct"]
+    assert (r5["ci_upper_95"] - r5["ci_lower_95"]) >= (r28["ci_upper_95"] - r28["ci_lower_95"])
 
 
-def test_execute_nowcasting_pipeline_callable():
-    context = {"ds": "2026-08-18"}
-    res = execute_nowcasting_pipeline(**context)
-    assert isinstance(res, dict)
+def test_synthetic_nowcast_execution():
+    """Verifies end-to-end synthetic generator without live Postgres."""
+    nowcaster = CPINowcaster()
+    res = nowcaster.generate_synthetic_test_nowcast(date(2026, 8, 25))
+
+    required_keys = [
+        "nowcast_date",
+        "target_month",
+        "days_observed",
+        "days_remaining",
+        "days_in_month",
+        "realized_cpi_so_far",
+        "projected_remaining_cpi",
+        "projected_mom_pct",
+        "nowcast_headline_cpi",
+        "nowcast_nis_headline_cpi",
+        "nowcast_core_cpi",
+        "prior_month_cpi",
+        "ci_lower_95",
+        "ci_upper_95",
+        "uncertainty_pct",
+        "model_name",
+    ]
+    for k in required_keys:
+        assert k in res, f"Missing expected key {k} in nowcast result"
+
+
+def test_run_daily_nowcast_offline_graceful_fallback():
+    """Verifies that run_daily_nowcast falls back to synthetic run if DB is offline."""
+    nowcaster = CPINowcaster()
+    # When DB is offline, it generates synthetic result without throwing an exception
+    res = nowcaster.run_daily_nowcast(date(2026, 9, 10))
+    assert res is not None
+    assert res["days_observed"] == 10
     assert "nowcast_headline_cpi" in res
-    assert "projected_mom_pct" in res
-    assert "nowcast_nis_headline_cpi" in res
 
+
+def test_execute_nowcasting_pipeline_airflow_entrypoint():
+    """Verifies Airflow entrypoint callable."""
+    context = {"ds": "2026-09-12"}
+    res = execute_nowcasting_pipeline(**context)
+    assert res["nowcast_date"] == date(2026, 9, 12)

@@ -171,8 +171,18 @@ class BronzeScraper:
                 # RETURNING gives us the actual inserted row (empty on conflict skip)
                 count += len(cur.fetchall())
 
+            staging_count = count
+            if staging_count == 0 and len(records) > 0:
+                cur.execute(
+                    "SELECT COUNT(*) FROM bronze.raw_prices WHERE source_name = %s AND scraped_at::date = %s::date",
+                    (source_name, scrape_date or time.strftime("%Y-%m-%d")),
+                )
+                row_existing = cur.fetchone()
+                if row_existing and row_existing[0] > 0:
+                    staging_count = row_existing[0]
+
             # Upsert staging.raw_scrapes batch record.
-            # record_count reflects rows actually written after dedup.
+            # record_count reflects rows actually written or existing after dedup.
             # payload stores the deduped canonical records (preserving Schema v1.0
             # for stg_raw_scrapes.sql), not pre-dedup records.
             cur.execute(
@@ -192,7 +202,7 @@ class BronzeScraper:
                     str(batch_id),
                     store_id,
                     scrape_date or time.strftime("%Y-%m-%d"),
-                    count,
+                    staging_count,
                     json.dumps(deduped_records),
                     source_type,
                 ),

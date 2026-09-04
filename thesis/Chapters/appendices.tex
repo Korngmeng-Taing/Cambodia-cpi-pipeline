@@ -73,26 +73,28 @@ Econometric Mart Transformations & 07:00 AM & Central Database & Automated Analy
 \end{equation}
 with strict inequality holding whenever price ratios $p_{i,t}/p_{i,0}$ are not strictly identical across all items $i$, causing systematic upward compounding index drift.
 
-\section*{Appendix D: Real-Time Inflation Nowcasting Feature Dictionary}
-\addcontentsline{toc}{section}{Appendix D: Real-Time Inflation Nowcasting Feature Dictionary}
+\section*{Appendix D: Machine Learning Inflation Forecasting Feature Dictionary}
+\addcontentsline{toc}{section}{Appendix D: Machine Learning Inflation Forecasting Feature Dictionary}
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{|>{\raggedright\arraybackslash}p{4.5cm}|c|>{\raggedright\arraybackslash}p{4.5cm}|>{\raggedright\arraybackslash}p{4.5cm}|}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{3.8cm}|c|>{\raggedright\arraybackslash}p{4.2cm}|>{\raggedright\arraybackslash}p{5.2cm}|}
 \hline
 \rowcolor{blue!20}
-\textbf{Feature Name} & \textbf{Frequency} & \textbf{Economic Concept} & \textbf{Transformation Method} \\ \hline
-Headline Scraped Momentum & Daily & Broad retail price changes & Percentage change from baseline \\ \hline
-Food Sub-Driver Signal & Daily & Staple food price movements & Weighted food division change \\ \hline
-Transport Sub-Driver Signal & Daily & Transit fare fluctuations & Weighted transport division change \\ \hline
-Official Fuel Price Resets & Bi-Weekly & Regulated retail gasoline costs & Ministry of Commerce adjustments \\ \hline
-Foreign Exchange Movement & Daily & USD/KHR bilateral rate & Daily change in central rate \\ \hline
-Rolling Price Volatility & 14-Day & Price turbulence indicator & Standard deviation of price changes \\ \hline
-Prior Month Official Inflation & Monthly & Macroeconomic price inertia & Official release ground truth \\ \hline
-Festival Calendar Window & Daily & Cultural demand surge & Cambodian holiday indicator \\ \hline
-Day-of-Month Indicator & Daily & Intra-month progress marker & Integer tracking days elapsed \\ \hline
+\textbf{Feature Column} & \textbf{Type} & \textbf{Economic / Econometric Concept} & \textbf{Mathematical Formulation} \\ \hline
+\texttt{dod\_pct} & Float & Base daily percentage return & $r_t = \frac{\text{CPI}_t - \text{CPI}_{t-1}}{\text{CPI}_{t-1}} \times 100\%$ \\ \hline
+\texttt{lag\_\{k\}\_dod} ($k \in \{1,2,3,7,14,30\}$) & Float & Autoregressive return memory & $L_k(t) = r_{t-k}$ (Strictly shifted by 1) \\ \hline
+\texttt{ma\_7}, \texttt{ma\_14}, \texttt{ma\_30} & Float & Trailing moving average trend & $\text{MA}_k(t) = \frac{1}{k}\sum_{i=1}^k \text{CPI}_{t-i}$ \\ \hline
+\texttt{momentum\_7\_30} & Float & Short-to-medium trend velocity & $\frac{\text{MA}_7(t) - \text{MA}_{30}(t)}{\text{MA}_{30}(t)} \times 100\%$ \\ \hline
+\texttt{volatility\_7d}, \texttt{14d} & Float & High-frequency price turbulence & $\sigma_k(t) = \sqrt{\frac{1}{k-1}\sum_{i=1}^k (r_{t-i} - \bar{r}_k)^2}$ \\ \hline
+\texttt{food\_momentum\_7d} & Float & Division 01 leading supply signal & $\frac{I_{\text{Food}, t-1} - I_{\text{Food}, t-8}}{I_{\text{Food}, t-8}} \times 100\%$ \\ \hline
+\texttt{transport\_momentum\_7d} & Float & Division 07 fuel/transit signal & $\frac{I_{\text{Trans}, t-1} - I_{\text{Trans}, t-8}}{I_{\text{Trans}, t-8}} \times 100\%$ \\ \hline
+\texttt{month\_sin}, \texttt{month\_cos} & Float & Annual cyclical Fourier terms & $\sin(\frac{2\pi \cdot m_t}{12}), \; \cos(\frac{2\pi \cdot m_t}{12})$ \\ \hline
+\texttt{day\_of\_week}, \texttt{is\_weekend} & Int & Intra-week shopping cyclicality & DOW $\in [0,6]$; Weekend dummy $\in \{0,1\}$ \\ \hline
+\texttt{is\_holiday\_window} & Binary & Cambodian festival spending & Active window for KNY, Pchum Ben, Water Fest \\ \hline
+\texttt{target\_\{H\}d} ($H \in \{7,14,30\}$) & Float & Forward multi-horizon target & $y_t^{(H)} = \frac{\text{CPI}_{t+H} - \text{CPI}_t}{\text{CPI}_t} \times 100\%$ \\ \hline
 \end{tabular}
-\caption{Economic Feature Store for Machine Learning Inflation Nowcasting}
+\caption{Production Feature Store Dictionary for Daily Machine Learning Inflation Forecasting}
 \label{tab:appendix_feature_store}
 \end{table}

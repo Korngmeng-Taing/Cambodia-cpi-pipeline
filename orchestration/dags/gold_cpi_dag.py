@@ -25,7 +25,6 @@ from airflow.operators.python import PythonOperator
 from airflow.models import Variable
 
 from pipeline.cpi_calculator import CPICalculationEngine
-from ml.nowcaster import execute_nowcasting_pipeline
 
 DEFAULT_ARGS = {
     "owner": "cpi-data-team",
@@ -79,7 +78,8 @@ def get_base_date(target_date: date | None = None) -> date:
         return date(2026, 8, 18)
 
 def execute_daily_cpi_calculation(**context):
-    logical_date_str = context.get("ds")
+    dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
+    logical_date_str = dag_run_conf.get("ds") or context.get("ds")
     if logical_date_str:
         calc_date = datetime.strptime(logical_date_str, "%Y-%m-%d").date()
     else:
@@ -93,7 +93,8 @@ def execute_daily_cpi_calculation(**context):
     print(f"✅ Gold CPI Calculation completed successfully for {calc_date}!")
 
 def execute_monthly_cpi_calculation(**context):
-    logical_date_str = context.get("ds")
+    dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
+    logical_date_str = dag_run_conf.get("ds") or context.get("ds")
     if logical_date_str:
         calc_date = datetime.strptime(logical_date_str, "%Y-%m-%d").date()
     else:
@@ -104,6 +105,22 @@ def execute_monthly_cpi_calculation(**context):
     df_monthly = engine.compute_monthly_cpi()
     engine.save_monthly_cpi(df_monthly)
     print(f"✅ Monthly CPI calculation and persistence complete!")
+
+def execute_nowcasting_task(**context):
+    """Executes the daily high-frequency inflation nowcasting pipeline.
+    
+    Deferred import keeps DAG parsing lightweight and prevents parser failures.
+    """
+    from ml.nowcaster import execute_nowcasting_pipeline
+    return execute_nowcasting_pipeline(**context)
+
+def execute_forecasting_task(**context):
+    """Executes the daily machine learning forward inflation forecasting pipeline.
+    
+    Deferred import keeps DAG parsing lightweight and prevents parser failures.
+    """
+    from ml.forecaster import execute_forecasting_pipeline
+    return execute_forecasting_pipeline(**context)
 
 def annual_rebase_cpi(**context):
 
@@ -118,7 +135,8 @@ def annual_rebase_cpi(**context):
     correct base date for their execution period. The Airflow Variable
     is also updated for backward compatibility.
     """
-    logical_date_str = context.get("ds")
+    dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
+    logical_date_str = dag_run_conf.get("ds") or context.get("ds")
     if logical_date_str:
         run_date = datetime.strptime(logical_date_str, "%Y-%m-%d").date()
     else:
@@ -246,8 +264,13 @@ with DAG(
     )
 
     nowcast_cpi_task = PythonOperator(
-        task_id="nowcast_monthly_inflation",
-        python_callable=execute_nowcasting_pipeline,
+        task_id="nowcast_daily_inflation",
+        python_callable=execute_nowcasting_task,
+    )
+
+    forecast_cpi_task = PythonOperator(
+        task_id="forecast_daily_inflation",
+        python_callable=execute_forecasting_task,
     )
 
     annual_rebase_task = PythonOperator(
@@ -255,5 +278,5 @@ with DAG(
         python_callable=annual_rebase_cpi,
     )
 
-    calculate_cpi_task >> calculate_monthly_cpi_task >> nowcast_cpi_task >> annual_rebase_task
+    calculate_cpi_task >> calculate_monthly_cpi_task >> nowcast_cpi_task >> forecast_cpi_task >> annual_rebase_task
 

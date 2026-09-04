@@ -217,6 +217,20 @@ def check_bronze_gate(source_slug: str, scrape_date: str) -> int:
             )
         count = row[0]
         if count <= 0:
+            with conn.cursor() as cur2:
+                cur2.execute(
+                    "SELECT COUNT(*) FROM bronze.raw_prices WHERE source_name = %s AND scraped_at::date = %s::date",
+                    (source_slug, scrape_date),
+                )
+                row_b = cur2.fetchone()
+                if row_b and row_b[0] > 0:
+                    count = row_b[0]
+                    cur2.execute(
+                        "UPDATE staging.raw_scrapes SET record_count = %s WHERE store_slug = %s AND scrape_date = %s::DATE",
+                        (count, source_slug, scrape_date),
+                    )
+                    conn.commit()
+                    return count
             raise ValueError(
                 f"Bronze gate failed: {source_slug} on {scrape_date} recorded 0 products"
             )

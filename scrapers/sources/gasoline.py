@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import json
-import logging
 import os
 import re
-import time
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 import pendulum
@@ -18,7 +15,6 @@ try:
 except ImportError:
     HAS_BS4 = False
 
-from pipeline.canonical import normalize_record
 from scrapers.base import BaseScraper
 from scrapers.sources._common import (
     _to_float,

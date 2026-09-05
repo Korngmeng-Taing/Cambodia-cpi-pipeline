@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import json
-import logging
 import os
-import re
 import time
-from datetime import UTC, datetime
 from typing import Any
 
 import pendulum
@@ -25,13 +21,8 @@ try:
 except ImportError:
     HAS_BS4 = False
 
-from pipeline.canonical import normalize_record
-from pipeline.config import DEFAULT_USD_KHR_RATE
 from scrapers.base import BaseScraper
 from scrapers.sources._common import (
-    THROTTLE_DELAY,
-    _cffi_get,
-    _cffi_post,
     _strip_html,
     _to_float,
     build_canonical_record,

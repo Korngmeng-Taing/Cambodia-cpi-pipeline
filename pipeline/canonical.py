@@ -240,6 +240,10 @@ def normalize_record(
     else:
         on_promo = _to_bool(on_promo_raw)
 
+    # Guard against contradictory state: if orig_price <= price (or clamped), there is no discount
+    if orig_price <= price:
+        on_promo = False
+
     discount_pct = (
         round(((orig_price - price) / orig_price) * 100.0, 2)
         if orig_price > 0 and on_promo
@@ -247,7 +251,7 @@ def normalize_record(
     )
     promo = (
         {"type": "discount", "value": round(orig_price - price, 2)}
-        if on_promo
+        if on_promo and (orig_price - price) > 0
         else None
     )
 

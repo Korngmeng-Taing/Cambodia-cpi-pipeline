@@ -287,7 +287,7 @@ def provision_all():
                     ROUND((e.price_ratio - 1.0) * 100.0, 1) AS "Price Change (%)",
                     CASE WHEN e.is_imputed THEN 'Imputed' ELSE 'Observed' END AS "Method"
                 FROM gold.fct_elementary_indices e
-                JOIN silver.canonical_items i ON i.item_id = e.item_id
+                JOIN silver.canonical_items i ON i.item_id::text = e.item_id
                 WHERE e.calculation_date = (SELECT MAX(calculation_date) FROM gold.fct_elementary_indices)
                 ORDER BY ABS(e.price_ratio - 1.0) DESC
                 LIMIT 20;
@@ -315,54 +315,6 @@ def provision_all():
             "grid": (0, 19, 24, 8)
         },
         {
-            "name": "Projected 7-Day Forward Inflation Forecast (%)",
-            "desc": "Machine Learning (LightGBM) projection of 7-day forward cumulative inflation rate.",
-            "display": "scalar",
-            "sql": """
-                SELECT 
-                    ROUND(predicted_inflation_pct::numeric, 2) AS "Projected 7-Day Inflation (%)"
-                FROM gold.fct_cpi_forecast
-                WHERE forecast_execution_date = (SELECT MAX(forecast_execution_date) FROM gold.fct_cpi_forecast)
-                  AND horizon_days = 7
-                ORDER BY forecast_execution_date DESC
-                LIMIT 1;
-            """,
-            "viz": {},
-            "grid": (0, 27, 8, 3)
-        },
-        {
-            "name": "Projected 30-Day Forward Headline CPI",
-            "desc": "Machine Learning (LightGBM) projection of 30-day forward Headline CPI index level.",
-            "display": "scalar",
-            "sql": """
-                SELECT 
-                    ROUND(projected_headline_cpi::numeric, 2) AS "Projected 30-Day CPI"
-                FROM gold.fct_cpi_forecast
-                WHERE forecast_execution_date = (SELECT MAX(forecast_execution_date) FROM gold.fct_cpi_forecast)
-                  AND horizon_days = 30
-                ORDER BY forecast_execution_date DESC
-                LIMIT 1;
-            """,
-            "viz": {},
-            "grid": (8, 27, 8, 3)
-        },
-        {
-            "name": "ML Forward Forecast Model Status",
-            "desc": "Forecast model architecture and out-of-sample cross-validation error metrics.",
-            "display": "scalar",
-            "sql": """
-                SELECT 
-                    CONCAT(model_name, ' (RMSE: ±', ROUND(COALESCE(model_rmse, 0)::numeric, 3), ' pts, MAE: ', ROUND(COALESCE(model_mae, 0)::numeric, 3), ')') AS "Model Accuracy"
-                FROM gold.fct_cpi_forecast
-                WHERE forecast_execution_date = (SELECT MAX(forecast_execution_date) FROM gold.fct_cpi_forecast)
-                  AND horizon_days = 30
-                ORDER BY forecast_execution_date DESC
-                LIMIT 1;
-            """,
-            "viz": {},
-            "grid": (16, 27, 8, 3)
-        },
-        {
             "name": "Current Month Inflation Nowcast (MoM %)",
             "desc": "Real-time daily Month-to-Date inflation nowcast estimating current month outcome before official NIS release.",
             "display": "scalar",
@@ -375,7 +327,7 @@ def provision_all():
                 LIMIT 1;
             """,
             "viz": {},
-            "grid": (0, 30, 8, 3)
+            "grid": (0, 27, 8, 3)
         },
         {
             "name": "Chain-Linked Official NIS CPI Estimate",
@@ -390,7 +342,7 @@ def provision_all():
                 LIMIT 1;
             """,
             "viz": {},
-            "grid": (8, 30, 8, 3)
+            "grid": (8, 27, 8, 3)
         },
         {
             "name": "Nowcast Uncertainty & 95% Confidence Interval",
@@ -405,7 +357,7 @@ def provision_all():
                 LIMIT 1;
             """,
             "viz": {},
-            "grid": (16, 30, 8, 3)
+            "grid": (16, 27, 8, 3)
         }
     ]
 

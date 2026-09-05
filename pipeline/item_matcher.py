@@ -1,5 +1,6 @@
 import logging
 import uuid
+import warnings
 from typing import Any
 
 import psycopg2
@@ -259,6 +260,11 @@ class ItemMatcher:
             Do NOT add new callers — use ``ItemMatcher().process_unmatched_batch()``
             instead.
         """
+        warnings.warn(
+            "ItemMatcher.match_record is deprecated; use process_unmatched_batch instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         actual_conn = conn
         actual_brand = brand
         if brand_or_conn is not None:

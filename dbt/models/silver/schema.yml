@@ -99,6 +99,5 @@ unit_tests:
         - {raw_price_id: 101, price_khr: 10000.00, cpi_eligible: true}
         - {raw_price_id: 102, price_khr: 2800.00, cpi_eligible: true}
 
-  # classification_queue was moved from silver.* to ops.* — its dbt source
-  # declaration now lives in dbt/models/ops/schema.yml. P3 #123.
+  # Note: Operational tables (classification_queue, ai_cache, etc.) are declared directly under sources/silver_sources.yml.
 

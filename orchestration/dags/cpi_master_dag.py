@@ -6,11 +6,11 @@ Master Orchestrator for the Cambodia CPI Medallion Pipeline.
 Daily 02:00 Asia/Phnom_Penh (or manual trigger):
     Stage 1 (Bronze): Trigger all per-source scraper DAGs in SCRAPER_REGISTRY in parallel.
     Stage 2 (Silver): Trigger silver_dag (Item matching + Vector & Gemini AI Classification + Log-Linear Hedonic + dbt Silver).
-    Stage 3 (Gold CPI): Trigger gold_cpi_dag (Jevons elementary indices + 12-division Laspeyres + ML-Assisted Nowcasting + LightGBM Multi-Horizon Forecasting).
+    Stage 3 (Gold CPI): Trigger gold_cpi_dag (Jevons elementary indices + 12-division Laspeyres + ML-Assisted Nowcasting).
     Stage 4 (Gold Star): Trigger gold_dag (dbt Gold star-schema models + tests).
 
 Visual & Execution Lineage:
-    start ─► [All Registered Scrapers] ─► bronze_gate ─► silver_dag ─► gold_cpi_dag (Nowcast & Forecast)
+    start ─► [All Registered Scrapers] ─► bronze_gate ─► silver_dag ─► gold_cpi_dag (Nowcast)
           ─► gold_dag ─► cpi_pipeline_success
 """
 
@@ -85,7 +85,6 @@ def _verify_minimum_scrapers_success(**context) -> None:
     (10) scrapers succeed, and aborts downstream pipeline if fewer than MIN_SUCCESSFUL_SCRAPERS (3).
     """
     from pipeline.config import get_db_connection
-    from scrapers.sources import SCRAPER_REGISTRY
 
     dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
     ds = (

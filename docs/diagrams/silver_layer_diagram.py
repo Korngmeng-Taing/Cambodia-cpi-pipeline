@@ -309,8 +309,8 @@ ops_tables_list = [
     ('silver.canonical_items', 'Deterministic UUID canonical item master with specs'),
     ('silver.item_match_log', 'Audit log of raw_price_id → item_id mapping'),
     ('silver.needs_review', 'Triage queue for borderline vector matches (0.75-0.88)'),
-    ('ops.dim_coicop_ai_cache', 'Persistent memoized cache for Gemini AI classifications'),
-    ('ops.classification_queue', 'Manual & automated triage queue for unclassified products'),
+    ('silver.dim_coicop_ai_cache', 'Persistent memoized cache for Gemini AI classifications'),
+    ('silver.classification_queue', 'Manual & automated triage queue for unclassified products'),
 ]
 for oi, (otbl, odesc) in enumerate(ops_tables_list):
     y_o = 4.2 - oi * 0.40

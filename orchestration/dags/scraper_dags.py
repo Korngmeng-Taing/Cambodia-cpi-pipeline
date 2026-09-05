@@ -59,7 +59,7 @@ def _build_scraper_dag(source_slug: str, dag_id: str | None = None):
         dag_id=effective_dag_id,
         description=f"Daily scrape & Bronze ingestion for {source_slug}",
         start_date=pendulum.datetime(2024, 1, 1, tz=local_tz),
-        schedule=None,  # orchestrated by cpi_master_dag at 06:00
+        schedule=None,  # orchestrated by cpi_master_dag at 02:00
         catchup=False,
         default_args=DEFAULT_ARGS,
         tags=["bronze", "scraper", source_slug, "cpi"],

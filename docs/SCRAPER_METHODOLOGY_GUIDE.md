@@ -14,13 +14,13 @@
 
 ## 1. Architectural Overview & Ingestion Standards
 
-Every night at 07:00, Airflow orchestrates daily data extraction across **22 Cambodian retail, grocery, telecom, transport, housing, hospitality, fuel, electronics, and dining sources** alongside official USD/KHR exchange rates from the Ministry of Economy & Finance (MEF).
+Every night at 02:00, Airflow orchestrates daily data extraction across **22 Cambodian retail, grocery, telecom, transport, housing, hospitality, fuel, electronics, and dining sources** alongside official USD/KHR exchange rates from the Ministry of Economy & Finance (MEF).
 
 ```
                       ┌──────────────────────────────────────────────────────────┐
                       │               23 Daily Scraper DAGs                      │
                       │  (scrape_{source}_dag: 22 sources + MEF FX, fan-out from │
-                      │   cpi_master_dag at 07:00 Asia/Phnom_Penh)               │
+                      │   cpi_master_dag at 02:00 Asia/Phnom_Penh)               │
                       └────────────────────────────┬─────────────────────────────┘
                                                    │
                                                    ▼

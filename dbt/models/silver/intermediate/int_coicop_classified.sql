@@ -60,7 +60,7 @@ all_overrides as materialized (
     from {{ ref('coicop_override') }}
     union all
     select match_type, trim(match_value) as match_value, lower(trim(match_value)) as match_val_lower, store_slug, lpad(coicop_division, 2, '0') as coicop_division
-    from {{ source('ops', 'coicop_override_manual') }}
+    from {{ source('silver', 'coicop_override_manual') }}
 ),
 ov_barcode as materialized (
     select distinct on (match_value)
@@ -111,7 +111,7 @@ ai_prejoined as materialized (
             else lpad(split_part(coicop_code, '.', 1), 2, '0')
         end as coicop_division,
         confidence_score
-    from {{ source('ops', 'dim_coicop_ai_cache') }}
+    from {{ source('silver', 'dim_coicop_ai_cache') }}
     where coicop_code <> '99.9.9'
     order by lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')), classified_at desc
 ),
@@ -120,7 +120,7 @@ cat_map_prejoined as materialized (
         store_slug,
         lower(trim(category_native)) as cat_key,
         lpad(coicop_division, 2, '0') as coicop_division
-    from {{ source('ops', 'coicop_category_map') }}
+    from {{ source('silver', 'coicop_category_map') }}
 ),
 store_defaults_prejoined as materialized (
     select distinct on (store_slug)

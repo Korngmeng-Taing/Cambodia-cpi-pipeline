@@ -42,3 +42,30 @@ def test_all_dags_have_catchup_false():
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
         assert "catchup=False" in content, f"DAG in {filename} must specify catchup=False for production safety"
+
+
+def test_dag_jinja_templates_compile():
+    """Validates that all Jinja template expressions in DAG files compile without TemplateSyntaxError."""
+    import re
+    import jinja2
+    import pendulum
+
+    env = jinja2.Environment()
+    for filename in DAG_FILES:
+        path = os.path.join(DAGS_DIR, filename)
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        # Match Jinja {{ (dag_run... or other Jinja tags, excluding f-string {{'ds' escapes
+        matches = re.findall(r"\{\{\s*\([^\}]+\)\s*\}\}", content, re.DOTALL)
+        for expr in matches:
+            try:
+                env.parse(expr)
+                t = env.from_string(expr)
+                rendered = t.render(
+                    dag_run=None,
+                    ds="2026-09-05",
+                    data_interval_end=pendulum.now("Asia/Phnom_Penh"),
+                )
+                assert rendered is not None
+            except Exception as exc:
+                pytest.fail(f"Jinja template failed in {filename} on expression {expr!r}: {exc}")

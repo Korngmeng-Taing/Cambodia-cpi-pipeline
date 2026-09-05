@@ -11,7 +11,7 @@
 
 | Layer | Tool | Why |
 |:---|:---|:---|
-| **Orchestration** | **Apache Airflow 2.9.3** | Schedules the daily `cpi_master_dag` (23 per-source scraper DAGs → `silver_dag` → `gold_dag` → `gold_cpi_dag`), handles retries, and provides automated end-to-end Medallion execution. |
+| **Orchestration** | **Apache Airflow 2.9.3** | Schedules the daily `cpi_master_dag` (23 per-source scraper DAGs → `silver_dag` → `gold_cpi_dag` → `gold_dag`), handles retries, and provides automated end-to-end Medallion execution. |
 | **Storage & Warehouse** | **PostgreSQL 16** (`bronze`/`staging`/`silver`/`gold`/`ops` schemas) | Pure relational data warehouse hosting typed atomic raw listings, item-matching state, cleaned facts, operational control tables, and the analytical star schema. |
 | **Transformation** | **dbt-core** (Silver & Gold) | Turns raw price records, entity-matching outputs, pack-size conversions, and COICOP classification into version-controlled, testable SQL models. |
 | **Multi-Key API Pool** | **GeminiKeyPool** (`pipeline/key_pool.py`) | Thread-safe round-robin API key pool supporting 3+ free Gemini keys (4,500 req/day, 45 RPM) with automatic 429 failover. |
@@ -66,38 +66,34 @@
   - `gold.dim_stores`: Store & retailer master dimension.
   - `gold.fct_daily_prices`: Conformed daily price fact table at grain `(scrape_date, store_slug, item_id)` with KHR prices, unit prices, promo/outlier/fallback flags, and COICOP attribution.
   - `gold.fct_coicop_class_daily`: Intermediate 4-digit COICOP class-level aggregate mart (e.g. `01.1.1` Bread & Cereals) for sub-division policy drilldown.
-  - `gold.fct_cpi_monthly`: Monthly conformed 12-division and national headline/core CPI aggregate mart with Month-over-Month (MoM %) and Year-over-Year (YoY %) inflation rates.
+  - `gold.fct_cpi_monthly`: Monthly conformed 12-division and national headline/core CPI aggregate mart with Month-over-Month (MoM %) and Year-over-Year (YoY %) inflation rates. Authoritatively managed by `pipeline/cpi_calculator.py` (`CPICalculationEngine.save_monthly_cpi`) as the single writer.
   - `gold.dim_nis_official_cpi`: Historical official NIS Cambodia monthly CPI releases (Oct–Dec 2006 = 100) used as ground-truth evaluation anchors.
   - `gold.fct_cpi_nowcast`: Daily generated current-month inflation nowcasts with dynamic 95% confidence intervals, uncertainty decay ratios, and official NIS chain-linking.
-  - `gold.fct_cpi_forecast`: Multi-horizon forward inflation forecasts (7-day, 14-day, 30-day cumulative inflation) and projected CPI index levels.
 - **Economic Index Calculation Engine (`pipeline/cpi_calculator.py`)**:
-  - **Jevons Micro-Index Compilation**: Unweighted geometric mean price ratios across active basket items:
-    $$I_{j}^{t/0} = \exp\left(\frac{1}{n_t} \sum_{i=1}^{n_t} \ln P_{i,t} - \frac{1}{n_0} \sum_{i=1}^{n_0} \ln P_{i,0}\right) \times 100.0$$
+  - **Two-Tier Elementary & Subclass Aggregation (ILO/IMF CPI Manual)**:
+    - *Tier 1 (Subclass Elementary Index)*: Unweighted Jevons geometric mean of price ratios for all items within each 4-digit COICOP subclass ($I_c$).
+    - *Tier 2 (Division Laspeyres Roll-Up)*: Subclasses are aggregated into COICOP divisions using official NIS Cambodia expenditure weights from `dbt/seeds/cambodia_cpi_coicop_weights_breakdown.csv`:
+      $$I_{\text{Div}} = \frac{\sum_{c \in \text{Div}} W_c \cdot I_c}{\sum_{c \in \text{Div}} W_c}$$
+  - **Continuous Series Chain-Linking Splice Factor**: Automatically queries `gold.cpi_base_dates` for the effective `avg_december_cpi`, applying $S = \bar{I}_{\text{Dec}} / 100.0$ to link annual rebasings onto a continuous historical series without step jumps.
   - **ILO Class-Mean Imputation Engine**: Missing items ($\le 7$ days) are dynamically imputed using the geometric mean rate of change of observed items in the corresponding COICOP division:
     $$P_{i,t} = P_{i,t-k} \times \left( \prod_{j \in D_i} \frac{P_{j,t}}{P_{j,t-1}} \right)^{\frac{1}{|D_i|}}$$
   - **Hedonic Quality Adjustment Bridge**: Directly bridges `silver.hedonic_adjusted_prices` to adjust for technology/electronic quality improvements (Division 08/09).
   - **Laspeyres 12-Division Weighting**: Official National Institute of Statistics (NIS) Cambodia expenditure shares compiled into Headline and Core CPI (`gold.fct_cpi_daily` & `gold.fct_cpi_monthly`).
-  - **Refined Core CPI**: Excludes volatile food (Division 01) and energy/fuel in accordance with NIS and National Bank of Cambodia core inflation standards.
+  - **Harmonized Monthly Headline & Core CPI**: Computed as the windowed Laspeyres sum of monthly division indices:
+    $$\text{monthly\_headline\_cpi} = \frac{\sum_{\text{active}} W_d \cdot I_d^{\text{month}}}{\sum_{\text{active}} W_d}$$
+  - **Refined Core CPI**: Excludes volatile food (Division 01), housing & utilities (Division 04), and transport fuel (Division 07) in accordance with NIS and National Bank of Cambodia core inflation standards.
 - **Machine Learning-Assisted Daily Inflation Nowcasting Engine (`ml/nowcaster.py`)**:
   - **Expanding-Window MTD Aggregation**: Partitions the current month into observed days ($1 \dots t$) and projected days ($t+1 \dots T$), aggregating daily facts from `gold.fct_cpi_daily`.
   - **Cross-Division Momentum Projection**: Projects remaining days using high-frequency Division 01 (Food, 44.8%) and Division 07 (Transport, 12.2%) momentum (*Macias et al., 2023*).
   - **Official Benchmark Chain-Linking**: Translates pipeline growth rates into chain-linked official NIS Phnom Penh index numbers (Base Oct–Dec 2006 = 100).
   - **Uncertainty Decay Modeling**: Computes dynamic 95% confidence intervals that narrow as the month progresses ($U_t = \sqrt{(T-t)/T}$).
-- **High-Frequency Daily Inflation ML Forecasting Engine (`ml/forecaster.py`)**:
-  - **Gradient Boosted Tree Architecture**: Trains production `LightGBMRegressor` on high-frequency daily price facts from `gold.fct_cpi_daily`.
-  - **Multi-Horizon Forward Projections**: Direct multi-step forecasts for $H \in [7, 14, 30]$ days forward cumulative inflation and projected CPI levels ($\widehat{\text{CPI}}_{t+H}$).
-  - **Sub-Driver Momentum Signals**: Leverages dedicated Food (44.775%) and Transport (12.228%) momentum features (>57% of NIS basket) as leading indicators.
-  - **Walk-Forward Validation**: Evaluates out-of-sample RMSE and MAE via `TimeSeriesSplit` cross-validation (*Babii et al., 2022*) to prevent look-ahead bias.
 - **Serving Views & Metabase Dashboards** (`sql/views.sql`):
   - `gold.v_nowcast_evaluation`: Real-time out-of-sample audit tracking daily nowcast error vs. official NIS monthly releases.
-  - `gold.v_cpi_forecast_chart`: Unions actual daily CPI with latest ML forward forecast points for seamless continuous visualization.
   - `gold.v_cpi_monthly_summary`: Monthly national headline and core CPI with MoM (%) and YoY (%) inflation indicators.
   - `gold.v_cpi_monthly_divisions`: Monthly 12-division COICOP performance matrix with official NIS expenditure weights.
   - `gold.v_cpi_inflation_summary`: Daily Headline & Core CPI DoD/MoM inflation metrics.
   - `gold.v_coicop_class_breakdown`: 4-digit COICOP class-level granular breakdown.
   - `gold.v_monitor_source_health_matrix`: 20-Source Scraper Live Availability Matrix.
-  - `gold.v_monitor_price_alerts`: Daily price anomaly & extreme shift alerts (> 20% DoD).
-  - `gold.v_monitor_fx_health`: Official MEF USD/KHR Exchange Rate Freshness Monitor.
   - `gold.v_monitor_price_alerts`: Daily price anomaly & extreme shift alerts (> 20% DoD).
   - `gold.v_monitor_fx_health`: Official MEF USD/KHR Exchange Rate Freshness Monitor.
 
@@ -129,11 +125,9 @@ CPI PIPELINE/
 │   ├── canonical.py       # Record normalization (Schema v1.0)
 │   ├── config.py          # Database connection & environment config
 │   └── migrations/        # PostgreSQL DDL migration scripts
-├── ml/                    # High-frequency ML inflation nowcasting & forecasting engine
-│   ├── config.py          # Forecast horizons (7d, 14d, 30d), holiday calendars & weights
-│   ├── features.py        # Autoregressive lags, rolling MA, volatility & momentum signals
-│   ├── nowcaster.py       # High-frequency daily inflation nowcasting & NIS chain-linking engine
-│   └── forecaster.py      # Production LightGBM multi-horizon forecasting pipeline
+├── ml/                    # High-frequency ML inflation nowcasting engine
+│   ├── config.py          # Cambodian holiday calendars, uncertainty params & weights
+│   └── nowcaster.py       # High-frequency daily inflation nowcasting & NIS chain-linking engine
 ├── scripts/               # Maintenance & operational CLI utilities
 │   ├── run_cpi_backtest.py # Runs historical CPI backtest across all dates
 │   ├── evaluate_accuracy_benchmark.py # End-to-end accuracy benchmark utility
@@ -179,7 +173,7 @@ CPI PIPELINE/
 │   ├── GOLD_LAYER_CPI_METHODOLOGY_GUIDE.md # CPI calculation methodology
 │   ├── GOLD_LAYER_IMPLEMENTATION_PLAN.md # Gold layer implementation roadmap
 │   └── rebasing_policy.md # Annual CPI rebasing methodology
-├── tests/                 # Full pytest suite (140 unit test cases)
+├── tests/                 # Full pytest suite (428+ unit test cases across 20 test modules)
 ├── postgres-init/         # PostgreSQL initialization scripts
 ├── docker-compose.yml     # Multi-service stack (PostgreSQL, Airflow, Metabase)
 ├── Literature_Review_Matrix.xlsx # Root 4-tab literature review matrix & Cambodia CPI weights
@@ -193,31 +187,33 @@ CPI PIPELINE/
 ```
 cpi_master_dag (Daily 02:00 ICT)
     │
-    ├──► [20 Scraper DAGs] ──── bronze_complete
+    ├──► [23 Scraper DAGs] ──── bronze_complete
     │         │
     │         ▼
     │    verify_bronze_quality_gate (≥3 successful sources)
     │         │
     │         ▼
     │    silver_dag
-    │         ├── silver_item_matching_service (ItemMatcher)
-    │         ├── gemini_item_auto_review (VectorItemMatcher + Gemini Flash)
-    │         ├── dbt_seed (reference data)
-    │         ├── gemini_coicop_classification (HybridCOICOPClassifier)
-    │         ├── hedonic_quality_adjustment (Log-Linear Hedonic)
-    │         ├── dbt_silver_run (incremental models)
-    │         └── dbt_silver_test (data quality)
-    │         │
-    │         ▼
-    │    gold_dag
-    │         ├── dbt_gold_run (dim_items, dim_stores, fct_daily_prices)
-    │         ├── dbt_gold_test (star schema tests)
-    │         └── refresh_serving_views (Metabase views)
+    │         ├── task_item_matching (ItemMatcher)
+    │         ├── task_item_auto_review (VectorItemMatcher + Gemini Flash)
+    │         ├── task_dbt_seed (reference seeds & weights)
+    │         ├── task_dbt_silver_run (clean_store_prices dedup & conformed facts)
+    │         ├── task_gemini_coicop (HybridCOICOPClassifier)
+    │         ├── task_hedonic_adjustment (Log-Linear Hedonic quality adjustment)
+    │         └── task_dbt_silver_test (data quality tests)
     │         │
     │         ▼
     │    gold_cpi_dag
-    │         ├── calculate_daily_cpi_indices (Jevons + Laspeyres)
-    │         └── annual_rebase_cpi (January rebasing)
+    │         ├── calculate_daily_cpi_indices (Two-tier Subclass & Division Laspeyres + Splice Factor)
+    │         ├── calculate_monthly_cpi_indices (Windowed Laspeyres Monthly Mart - Single Writer)
+    │         ├── nowcast_daily_inflation (ML-assisted daily inflation nowcast)
+    │         └── annual_rebase_cpi (January continuous linking rebasing)
+    │         │
+    │         ▼
+    │    gold_dag
+    │         ├── dbt_gold_run (dim_items, dim_stores, fct_daily_prices, fct_coicop_class_daily)
+    │         ├── dbt_gold_test (star schema tests)
+    │         └── refresh_serving_views (Metabase serving views)
     │
     ▼
 cpi_pipeline_success
@@ -226,6 +222,25 @@ cpi_pipeline_success
 ---
 
 ## 5. Key Code Changes & Fixes (Recent)
+
+### Econometric & Pipeline Hardening (2026-09-05)
+- **Files**: `pipeline/cpi_calculator.py`, `orchestration/dags/cpi_master_dag.py`, `orchestration/dags/silver_dag.py`, `orchestration/dags/gold_cpi_dag.py`, `dbt/models/silver/clean_store_prices.sql`, `dbt/models/gold/fct_cpi_monthly.sql`
+- **Two-Tier Subclass Weighting (ILO/IMF Standards)**:
+  - Upgraded division index aggregation from unweighted geometric means across raw items to the ILO/IMF standard: Tier 1 computes unweighted Jevons elementary indices per 4-digit COICOP subclass ($I_c$); Tier 2 computes expenditure-weighted Laspeyres sums into division indices using official CSES subclass weights from `dbt/seeds/cambodia_cpi_coicop_weights_breakdown.csv`.
+- **Continuous Rebasing Chain-Linking Splice Factor**:
+  - In `pipeline/cpi_calculator.py`, added dynamic lookup of `avg_december_cpi` from `gold.cpi_base_dates` to apply a chain-linking splice factor $S = \bar{I}_{\text{Dec}} / 100.0$ to all division indices, headline CPI, and core CPI, preventing January 1 step jumps.
+- **Single-Writer Architecture for `gold.fct_cpi_monthly`**:
+  - Disabled `dbt/models/gold/fct_cpi_monthly.sql` (`enabled=false`) to eliminate dual-writer race conditions between dbt and Python, establishing `CPICalculationEngine.save_monthly_cpi` as the authoritative single writer.
+  - Harmonized monthly headline and core CPI calculations to use the windowed Laspeyres weighted sum over active divisions in each month.
+- **Airflow Pipeline Lineage & Task Sequencing**:
+  - In `silver_dag.py`, sequenced `task_dbt_silver_run` before `task_gemini_coicop` so unclassified items are materialized in `silver.clean_store_prices` before the LLM classifier runs.
+  - In `cpi_master_dag.py`, ordered stages to `silver_dag >> gold_cpi_dag >> gold_dag`, ensuring economic CPI facts exist before dbt star-schema models and daily class marts execute.
+- **Semantic Fallback Vector Disambiguation**:
+  - Contextual token boosting in `pipeline/hybrid_embeddings_classifier.py` distinguishes retail grocery goods (`"Coffee 250g"`, `"Tea Bags"`) from cafe/restaurant establishments, ensuring accurate 01 vs 11 classification under deterministic vector fallback.
+- **Seasonal Festival Shock Integration**:
+  - Integrated `CAMBODIA_ANNUAL_HOLIDAYS` in `ml/nowcaster.py` to account for transitory holiday spending surges during Khmer New Year, Pchum Ben, and Water Festival in leading drift projections.
+- **Pristine Test Suite Execution**:
+  - Filtered `ItemMatcher.match_record` deprecation noise in `pyproject.toml`, achieving 433 passed tests with 0 failures, 0 skipped, and 0 warnings.
 
 ### Local-First Vector Matching & Caching (2026-08-28)
 - **Files**: `pipeline/vector_item_matcher.py`, `pipeline/hybrid_embeddings_classifier.py`, `dbt/models/silver/schema.yml`
@@ -273,14 +288,10 @@ cpi_pipeline_success
 - **Issue**: `item_match_log.match_method` constraint was missing `exact_text` value.
 - **Fix**: Added `exact_text` to the CHECK constraint: `('barcode_exact', 'sku_exact', 'fuzzy_text', 'new_item', 'exact_text')`
 
-### Ops Schema Pass-Through Views (2026-08-27)
-- **Database**: `cpi_db` → `ops` schema
-- **Issue**: dbt models reference `ops.*` schema but tables exist in `silver.*`.
-- **Fix**: Created pass-through views in `ops` schema:
-  - `ops.dim_coicop_ai_cache` → `silver.dim_coicop_ai_cache`
-  - `ops.coicop_category_map` → `silver.coicop_category_map`
-  - `ops.classification_queue` → `silver.classification_queue`
-  - `ops.coicop_override_manual` (real table, not view)
+### Ops Schema Consolidation into Silver
+- **Database**: `cpi_db` → `silver` schema
+- **Issue**: `ops` schema originally mirrored tables from `silver.*` as pass-through alias views.
+- **Fix**: Fully eliminated `ops` schema. Consolidated all operational tables directly into `silver.*` (`silver.dim_coicop_ai_cache`, `silver.coicop_category_map`, `silver.classification_queue`, `silver.coicop_override_manual`), and updated all dbt models to target `source('silver', ...)`.
 
 ### Gold DAG View Refresh Fix (2026-08-27)
 - **File**: `orchestration/dags/gold_dag.py`
@@ -391,10 +402,9 @@ MIN_SUCCESSFUL_SCRAPERS=3
 | Schema | Purpose | Key Tables |
 |:---|:---|:---|
 | `bronze` | Raw store listings | `raw_prices`, `scrape_errors` |
-| `staging` | Ingestion staging | `raw_scrapes`, `exchange_rates`, `bronze_ingestion_stats` |
-| `silver` | Clean observations & dims | `canonical_items`, `clean_store_prices`, `item_match_log`, `needs_review`, `dim_coicop_ai_cache`, `coicop_override`, `coicop_store_defaults`, `coicop_category_map`, `classification_queue` |
-| `gold` | Analytical star schema | `dim_items`, `dim_stores`, `category_weights`, `cambodia_cpi_coicop_weights_breakdown`, `fct_daily_prices`, `fct_elementary_indices`, `fct_cpi_daily`, `fct_cpi_monthly`, `fct_cpi_forecast` |
-| `ops` | Control-flow tables | Operational views over `silver.*` + classifier review queues |
+| `staging` | Ingestion landing & SLA logs | `raw_scrapes`, `exchange_rates`, `bronze_ingestion_stats`, `macro_indicators` |
+| `silver` | Clean observations, dims & triage | `canonical_items`, `clean_store_prices`, `item_match_log`, `needs_review`, `dim_coicop_ai_cache`, `coicop_override_manual`, `coicop_category_map`, `classification_queue` |
+| `gold` | Analytical marts & CPI facts | `dim_items`, `dim_stores`, `category_weights`, `cambodia_cpi_coicop_weights_breakdown`, `fct_daily_prices`, `fct_elementary_indices`, `fct_cpi_daily`, `fct_cpi_monthly`, `fct_cpi_nowcast` |
 
 ---
 
@@ -411,12 +421,13 @@ python -m pytest tests/test_item_matcher.py -v
 python -m pytest tests/ --cov=pipeline --cov-report=term-missing
 ```
 
-**Test Coverage**: 140 unit test cases covering:
-- Item matching (barcode, SKU, fuzzy, vector)
-- COICOP classification (4-tier ladder)
-- CPI calculation (Jevons, Laspeyres, imputation)
-- Text normalization & spec guards
-- Bronze ingestion & canonicalization
+**Test Coverage**: **433 passed unit test cases** (100% pass rate, 0 warnings, 0 skipped) across 20 test modules covering:
+- Item matching (barcode, SKU, fuzzy, 768-dim vector embeddings)
+- COICOP classification (4-tier ladder, reference vector cosine, Gemini fallback, pure store locks)
+- Two-Tier Subclass-Weighted Laspeyres & Jevons CPI calculations with continuous chain-linking splice factors
+- Macroeconomic high-frequency nowcasting with Cambodian holiday/festival shock adjustments
+- Text normalization, Khmer numerals, and physical specification guards (pack size, volume, tech specs)
+- Bronze ingestion resilience, zero-product circuit breakers, and database canonicalization
 
 ---
 

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import logging
 from datetime import date, timedelta
+import os
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -52,15 +54,101 @@ DIVISION_NAMES = {
     "12": "Miscellaneous Goods and Services",
 }
 
+# Official NIS Cambodia 4-Digit COICOP Subclass / Class Expenditure Weights (Base: Oct-Dec 2006 = 100)
+# Matches dbt/seeds/cambodia_cpi_coicop_weights_breakdown.csv
+DEFAULT_SUBCLASS_WEIGHTS = {
+    "01.1.1": 17.230,  # Bread and cereals
+    "01.1.2": 8.450,   # Meat
+    "01.1.3": 7.120,   # Fish and seafood
+    "01.1.4": 1.850,   # Milk, cheese and eggs
+    "01.1.5": 1.140,   # Oils and fats
+    "01.1.6": 2.460,   # Fruit
+    "01.1.7": 2.380,   # Vegetables
+    "01.1.8": 0.720,   # Sugar, jam, honey, chocolate
+    "01.1.9": 0.630,   # Food products n.e.c.
+    "01.2.1": 0.515,   # Coffee, tea and cocoa
+    "01.2.2": 2.280,   # Mineral waters, soft drinks, juices
+    "02.1.1": 0.210,   # Spirits and liqueurs
+    "02.1.2": 0.085,   # Wine
+    "02.1.3": 0.750,   # Beer
+    "02.2.0": 0.580,   # Tobacco
+    "03.1.2": 2.140,   # Garments
+    "03.1.3": 0.146,   # Other articles of clothing & accessories
+    "03.2.1": 0.750,   # Shoes and other footwear
+    "04.1.1": 9.420,   # Actual rentals paid by tenants
+    "04.3.1": 1.120,   # Materials for dwelling maintenance
+    "04.4.1": 1.860,   # Water supply
+    "04.5.1": 2.820,   # Electricity
+    "04.5.2": 1.650,   # Gas
+    "04.5.4": 0.214,   # Solid fuels
+    "05.1.1": 0.820,   # Furniture and furnishings
+    "05.2.1": 0.450,   # Household textiles
+    "05.5.1": 0.380,   # Glassware, tableware, household utensils
+    "05.6.1": 1.600,   # Non-durable household goods
+    "06.1.1": 3.450,   # Pharmaceutical products
+    "06.1.2": 0.370,   # Other medical products
+    "06.2.1": 1.740,   # Medical services
+    "07.1.2": 3.120,   # Motorcycles
+    "07.2.2": 6.850,   # Fuels and lubricants
+    "07.2.3": 0.560,   # Maintenance & repair of transport
+    "07.3.2": 1.650,   # Passenger transport by bus, coach, van
+    "08.2.0": 1.420,   # Telephone equipment
+    "08.3.0": 2.500,   # Telephone and internet services
+    "09.1.1": 0.620,   # Audio/visual reception & reproduction
+    "09.1.3": 0.560,   # Information processing equipment
+    "09.3.1": 0.420,   # Games, toys and hobbies
+    "09.5.1": 0.310,   # Books and stationery
+    "10.1.0": 1.510,   # Education services (tuition fees)
+    "11.1.1": 2.435,   # Restaurants, cafes and the like
+    "11.2.0": 0.650,   # Accommodation services
+    "12.1.1": 0.405,   # Hairdressing & grooming
+    "12.1.3": 0.930,   # Personal care appliances & products
+    "12.3.1": 0.410,   # Jewellery, clocks and watches
+    "12.3.2": 0.320,   # Other personal effects
+}
+
 class CPICalculationEngine:
     """
     Computes Jevons micro-indices, 7-day missing price imputation,
-    Laspeyres 12-division aggregation, and Headline / Core CPI series.
+    subclass-weighted Laspeyres 12-division aggregation, and Headline / Core CPI series.
     """
 
     def __init__(self, db_url: str | None = None):
         self.db_url = db_url or get_database_url()
         self.weights = DEFAULT_NIS_WEIGHTS.copy()
+        self.subclass_weights = self._load_subclass_weights()
+
+    def _load_subclass_weights(self) -> dict[str, float]:
+        """Loads official 4-digit / Class level COICOP expenditure weights from seed CSV or defaults."""
+        weights = DEFAULT_SUBCLASS_WEIGHTS.copy()
+        csv_path = Path(__file__).resolve().parent.parent / "dbt" / "seeds" / "cambodia_cpi_coicop_weights_breakdown.csv"
+        if csv_path.exists():
+            try:
+                df = pd.read_csv(csv_path, dtype=str)
+                df["weight_pct"] = pd.to_numeric(df["weight_pct"], errors="coerce")
+                for _, row in df.iterrows():
+                    code = str(row.get("coicop_code", "")).strip()
+                    wt = row.get("weight_pct")
+                    if code and not pd.isna(wt) and float(wt) > 0:
+                        weights[code] = float(wt)
+            except Exception as e:
+                log.warning("Could not load subclass weights from seed CSV: %s", e)
+        return weights
+
+    def _get_subclass_code(self, raw_code: str | None, div_code: str) -> str:
+        """Resolves raw COICOP code into an official subclass / class code matching weights."""
+        if raw_code is None or pd.isna(raw_code):
+            return f"{div_code}.unclassified"
+        code = str(raw_code).strip()
+        if not code:
+            return f"{div_code}.unclassified"
+        if code in self.subclass_weights:
+            return code
+        if len(code) >= 6 and code[:6] in self.subclass_weights:
+            return code[:6]
+        if len(code) >= 4 and code[:4] in self.subclass_weights:
+            return code[:4]
+        return code
 
     def get_connection(self):
         conn_str = self.db_url.replace("postgresql+psycopg2://", "postgresql://", 1)
@@ -270,17 +358,58 @@ class CPICalculationEngine:
 
         return valid
 
-    def aggregate_division_and_headline(self, elementary_df: pd.DataFrame, calc_date: date) -> tuple[pd.DataFrame, dict]:
+    def aggregate_division_and_headline(
+        self, 
+        elementary_df: pd.DataFrame, 
+        calc_date: date,
+        splice_factor: float = 1.0
+    ) -> tuple[pd.DataFrame, dict]:
         """
         Aggregates elementary indices into 12 COICOP division indices and Headline / Core CPI.
+        Implements ILO/IMF two-tier aggregation:
+          Tier 1: Jevons unweighted geometric mean of price ratios within each 4-digit COICOP subclass.
+          Tier 2: Laspeyres expenditure-weighted aggregation of subclass indices to form division index.
+          Tier 3: Laspeyres expenditure-weighted aggregation of division indices to form Headline / Core CPI.
+        Optional splice_factor applies continuous series chain-linking on rebasing.
         """
-        # Division-level Jevons index (geometric mean of elementary price ratios)
         div_records = []
+        has_coicop_code = "coicop_code" in elementary_df.columns
+
         for div_code, weight in self.weights.items():
             div_items = elementary_df[elementary_df["coicop_division"] == div_code]
             if not div_items.empty:
-                # Geometric mean of ratios
-                div_index = np.exp(np.mean(np.log(div_items["price_ratio"]))) * 100.0
+                # Group items by subclass within the division
+                if has_coicop_code and div_items["coicop_code"].notna().any():
+                    subclass_indices = []
+                    subclass_wts = []
+
+                    div_items_with_sub = div_items.copy()
+                    div_items_with_sub["subclass_code"] = div_items_with_sub["coicop_code"].apply(
+                        lambda c: self._get_subclass_code(c, div_code)
+                    )
+
+                    for sub_code, sub_group in div_items_with_sub.groupby("subclass_code"):
+                        ratios = sub_group["price_ratio"][sub_group["price_ratio"] > 0]
+                        if len(ratios) > 0:
+                            sub_index = float(np.exp(np.mean(np.log(ratios))) * 100.0)
+                            sub_wt = self.subclass_weights.get(sub_code)
+                            subclass_indices.append(sub_index)
+                            subclass_wts.append(sub_wt)
+
+                    valid_wts = [w for w in subclass_wts if w is not None and w > 0]
+                    if len(valid_wts) == len(subclass_wts) and sum(valid_wts) > 0:
+                        div_index = sum(idx * wt for idx, wt in zip(subclass_indices, subclass_wts)) / sum(subclass_wts)
+                    else:
+                        # Fallback if subclass weights are missing: unweighted geometric mean across all division items
+                        div_index = float(np.exp(np.mean(np.log(div_items["price_ratio"]))) * 100.0)
+                else:
+                    # No subclass codes provided: unweighted geometric mean across division items
+                    div_index = float(np.exp(np.mean(np.log(div_items["price_ratio"]))) * 100.0)
+
+                # Apply continuous chain-linking splice factor if applicable
+                if splice_factor != 1.0 and not np.isnan(div_index):
+                    div_index = div_index * splice_factor
+
                 obs_cnt = int(div_items["observation_count"].sum())
                 item_cnt = len(div_items)
             else:
@@ -311,7 +440,7 @@ class CPICalculationEngine:
         # exclude missing divisions from both numerator and denominator.
         active_div = df_div[df_div["item_count"] > 0]
         if active_div.empty:
-            headline_cpi = 100.0
+            headline_cpi = 100.0 * splice_factor
         else:
             total_weight = active_div["weight"].sum()
             headline_cpi = float((active_div["weight"] * active_div["division_index"]).sum() / total_weight)
@@ -339,7 +468,12 @@ class CPICalculationEngine:
 
         return df_div, headline_summary
 
-    def run_daily_pipeline(self, target_date: date | None = None, base_date: date | None = None):
+    def run_daily_pipeline(
+        self, 
+        target_date: date | None = None, 
+        base_date: date | None = None,
+        splice_factor: float | None = None
+    ):
         """Executes full daily CPI calculation and writes results to PostgreSQL."""
         if target_date is None:
             target_date = date.today()
@@ -381,7 +515,27 @@ class CPICalculationEngine:
 
         elementary_df = self.compute_daily_elementary_indices(target_date, base_df, df_history)
 
-        df_div, headline = self.aggregate_division_and_headline(elementary_df, target_date)
+        # Lookup continuous series chain-linking splice factor if not explicitly passed
+        if splice_factor is None:
+            splice_factor = 1.0
+            try:
+                with self.get_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            SELECT avg_december_cpi 
+                            FROM gold.cpi_base_dates 
+                            WHERE effective_from <= %s 
+                            ORDER BY effective_from DESC 
+                            LIMIT 1;
+                        """, (target_date,))
+                        row = cur.fetchone()
+                        if row and row[0] is not None and float(row[0]) > 0:
+                            splice_factor = float(row[0]) / 100.0
+                            log.info("Applying chain-linking splice factor: %.4f (avg_december_cpi=%.2f)", splice_factor, float(row[0]))
+            except Exception as e:
+                log.debug("Could not query gold.cpi_base_dates for splice factor: %s. Defaulting to 1.0", e)
+
+        df_div, headline = self.aggregate_division_and_headline(elementary_df, target_date, splice_factor=splice_factor)
 
         log.info(f"📊 {target_date} Headline CPI: {headline['headline_cpi']:.2f} | Core CPI: {headline['core_cpi']:.2f} | Active Basket Items: {headline['total_items']}")
 
@@ -504,13 +658,33 @@ class CPICalculationEngine:
                             MAX(division_name) AS division_name,
                             MAX(weight) AS weight,
                             ROUND(AVG(division_index)::numeric, 4) AS monthly_division_index,
-                            ROUND(AVG(headline_cpi)::numeric, 4) AS monthly_headline_cpi,
-                            ROUND(AVG(core_cpi)::numeric, 4) AS monthly_core_cpi,
                             SUM(item_count) AS item_count,
                             SUM(observation_count) AS observation_count,
                             COUNT(DISTINCT calculation_date) AS active_days_in_month
                         FROM gold.fct_cpi_daily
                         GROUP BY DATE_TRUNC('month', calculation_date)::DATE, coicop_division
+                    ),
+                    monthly_weighted AS (
+                        SELECT
+                            cpi_month,
+                            coicop_division,
+                            division_name,
+                            weight,
+                            monthly_division_index,
+                            ROUND(
+                                (SUM(CASE WHEN monthly_division_index IS NOT NULL THEN weight * monthly_division_index ELSE 0 END) OVER (PARTITION BY cpi_month)
+                                 / NULLIF(SUM(CASE WHEN monthly_division_index IS NOT NULL THEN weight ELSE 0 END) OVER (PARTITION BY cpi_month), 0))::numeric,
+                                4
+                            ) AS monthly_headline_cpi,
+                            ROUND(
+                                (SUM(CASE WHEN monthly_division_index IS NOT NULL AND coicop_division NOT IN ('01', '04', '07') THEN weight * monthly_division_index ELSE 0 END) OVER (PARTITION BY cpi_month)
+                                 / NULLIF(SUM(CASE WHEN monthly_division_index IS NOT NULL AND coicop_division NOT IN ('01', '04', '07') THEN weight ELSE 0 END) OVER (PARTITION BY cpi_month), 0))::numeric,
+                                4
+                            ) AS monthly_core_cpi,
+                            item_count,
+                            observation_count,
+                            active_days_in_month
+                        FROM monthly_base
                     ),
                     calculated AS (
                         SELECT
@@ -528,7 +702,7 @@ class CPICalculationEngine:
                             item_count,
                             observation_count,
                             active_days_in_month
-                        FROM monthly_base
+                        FROM monthly_weighted
                     )
                     SELECT * FROM calculated
                     {where_clause}
@@ -569,7 +743,6 @@ class CPICalculationEngine:
                     );
                     ALTER TABLE gold.fct_cpi_monthly ADD COLUMN IF NOT EXISTS headline_mom_inflation_pct NUMERIC(8, 4);
                     ALTER TABLE gold.fct_cpi_monthly ADD COLUMN IF NOT EXISTS headline_yoy_inflation_pct NUMERIC(8, 4);
-                    CREATE UNIQUE INDEX IF NOT EXISTS uq_fct_cpi_monthly ON gold.fct_cpi_monthly (cpi_month, coicop_division);
                 """)
                 rows = [
                     (

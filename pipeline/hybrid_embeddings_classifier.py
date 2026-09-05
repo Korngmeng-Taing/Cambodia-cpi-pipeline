@@ -485,6 +485,14 @@ def _build_semantic_fallback_vector(text: str) -> np.ndarray:
             if overlap4 > 0:
                 vec[712 + j] += float(overlap4) * 12.0
 
+    # 4. Contextual Disambiguation Boosts
+    # Disambiguate retail grocery coffee/tea (Division 01 / 01.2.1) vs. restaurant/cafe service (Division 11 / 11.1.1)
+    is_dining = any(k in tokens for k in ["shop", "cafe", "restaurant", "dining", "hotel", "combo", "latte", "cappuccino", "buffet", "court"])
+    is_retail_coffee = any(k in tokens for k in ["coffee", "tea", "beans", "roast", "nescafe", "កាហ្វេ", "តែ"]) and not is_dining
+    if is_retail_coffee:
+        vec[700] += 25.0  # Division 01
+        vec[721] += 30.0  # 01.2.1 Coffee, tea and cocoa
+
     norm = np.linalg.norm(vec)
     if norm > 0:
         vec /= norm

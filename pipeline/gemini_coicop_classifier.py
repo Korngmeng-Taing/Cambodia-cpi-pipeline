@@ -35,7 +35,7 @@ The system prompt is intentionally detailed: it pins the model to the UN COICOP
 JSON contract with product_name / coicop_code / confidence_score / reasoning.
 
 Requires: google-generativeai, sqlalchemy.  API key via GEMINI_API_KEY,
-model name via GEMINI_MODEL (default gemini-3.1-flash-lite).
+model name via GEMINI_MODEL (default gemini-2.5-flash).
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ except ImportError:  # pragma: no cover - only present in the Airflow image
 log = logging.getLogger(__name__)
 
 BATCH_SIZE = int(os.getenv("GEMINI_BATCH_SIZE", "200"))  # Gemini batch size (was 50)
-DEFAULT_MODEL = "gemini-3.1-flash-lite"
+DEFAULT_MODEL = "gemini-2.5-flash"
 UNCLASSIFIED = "99.9.9"
 CLASSIFICATION_METHOD = "gemini_ai"
 

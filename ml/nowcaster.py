@@ -30,6 +30,7 @@ import numpy as np
 import pandas as pd
 
 from ml.config import (
+    CAMBODIA_ANNUAL_HOLIDAYS,
     CI_ALPHA,
     NIS_COICOP_WEIGHTS,
     Z_SCORE_95,
@@ -197,13 +198,39 @@ class CPINowcaster:
                     transport_momentum = (trans_recent - trans_prior) / trans_prior
 
         # Combined daily drift rate from leading signals
-        # Food (44.8% weight) + Transport (12.2% weight)
-        projected_daily_drift = (0.44775 * (food_momentum / 7.0)) + (0.12180 * (transport_momentum / 7.0))
+        # Food (44.8% weight) + Transport (12.2% weight), normalized to their combined share (0.56955)
+        combined_momentum_weight = 0.44775 + 0.12180
+        leading_signal_drift = (
+            (0.44775 * (food_momentum / 7.0)) + (0.12180 * (transport_momentum / 7.0))
+        ) / combined_momentum_weight
+
+        # -------------------------------------------------------------------------
+        # Cambodian Seasonal / Festival Shock Adjustment (Khmer New Year, Pchum Ben, etc.)
+        # -------------------------------------------------------------------------
+        festival_shock = 0.0
+        active_festival = None
+        for hol in CAMBODIA_ANNUAL_HOLIDAYS:
+            if hol["month"] == target_date.month:
+                peak_days = hol["peak_days"]
+                window = hol.get("window_days", 4)
+                min_day = max(1, min(peak_days) - window)
+                max_day = min(days_in_month, max(peak_days) + 2)
+                # Check if target date falls within the festival surge window
+                if min_day <= target_date.day <= max_day:
+                    active_festival = hol["name"]
+                    # Peak festival days experience heightened demand surge in Food & Transport
+                    if target_date.day in peak_days:
+                        festival_shock = 0.0012  # ~0.12% daily festive premium
+                    else:
+                        festival_shock = 0.0006  # ~0.06% lead/lag festive premium
+                    break
+
+        projected_daily_drift = leading_signal_drift + festival_shock
 
         # Project end of month CPI for remaining days
         if days_remaining > 0:
             projected_end_cpi = realized_cpi * (1.0 + (projected_daily_drift * days_remaining))
-            projected_core_end = realized_core * (1.0 + (projected_daily_drift * 0.5 * days_remaining))
+            projected_core_end = realized_core * (1.0 + (leading_signal_drift * 0.5 * days_remaining))
         else:
             projected_end_cpi = realized_cpi
             projected_core_end = realized_core

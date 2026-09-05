@@ -16,14 +16,6 @@ sources:
         description: Canonical products created by the canonicalizer (dim_canonical_products).
       - name: hedonic_adjusted_prices
         description: Quality-adjusted constant-specification prices for Division 09/08 electronics.
-
-  - name: ops
-    schema: ops
-    description: |
-      Operational / control-flow tables for COICOP classification pipeline.
-      These are pass-through views over silver.* tables (see sql/schema.sql P3 #123).
-      Canonical reads/writes should target this ops source.
-    tables:
       - name: dim_coicop_ai_cache
         description: Gemini AI classification result cache.
       - name: coicop_category_map

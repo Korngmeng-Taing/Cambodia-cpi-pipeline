@@ -145,3 +145,22 @@ def test_currency_inference_defaults():
     assert rec_ucare["currency"] == "KHR"
     rec_aeon3 = normalize_record({"name": "Shirt", "price": 35000.0, "source_slug": "aeon3"})
     assert rec_aeon3["currency"] == "KHR"
+
+
+def test_promo_reset_when_original_price_clamped_or_equal():
+    # If scraper returns original_price < price, it clamps to price and on_promo becomes False
+    rec_clamped = normalize_record(
+        {"name": "Item A", "price": 10.0, "original_price": 8.0, "on_promo": True, "source_slug": "store_a"}
+    )
+    assert rec_clamped["original_price"] == 10.0
+    assert rec_clamped["on_promo"] is False
+    assert rec_clamped["discount_pct"] == 0.0
+    assert rec_clamped["promo"] is None
+
+    # If original_price == price, on_promo must be False even if scraper flagged on_promo=True
+    rec_equal = normalize_record(
+        {"name": "Item B", "price": 5.0, "original_price": 5.0, "on_promo": True, "source_slug": "store_a"}
+    )
+    assert rec_equal["on_promo"] is False
+    assert rec_equal["discount_pct"] == 0.0
+    assert rec_equal["promo"] is None

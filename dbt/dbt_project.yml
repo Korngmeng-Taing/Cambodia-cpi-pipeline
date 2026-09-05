@@ -23,9 +23,6 @@ vars:
 
 models:
   cpi:
-    staging:
-      +schema: staging
-      +materialized: view
     silver:
       +schema: silver
       +materialized: incremental

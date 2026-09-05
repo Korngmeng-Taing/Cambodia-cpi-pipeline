@@ -204,4 +204,90 @@ def test_seven_day_imputation_multistore_geometric_mean(cpi_engine):
     assert pytest.approx(item2_row["current_price_khr"], 0.01) == expected_imputed
 
 
+def test_subclass_weighted_division_aggregation(cpi_engine):
+    """Verifies that items within a division are aggregated using official 4-digit subclass weights (ILO/IMF standard)."""
+    calc_date = date(2026, 8, 28)
+    # Division 01 with Rice (01.1.1, wt 17.23) and Meat (01.1.2, wt 8.45)
+    elem_df = pd.DataFrame([
+        {
+            "calculation_date": calc_date,
+            "item_id": uuid4(),
+            "coicop_division": "01",
+            "coicop_code": "01.1.1",
+            "base_price_khr": 1000.0,
+            "current_price_khr": 1200.0,  # 20% increase -> index 120.0
+            "price_ratio": 1.20,
+            "price_ratio_pct": 120.0,
+            "is_imputed": False,
+            "observation_count": 5,
+        },
+        {
+            "calculation_date": calc_date,
+            "item_id": uuid4(),
+            "coicop_division": "01",
+            "coicop_code": "01.1.2",
+            "base_price_khr": 2000.0,
+            "current_price_khr": 2000.0,  # 0% increase -> index 100.0
+            "price_ratio": 1.00,
+            "price_ratio_pct": 100.0,
+            "is_imputed": False,
+            "observation_count": 5,
+        },
+    ])
+
+    df_div, headline = cpi_engine.aggregate_division_and_headline(elem_df, calc_date)
+    div01 = df_div[df_div["coicop_division"] == "01"].iloc[0]
+
+    # Weighted Laspeyres: (17.230 * 120.0 + 8.450 * 100.0) / (17.230 + 8.450) = 113.419
+    expected_div_index = (17.230 * 120.0 + 8.450 * 100.0) / (17.230 + 8.450)
+    assert pytest.approx(div01["division_index"], 0.001) == expected_div_index
+    # Ensure it's not the unweighted geometric mean (which would be sqrt(1.2 * 1.0) * 100 = 109.54)
+    assert abs(div01["division_index"] - 109.5445) > 1.0
+
+
+def test_chain_linking_splice_factor(cpi_engine):
+    """Verifies that chain-linking splice factor scales division indices, headline CPI, and core CPI proportionally."""
+    calc_date = date(2027, 1, 15)
+    elem_df = pd.DataFrame([
+        {
+            "calculation_date": calc_date,
+            "item_id": uuid4(),
+            "coicop_division": "01",
+            "coicop_code": "01.1.1",
+            "base_price_khr": 1000.0,
+            "current_price_khr": 1000.0,
+            "price_ratio": 1.00,
+            "price_ratio_pct": 100.0,
+            "is_imputed": False,
+            "observation_count": 5,
+        },
+        {
+            "calculation_date": calc_date,
+            "item_id": uuid4(),
+            "coicop_division": "02",
+            "coicop_code": "02.1.3",
+            "base_price_khr": 2000.0,
+            "current_price_khr": 2000.0,
+            "price_ratio": 1.00,
+            "price_ratio_pct": 100.0,
+            "is_imputed": False,
+            "observation_count": 5,
+        },
+    ])
+
+    # Unadjusted run (splice_factor = 1.0)
+    df_div_base, headline_base = cpi_engine.aggregate_division_and_headline(elem_df, calc_date, splice_factor=1.0)
+    assert pytest.approx(headline_base["headline_cpi"], 0.001) == 100.0
+
+    # Spliced run (e.g. 2026 average December CPI was 105.50 -> splice_factor = 1.055)
+    splice = 1.055
+    df_div_spliced, headline_spliced = cpi_engine.aggregate_division_and_headline(elem_df, calc_date, splice_factor=splice)
+
+    assert pytest.approx(headline_spliced["headline_cpi"], 0.001) == 100.0 * splice
+    assert pytest.approx(headline_spliced["core_cpi"], 0.001) == 100.0 * splice
+    for _, row in df_div_spliced.iterrows():
+        if row["item_count"] > 0:
+            assert pytest.approx(row["division_index"], 0.001) == 100.0 * splice
+
+
 

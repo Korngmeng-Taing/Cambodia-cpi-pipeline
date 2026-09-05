@@ -22,6 +22,7 @@ from datetime import timedelta
 import pendulum
 from airflow import DAG
 from airflow.operators.bash import BashOperator
+from airflow.operators.python import PythonOperator
 
 log = logging.getLogger(__name__)
 
@@ -36,8 +37,6 @@ DEFAULT_ARGS = {
     "email_on_failure": False,
     "email_on_retry": False,
 }
-
-from airflow.operators.python import PythonOperator
 
 
 def _refresh_serving_views(**context):
@@ -84,7 +83,8 @@ with DAG(
     tags=["gold", "star-schema", "dbt", "cpi"],
 ) as dag:
 
-    _dbt_vars = '{"ds": "{{ (dag_run.conf.get(\'ds\') if dag_run and dag_run.conf else None) or ds }}"}'
+    dbt_ds_expr = '{{ (dag_run.conf.get("ds") if dag_run and dag_run.conf else None) or ds }}'
+    _dbt_vars = f'{{"ds": "{dbt_ds_expr}"}}'
     _dbt_flags = f"--project-dir {DBT_PROJECT_DIR} --target-path /tmp/dbt/target --log-path /tmp/dbt/logs"
 
     t_dbt_gold_run = BashOperator(

@@ -14,6 +14,7 @@ REBASING POLICY (see docs/rebasing_policy.md):
 =============================================================================
 """
 
+import logging
 import sys
 import os
 sys.path.insert(0, "/opt/airflow")
@@ -25,6 +26,8 @@ from airflow.operators.python import PythonOperator
 from airflow.models import Variable
 
 from pipeline.cpi_calculator import CPICalculationEngine
+
+log = logging.getLogger(__name__)
 
 DEFAULT_ARGS = {
     "owner": "cpi-data-team",
@@ -86,11 +89,11 @@ def execute_daily_cpi_calculation(**context):
         calc_date = date.today()
 
     base_date = get_base_date(calc_date)
-    print(f"🚀 Starting Gold CPI Calculation for {calc_date} (Base Date: {base_date})...")
+    log.info("Starting Gold CPI Calculation for %s (Base Date: %s)...", calc_date, base_date)
 
     engine = CPICalculationEngine()
     engine.run_daily_pipeline(target_date=calc_date, base_date=base_date)
-    print(f"✅ Gold CPI Calculation completed successfully for {calc_date}!")
+    log.info("Gold CPI Calculation completed successfully for %s!", calc_date)
 
 def execute_monthly_cpi_calculation(**context):
     dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
@@ -100,11 +103,11 @@ def execute_monthly_cpi_calculation(**context):
     else:
         calc_date = date.today()
 
-    print(f"🚀 Updating Monthly CPI Mart for {calc_date}...")
+    log.info("Updating Monthly CPI Mart for %s...", calc_date)
     engine = CPICalculationEngine()
     df_monthly = engine.compute_monthly_cpi()
     engine.save_monthly_cpi(df_monthly)
-    print(f"✅ Monthly CPI calculation and persistence complete!")
+    log.info("Monthly CPI calculation and persistence complete!")
 
 def execute_nowcasting_task(**context):
     """Executes the daily high-frequency inflation nowcasting pipeline.
@@ -114,18 +117,8 @@ def execute_nowcasting_task(**context):
     from ml.nowcaster import execute_nowcasting_pipeline
     return execute_nowcasting_pipeline(**context)
 
-def execute_forecasting_task(**context):
-    """Executes the daily machine learning forward inflation forecasting pipeline.
-    
-    Deferred import keeps DAG parsing lightweight and prevents parser failures.
-    """
-    from ml.forecaster import execute_forecasting_pipeline
-    return execute_forecasting_pipeline(**context)
-
 def annual_rebase_cpi(**context):
-
-    """
-    Annual rebasing task: runs on Jan 1 (or first business day).
+    """Annual rebasing task: runs on Jan 1 (or first business day).
     Picks the date in December with the most price observations as the new
     base date (more representative than always anchoring to Dec 1, which
     may be missing data in many years).
@@ -144,7 +137,7 @@ def annual_rebase_cpi(**context):
 
     # Only run in January
     if run_date.month != 1:
-        print(f"⏭️ Skipping annual rebase: not January (current month: {run_date.month})")
+        log.info("Skipping annual rebase: not January (current month: %d)", run_date.month)
         return
 
     # Determine preceding December
@@ -156,7 +149,7 @@ def annual_rebase_cpi(**context):
     df_dec = engine.load_clean_prices(dec_start, dec_end)
 
     if df_dec.empty:
-        print(f"⚠️ No price data for December {dec_year}; rebasing skipped.")
+        log.warning("No price data for December %d; rebasing skipped.", dec_year)
         return
 
     # Pick the date in December with the most price observations — more
@@ -165,21 +158,24 @@ def annual_rebase_cpi(**context):
     new_base = obs_by_date.idxmax()
     effective_from = date(run_date.year, 1, 1)
 
-    # Determine prior active base date to evaluate December price level relative to current series
+    # Determine prior active base date and link factor to evaluate December price level relative to continuous series
     import psycopg2
     from pipeline.config import get_database_url
     conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://", 1)
     prior_base = None
+    prior_splice = 1.0
     try:
         with psycopg2.connect(conn_str) as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT base_date FROM gold.cpi_base_dates WHERE effective_from <= %s ORDER BY effective_from DESC LIMIT 1;",
+                    "SELECT base_date, avg_december_cpi FROM gold.cpi_base_dates WHERE effective_from <= %s ORDER BY effective_from DESC LIMIT 1;",
                     (dec_start,),
                 )
                 row = cur.fetchone()
                 if row and row[0]:
                     prior_base = row[0]
+                    if row[1] is not None and float(row[1]) > 0:
+                        prior_splice = float(row[1]) / 100.0
     except Exception:
         pass
 
@@ -204,7 +200,7 @@ def annual_rebase_cpi(**context):
     for d in dec_dates:
         try:
             elem = engine.compute_daily_elementary_indices(d, base_df, df_dec)
-            _, headline = engine.aggregate_division_and_headline(elem, d)
+            _, headline = engine.aggregate_division_and_headline(elem, d, splice_factor=prior_splice)
             cpi_values.append(headline["headline_cpi"])
         except Exception:
             continue
@@ -213,9 +209,6 @@ def annual_rebase_cpi(**context):
         avg_cpi = sum(cpi_values) / len(cpi_values)
 
         # Persist to date-effective lookup table (backfill-safe)
-        import psycopg2
-        from pipeline.config import get_database_url
-        conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://", 1)
         with psycopg2.connect(conn_str) as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -237,9 +230,12 @@ def annual_rebase_cpi(**context):
 
         # Also update Airflow Variable for backward compatibility
         Variable.set("cpi_base_date", new_base.strftime("%Y-%m-%d"))
-        print(f"✅ Annual rebasing complete: new base_date = {new_base} (most-observed Dec date) effective from {effective_from} (avg December CPI: {avg_cpi:.2f})")
+        log.info(
+            "Annual rebasing complete: new base_date = %s effective from %s (avg December CPI: %.2f)",
+            new_base, effective_from, avg_cpi,
+        )
     else:
-        print(f"⚠️ Could not compute December average CPI; rebasing skipped.")
+        log.warning("Could not compute December average CPI; rebasing skipped.")
 
 local_tz = pendulum.timezone("Asia/Phnom_Penh")
 
@@ -268,15 +264,10 @@ with DAG(
         python_callable=execute_nowcasting_task,
     )
 
-    forecast_cpi_task = PythonOperator(
-        task_id="forecast_daily_inflation",
-        python_callable=execute_forecasting_task,
-    )
-
     annual_rebase_task = PythonOperator(
         task_id="annual_rebase_cpi",
         python_callable=annual_rebase_cpi,
     )
 
-    calculate_cpi_task >> calculate_monthly_cpi_task >> nowcast_cpi_task >> forecast_cpi_task >> annual_rebase_task
+    calculate_cpi_task >> calculate_monthly_cpi_task >> nowcast_cpi_task >> annual_rebase_task
 

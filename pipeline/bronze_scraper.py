@@ -267,14 +267,9 @@ class BronzeScraper:
             )
         """
         try:
-            # Use a separate autocommit connection so error logs survive
-            # even if the main transaction on `conn` is rolled back.
-            import psycopg2
-            dsn = conn.dsn
-            err_conn = psycopg2.connect(dsn)
-            try:
-                err_conn.autocommit = True
-                with err_conn.cursor() as cur:
+            with conn.cursor() as cur:
+                cur.execute("SAVEPOINT log_error_sp")
+                try:
                     cur.execute(
                         insert_query,
                         (
@@ -286,8 +281,10 @@ class BronzeScraper:
                             error_message,
                         ),
                     )
-            finally:
-                err_conn.close()
+                    cur.execute("RELEASE SAVEPOINT log_error_sp")
+                except Exception as exc:
+                    cur.execute("ROLLBACK TO SAVEPOINT log_error_sp")
+                    logger.warning("Could not insert into bronze.scrape_errors via savepoint: %s", exc)
         except Exception as e:
             logger.error("Failed to log error: %s", e)
 

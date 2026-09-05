@@ -158,14 +158,15 @@ with DAG(
     )
 
     # 6. dbt Run
-    dbt_ds_expr = "{{ (dag_run.conf.get('ds') if dag_run and dag_run.conf else None) or ds }}"
+    dbt_ds_expr = '{{ (dag_run.conf.get("ds") if dag_run and dag_run.conf else None) or ds }}'
+    _dbt_vars = f'{{"ds": "{dbt_ds_expr}"}}'
     task_dbt_silver_run = BashOperator(
         task_id="dbt_silver_run",
         trigger_rule="none_failed",
         bash_command=(
             f"dbt run {_dbt_flags} "
-            "--select silver staging "
-            f'--vars \'{{"ds": "{dbt_ds_expr}"}}\''
+            "--select silver "
+            f"--vars '{_dbt_vars}'"
         ),
     )
 
@@ -174,7 +175,7 @@ with DAG(
         task_id="dbt_silver_test",
         bash_command=(
             f"dbt test {_dbt_flags} "
-            "--select silver staging"
+            "--select silver"
         ),
     )
 
@@ -183,8 +184,9 @@ with DAG(
         task_item_matching
         >> task_item_auto_review
         >> task_dbt_seed
-        >> task_gemini_coicop
         >> task_dbt_silver_run
+        >> task_gemini_coicop
         >> task_hedonic_adjustment
         >> task_dbt_silver_test
     )
+

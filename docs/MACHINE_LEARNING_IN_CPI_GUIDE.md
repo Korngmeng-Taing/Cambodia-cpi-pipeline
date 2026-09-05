@@ -154,13 +154,10 @@ To achieve maximum accuracy, speed, and cost efficiency in the Cambodia CPI Meda
 ### Module 3: Machine Learning-Assisted Daily Inflation Nowcasting (ml/nowcaster.py)
 - Aggregates daily facts from `gold.fct_cpi_daily` for the active calendar month ($1 \dots t_{\text{observed}}$).
 - Projects remaining days ($t+1 \dots T$) using 7-day momentum in **Division 01 (Food - 44.8% weight)** and **Division 07 (Transport - 12.2% weight)** following *Macias et al. (2023)*.
+- Incorporates Cambodian festival and holiday shock calendars (`CAMBODIA_ANNUAL_HOLIDAYS` in `ml/config.py`) to model transitory consumer demand surges during Khmer New Year, Pchum Ben, and Water Festival (+0.12% peak, +0.06% lead/lag window).
 - Derives Month-over-Month (MoM %) estimated inflation and chain-links to official National Institute of Statistics (NIS) Phnom Penh benchmark levels in `gold.fct_cpi_nowcast`.
 - Computes dynamic 95% confidence intervals based on daily price dispersion and uncertainty decay ($U_t = \sqrt{(T-t)/T}$).
-
-### Module 4: Multi-Horizon Daily Inflation Forecasting (ml/forecaster.py)
-- Use daily price facts from `gold.fct_cpi_daily` for Food, Housing, and Transport alongside Cambodian cultural holiday calendars.
-- Train production `LightGBMRegressor` models across walk-forward cross-validation splits (*Babii et al., 2022*) to project 7-day, 14-day, and 30-day forward cumulative inflation rates and projected index levels in `gold.fct_cpi_forecast`.
-- Render continuous actual-to-forecast trends via `gold.v_cpi_forecast_chart` on Metabase Dashboard 01.
+- Exposes out-of-sample tracking via `gold.v_nowcast_evaluation` on Metabase Dashboard 01.
 
 ---
 

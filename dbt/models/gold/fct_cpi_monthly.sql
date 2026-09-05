@@ -1,6 +1,10 @@
 -- fct_cpi_monthly.sql
 -- Monthly 12-Division & National CPI Aggregate Mart
+-- NOTE: Authoritative single-writer is pipeline/cpi_calculator.py (CPICalculationEngine.save_monthly_cpi),
+-- invoked by gold_cpi_dag.py (calculate_monthly_cpi_indices).
+-- Disabled in dbt to guarantee single-writer consistency and prevent race conditions.
 {{ config(
+    enabled=false,
     materialized='incremental',
     incremental_strategy='delete+insert',
     unique_key=['cpi_month', 'coicop_division'],
@@ -34,8 +38,6 @@ monthly_aggregated as (
         max(division_name) as division_name,
         max(weight) as weight,
         round(avg(division_index)::numeric, 4) as monthly_division_index,
-        round(avg(headline_cpi)::numeric, 4) as monthly_headline_cpi,
-        round(avg(core_cpi)::numeric, 4) as monthly_core_cpi,
         sum(item_count) as item_count,
         sum(observation_count) as observation_count,
         count(distinct calculation_date) as active_days_in_month
@@ -44,6 +46,29 @@ monthly_aggregated as (
         cpi_month,
         coicop_division
 ),
+monthly_weighted as (
+    select
+        cpi_month,
+        coicop_division,
+        division_name,
+        weight,
+        monthly_division_index,
+        round(
+            (sum(case when monthly_division_index is not null then weight * monthly_division_index else 0 end) over (partition by cpi_month)
+             / nullif(sum(case when monthly_division_index is not null then weight else 0 end) over (partition by cpi_month), 0))::numeric,
+            4
+        ) as monthly_headline_cpi,
+        round(
+            (sum(case when monthly_division_index is not null and coicop_division not in ('01', '04', '07') then weight * monthly_division_index else 0 end) over (partition by cpi_month)
+             / nullif(sum(case when monthly_division_index is not null and coicop_division not in ('01', '04', '07') then weight else 0 end) over (partition by cpi_month), 0))::numeric,
+            4
+        ) as monthly_core_cpi,
+        item_count,
+        observation_count,
+        active_days_in_month
+    from monthly_aggregated
+),
+
 with_lags as (
     select
         cpi_month,
@@ -61,6 +86,6 @@ with_lags as (
         observation_count,
         active_days_in_month,
         now() as created_at
-    from monthly_aggregated
+    from monthly_weighted
 )
 select * from with_lags

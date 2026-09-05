@@ -111,3 +111,6 @@ testpaths = [
     "tests"
 ]
 python_files = ["test_*.py"]
+filterwarnings = [
+    "ignore:ItemMatcher.match_record is deprecated:DeprecationWarning",
+]

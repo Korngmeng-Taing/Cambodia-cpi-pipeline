@@ -35,5 +35,8 @@ sources:
         description: Jevons micro-indices calculated daily by pipeline/cpi_calculator.py.
       - name: fct_cpi_daily
         description: Daily 12-division Laspeyres and Headline/Core CPI facts.
+      - name: fct_cpi_monthly
+        description: Monthly conformed 12-division and national headline/core CPI facts calculated by pipeline/cpi_calculator.py.
+
 
 

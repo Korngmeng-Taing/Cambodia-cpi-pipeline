@@ -6,7 +6,7 @@ This document contains the complete set of architecture diagrams for the Cambodi
 
 ## 🌐 1. High-Level End-to-End Pipeline Overview
 
-This macro-level diagram illustrates the full data journey from 20 external Cambodian retail sources through the Medallion architecture to executive dashboards and multi-horizon ML forward inflation forecasting.
+This macro-level diagram illustrates the full data journey from 20 external Cambodian retail sources through the Medallion architecture to executive dashboards and daily ML-assisted inflation nowcasting.
 
 ```mermaid
 flowchart LR
@@ -39,7 +39,7 @@ flowchart LR
     subgraph S4["SERVING & ANALYTICS"]
         E1["Metabase v0.49\n(3 Streamlined Dashboards:\nMacro, Ops, Quality)"]
         E2["Power BI DirectQuery\n(Executive Inflation Dashboards)"]
-        E3["ML Forecasting Engine\n(LightGBM Multi-Horizon Forecasts)"]
+        E3["ML Nowcasting Engine\n(Daily Inflation Nowcasting & NIS Chain-Linking)"]
     end
 
     S0 --> S1
@@ -136,8 +136,8 @@ flowchart TD
 
     subgraph Stage4["Stage 4 & 5: Hedonics & Final Assembly"]
         C2 & C3 & C4 & C5 & B2 & B4 & B5 & B6 --> D1["Hedonic Quality Adjustment\n(Division 08 & 09 Tech Specs)"]
-        D1 --> D2["Promo Clamping [0%, 95%] & Outlier Tagging"]
-        D2 --> D3[("silver.clean_store_prices\nClean Conformed Daily Facts")]
+        D1 --> D2["Promo Clamping [0%, 95%] & Outlier Tagging\n+ Windowed Dedup on (scrape_date, store_slug, item_id)"]
+        D2 --> D3[("silver.clean_store_prices\nClean Conformed Daily Facts\n(Satisfies uq_clean_store_prices_date_store_item)")]
     end
 
     classDef slvBox fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20;
@@ -148,33 +148,35 @@ flowchart TD
 
 ---
 
-## 🥇 4. Gold Layer Detail (Star Schema, Jevons Math & ML Multi-Horizon Forecast)
+## 🥇 4. Gold Layer Detail (Star Schema, Two-Tier Jevons/Laspeyres Math & ML Inflation Nowcasting)
 
-The Gold layer structures data into a Kimball dimensional star schema, applies Jevons geometric mean elementary aggregation, 7-day missing price imputation, 12-division Laspeyres compilation, and produces multi-horizon ML forward inflation forecasts (7d, 14d, 30d).
+The Gold layer structures data into a Kimball dimensional star schema, applies the ILO/IMF two-tier elementary aggregation standard (subclass Jevons → division Laspeyres), 7-day ILO class-mean imputation, continuous series chain-linking splice factor, single-writer monthly CPI mart (`gold.fct_cpi_monthly`), and produces daily ML-assisted inflation nowcasts with dynamic uncertainty decay and official NIS benchmark chain-linking.
 
 ```mermaid
 flowchart TD
-    subgraph StarSchema["1. Kimball Star Schema Dimensional Model (gold.*)"]
+    subgraph StarSchema["1. Kimball Star Schema Dimensional Model (gold_dag)"]
         G_DIM1[("gold.dim_items\n• item_id (PK UUID)\n• canonical_name & brand\n• coicop_division & code\n• first_seen / last_seen")]
         G_DIM2[("gold.dim_stores\n• store_slug (PK)\n• store_name & channel\n• default_coicop_division")]
         G_FACT[("gold.fct_daily_prices\n• (scrape_date, store_slug, item_id) [PK]\n• price_khr & unit_price_khr\n• discount_pct & on_promo\n• is_outlier & cpi_eligible")]
+        G_CLASS[("gold.fct_coicop_class_daily\n• 4-digit subclass daily mart")]
         
         G_DIM1 --> G_FACT
         G_DIM2 --> G_FACT
     end
 
-    subgraph IndexEngine["2. CPI Index Math & Econometric Engine (pipeline/cpi_calculator.py)"]
-        G_FACT --> M1["Jevons Geometric Mean Elementary Micro-Index\nP_Jevons = exp( 1/N * sum( ln(P_i,t) ) )"]
-        M1 --> M2["ILO/IMF 7-Day Missing Price Imputation\n(Carry-forward last valid observed price)"]
-        M2 --> M3["Base Period Anchoring (P0 = Aug 18, 2026 = 100.00)\ngold.fct_elementary_indices"]
-        M3 --> M4["12-Division Weighted Laspeyres Aggregation\n(NIS Cambodia expenditure shares w_d)"]
-        M4 --> M5["National Headline & Core CPI Compilation\ngold.fct_cpi_daily"]
+    subgraph IndexEngine["2. Two-Tier CPI Index Math & Econometric Engine (pipeline/cpi_calculator.py)"]
+        G_FACT --> M1["Jevons Geometric Mean Elementary Micro-Index\nP_Jevons = exp( 1/N * sum( ln(P_i,t) ) )\ngold.fct_elementary_indices"]
+        M1 --> M2["ILO Class-Mean 7-Day Imputation\n(Advances missing prices by observed division movement)"]
+        M2 --> M3["Tier 1: 4-Digit Subclass Jevons Aggregation\nI_c = exp( 1/N_c * sum( ln(R_i) ) ) * 100.0"]
+        M3 --> M4["Tier 2: Division Laspeyres Roll-Up\n(48 Official NIS Subclass Weights w_c)\nI_Div = sum(w_c * I_c) / sum(w_c)"]
+        M4 --> M5["Continuous Chain-Linking & Laspeyres Headline/Core CPI\n• Splice Factor: S = avg_december_cpi / 100.0\n• gold.fct_cpi_daily & gold.fct_cpi_monthly (Single Writer)"]
+        M1 --> G_CLASS
     end
 
-    subgraph FeatureStore["3. ML Forecasting Engine (gold.fct_cpi_forecast)"]
-        M4 & M5 --> F1["Feature Engineering (ml/features.py)\n• 7d, 14d, 30d Lags & Moving Averages\n• Food (01) & Fuel (07) Momentum Signals\n• Cambodian Expenditure Festival Windows"]
-        F1 --> F2["Machine Learning Models (ml/forecaster.py)\n(Production LightGBM Regressors)"]
-        F2 --> F3["Multi-Horizon Forward Forecasts (H=7, 14, 30d)\ngold.fct_cpi_forecast & gold.v_cpi_forecast_chart"]
+    subgraph NowcastEngine["3. ML Inflation Nowcasting Engine (gold.fct_cpi_nowcast)"]
+        M4 & M5 --> F1["Month-to-Date Realized Aggregation\n• Observed days mean CPI\n• Food (01) & Transport (07) 7-Day Momentum\n• Cambodian Festival Shock Calendar (KNY, Pchum Ben)"]
+        F1 --> F2["Econometric Nowcasting Engine (ml/nowcaster.py)\n(NIS Base 2006 Chain-Linking)"]
+        F2 --> F3["Daily MTD Inflation Nowcasts & 95% Confidence Intervals\ngold.fct_cpi_nowcast & gold.v_nowcast_evaluation"]
     end
 
     subgraph Serving["4. Executive BI & Operational Observability"]
@@ -185,5 +187,5 @@ flowchart TD
     classDef gldBox fill:#fffde7,stroke:#f57f17,stroke-width:2px,color:#e65100;
     classDef gldTable fill:#ffffff,stroke:#f57f17,stroke-width:2px,stroke-dasharray: 5 5,color:#e65100;
     class M1,M2,M3,M4,M5,F1,F2,F3,B1,B2 gldBox;
-    class G_DIM1,G_DIM2,G_FACT gldTable;
+    class G_DIM1,G_DIM2,G_FACT,G_CLASS gldTable;
 ```

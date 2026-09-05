@@ -7,7 +7,6 @@ CREATE SCHEMA IF NOT EXISTS bronze;
 CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS silver;
 CREATE SCHEMA IF NOT EXISTS gold;
-CREATE SCHEMA IF NOT EXISTS ops;
 
 -- Required for trigram GIN indexes and high-dimensional vector search
 DO $$
@@ -38,9 +37,9 @@ CREATE TABLE IF NOT EXISTS bronze.raw_prices (
     source_url TEXT,
     source_name VARCHAR(128) NOT NULL,
     batch_id UUID,
-    raw_payload JSONB,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    raw_payload JSONB
 );
+ALTER TABLE bronze.raw_prices DROP COLUMN IF EXISTS created_at;
 CREATE INDEX IF NOT EXISTS idx_raw_prices_store_scraped ON bronze.raw_prices (store_id, scraped_at);
 CREATE INDEX IF NOT EXISTS idx_raw_prices_source_scraped ON bronze.raw_prices (source_name, scraped_at);
 -- CONTRACT: bronze.raw_prices is "deduped at insert", NOT strictly append-only.
@@ -398,18 +397,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_stores (
 -- Store Product Link Mapping
 -- (removed: silver.store_products was a legacy table, link data now lives in dbt silver.item_match_log / dim_products)
 
--- ============================================================================
--- P3 #123 — OPS SCHEMA. Control-flow tables (overrides, review queues, AI
--- cache) live in their own schema so silver/gold is reserved for analytical
--- facts. We keep `silver.*` as the authoritative storage; `ops.*` are
--- pass-through views so new dbt code can target ops directly while legacy
--- writers continue to INSERT/UPDATE silver.* unchanged.
--- ============================================================================
-CREATE SCHEMA IF NOT EXISTS ops;
 
-COMMENT ON SCHEMA ops IS
-    'P3 #123 — Operational & control-flow tables (overrides, review queues, AI cache) live here. '
-    'silver.* views on the same names are kept as legacy pass-through for existing writers.';
 
 -- Manual Overrides Table
 CREATE TABLE IF NOT EXISTS silver.coicop_override (
@@ -462,13 +450,7 @@ CREATE TABLE IF NOT EXISTS silver.classification_queue (
 );
 CREATE INDEX IF NOT EXISTS idx_class_queue_pending ON silver.classification_queue(status) WHERE status = 'PENDING';
 
--- Ops-schema alias views. Created here (post-table-create) so all source tables
--- already exist when views compile. dbt source() targets should use schema='ops'.
-CREATE OR REPLACE VIEW ops.coicop_override        AS SELECT * FROM silver.coicop_override;
-CREATE OR REPLACE VIEW ops.coicop_override_manual AS SELECT * FROM silver.coicop_override_manual;
-CREATE OR REPLACE VIEW ops.coicop_category_map    AS SELECT * FROM silver.coicop_category_map;
-CREATE OR REPLACE VIEW ops.classification_queue    AS SELECT * FROM silver.classification_queue;
-CREATE OR REPLACE VIEW ops.dim_coicop_ai_cache     AS SELECT * FROM silver.dim_coicop_ai_cache;
+
 
 -- Golden Ground Truth Dataset (Active Learning & Human Validation)
 CREATE TABLE IF NOT EXISTS silver.classification_ground_truth (
@@ -595,24 +577,6 @@ CREATE TABLE IF NOT EXISTS gold.fct_cpi_nowcast (
 );
 CREATE INDEX IF NOT EXISTS idx_fct_cpi_nowcast_target_month ON gold.fct_cpi_nowcast(target_month);
 CREATE INDEX IF NOT EXISTS idx_fct_cpi_nowcast_date ON gold.fct_cpi_nowcast(nowcast_date);
-
--- Machine Learning Multi-Horizon Daily Inflation Forecasts (LightGBM)
-CREATE TABLE IF NOT EXISTS gold.fct_cpi_forecast (
-    forecast_execution_date DATE NOT NULL,
-    target_date DATE NOT NULL,
-    horizon_days INT NOT NULL,
-    current_headline_cpi NUMERIC(10, 4) NOT NULL,
-    predicted_inflation_pct NUMERIC(8, 4) NOT NULL,
-    projected_headline_cpi NUMERIC(10, 4) NOT NULL,
-    model_name VARCHAR(50) NOT NULL,
-    model_rmse NUMERIC(8, 4),
-    model_mae NUMERIC(8, 4),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (forecast_execution_date, target_date, horizon_days, model_name)
-);
-CREATE INDEX IF NOT EXISTS idx_fct_cpi_forecast_date ON gold.fct_cpi_forecast(forecast_execution_date);
-CREATE INDEX IF NOT EXISTS idx_fct_cpi_forecast_target ON gold.fct_cpi_forecast(target_date);
-CREATE INDEX IF NOT EXISTS idx_fct_cpi_forecast_horizon ON gold.fct_cpi_forecast(horizon_days);
 
 -- Performance Indexes for Silver Fact & Bronze Tables
 -- Performance Indexes for Gold Fact & Dimensions, Silver Store Prices, and Bronze Tables

@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
 import sys
-import time
-from datetime import UTC, datetime
 from typing import Any
 
-import pendulum
 import requests
 
 try:
@@ -27,8 +23,6 @@ except ImportError:
     HAS_BS4 = False
 
 from pipeline.canonical import normalize_record
-from pipeline.config import DEFAULT_USD_KHR_RATE
-from scrapers.base import BaseScraper
 
 log = logging.getLogger(__name__)
 

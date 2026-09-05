@@ -269,21 +269,23 @@ Observations outside $[-80\%, +400\%]$ price movement bounds are quarantined.
 
 ### Step 6: 4-Digit COICOP Subclass Aggregation ($I_c^{t/0}$)
 
-All elementary items belonging to subclass $c$ (e.g., `01.1.1 Rice & Cereals`) are aggregated using the unweighted geometric mean across $N_c$ items:
+All elementary items belonging to subclass $c$ (e.g., `01.1.1 Rice & Cereals`, `01.1.2 Meat`) are aggregated using the unweighted Jevons geometric mean of price ratios across $N_c$ items:
 
 $$
-I_c^{t/0} = \exp\left(\frac{1}{N_c} \sum_{i \in \text{Class } c} \ln I_i^{t/0}\right)
+I_c^{t/0} = \exp\left(\frac{1}{N_c} \sum_{i \in \text{Subclass } c} \ln\left(\frac{P_{i, t}}{P_{i, 0}}\right)\right) \times 100.0
 $$
 
 ---
 
-### Step 7: 2-Digit COICOP Division Aggregation ($I_d^{t/0}$)
+### Step 7: 2-Digit COICOP Division Laspeyres Roll-Up ($I_d^{t/0}$)
 
-Subclass indices are aggregated into 2-digit division indices using intra-division expenditure shares $w_{c|d}$:
+Subclass indices are aggregated into 2-digit division indices using official CSES 4-digit subclass expenditure weights ($w_c$) from `dbt/seeds/cambodia_cpi_coicop_weights_breakdown.csv`:
 
 $$
-I_d^{t/0} = \sum_{c \in \text{Division } d} w_{c|d} \cdot I_c^{t/0}
+I_d^{t/0} = \frac{\sum_{c \in \text{Division } d} w_c \cdot I_c^{t/0}}{\sum_{c \in \text{Division } d} w_c}
 $$
+
+If items in a division lack subclass classifications or weights, the engine falls back to an unweighted geometric mean across all items in that division.
 
 ---
 
@@ -292,47 +294,58 @@ $$
 #### 1. National Headline Daily CPI ($CPI_{\text{headline}}^t$):
 
 $$
-CPI_{\text{headline}}^t = \sum_{d=1}^{12} W_d \cdot I_d^{t/0}, \quad \text{where } \sum_{d=1}^{12} W_d = 100.00\%
+CPI_{\text{headline}}^t = \frac{\sum_{d \in \text{active}} W_d \cdot I_d^{t/0}}{\sum_{d \in \text{active}} W_d}
 $$
+
+Missing divisions are excluded from both numerator and denominator to prevent artificial deflation toward 100.
 
 #### 2. National Core Daily CPI ($CPI_{\text{core}}^t$):
 
-Excludes volatile **Division 01 (Food)** and **Division 07 Automotive Fuel**:
+Excludes volatile **Division 01 (Food & Non-Alcoholic Beverages)**, **Division 04 (Housing, Water, Electricity, Gas & Fuels)**, and **Division 07 (Transport & Automotive Fuels)**, in strict alignment with NIS Cambodia and National Bank of Cambodia core inflation methodology:
 
 $$
-CPI_{\text{core}}^t = \frac{\sum_{d \notin \{01, \text{fuel}\}} W_d \cdot I_d^{t/0}}{\sum_{d \notin \{01, \text{fuel}\}} W_d}
+CPI_{\text{core}}^t = \frac{\sum_{d \notin \{01, 04, 07\}} W_d \cdot I_d^{t/0}}{\sum_{d \notin \{01, 04, 07\}} W_d}
 $$
 
-#### 3. Live Production Laspeyres Aggregation Table (August 26, 2026):
+#### 3. Continuous Series Chain-Linking Splice Factor (Step 9):
 
-Queried directly from PostgreSQL `gold.fct_cpi_daily`:
+When annual rebasing shifts the base date to the preceding December, all newly computed division indices and headline CPI are multiplied by the chain-linking splice factor:
 
-| Division Code & Name                      | Official NIS Weight ($W_d$) | Today's Index ($I_d^{t/0}$) | **Laspeyres Weighted Contribution** ($W_d \times I_d$) |     |     |
-| :---------------------------------------- | :-------------------------: | :-------------------------: | :----------------------------------------------------: | --- | --- |
-| **01. Food and Non-Alcoholic Beverages**  |         **0.44800**         |        **126.0760**         |                      **56.4820**                       |
-| **02. Alcoholic Beverages and Tobacco**   |         **0.01500**         |        **102.3840**         |                       **1.5358**                       |
-| **03. Clothing and Footwear**             |         **0.02900**         |        **103.7862**         |                       **3.0098**                       |
-| **04. Housing, Water, Electricity & Gas** |         **0.17100**         |        **100.0000**         |                      **17.1000**                       |
-| **05. Furnishings & Household Goods**     |         **0.03300**         |         **99.5614**         |                       **3.2855**                       |
-| **06. Health & Pharmacy**                 |         **0.05600**         |        **106.2686**         |                       **5.9510**                       |
-| **07. Transport (Buses, Fuel)**           |         **0.12200**         |         **97.9320**         |                      **11.9477**                       |
-| **08. Communication (Phone & Wi-Fi)**     |         **0.03900**         |         **99.9956**         |                       **3.8998**                       |
-| **09. Recreation and Culture**            |         **0.01900**         |        **101.0208**         |                       **1.9194**                       |
-| **10. Education**                         |         **0.01500**         |        **100.0000**         |                       **1.5000**                       |
-| **11. Restaurants and Hotels**            |         **0.03100**         |        **100.0139**         |                       **3.1004**                       |
-| **12. Miscellaneous Goods & Services**    |         **0.02200**         |        **124.0621**         |                       **2.7294**                       |
-| **SUM TOTAL (Laspeyres Headline CPI)**    |     **1.00000 (100%)**      |              —              |                     **`112.4609`**                     |
-| **CORE CPI (Excluding Food & Fuel)**      |     **0.52200 (52.2%)**     |              —              |                     **`101.4110`**                     |
+$$
+S = \frac{\bar{I}_{\text{Dec}}^{\text{continuous}}}{100.0}
+$$
 
-#### 4. Python Implementation (`pipeline/cpi_calculator.py:L233-L241`):
+$$
+I_d^{\text{continuous}} = I_d^{t/0} \times S, \quad CPI_{\text{headline}}^{\text{continuous}} = CPI_{\text{headline}}^t \times S
+$$
+
+#### 4. Harmonized Monthly CPI Compilation (Step 10 — Single Writer):
+
+To ensure absolute single-writer consistency and prevent race conditions with dbt, `pipeline/cpi_calculator.py:save_monthly_cpi` serves as the authoritative writer to `gold.fct_cpi_monthly`. Monthly headline and core CPI are compiled as the windowed Laspeyres sum over active monthly division averages:
+
+$$
+CPI_{\text{headline}}^M = \frac{\sum_{d} W_d \cdot \bar{I}_{d, M}}{\sum_{d} W_d}, \quad CPI_{\text{core}}^M = \frac{\sum_{d \notin \{01, 04, 07\}} W_d \cdot \bar{I}_{d, M}}{\sum_{d \notin \{01, 04, 07\}} W_d}
+$$
+
+#### 5. Python Implementation (`pipeline/cpi_calculator.py`):
 
 ```python
-# Higher-Level Laspeyres Aggregation for Headline CPI
-total_weight = df_div["weight"].sum()
-headline_cpi = float((df_div["weight"] * df_div["division_index"]).sum() / total_weight)
+# Subclass-weighted Laspeyres division aggregation with continuous chain-linking
+for div_code, weight in self.weights.items():
+    div_items = elementary_df[elementary_df["coicop_division"] == div_code]
+    if not div_items.empty:
+        # Tier 1: Subclass Jevons indices
+        # Tier 2: Subclass weighted average within division
+        div_index = sum(idx * wt for idx, wt in zip(sub_indices, sub_wts)) / sum(sub_wts)
+        if splice_factor != 1.0:
+            div_index = div_index * splice_factor
 
-# Core CPI (Excluding Division 01 Food & Energy)
-core_divisions = df_div[~df_div["coicop_division"].isin(["01"])]
+# Tier 3: Higher-Level Laspeyres Aggregation for Headline CPI
+total_weight = active_div["weight"].sum()
+headline_cpi = float((active_div["weight"] * active_div["division_index"]).sum() / total_weight)
+
+# Core CPI (Excluding Division 01 Food, Division 04 Housing/Utilities, Division 07 Transport)
+core_divisions = active_div[~active_div["coicop_division"].isin(["01", "04", "07"])]
 core_weight = core_divisions["weight"].sum()
 core_cpi = float((core_divisions["weight"] * core_divisions["division_index"]).sum() / core_weight)
 ```
@@ -484,11 +497,11 @@ CREATE TABLE IF NOT EXISTS gold.fct_cpi_daily (
       │
 [02:00 ICT] silver_dag (ItemMatcher ─► Vector Embedding ─► AI Classification ─► dbt Silver)
       │
-[03:00 ICT] gold_dag (dbt Gold Star Schema: dim_items, dim_stores, fct_daily_prices)
+[03:00 ICT] gold_cpi_dag (pipeline/cpi_calculator.py: Jevons Micro-Index + Subclass/Div Laspeyres + Nowcast)
       │
-[03:30 ICT] gold_cpi_dag (pipeline/cpi_calculator.py: Jevons Micro-Index + Laspeyres 12-Div)
+[03:30 ICT] gold_dag (dbt Gold Star Schema: dim_items, dim_stores, fct_daily_prices, fct_coicop_class_daily)
       │
-[04:00 ICT] Metabase Serving Layer (Dashboards 19 & 20 Refreshed with Zero Orphaned Cards)
+[04:00 ICT] Metabase Serving Layer (Serving views & dashboards refreshed)
 ```
 
 ---

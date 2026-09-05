@@ -259,37 +259,7 @@ FROM div_monthly
 ORDER BY cpi_month DESC, coicop_division ASC;
 
 
--- 10.9 Continuous Daily CPI Actuals & Forward ML Inflation Forecast Chart View
-CREATE OR REPLACE VIEW gold.v_cpi_forecast_chart AS
-WITH actual_daily AS (
-    SELECT
-        calculation_date AS time_point,
-        MAX(headline_cpi) AS actual_cpi,
-        NULL::NUMERIC(10, 4) AS forecast_cpi,
-        NULL::NUMERIC(8, 4) AS predicted_inflation_pct,
-        'Actual Historical' AS series_type,
-        0 AS horizon_days
-    FROM gold.fct_cpi_daily
-    GROUP BY calculation_date
-),
-latest_forecasts AS (
-    SELECT
-        target_date AS time_point,
-        NULL::NUMERIC(10, 4) AS actual_cpi,
-        projected_headline_cpi AS forecast_cpi,
-        predicted_inflation_pct,
-        'ML Forward Forecast' AS series_type,
-        horizon_days
-    FROM gold.fct_cpi_forecast
-    WHERE forecast_execution_date = (SELECT MAX(forecast_execution_date) FROM gold.fct_cpi_forecast)
-)
-SELECT * FROM actual_daily
-UNION ALL
-SELECT * FROM latest_forecasts
-ORDER BY time_point ASC, series_type DESC;
-
-
--- 10.10 Out-of-Sample Nowcasting Evaluation & Tracking vs. Official NIS Benchmarks
+-- 10.9 Out-of-Sample Nowcasting Evaluation & Tracking vs. Official NIS Benchmarks
 CREATE OR REPLACE VIEW gold.v_nowcast_evaluation AS
 SELECT 
     n.nowcast_date,

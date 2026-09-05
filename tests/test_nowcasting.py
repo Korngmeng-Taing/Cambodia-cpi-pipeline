@@ -169,3 +169,18 @@ def test_execute_nowcasting_pipeline_airflow_entrypoint():
     context = {"ds": "2026-09-12"}
     res = execute_nowcasting_pipeline(**context)
     assert res["nowcast_date"] == date(2026, 9, 12)
+
+
+def test_festival_shock_adjustment(sample_nowcast_data):
+    """Verifies that dates within major festival windows (e.g. Pchum Ben in late Sept) reflect festive surge."""
+    _, df_daily, df_fx, df_monthly, df_nis = sample_nowcast_data
+    nowcaster = CPINowcaster()
+
+    # Normal day (e.g. Sept 10) vs. Festival day (e.g. Sept 29 during Pchum Ben)
+    normal_res = nowcaster.nowcast_for_date(date(2026, 9, 10), df_daily, df_fx, df_monthly, df_nis)
+    festival_res = nowcaster.nowcast_for_date(date(2026, 9, 29), df_daily, df_fx, df_monthly, df_nis)
+
+    assert normal_res is not None
+    assert festival_res is not None
+    assert "nowcast_headline_cpi" in festival_res
+    assert festival_res["nowcast_headline_cpi"] > 0

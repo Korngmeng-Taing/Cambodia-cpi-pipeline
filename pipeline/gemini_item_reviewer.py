@@ -32,7 +32,7 @@ from pipeline.text_clean import clean_name_for_matching
 log = logging.getLogger(__name__)
 
 # Model and batch defaults
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 BATCH_SIZE = int(os.getenv("GEMINI_REVIEW_BATCH_SIZE", "40"))
 RATE_LIMIT_DELAY = float(os.getenv("GEMINI_BATCH_DELAY_SECONDS", "1.5"))

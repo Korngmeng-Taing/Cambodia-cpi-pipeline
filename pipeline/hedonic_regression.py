@@ -178,8 +178,8 @@ def fetch_hedonic_items(
         FROM silver.clean_store_prices f
         WHERE (f.coicop_division = '08' OR f.coicop_division = '09' OR f.coicop_division LIKE :prefix)
           AND f.price_khr > 0
-          AND f.scrape_date >= :cutoff::DATE
-          AND f.scrape_date <= :as_of::DATE
+          AND f.scrape_date >= CAST(:cutoff AS DATE)
+          AND f.scrape_date <= CAST(:as_of AS DATE)
         """
     )
     with engine.connect() as conn:
@@ -204,8 +204,8 @@ def fetch_hedonic_items(
                     FROM silver.int_prices_cleaned f
                     LEFT JOIN silver.clean_store_prices c ON c.raw_price_id = f.raw_price_id
                     WHERE f.price_khr > 0
-                      AND f.scrape_date >= :cutoff::DATE
-                      AND f.scrape_date <= :as_of::DATE
+                      AND f.scrape_date >= CAST(:cutoff AS DATE)
+                      AND f.scrape_date <= CAST(:as_of AS DATE)
                     """
                 )
                 df = pd.read_sql(

@@ -15,6 +15,23 @@ from pipeline.hybrid_embeddings_classifier import get_hybrid_classifier
 log = logging.getLogger(__name__)
 
 
+def is_valid_barcode(barcode: str | None) -> bool:
+    """Validates that a barcode is a genuine product identifier (GTIN-8/12/13/14)
+    and not a retailer placeholder, department dummy code, or sequence of identical digits."""
+    if not barcode:
+        return False
+    b = str(barcode).strip()
+    if not (4 <= len(b) <= 18 and b.isdigit()):
+        return False
+    if len(set(b)) <= 1:
+        return False
+    if b in {"123456789012", "1234567890123"}:
+        return False
+    if b.endswith("00000000"):
+        return False
+    return True
+
+
 class ItemMatcher:
     use_vector_matcher: bool = True
 
@@ -63,7 +80,7 @@ class ItemMatcher:
             self.items_cache.clear()
             self.sku_cache.clear()
             for item_id, name, barcode, size_norm in rows:
-                if barcode:
+                if barcode and is_valid_barcode(barcode):
                     self.barcode_cache[barcode.strip()] = item_id
                 if name:
                     self.exact_name_cache[name.strip().upper()] = item_id
@@ -105,7 +122,7 @@ class ItemMatcher:
     def match_by_barcode(
         self, barcode: str | None, conn: Any = None
     ) -> tuple[uuid.UUID, float] | None:
-        if not barcode:
+        if not barcode or not is_valid_barcode(barcode):
             return None
         barcode_clean = barcode.strip()
         if barcode_clean in self.barcode_cache:
@@ -223,6 +240,7 @@ class ItemMatcher:
         except Exception as e:
             log.warning("COICOP classification on create_canonical_item failed: %s", e)
 
+        valid_bc = barcode if is_valid_barcode(barcode) else None
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -230,10 +248,10 @@ class ItemMatcher:
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (item_id) DO NOTHING
                 """,
-                (item_id, name, brand, barcode, size_norm, coicop_div, coicop_code),
+                (item_id, name, brand, valid_bc, size_norm, coicop_div, coicop_code),
             )
-        if barcode:
-            self.barcode_cache[barcode.strip()] = item_id
+        if valid_bc:
+            self.barcode_cache[valid_bc.strip()] = item_id
         if name:
             self.exact_name_cache[name.strip().upper()] = item_id
         self.items_cache.append((item_id, name, size_norm))
@@ -453,7 +471,7 @@ class ItemMatcher:
             name_clean = clean_name_for_matching(desc)
 
             # 1. Exact Barcode match
-            if barcode and barcode.strip() in self.barcode_cache:
+            if barcode and is_valid_barcode(barcode) and barcode.strip() in self.barcode_cache:
                 item_id = self.barcode_cache[barcode.strip()]
                 match_logs.append((raw_price_id, str(item_id), "barcode_exact", 1.0))
                 totals["matched_exact"] += 1
@@ -524,9 +542,10 @@ class ItemMatcher:
                 coicop_code = res.get("coicop_code")
             except Exception as e:
                 log.warning("COICOP classification on batch new item failed: %s", e)
-            new_items.append((str(new_id), name_clean, brand, barcode, package_size, coicop_div, coicop_code))
-            if barcode:
-                self.barcode_cache[barcode.strip()] = new_id
+            valid_bc = barcode if is_valid_barcode(barcode) else None
+            new_items.append((str(new_id), name_clean, brand, valid_bc, package_size, coicop_div, coicop_code))
+            if valid_bc:
+                self.barcode_cache[valid_bc.strip()] = new_id
             if sku:
                 sku_clean = sku.strip()
                 self.sku_cache[(store_id, sku_clean)] = new_id

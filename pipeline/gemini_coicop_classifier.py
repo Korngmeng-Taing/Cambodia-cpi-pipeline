@@ -74,7 +74,7 @@ MAX_CONSECUTIVE_FAILURES = int(os.getenv("GEMINI_MAX_CONSECUTIVE_FAILURES", "5")
 SYSTEM_PROMPT = """You are an expert statistical classifier for the UN COICOP 2018 taxonomy (Classification of Individual Consumption According to Purpose). I will give you a list of e-commerce product names from Cambodia. You must return a JSON array mapping each product to its most specific 5-digit COICOP code. If unsure, return '99.9.9'. Include a 'confidence_score' (0.0 to 1.0) and a brief 'reasoning' string.
 
 Classification rules:
-- Use the official dotted 5-digit COICOP 2018 notation, e.g. '01.1.1' (Bread and cereals) or '07.2.2' (Fuels and lubricants for personal transport equipment).
+- Use the official dotted 5-digit COICOP 2018 notation, e.g. '01.1.1' (Bread and cereals) or '07.2.2' (Fuels and lubricants).
 - Prefer the MOST SPECIFIC code the name unambiguously supports. Never invent a finer class than the name justifies.
 - If the product cannot be confidently mapped to any COICOP class, return the special code '99.9.9'.
 - Classify only what the name literally describes. Do not infer bundles, promotions or brand-only categories unless the name says so.
@@ -82,127 +82,95 @@ Classification rules:
 - 'confidence_score' must be a float from 0.0 to 1.0.
 - 'reasoning' must be a short (max 15 words) English explanation.
 
-CRITICAL store-context rules:
-- This data comes from RETAIL GROCERY STORES. Packaged/retail food products —
-  sandwiches, burgers, pizza, instant noodles, canned soup, ready meals,
-  frozen dishes, pastries, sushi packs — are FOOD (division 01), even when
-  named after restaurant dishes. Division 11 is ONLY for actual restaurant
-  meals, cafe orders, or hotel accommodation services sold as a service
-  (e.g. 'Dinner buffet for 2', 'Deluxe room 1 night').
-- Phone/electronics ACCESSORIES (chargers, cases, FM transmitters, cables)
-  bought at general retailers are NOT division 08. Classify by product type:
-  car gadgets -> 07.2.1, audio/electronics -> 09.1.x. Division 08 equipment
-  applies to phones/tablets themselves or telecom-store context.
+CRITICAL retail context rules:
+- RETAIL SUPERMARKET FOOD IS ALWAYS DIVISION 01: Packaged, canned, fresh, or prepared retail grocery products —
+  sandwiches, burgers, pizza, instant noodles, canned soup, ready meals, bento boxes,
+  frozen dishes, pastries, sushi packs, salad packs — are FOOD (division 01), NEVER division 11.
+- Division 11 is RESERVED EXCLUSIVELY for actual dine-in restaurant services, cafe bills, or hotel overnight room bookings.
+- Division 04 is RESERVED for residential real estate rentals and utility bills. Hardware, cookware, and groceries are NEVER division 04.
+- Cleaning chemicals, dishwashing soap, detergent, laundry softener, trash bags, mops, cookware, and tableware are DIVISION 05 (05.5.1 / 05.6.1).
+- Personal care (shampoo, body wash, lotion, sunscreen, skincare, cosmetics, toothpaste, toilet paper, diapers) is DIVISION 12 (12.1.3).
+- OTC medicines, vitamins, bandages, painkillers, and medical masks are DIVISION 06 (06.1.2).
+- Phone/electronics accessories (chargers, cases, cables) bought at general retailers are NOT division 08:
+  car gadgets -> 07.2.1, audio/electronics -> 09.1.x. Division 08 (08.2.0) is for phones, tablets, SIM cards, and internet plans.
 
-Common COICOP 2018 codes you will need:
-- 01.1.1 Bread and cereals (rice, flour, pasta, cereal, noodles, bread, buns, rolls, croissants)
-- 01.1.2 Meat (fresh meat, frozen meat, sausages, bacon, ham, jerky, dried meat)
-- 01.1.3 Fish and seafood (fresh fish, frozen fish, shrimp, squid, dried fish, dried shrimp, fish sauce, oyster sauce)
-- 01.1.4 Milk, cheese and eggs (milk, yogurt, cheese, eggs, butter, condensed milk, powdered milk, baby formula)
-- 01.1.5 Oils and fats (cooking oil, olive oil, coconut oil, sesame oil, butter, margarine, ghee)
-- 01.1.6 Fruit (fresh fruit, dried fruit, frozen fruit, fruit juice, fruit smoothie)
-- 01.1.7 Vegetables (fresh vegetables, frozen vegetables, canned vegetables, salad, herbs, spices, seasonings, sauces, condiments, pickles)
-- 01.1.8 Sugar, jam, honey, chocolate and confectionery (sugar, honey, jam, chocolate, candy, lollipop, gummy, marshmallow, cookies, biscuits, wafers, cakes, pastries)
-- 01.2.1 Coffee, tea and cocoa (coffee, tea, cocoa, hot chocolate, instant coffee, coffee beans, tea bags)
-- 01.2.2 Mineral waters, soft drinks, juices (water, soda, juice, energy drink, sports drink, coconut water, aloe vera drink)
+Common UN COICOP 2018 5-digit codes:
+- 01.1.1 Bread, cereals and ready dishes (rice, flour, pasta, cereal, noodles, bread, buns, croissants, pizza, ready meals, bento, sandwiches)
+- 01.1.2 Meat (fresh/frozen beef, pork, chicken, poultry, sausages, bacon, ham, jerky, dried meat)
+- 01.1.3 Fish and seafood (fresh/frozen fish, salmon, canned tuna, shrimp, squid, crab, dried fish)
+- 01.1.4 Milk, cheese and eggs (fresh milk, yogurt, cheese, eggs, butter, condensed milk, powdered milk, baby formula)
+- 01.1.5 Oils and fats (cooking oil, vegetable oil, olive oil, coconut oil, sesame oil, margarine, ghee)
+- 01.1.6 Fruit (fresh fruit, dried fruit, frozen fruit, apples, bananas, oranges, mango, grapes)
+- 01.1.7 Vegetables (fresh/frozen/canned vegetables, potatoes, onions, tomatoes, mushrooms, fresh salad, garlic, chili)
+- 01.1.8 Sugar, jam, honey, chocolate and confectionery (sugar, honey, jam, chocolate, candy, cookies, biscuits, wafers, cakes)
+- 01.1.9 Food products n.e.c. (sauces, soy sauce, fish sauce, oyster sauce, chili sauce, ketchup, mayonnaise, mustard, vinegar, salt, pepper, spices, seasoning, curry paste)
+- 01.2.1 Coffee, tea and cocoa (ground coffee, coffee beans, instant coffee, tea bags, green tea, cocoa powder)
+- 01.2.2 Mineral waters, soft drinks, juices (bottled drinking water, mineral water, soda, fruit juice, energy drink, canned iced tea/coffee)
 - 02.1.1 Spirits (whiskey, vodka, rum, gin, tequila, brandy, soju, baijiu)
 - 02.1.2 Wine (red wine, white wine, rose, champagne, sparkling wine)
-- 02.2.1 Beer (beer, lager, stout, pilsner, ale, draft beer, craft beer)
-- 02.2.0 Tobacco (cigarettes, cigars, tobacco, chewing tobacco, snus)
-- 03.1.1 Garments for men (men shirt, men t-shirt, men pants, men jacket, men coat, men shorts, men suit, men hoodie)
-- 03.1.2 Garments for women (women dress, women blouse, women skirt, women jacket, women coat, women pants, women shorts)
-- 03.1.3 Garments for infants (baby clothes, baby onesie, baby bodysuit, baby pajamas)
-- 03.1.4 Other garments (unisex clothing, uniform, apron, raincoat, swimwear, underwear, socks)
-- 03.2.1 Shoes and other footwear (shoes, sneakers, boots, sandals, flip-flops, slippers, heels, loafers, crocs)
-- 04.1.1 Actual rentals for housing (rent, rental, apartment rent, condo rent, house rent)
-- 04.2.1 Imputed rentals for housing (not directly applicable to purchases)
-- 04.3.1 Maintenance and repair of the dwelling (plumber, electrician, renovation, repair, painting, pest control)
-- 04.4.1 Water supply and related services (water bill, water rate, water meter)
-- 04.5.1 Electricity (electric bill, power bill, electricity meter, kwh)
-- 04.5.2 Gas (gas cylinder, gas tank, lpg, gas bill)
-- 04.5.3 Liquid fuels (kerosene, firewood, charcoal for cooking)
-- 05.1.1 Furniture and furnishings (sofa, chair, table, bed, desk, wardrobe, shelf, bookcase, dresser)
-- 05.2.1 Household textiles (towel, curtains, bedsheet, pillow, blanket, linen, tablecloth)
-- 05.3.1 Major household appliances (refrigerator, fridge, freezer, washing machine, dryer, dishwasher, oven, microwave, air conditioner, fan, water heater)
-- 05.4.1 Small electric household appliances (kettle, blender, toaster, vacuum, iron, rice cooker, coffee maker, air fryer, food processor, mixer, juicer, slow cooker, pressure cooker, hair dryer)
-- 05.5.1 Glassware, tableware and household utensils (plate, bowl, cup, mug, glass, cutlery, fork, spoon, knife, pan, pot, wok, baking tray)
-- 05.6.1 Non-durable household goods (detergent, soap, bleach, dish soap, cleaning product, sponge, trash bag, toilet paper, paper towel, tissue)
-- 06.1.1 Medical and paramedical services (doctor visit, clinic, hospital, dental, physiotherapy)
-- 06.1.2 Pharmaceutical products (medicine, paracetamol, ibuprofen, panadol, aspirin, antibiotic, cough syrup, inhaler, ointment, bandage, first aid kit)
-- 06.1.3 Other medical products (thermometer, blood pressure monitor, glucose meter, pregnancy test, contact lens solution, condoms, surgical gloves)
-- 06.1.4 Therapeutic medical appliances (crutches, wheelchair, hearing aid, oxygen tank)
-- 06.2.1 Dental services (dental cleaning, dental filling, dental extraction, dental whitening, braces)
-- 06.3.1 Spectacles and lenses (prescription glasses, corrective contact lenses)
-- 07.1.1 Passenger transport by railway (train ticket, rail fare)
-- 07.1.2 Passenger transport by road (bus ticket, express bus, passenger van)
-- 07.1.3 Passenger transport by air (airline ticket, airfare, flight)
-- 07.1.4 Passenger transport by water (ferry ticket, boat fare)
-- 07.2.1 Spare parts and accessories for personal transport equipment (car parts, brake pads, spark plug, oil filter, car battery, tire)
-- 07.2.2 Fuels and lubricants for personal transport equipment (gasoline, petrol, diesel, engine oil, motor oil)
-- 07.2.3 Maintenance and repair of personal transport equipment (car wash, car service, oil change)
-- 08.1.1 Postal services (postage stamp, courier, delivery fee, parcel)
-- 08.2.0 Telephone and telefax equipment (smartphone, mobile phone, telephone, tablet, iPad, phone charger, charging cable, phone case)
-- 08.3.0 Telephone and telefax services / Internet services (internet plan, broadband, fiber, wifi, data plan, mobile data, SIM card, airtime, top-up, mobile plan)
-- 09.1.1 Audio-visual equipment (TV, camera, headphone, speaker, soundbar, projector)
-- 09.1.2 Photographic and cinematographic equipment (DSLR camera, action camera, GoPro, tripod, lens, memory card)
-- 09.1.3 Information processing equipment (personal computer, laptop, Macbook, printer)
-- 09.1.4 Recording media (CD, DVD, USB drive, SD card)
-- 09.2.2 Musical instruments (guitar, piano, violin, drums, keyboard)
-- 09.3.1 Games, toys and hobbies (toy, doll, Barbie, Hot Wheels, puzzle, board game, video game, Lego, action figure)
-- 09.3.2 Equipment for sport, camping and open-air recreation (football, basketball, tennis, badminton, bicycle, camping tent)
-- 09.3.3 Gardens, plants and flowers (natural or artificial plants, flowers, seeds, fertilizers, pots)
-- 09.3.4 Pets and related products (pet food, dog food, cat food, kitten food, puppy food, pet treats, cat litter, pet toys, pet shampoo, pet accessories)
-- 09.5.1 Books (book, novel, textbook, dictionary, atlas, guide book)
-- 09.5.2 Newspapers and periodicals (newspaper, magazine, journal)
-- 09.5.4 Stationery and drawing materials (pen, pencil, ruler, eraser, sharpener, notebook, exercise book, crayon, marker, highlighter, stapler, envelope, paper, folder, binder, scissors, glue)
-- 10.1.0 Pre-primary and primary education services (kindergarten, primary school, elementary school tuition)
-- 10.2.0 Secondary education services (secondary school, high school tuition)
-- 10.4.0 Tertiary education services (university, college tuition, degree courses)
-- 10.5.0 Education not definable by level (vocational training, language course tuition)
-- 11.1.1 Restaurants and cafes (restaurant, cafe, diner, bistro, cafeteria, fast food, meal, dining)
-- 11.2.0 Accommodation services (hotel room, resort stay, guesthouse, Airbnb, serviced apartment)
-- 12.1.1 Hairdressing and personal grooming (haircut, hair salon, beauty salon, nail salon, manicure, pedicure, facial treatment, spa, massage)
-- 12.1.2 Appliances and products for personal hygiene (hair dryer, electric shaver, razor, dental floss, mouthwash)
-- 12.1.3 Articles and products for personal care (shampoo, conditioner, soap, body wash, lotion, moisturizer, sunscreen, skincare, face cream, makeup, lipstick, perfume, cologne, baby lotion, baby powder)
-- 12.2.0 Jewellery, watches and luggage (necklace, earring, ring, bracelet, analog watch, quartz watch, handbag, suitcase, wallet, purse, sunglasses, umbrella)
-- 12.2.2 Financial services (bank fee, insurance premium, investment, loan, mortgage, interest)
-- 12.3.1 Housing maintenance and repair services (plumber, electrician, renovation, painting, pest control, gardening, landscaping)
-- 12.4.0 Other services not elsewhere classified (legal service, accounting, consulting, photography, printing, laundry, dry cleaning, tailoring, repair, storage)
-- 12.5.1 Social protection services (social security, welfare, pension, unemployment benefits)
-- 12.6.0 Other services (charity, donation, subscription, membership, licensing, certification, inspection)
+- 02.2.1 Beer (beer, lager, stout, pilsner, ale, craft beer, cider)
+- 02.2.0 Tobacco (cigarettes, cigars, tobacco)
+- 03.1.1 Garments for men (men shirt, men pants, men jacket, men shorts)
+- 03.1.2 Garments for women (women dress, women blouse, women skirt, women pants)
+- 03.1.3 Garments for infants (baby clothes, baby bodysuit, baby pajamas)
+- 03.1.4 Other garments (unisex clothing, apron, raincoat, underwear, socks)
+- 03.2.1 Shoes and other footwear (shoes, sneakers, boots, sandals, flip-flops, slippers)
+- 04.1.1 Actual rentals for housing (apartment rent, condo rent, house rental)
+- 04.5.1 Electricity (electric bill, power bill)
+- 04.5.2 Gas (gas cylinder, lpg refill)
+- 05.1.1 Furniture and furnishings (sofa, chair, table, bed, desk, mattress)
+- 05.2.1 Household textiles (towel, curtains, bedsheet, pillow, blanket)
+- 05.3.1 Major household appliances (refrigerator, washing machine, air conditioner)
+- 05.4.1 Small electric household appliances (kettle, blender, rice cooker, toaster, iron, microwave)
+- 05.5.1 Glassware, tableware and household utensils (plate, bowl, cup, pan, pot, wok, knife, cutlery)
+- 05.6.1 Non-durable household goods (laundry detergent, dishwashing soap, bleach, floor cleaner, sponges, trash bags)
+- 06.1.1 Medical services (doctor visit, clinic)
+- 06.1.2 Pharmaceutical products (paracetamol, ibuprofen, antibiotic, cough syrup, vitamins, first aid, medical mask)
+- 07.1.2 Passenger transport by road (bus ticket, van ticket, taxi fare)
+- 07.2.1 Spare parts and accessories for transport equipment (tires, car battery, spark plug, motor oil filter)
+- 07.2.2 Fuels and lubricants for transport equipment (gasoline, petrol, diesel, engine oil)
+- 08.2.0 Telephone and telefax equipment (smartphone, mobile phone, tablet, iPad)
+- 08.3.0 Internet and telecom services (internet plan, wifi subscription, data plan, SIM card, airtime)
+- 09.1.1 Audio-visual equipment (TV, headphone, speaker, camera)
+- 09.1.3 Information processing equipment (laptop, PC, printer)
+- 09.3.4 Pets and related products (dog food, cat food, pet treats, cat litter, pet shampoo)
+- 09.5.4 Stationery and drawing materials (notebook, pen, pencil, eraser, ruler, stapler)
+- 11.1.1 Restaurants and cafes (dine-in meal bill, cafe table order, restaurant dining)
+- 11.2.0 Accommodation services (hotel room overnight stay, resort booking)
+- 12.1.3 Articles and products for personal care (shampoo, hair conditioner, body wash, lotion, sunscreen, skincare, face cream, makeup, perfume, toothpaste, toothbrush, toilet paper, diapers, wet wipes)
+- 12.2.1 Travel goods and personal effects (backpack, suitcase, handbag, wallet, umbrella)
 
 Cambodian market examples:
-- "Jasmine Rice 5kg" -> 01.1.1 (Bread and cereals)
+- "Jasmine Rice 5kg" -> 01.1.1 (Bread, cereals and grain products)
+- "Frozen Cheese Pizza 350g" -> 01.1.1 (Bread, cereals and ready dishes)
+- "Pork Fried Rice (Bai Cha) Ready Meal" -> 01.1.1 (Bread, cereals and ready dishes)
+- "Karaage-Don Bento Box" -> 01.1.1 (Bread, cereals and ready dishes)
+- "Fresh Pork Belly 500g" -> 01.1.2 (Meat)
+- "Salmon Fillet Fresh 200g" -> 01.1.3 (Fish and seafood)
+- "Dutch Mill Fresh Milk 1L" -> 01.1.4 (Milk, cheese and eggs)
+- "Vegetable Cooking Oil 1L" -> 01.1.5 (Oils and fats)
+- "Fresh Cavendish Banana 1kg" -> 01.1.6 (Fruit)
+- "Broccoli Fresh 500g" -> 01.1.7 (Vegetables)
+- "Chili Sauce Sriracha 450g" -> 01.1.9 (Food products n.e.c. - sauces and condiments)
+- "Fish Sauce 750ml" -> 01.1.9 (Food products n.e.c. - sauces and condiments)
+- "Iced Coffee 250ml Can" -> 01.2.2 (Mineral waters, soft drinks, juices)
 - "Angkor Beer Can 330ml" -> 02.2.1 (Beer)
-- "Pedigree Dog Food Beef 1.5kg" -> 09.3.4 (Pets and related products)
-- "Whiskas Cat Food Tuna 1.2kg" -> 09.3.4 (Pets and related products)
-- "Paracetamol 500mg 100 Tablets" -> 06.1.2 (Pharmaceutical products)
-- "Samsung Galaxy A15 128GB" -> 08.2.0 (Telephone equipment)
-- "Home Fiber 50 Mbps Monthly" -> 08.3.0 (Internet services)
-- "Deluxe Room River View (1 Night)" -> 11.2.0 (Accommodation services)
-- "Pork Fried Rice (Bai Cha)" -> 11.1.1 (Restaurants and cafes)
-- "Bus Ticket Phnom Penh - Siem Reap" -> 07.1.2 (Passenger transport by road)
-- "1 Bedroom Condo BKK1 Rent" -> 04.1.1 (Actual rentals for housing)
-- "Exercise Book A4 120 Pages" -> 09.5.4 (Stationery)
-- "Electric Kettle 1.8L" -> 05.4.1 (Small electric household appliances)
-- "Regular Gasoline" -> 07.2.2 (Fuels and lubricants)
-- "USD/KHR Exchange Rate" -> 99.9.9 (Not a consumer good)
-- "Smart Laor! 8GB Weekly" -> 08.4.0 (Other communication services)
-- "Smart Fiber+ 80 Mbps" -> 08.3.0 (Internet services)
-- "BIC Ball Pen Blue" -> 09.5.4 (Stationery)
-- "Crayola Crayons 24 Colors" -> 09.5.4 (Stationery)
-- "Fresh Milk 1L Pasteurised" -> 01.1.4 (Milk, cheese and eggs)
-- "Eggs Tray 10s" -> 01.1.4 (Milk, cheese and eggs)
-- "Avocado Hass Fresh 500g" -> 01.1.6 (Fruit)
-- "Non-Stick Frying Pan 28cm" -> 05.5.1 (Glassware, tableware and household utensils)
 - "Men Cotton T-Shirt" -> 03.1.1 (Garments for men)
-- "Women Running Shoes" -> 03.2.1 (Shoes and other footwear)
-- "Apple USB-C Fast Charger 20W" -> 08.2.0 (Telephone equipment)
-- "Executive Suite 1 Night" -> 11.2.0 (Accommodation services)
-- "Iced Milk Coffee (Kafe Teuk Doh Koh)" -> 11.1.1 (Restaurants and cafes)
-- "Express Van Phnom Penh - Battambang" -> 07.1.2 (Passenger transport by road)
-- "VIP Van Phnom Penh - Sihanoukville" -> 07.1.2 (Passenger transport by road)
-- "Standard King Room 1 Night" -> 11.2.0 (Accommodation services)
+- "1 Bedroom Condo BKK1 Monthly Rent" -> 04.1.1 (Actual rentals for housing)
+- "Sunlight Dishwashing Liquid 750ml" -> 05.6.1 (Non-durable household goods)
+- "Attack Laundry Detergent 1.4kg" -> 05.6.1 (Non-durable household goods)
+- "Non-Stick Frying Pan 28cm" -> 05.5.1 (Tableware and household utensils)
+- "Panadol Extra 500mg 10s" -> 06.1.2 (Pharmaceutical products)
+- "Bus Ticket Phnom Penh - Siem Reap" -> 07.1.2 (Passenger transport by road)
+- "Regular Gasoline 1L" -> 07.2.2 (Fuels and lubricants)
+- "Samsung Galaxy A15 128GB" -> 08.2.0 (Telephone equipment)
+- "Smart Fiber 50 Mbps Monthly" -> 08.3.0 (Internet services)
+- "Sony Wireless Headphones" -> 09.1.1 (Audio-visual equipment)
+- "Pedigree Dog Food Beef 1.5kg" -> 09.3.4 (Pets and related products)
+- "Deluxe Hotel Room 1 Night Stay" -> 11.2.0 (Accommodation services)
+- "Head & Shoulders Shampoo 450ml" -> 12.1.3 (Articles and products for personal care)
+- "Colgate Total Toothpaste 150g" -> 12.1.3 (Articles and products for personal care)
+- "Foldable Travel Backpack 20L" -> 12.2.1 (Travel goods and personal effects)
 
 Response format (strict JSON array, no markdown fences, no extra text):
 [{"product_name": "<exact input name>", "coicop_code": "01.1.4", "confidence_score": 0.95, "reasoning": "Unambiguous whole milk product"}]
@@ -653,8 +621,9 @@ def fetch_unclassified(
         except Exception as e:
             log.warning("Could not read silver.classification_queue: %s", e)
 
-        # Tier 2: Sweep every uncached product scraped on this specific scrape_date
-        if not items:
+        # Tier 2: Sweep uncached products scraped on this specific scrape_date if slots remain
+        remaining = limit - len(items)
+        if remaining > 0:
             try:
                 date_filter = "p.scrape_date = CAST(:ds AS DATE)" if scrape_date else "p.scrape_date = (SELECT max(scrape_date) FROM silver.int_prices_cleaned)"
                 # Phase 4: Exclude recently negative-cached items (< 24h old)
@@ -691,7 +660,7 @@ def fetch_unclassified(
                     ORDER BY sub.observation_count DESC, sub.canonical_name
                     LIMIT :lim
                 """
-                params: dict[str, Any] = {"lim": limit}
+                params: dict[str, Any] = {"lim": remaining}
                 if scrape_date:
                     params["ds"] = scrape_date
                 ci_res = conn.execute(text(query_sql), params).fetchall()

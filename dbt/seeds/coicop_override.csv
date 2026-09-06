@@ -311,3 +311,107 @@ name,WHISKY,,02,Alcohol - spirits
 name,TEQUILA,,02,Alcohol - spirits
 name,CHIVAS REGAL,,02,Alcohol - spirits
 name,JOHNNIE WALKER,,02,Alcohol - spirits
+name,CABERNET SAUVIGNON,,02,Alcohol - wine
+name,CAB-SAUVIGNON,,02,Alcohol - wine
+name,CABINET-SAUVIGNON,,02,Alcohol - wine
+name,CHARDONNAY,,02,Alcohol - wine
+name,SHIRAZ,,02,Alcohol - wine
+name,MERLOT,,02,Alcohol - wine
+name,SAUVIGNON BLANC,,02,Alcohol - wine
+name,PINOT NOIR,,02,Alcohol - wine
+name,BORDEAUX,,02,Alcohol - wine
+name,MOSCATO,,02,Alcohol - wine
+name,PROSECCO,,02,Alcohol - sparkling wine
+name,SPARKLING WINE,,02,Alcohol - sparkling wine
+name,SOJU,,02,Alcohol - spirits
+name,HOEGAARDEN,,02,Alcohol - beer
+name,SINGHA,,02,Alcohol - beer
+name,CHANG BEER,,02,Alcohol - beer
+name,SAPPORO,,02,Alcohol - beer
+name,SOMERSBY,,02,Alcohol - cider
+name,CIGARETTE,,02,Tobacco - cigarette
+name,CIGAR,,02,Tobacco - cigar
+name,DISHWASHING,,05,Household - dishwashing liquid
+name,DISHWASH,,05,Household - dishwashing liquid
+name,DISH SOAP,,05,Household - dish soap
+name,LIQUID DETERGENT,,05,Household - laundry detergent
+name,DETERGENT POWDER,,05,Household - laundry detergent
+name,FABRIC SOFTENER,,05,Household - fabric softener
+name,SOFTENER,,05,Household - fabric softener
+name,FLOOR CLEANER,,05,Household - floor cleaner
+name,TOILET CLEANER,,05,Household - toilet cleaner
+name,BLEACH,,05,Household - bleach
+name,SCOURER SPONGE,,05,Household - cleaning sponge
+name,SCOURING PAD,,05,Household - cleaning pad
+name,KITCHEN SCISSORS,,05,Household - kitchen utensil
+name,PEELER KNIFE,,05,Household - kitchen utensil
+name,FRYING PAN,,05,Household - cookware
+name,SAUCEPAN,,05,Household - cookware
+name,COOKWARE,,05,Household - cookware
+name,CHOPSTICKS,,05,Household - tableware
+name,PLASTIC FORK,,05,Household - tableware
+name,TRASH BAG,,05,Household - garbage bag
+name,GARBAGE BAG,,05,Household - garbage bag
+name,AIR FRESHENER,,05,Household - air freshener
+name,AIR FRAGRANCE,,05,Household - air freshener
+name,MOSQUITO COIL,,05,Household - insecticide
+name,INSECTICIDE,,05,Household - insecticide
+name,BATTERIES,,05,Household - batteries
+name,ALKALINE BATTERY,,05,Household - batteries
+name,HAIR CONDITIONER,,12,Personal care - hair conditioner
+name,CONDITIONER (,,12,Personal care - hair conditioner
+name,ROLL ON,,12,Personal care - deodorant
+name,BODY LOTION,,12,Personal care - lotion
+name,MOISTURIZER,,12,Personal care - skincare
+name,NIGHT CREAM,,12,Personal care - skincare
+name,DAY CREAM,,12,Personal care - skincare
+name,SUN LOTION,,12,Personal care - sunscreen
+name,UV DEFENDER,,12,Personal care - sunscreen
+name,MAKEUP REMOVER,,12,Personal care - cosmetics
+name,REMOVE MAKEUP,,12,Personal care - cosmetics
+name,TOOTHBRUSH,,12,Personal care - oral care
+name,TOOTHPASTE,,12,Personal care - oral care
+name,MOUTHWASH,,12,Personal care - oral care
+name,DENTAL FLOSS,,12,Personal care - dental floss
+name,SANITARY PAD,,12,Personal care - feminine hygiene
+name,SANITARY NAPKIN,,12,Personal care - feminine hygiene
+name,PANTILINER,,12,Personal care - feminine hygiene
+name,MAMY POKO,,12,Personal care - baby diapers
+name,BABY DIAPER,,12,Personal care - baby diapers
+name,TOILET PAPER,,12,Personal care - paper hygiene
+name,TOILET TISSUE,,12,Personal care - paper hygiene
+name,FACIAL TISSUE,,12,Personal care - paper hygiene
+name,JUMBO ROLL,,12,Personal care - tissue roll
+name,COTTON BUD,,12,Personal care - cotton buds
+name,COTTON BUDS,,12,Personal care - cotton buds
+name,TWEEZERS,,12,Personal care - grooming tools
+name,GIRL T-SHIRT,,03,Clothing - children clothing
+name,BOY T-SHIRT,,03,Clothing - children clothing
+name,BOY SHIRT,,03,Clothing - children clothing
+name,GIRL SHIRT,,03,Clothing - children clothing
+name,BABY GIRL PANTS,,03,Clothing - infant clothing
+name,BABY BOY PANTS,,03,Clothing - infant clothing
+name,SLIPPERS,,03,Clothing - footwear
+name,UNDERWEAR,,03,Clothing - underwear
+name,COLOR PEN,,09,Recreation - stationery
+name,PENCIL SET,,09,Recreation - stationery
+name,DOG FOOD,,09,Recreation - pet food
+name,CAT FOOD,,09,Recreation - pet food
+name,CAT LITTER,,09,Recreation - pet care
+name,PET FOOD,,09,Recreation - pet food
+name,WHISKAS,,09,Recreation - pet food
+name,PEDIGREE,,09,Recreation - pet food
+name,DISHWASHING LIQUID,,05,Household - dishwashing liquid trap
+name,LAUNDRY DETERGENT,,05,Household - laundry detergent trap
+name,TOOTHPASTE,,12,Personal care - toothpaste trap
+name,SHAMPOO,,12,Personal care - shampoo trap
+name,PARACETAMOL,,06,Health - paracetamol trap
+name,HEINEKEN,,02,Alcohol - heineken trap
+name,IPHONE,,08,Communication - iphone trap
+name,BROW-SESSIVE BROW PENCIL,,12,Personal care - eyebrow pencil
+name,ELLIPS HAIR VITAMIN,,12,Personal care - hair vitamin treatment
+name,SLASH FOLDABLE TRAVEL,,12,Personal effects - travel day pack
+name,CAULK STRIP,,05,Household - caulk strip sealing tape
+name,CROCHET HOOKS,,05,Household - crochet hooks sewing kit
+name,LED FLASHLIGHT,,05,Household - led flashlight torch
+

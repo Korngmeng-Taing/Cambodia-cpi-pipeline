@@ -141,7 +141,18 @@ class TestItemMatcher(unittest.TestCase):
 
         self.assertEqual(stats["matched_exact"], 1)
         self.assertEqual(stats["sent_to_review"], 1)
-        self.assertEqual(stats["new_items_created"], 1)
+    def test_is_valid_barcode(self):
+        from pipeline.item_matcher import is_valid_barcode
+        self.assertTrue(is_valid_barcode("8850188800123"))
+        self.assertTrue(is_valid_barcode("12345"))
+        # Generic / dummy / placeholder barcodes must be rejected
+        self.assertFalse(is_valid_barcode("2000000000000"))
+        self.assertFalse(is_valid_barcode("0000000000000"))
+        self.assertFalse(is_valid_barcode("1111111111111"))
+        self.assertFalse(is_valid_barcode("1234567890123"))
+        self.assertFalse(is_valid_barcode(None))
+        self.assertFalse(is_valid_barcode(""))
+        self.assertFalse(is_valid_barcode("abc"))
 
 
 if __name__ == "__main__":

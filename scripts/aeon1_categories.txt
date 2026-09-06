@@ -1,0 +1,565 @@
+3404	Event
+3777	Event / Mid-Autumn Festival
+3936	Event / Mid-Autumn Festival / MoonCake
+3937	Event / Mid-Autumn Festival / Praying Goods
+3788	Event / Deal of the Month
+3781	Event / Deal of the Month / Everyday Low Price
+3938	Event / Deal of the Month / Clean up - Super Sale
+3940	Event / Deal of the Month / Moni Happy September
+3118	Event / Deal of the Month / Kids Rainy Season
+3673	Event / Household Super Saver
+3676	Event / Household Super Saver / Household Super Saver
+3585	Event / Household Super Saver / Panasonic
+3616	Event / Hamper & Gift Vouchers
+1686	Event / Hamper & Gift Vouchers / Gift Voucher
+3669	Event / Hamper & Gift Vouchers / Flowers
+3733	Khmer Products
+3825	Khmer Products / Local Perishable
+3626	Khmer Products / Local Perishable / Perisable
+3889	Khmer Products / Geographical Indications
+3890	Khmer Products / Geographical Indications / Geographical Indications
+3859	Khmer Products / Local Dairy & Daily
+3392	Khmer Products / Local Dairy & Daily / Dairy & Daily
+3826	Khmer Products / Local Grocery
+3393	Khmer Products / Local Grocery / Grocery
+3743	Khmer Products / Local Hygiene
+3850	Khmer Products / Local Hygiene / Hygiene
+942	TopValu
+3453	TopValu / Confectionery
+3451	TopValu / Confectionery / Snack & Chocolate
+3531	TopValu / Confectionery / Jam, Honey & Condensed Milk
+3534	TopValu / Confectionery / Chewy Gum & Candies
+3447	TopValu / Ingredients & Sauce
+3448	TopValu / Ingredients & Sauce / Sauces
+3461	TopValu / Ingredients & Sauce / Instant Noodle & Rice
+3486	TopValu / Ingredients & Sauce / Canned Food TV
+3523	TopValu / Ingredients & Sauce / Ingredient & Seasoning
+3524	TopValu / Ingredients & Sauce / Miso Soup
+3553	TopValu / Ingredients & Sauce / Seaweed
+3476	TopValu / Beverage & Liquor
+3479	TopValu / Beverage & Liquor / Juices
+3480	TopValu / Beverage & Liquor / Coffee & Tea
+3565	TopValu / Beverage & Liquor / Liquor
+3620	TopValu / Beverage & Liquor / Health & Energy Drink
+3450	TopValu / Frozen Foods & Ice Cream
+3457	TopValu / Frozen Foods & Ice Cream / Frozen Vegetables
+3593	TopValu / Frozen Foods & Ice Cream / Ice-cream
+3694	TopValu / Frozen Foods & Ice Cream / Frozen Food
+3515	TopValu / Non-food
+3516	TopValu / Non-food / Cleaning & Accessories
+3537	TopValu / Non-food / Wet Tissue & Toilet Paper
+3538	TopValu / Non-food / Shower Goods
+3539	TopValu / Non-food / Diaper & Sanitary
+3618	TopValu / Non-food / Pet Care
+3621	TopValu / Non-food / Laundry Goods
+3623	TopValu / Non-food / Party Goods & Accessories
+3608	TopValu / Non-food / Kitchen Goods & Accessories
+3487	TopValu / Daily & Diary
+3488	TopValu / Daily & Diary / Milk & Yogurt
+3489	TopValu / Daily & Diary / Butter & Cheese
+3535	TopValu / Daily & Diary / Vegetable & Meat
+936	Home Coordy
+2617	Home Coordy / Bedding
+2618	Home Coordy / Bedding / Bed Sheet
+2619	Home Coordy / Bedding / Comforter
+2621	Home Coordy / Bedding / Blanket
+2622	Home Coordy / Bedding / Pillow
+2623	Home Coordy / Bedding / Bolster
+2624	Home Coordy / Bedding / Mobile Mattress
+2625	Home Coordy / Bedding / Accessories
+2626	Home Coordy / Bedding / Mattress
+2627	Home Coordy / Bath Essential
+2631	Home Coordy / Bath Essential / Towel
+2629	Home Coordy / Bath Essential / Bath Accessories
+2628	Home Coordy / Bath Essential / Sandal
+2633	Home Coordy / Interior Living
+2634	Home Coordy / Interior Living / Floor Covering
+2635	Home Coordy / Interior Living / Cushion
+2636	Home Coordy / Interior Living / Cushion Cover
+2637	Home Coordy / Interior Dining & Kitchen
+2638	Home Coordy / Interior Dining & Kitchen / Interior Kitchen
+2639	Home Coordy / Home Furniture
+2640	Home Coordy / Home Furniture / Living Room Furniture
+2641	Home Coordy / Home Storage
+2642	Home Coordy / Home Storage / Storage Boxes
+2643	Home Coordy / Home Storage / Hanging Rails
+2644	Home Coordy / Home Storage / Storage With Drawers
+2646	Home Coordy / Dining Goods
+3651	Home Coordy / Dining Goods / Bowl
+2647	Home Coordy / Dining Goods / Plate
+2648	Home Coordy / Dining Goods / Cutlery
+2649	Home Coordy / Dining Goods / Table Top Goods
+2650	Home Coordy / Dining Goods / Mug
+2651	Home Coordy / Dining Goods / Glass
+2652	Home Coordy / Dining Goods / Drink Bottle
+2653	Home Coordy / Dining Goods / Coffee Pot / Tea Cup
+2654	Home Coordy / Dining Goods / Drink Accessories
+2655	Home Coordy / Dining Goods / Jug
+2656	Home Coordy / Dining Goods / Party Goods
+2657	Home Coordy / Kitchen Goods
+2658	Home Coordy / Kitchen Goods / Pot
+2659	Home Coordy / Kitchen Goods / Pan
+2660	Home Coordy / Kitchen Goods / Bakeware
+2661	Home Coordy / Kitchen Goods / Kitchen Utensil
+2662	Home Coordy / Kitchen Goods / Kitchen Organiser
+2663	Home Coordy / Kitchen Goods / Food Storage
+2664	Home Coordy / Laundry & Cleaning
+2665	Home Coordy / Laundry & Cleaning / Cleaning Goods
+2666	Home Coordy / Laundry & Cleaning / Cleaning Accessories
+2667	Home Coordy / Laundry & Cleaning / Laundry Goods
+2668	Home Coordy / Laundry & Cleaning / Plastic Bag
+2670	Home Coordy / Sports Goods
+3727	Home Coordy / Sports Goods / Sports Accessories
+3772	Home Coordy / Sports Goods / Picnic & Outdoor
+2671	Home Coordy / Sports Goods / Sports Sandals
+3664	Daiso
+3847	Daiso / Home & Lifestyle
+3814	Daiso / Home & Lifestyle / Collector
+3832	Daiso / Home & Lifestyle / Stationery
+3835	Daiso / Home & Lifestyle / Kitchen
+3836	Daiso / Home & Lifestyle / Interior & Living Room
+3837	Daiso / Home & Lifestyle / Toy & Party
+3838	Daiso / Home & Lifestyle / Household & Cleaning
+3839	Daiso / Home & Lifestyle / Laundry
+3840	Daiso / Home & Lifestyle / Shoe Care
+3841	Daiso / Home & Lifestyle / Gardening
+3842	Daiso / Home & Lifestyle / Pet
+3848	Daiso / Technology & Personal Essentials
+3833	Daiso / Technology & Personal Essentials / Electronics & Mobile
+3834	Daiso / Technology & Personal Essentials / Vehicle & D.I.Y
+3843	Daiso / Technology & Personal Essentials / Fashion
+3844	Daiso / Technology & Personal Essentials / Makeup & Hair
+3845	Daiso / Technology & Personal Essentials / Sport​ & Personal Care
+3846	Daiso / Technology & Personal Essentials / Campaign & Outdoor
+927	Perishable
+1917	Perishable / Red Meat & Poultry
+1918	Perishable / Red Meat & Poultry / Beef
+1927	Perishable / Red Meat & Poultry / Pork
+1923	Perishable / Red Meat & Poultry / Chicken
+3926	Perishable / Red Meat & Poultry / Duck
+3860	Perishable / Marinade
+3864	Perishable / Marinade / Beef
+3863	Perishable / Marinade / Pork
+3862	Perishable / Marinade / Chicken
+3865	Perishable / Marinade / Fish
+3866	Perishable / Marinade / BBQ
+3464	Perishable / Ready to Cook
+1946	Perishable / Ready to Cook / Cut Vegetable
+3636	Perishable / Ready to Cook / Cut Vegetable Meat
+3390	Perishable / Ready to Cook / Cut Vegetable Fish
+3391	Perishable / Ready to Cook / Cut Vegetable Seafood
+1898	Perishable / Fresh Fish & Seafood
+3759	Perishable / Fresh Fish & Seafood / River Fish
+3760	Perishable / Fresh Fish & Seafood / Seafood
+1906	Perishable / Frozen
+1909	Perishable / Frozen / Frozen Seafood & Fish
+1929	Perishable / Ham & Sausage
+1930	Perishable / Ham & Sausage / Ham
+1931	Perishable / Ham & Sausage / Sausage
+1937	Perishable / Vegetable
+1938	Perishable / Vegetable / Leafy & Salad
+1939	Perishable / Vegetable / Mushroom & Root
+1949	Perishable / Fruit
+1885	Perishable / Fruit / Tropical Fruits
+1964	Perishable / Fruit / Cut Fruit
+1968	Perishable / Fruit / Japanese Fruit
+3495	Perishable / Dried Fruits
+1944	Perishable / Dried Fruits / Dry & Preserve
+3763	Perishable / Dry Fish & Sausage
+3762	Perishable / Dry Fish & Sausage / Dry Fish & Sausage
+926	Daily & Dairy
+1850	Daily & Dairy / Daily Food
+1851	Daily & Dairy / Daily Food / Eggs
+1853	Daily & Dairy / Daily Food / Vegeterain & Tofu
+1854	Daily & Dairy / Daily Food / Fish & Meatball
+1858	Daily & Dairy / Daily Food / Seasoning (Chill)
+1865	Daily & Dairy / Fresh Drink
+1866	Daily & Dairy / Fresh Drink / Milk
+1867	Daily & Dairy / Fresh Drink / Juice (Chill)
+1868	Daily & Dairy / Fresh Drink / Yogurt
+1869	Daily & Dairy / Fresh Drink / Drinking Yogurt
+1872	Daily & Dairy / Dairy Products
+1873	Daily & Dairy / Dairy Products / Butter
+1874	Daily & Dairy / Dairy Products / Margarine
+1875	Daily & Dairy / Dairy Products / Cheese
+1876	Daily & Dairy / Dairy Products / Cream/Garnish
+1883	Daily & Dairy / Processed Food
+1887	Daily & Dairy / Processed Food / Seafood
+1884	Daily & Dairy / Processed Food / Frozen Vegetable
+1886	Daily & Dairy / Processed Food / Process Meat
+1888	Daily & Dairy / Processed Food / Frozen Instant Food
+1890	Daily & Dairy / Processed Food / Frozen Foods & Meatball
+1891	Daily & Dairy / Ice Cream & Dessert
+1893	Daily & Dairy / Ice Cream & Dessert / Ice Cream
+1892	Daily & Dairy / Ice Cream & Dessert / Dessert
+924	Grocery
+1713	Grocery / Snack
+1714	Grocery / Snack / Confectionery
+1715	Grocery / Snack / Beverage
+3641	Grocery / Snack / Tea & Coffee & Beverages
+1716	Grocery / Snack / Materials
+3642	Grocery / Instant Foods
+3645	Grocery / Instant Foods / Instant Foods
+3644	Grocery / Sauce & Seasoning
+3643	Grocery / Sauce & Seasoning / Sauce & Seasoning
+3647	Grocery / Cereal, Jam & Cooking Powder
+3648	Grocery / Cereal, Jam & Cooking Powder / Cereal, Jam & Cooking Powder
+3649	Grocery / Candy
+3650	Grocery / Candy / Candy
+3652	Grocery / Gift Corner
+3653	Grocery / Gift Corner / Chocolate & Cookies
+1665	Grocery / Confectionery
+1666	Grocery / Confectionery / Preserved Fruits
+1667	Grocery / Confectionery / Chocolate
+1668	Grocery / Confectionery / Candy & Weight Candy
+1669	Grocery / Confectionery / Dessert Snack
+1672	Grocery / Snack
+1673	Grocery / Snack / Breakfast Spread
+1674	Grocery / Snack / Honey & Jam
+1676	Grocery / Snack / Cereal & Oats
+1677	Grocery / Snack / Biscuits & Cookies
+1678	Grocery / Snack / Nuts & Weight Nuts
+1679	Grocery / Snack / Chips & Crips
+1694	Grocery / Seasoning
+1695	Grocery / Seasoning / Sauces
+1696	Grocery / Seasoning / Pasta Sauces
+1697	Grocery / Seasoning / Spices
+1698	Grocery / Seasoning / Cooking Paste
+1699	Grocery / Seasoning / Flavor Enhancer
+1700	Grocery / Seasoning / Cooking Soft Oil
+1701	Grocery / Seasoning / Cooking Palm Oil
+1702	Grocery / Seasoning / Flavoring Oil
+1703	Grocery / Seasoning / Sugar
+1756	Grocery / Seasoning / Vineger
+1704	Grocery / Meterial
+1705	Grocery / Meterial / Noodle with Seasoning
+1706	Grocery / Meterial / Noodle With Out Seasoning
+1707	Grocery / Meterial / Rice
+1708	Grocery / Meterial / Canned Food
+1709	Grocery / Meterial / Instant Food
+1710	Grocery / Meterial / Pasta
+1711	Grocery / Meterial / Sundries
+1712	Grocery / Meterial / Baking Material
+1740	Grocery / Hot Beverage
+1743	Grocery / Hot Beverage / Condensed Milk
+1744	Grocery / Hot Beverage / Nutritious Drink
+1745	Grocery / Hot Beverage / Coffee
+1746	Grocery / Hot Beverage / Tea
+1747	Grocery / Hot Beverage / Creamer
+1749	Grocery / Cold Beverage
+1750	Grocery / Cold Beverage / Water
+1751	Grocery / Cold Beverage / Can Drink
+1752	Grocery / Cold Beverage / Soft Drink
+1753	Grocery / Cold Beverage / Packet Drink
+1754	Grocery / Cold Beverage / Juice
+1757	Grocery / Cold Beverage / Liquid Milk
+1758	Grocery / Beer
+1760	Grocery / Beer / Import & Local Beer
+1762	Grocery / Wine
+1772	Grocery / Wine / Sparkling Wine
+1773	Grocery / Hard Liquor
+1774	Grocery / Hard Liquor / Local Liqour
+1776	Grocery / Hard Liquor / Whisky
+1779	Grocery / Hard Liquor / Japanese Liquor
+1780	Grocery / Hard Liquor / Korean Liquor
+3867	Grocery / Cigarette
+3868	Grocery / Cigarette / Cigarette
+3360	Organic
+3726	Organic / Organic Topvalu
+3854	Organic / Organic Topvalu / Dry-Food
+3852	Organic / Organic Topvalu / Chill-Food
+3853	Organic / Organic Topvalu / Frozen Food
+3666	Organic / Seasoning & Material
+3630	Organic / Seasoning & Material / Seasoning & Material
+3740	Organic / Beverage & Liquor
+1723	Organic / Beverage & Liquor / Organic Beverages
+3755	Organic / Daily & Dairy
+3625	Organic / Daily & Dairy / Fresh Drink
+3736	Organic / Vegetable
+3851	Organic / Vegetable / Organic Vegetable
+3874	Carton Sales
+3876	Carton Sales / Carton Sales
+3878	Carton Sales / Carton Sales / Topvalu
+3879	Carton Sales / Carton Sales / Carton Food
+3880	Carton Sales / Carton Sales / Carton Beverage
+3877	Carton Sales / Carton Sales / Carton Alcoholic Drink
+928	Ready to Eat
+1973	Ready to Eat / Delica Food
+3501	Ready to Eat / Delica Food / Khmer Food
+1981	Ready to Eat / Delica Food / Rice​​ Delica
+1982	Ready to Eat / Delica Food / Noodle Soup
+1977	Ready to Eat / Delica Food / BBQ & Grill
+3635	Ready to Eat / Delica Food / Vegetarian Food
+1989	Ready to Eat / Sushi, Sashimi & Onigri
+3504	Ready to Eat / Sushi, Sashimi & Onigri / Sushi
+1905	Ready to Eat / Sushi, Sashimi & Onigri / Sashimi
+1995	Ready to Eat / Sushi, Sashimi & Onigri / Onigiri
+2007	Ready to Eat / Bread
+2008	Ready to Eat / Bread / Table Bread
+3670	Ready to Eat / Bread / Baguette
+2009	Ready to Eat / Bread / Sweet Buns & Delica Buns
+2010	Ready to Eat / Bread / Croissant & Danish
+2011	Ready to Eat / Bread / Sandwich
+2013	Ready to Eat / Bread / Doughnut
+938	Health & Hygiene
+2871	Health & Hygiene / Pet Care
+2873	Health & Hygiene / Pet Care / Pet Accessories
+2874	Health & Hygiene / Pet Care / Pet Grooming
+2875	Health & Hygiene / Pet Care / Pet Health Care
+2876	Health & Hygiene / Pet Care / Cat Foods
+2872	Health & Hygiene / Pet Care / Dog Foods
+2881	Health & Hygiene / Cleaning liquid
+2882	Health & Hygiene / Cleaning liquid / Laundry Liquid Detergen
+2883	Health & Hygiene / Cleaning liquid / Laundry Powder Detergent
+2885	Health & Hygiene / Cleaning liquid / Softener
+2886	Health & Hygiene / Cleaning liquid / Shoe Care
+2887	Health & Hygiene / Cleaning liquid / All Purpose Cleaner
+2888	Health & Hygiene / Cleaning liquid / Cleaner Floor
+2889	Health & Hygiene / Cleaning liquid / Cleaner Glass
+2890	Health & Hygiene / Cleaning liquid / Cleaner Toilet
+2891	Health & Hygiene / Cleaning liquid / Bleach
+2892	Health & Hygiene / Cleaning liquid / Dishwashing
+2893	Health & Hygiene / Cleaning liquid / Fabric Fresheners
+2915	Health & Hygiene / Cleaning liquid / Insecticide
+2916	Health & Hygiene / Cleaning liquid / Air Care
+2894	Health & Hygiene / Sanitary
+2895	Health & Hygiene / Sanitary / Diapers
+2899	Health & Hygiene / Sanitary / Pantiliner
+2901	Health & Hygiene / Sanitary / Toilet Paper
+2902	Health & Hygiene / Sanitary / Facial Tissue
+2905	Health & Hygiene / Sanitary / Hand Towel Tissue
+2914	Health & Hygiene / Cleaning Goods
+2231	Health & Hygiene / Cleaning Goods / Cleaning Goods
+3627	Health & Hygiene / Cleaning Goods / Dustbin
+2924	Health & Hygiene / Personal Care
+2926	Health & Hygiene / Personal Care / Body Soap & Foam
+2927	Health & Hygiene / Personal Care / Non-Medicated Body Foam
+2928	Health & Hygiene / Personal Care / Hand Wash
+2930	Health & Hygiene / Personal Care / Body Care Accessories
+2932	Health & Hygiene / Personal Care / Toothpaste & Mouthwash
+2933	Health & Hygiene / Personal Care / Toothbrush
+2935	Health & Hygiene / Personal Care / Cleansing Aids
+2945	Health & Hygiene / Skin Care
+2955	Health & Hygiene / Skin Care / Facial Care
+2946	Health & Hygiene / Skin Care / Facial Foam
+2950	Health & Hygiene / Skin Care / Lotion - Cream - Mask
+2951	Health & Hygiene / Skin Care / Lip Care
+2959	Health & Hygiene / Grooming
+2960	Health & Hygiene / Grooming / Hair Shampoo
+2961	Health & Hygiene / Grooming / Hair Conditioner & Treatment
+2963	Health & Hygiene / Grooming / Hair Styling & Cream
+2966	Health & Hygiene / Grooming / Men'S Care
+2970	Health & Hygiene / Grooming / Body Deodorants
+2983	Health & Hygiene / Health Support
+2984	Health & Hygiene / Health Support / Beauty Drink
+2985	Health & Hygiene / Health Support / Dermo Care
+2986	Health & Hygiene / Health Support / Eye Drops/Contact Care
+2987	Health & Hygiene / Health Support / Family Planning
+2988	Health & Hygiene / Health Support / Feminine Hygiene
+2989	Health & Hygiene / Health Support / First Aid
+940	Kids
+3143	Kids / Boy Apparel
+3146	Kids / Boy Apparel / Boys Shirt
+3148	Kids / Boy Apparel / Boys Pants
+3151	Kids / Girl Apparel
+3154	Kids / Girl Apparel / Girl Shirt/Blouse
+3156	Kids / Girl Apparel / Girls Skirt
+3157	Kids / Girl Apparel / Girl Pants
+3368	Kids / TopValu Kids Boys
+3370	Kids / TopValu Kids Boys / Boys Jacket (Topvalu)
+3369	Kids / TopValu Kids Boys / Boys Pant (Topvalu)
+3191	Kids / Children Homewear
+1595	Kids / Children Homewear / Pyjamas
+3196	Kids / Children Homewear / Kids Homewear
+3374	Kids / TopValu Kids Girls
+3375	Kids / TopValu Kids Girls / Girls Jacket (Topvalu)
+3380	Kids / TopValu Kids Girls / Girl Pants (Topvalu)
+3207	Kids / Boy Shoes
+3208	Kids / Boy Shoes / Boots
+3209	Kids / Boy Shoes / Casual/Trainers
+3211	Kids / Boy Shoes / Sandals/Slipper
+3213	Kids / Girls Shoes
+3214	Kids / Girls Shoes / Boots
+3215	Kids / Girls Shoes / Casual/Trainers
+3217	Kids / Girls Shoes / Sandals/Slipper
+3219	Kids / Boy Bags
+3223	Kids / Boy Bags / Boy Backpack
+3225	Kids / Girl Bags
+3230	Kids / Girl Bags / Girl Backpack
+3233	Kids / Kids Accessories
+3633	Kids / Kids Accessories / Umbrella & Raincoat
+3715	Kids / Kids Accessories / Kid Hat & Watch
+3716	Kids / Kids Accessories / Kids Hair Accessories
+941	Toys
+3298	Toys / Vehicle Playsets
+3893	Toys / Vehicle Playsets / Hot Wheels
+3300	Toys / Vehicle Playsets / Remote Control
+3304	Toys / Animal Figures
+3307	Toys / Animal Figures / Play set
+3319	Toys / Soft Toys
+3542	Toys / Soft Toys / Soft Toy
+3237	Toys / Toys and Me
+3251	Toys / Toys and Me / TOYS & ME
+3252	Toys / Toys and Me / TOMICA
+3416	Toys / ZURU Toys
+3660	Toys / ZURU Toys / ZURU Toys
+939	Baby
+3412	Baby / Baby Products
+3413	Baby / Baby Products / Baby Product (Topvalu)
+3521	Baby / Baby Products / Baby Apparel
+3698	Baby / Baby Products / Baby Accessories
+1190	Baby / Baby Products / Baby Shoes
+3888	Baby / Baby Products / Baby Toys
+3037	Baby / Baby Feeding
+1741	Baby / Baby Feeding / Milk Powder
+3038	Baby / Baby Feeding / Nursing/ Breast Feeding
+3039	Baby / Baby Feeding / Feeding Bottle
+3040	Baby / Baby Feeding / Feeding Teats/Nipple
+3045	Baby / Baby Feeding / Cleansing & Hygiene
+3046	Baby / Baby Feeding / Sterilizer & Warmer
+3065	Baby / Baby Feeding / Baby Food & Nutrition
+3048	Baby / Baby Care
+3049	Baby / Baby Care / Wet Tissue
+3054	Baby / Baby Care / Oral Cares
+3057	Baby / Baby Care / Laundry
+3058	Baby / Toilet & Laundry
+3059	Baby / Toilet & Laundry / Toiletries
+3061	Baby / Toilet & Laundry / Baby Diapers
+3018	Baby / Baby Outdoor
+3022	Baby / Baby Outdoor / Carrier
+931	Electrical & Multimedia
+2245	Electrical & Multimedia / Small Appliance
+3713	Electrical & Multimedia / Small Appliance / PHILIPS
+2246	Electrical & Multimedia / Small Appliance / Irons
+2247	Electrical & Multimedia / Small Appliance / Vacuum Cleaners
+2248	Electrical & Multimedia / Small Appliance / Cookers, Grillers / Ovens
+2251	Electrical & Multimedia / Small Appliance / Kettles, Thermo-Pot & Coolers
+2252	Electrical & Multimedia / Small Appliance / Food Preparation
+2274	Electrical & Multimedia / Small Appliance / MORRIES
+2283	Electrical & Multimedia / Small Appliance / MIDEA
+2286	Electrical & Multimedia / Small Appliance / OTTO
+2254	Electrical & Multimedia / Large Appliance
+2255	Electrical & Multimedia / Large Appliance / Fridges / Freezers
+2256	Electrical & Multimedia / Large Appliance / Microwaves
+2257	Electrical & Multimedia / Large Appliance / Washing Machine / Dryers
+2258	Electrical & Multimedia / Large Appliance / Gas Cookers / Ovens
+2259	Electrical & Multimedia / Large Appliance / Dishwashers
+2292	Electrical & Multimedia / Large Appliance / LG
+2294	Electrical & Multimedia / Large Appliance / RINNAI
+2299	Electrical & Multimedia / Large Appliance / SAMSUNG
+2262	Electrical & Multimedia / Personal Care Appliance
+2263	Electrical & Multimedia / Personal Care Appliance / Personal Care
+2264	Electrical & Multimedia / Air Conditioner, Fan & Purifier
+2265	Electrical & Multimedia / Air Conditioner, Fan & Purifier / Air Conditioning
+2266	Electrical & Multimedia / Air Conditioner, Fan & Purifier / Fan
+2267	Electrical & Multimedia / Air Conditioner, Fan & Purifier / Dehumidifiers / Air Treatment
+2320	Electrical & Multimedia / Audio
+2321	Electrical & Multimedia / Audio / Home Theatre
+2326	Electrical & Multimedia / Visual
+2328	Electrical & Multimedia / Visual / LED TV
+2302	Electrical & Multimedia / Massage & Relaxation
+2303	Electrical & Multimedia / Massage & Relaxation / OKIA
+2368	Electrical & Multimedia / Smartphone
+2361	Electrical & Multimedia / Smartphone / iPhone-Apple
+2377	Electrical & Multimedia / Smartphone / VIVO
+2378	Electrical & Multimedia / Smartphone / OPPO
+2384	Electrical & Multimedia / Mobile Phones Accessories
+2390	Electrical & Multimedia / Mobile Phones Accessories / ISMART
+929	Home Fashion
+2065	Home Fashion / Bath Essential
+2068	Home Fashion / Bath Essential / Bathroom Scale
+2069	Home Fashion / Bath Essential / Bath Accessories
+2070	Home Fashion / Towel
+2071	Home Fashion / Towel / Towel
+2079	Home Fashion / Interior Living
+3803	Home Fashion / Interior Living / Mirror
+2082	Home Fashion / Interior Living / Floor Covering
+2085	Home Fashion / Interior Decoration
+2086	Home Fashion / Interior Decoration / Home Fragrance
+2088	Home Fashion / Interior Decoration / Hall Decor
+2089	Home Fashion / Interior Decoration / Wall Decor
+2090	Home Fashion / Interior, Dining & Kitchen
+2092	Home Fashion / Interior, Dining & Kitchen / Interior Kitchen
+2118	Home Fashion / Home Storage
+2119	Home Fashion / Home Storage / Storage Boxes
+2122	Home Fashion / Home Storage / Hanging Rails
+2135	Home Fashion / Living Room
+2136	Home Fashion / Living Room / Textiles
+2137	Home Fashion / Living Room / Artificial Plants / Flower
+2049	Home Fashion / Bedding & Accessories
+2036	Home Fashion / Bedding & Accessories / Blanket & Pillow
+2053	Home Fashion / Bedding & Accessories / AKEMI & WHITE
+3710	Home Fashion / Bedding & Accessories / Jean Perry & Novelle
+2577	Home Fashion / Praying Goods
+2580	Home Fashion / Praying Goods / Praying Goods (Temp)
+935	D.I.Y
+3460	D.I.Y / DIY & Accessories
+3622	D.I.Y / DIY & Accessories / DIY & Accessories
+2576	D.I.Y / DIY & Accessories / Electrical Fitting
+2550	D.I.Y / Batteries
+2552	D.I.Y / Batteries / Batteries
+2582	D.I.Y / Car Care & Accessories
+2583	D.I.Y / Car Care & Accessories / Car Wash
+2584	D.I.Y / Car Care & Accessories / Cleaning Goods
+2585	D.I.Y / Car Care & Accessories / Car Freshener
+2587	D.I.Y / Car Care & Accessories / Car Accessories
+2590	D.I.Y / Motor Cycle Care & Accessories
+2592	D.I.Y / Motor Cycle Care & Accessories / Raincoat-Glove-Helmet
+2680	D.I.Y / Gardening Goods
+3695	D.I.Y / Gardening Goods / Vegetable Seeds
+2615	D.I.Y / Gardening Goods / Plant & Equipement
+3761	D.I.Y / Fresh Flower & Plants
+2608	D.I.Y / Fresh Flower & Plants / Plants
+930	Household
+2162	Household / Dining
+3935	Household / Dining / Teapot Set
+2164	Household / Dining / Plate
+2169	Household / Dining / Mug
+2167	Household / Dining / Cutlery
+2168	Household / Dining / Table Top Goods
+2171	Household / Dining / Glass
+2172	Household / Dining / Drink Bottle
+2175	Household / Dining / Jug
+2176	Household / Dining / Party Goods
+2177	Household / Kitchen
+2178	Household / Kitchen / Pot
+2179	Household / Kitchen / Steamer / Pressure Cooker / Thermal
+2180	Household / Kitchen / Pan
+2184	Household / Kitchen / Bakeware
+2185	Household / Kitchen / Kitchen Utensil
+2186	Household / Kitchen / Kitchen Organiser
+2187	Household / Kitchen / Food Storage
+2913	Household / Kitchen / Kitchen Good
+933	Stationery
+2399	Stationery / School
+2400	Stationery / School / Pen / Pencil
+2402	Stationery / School / Paper / Book / Notepad
+2403	Stationery / School / File & Accessories
+2404	Stationery / School / Tape & Calculator
+2451	Stationery / Office
+2452	Stationery / Office / iR Branded Pen / Premium Pen
+2453	Stationery / Office / iR Pen ( Pack )
+2455	Stationery / Office / iR File & File Accessories
+2456	Stationery / Office / iR Tape
+2457	Stationery / Office / iR Glue (Pack)
+2458	Stationery / Office / iR Organizer / Planner
+2459	Stationery / Office / iR Office Tools
+2460	Stationery / iRASHIKU School
+2461	Stationery / iRASHIKU School / iR Pen
+2462	Stationery / iRASHIKU School / iR Pencil
+2463	Stationery / iRASHIKU School / iR Glue & Eraser
+2465	Stationery / iRASHIKU School / iR Art & Crafts
+2466	Stationery / iRASHIKU School / iR Notebook / Note Pad
+2469	Stationery / Fancy
+2470	Stationery / Fancy / iR Stationery Goods
+2471	Stationery / Fancy / iR Fancy Gift
+2472	Stationery / Fancy / iR Bag & Case Accessories
+2473	Stationery / iR Home
+2474	Stationery / iR Home / iR Wrapper & Greeting Card
+934	Sports
+2484	Sports / Equipment & Accessories
+2485	Sports / Equipment & Accessories / Racket
+2487	Sports / Equipment & Accessories / Fitness & Equipment
+2491	Sports / Equipment & Accessories / Picnic & Outdoor
+2492	Sports / Equipment & Accessories / Sports Accessories
+2494	Sports / Equipment & Accessories / Sports Bike / Leisure Bike

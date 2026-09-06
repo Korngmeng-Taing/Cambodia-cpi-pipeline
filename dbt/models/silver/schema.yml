@@ -51,6 +51,7 @@ models:
                   - "gemini_ai"
                   - "gemini_ai_low_conf"
                   - "category_map"
+                  - "text_rules"
                   - "unclassified"
                   - "review"
 

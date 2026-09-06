@@ -690,6 +690,37 @@ VALUES
     ('delishop', 'Pets > Travel Crate', '09'),
     ('delishop', 'Pets > Treats', '09'),
     ('delishop', 'Pets', '09'),
+    -- Delishop full root category taxonomy
+    ('delishop', 'Pantry', '01'),
+    ('delishop', 'Sweet Corner', '01'),
+    ('delishop', 'Coffee & Tea', '01'),
+    ('delishop', 'Dairy Products', '01'),
+    ('delishop', 'Baking', '01'),
+    ('delishop', 'Meat & Poultry', '01'),
+    ('delishop', 'Vegetables & Fruits', '01'),
+    ('delishop', 'Breakfast', '01'),
+    ('delishop', 'Fruit Drinks', '01'),
+    ('delishop', 'Ready Meal & Caterer', '01'),
+    ('delishop', 'Soda', '01'),
+    ('delishop', 'Seafood', '01'),
+    ('delishop', 'Milk', '01'),
+    ('delishop', 'Water', '01'),
+    ('delishop', 'Wine', '02'),
+    ('delishop', 'Spirit', '02'),
+    ('delishop', 'Beer & Cider', '02'),
+    ('delishop', 'Homewares & Accessories', '05'),
+    ('delishop', 'Household Essentials', '05'),
+    ('delishop', 'Tableware', '05'),
+    ('delishop', 'Pharmacy & Parapharmacy', '06'),
+    ('delishop', 'Nutrition Product', '06'),
+    ('delishop', 'Electronic & Computer', '08'),
+    ('delishop', 'Games & Toys', '09'),
+    ('delishop', 'Stationery', '09'),
+    ('delishop', 'Personal Care', '12'),
+    ('delishop', 'Baby''s World', '12'),
+    ('delishop', 'Baby Care', '12'),
+    ('delishop', 'Cosmetics & Make-Up', '12'),
+    ('delishop', 'Jewelry', '12'),
     ('aeon', 'Pet Food', '09'),
     ('aeon', 'Pet Care', '09'),
     ('aeon', 'Pet Accessories', '09'),
@@ -697,6 +728,101 @@ VALUES
     ('aeon', 'Cat Food', '09')
 ON CONFLICT (store_slug, category_native) DO UPDATE
 SET coicop_division = EXCLUDED.coicop_division;
+
+-- Seed comprehensive AEON 1 & AEON 3 Category Taxonomy Mappings
+INSERT INTO silver.coicop_category_map (store_slug, category_native, coicop_division)
+VALUES
+    -- Division 02: Alcoholic beverages & tobacco
+    ('aeon', 'Grocery > Beer', '02'), ('aeon', 'Beer', '02'),
+    ('aeon', 'Grocery > Wine', '02'), ('aeon', 'Wine', '02'),
+    ('aeon', 'Grocery > Hard Liquor', '02'), ('aeon', 'Hard Liquor', '02'),
+    ('aeon', 'Grocery > Cigarette', '02'), ('aeon', 'Cigarette', '02'), ('aeon', 'Cigarettes', '02'),
+    ('aeon', 'TopValu > Beverage & Liquor', '02'), ('aeon', 'Organic > Beverage & Liquor', '02'),
+    ('aeon', 'Beverage & Liquor', '02'), ('aeon', 'Liquor', '02'), ('aeon', 'Wine & Spirits', '02'),
+    ('aeon3', 'Grocery > Beer', '02'), ('aeon3', 'Beer', '02'),
+    ('aeon3', 'Grocery > Wine', '02'), ('aeon3', 'Wine', '02'),
+    ('aeon3', 'Grocery > Hard Liquor', '02'), ('aeon3', 'Hard Liquor', '02'),
+    ('aeon3', 'Grocery > Cigarette', '02'), ('aeon3', 'Cigarette', '02'), ('aeon3', 'Cigarettes', '02'),
+    ('aeon3', 'TopValu > Beverage & Liquor', '02'), ('aeon3', 'Organic > Beverage & Liquor', '02'),
+
+    -- Division 03: Clothing and footwear
+    ('aeon', 'Apparel', '03'), ('aeon', 'Clothing', '03'), ('aeon', 'Fashion', '03'),
+    ('aeon', 'Kids > Boy Apparel', '03'), ('aeon', 'Kids > Girl Apparel', '03'),
+    ('aeon', 'Kids > TopValu Kids Boys', '03'), ('aeon', 'Kids > TopValu Kids Girls', '03'),
+    ('aeon', 'Kids > Children Homewear', '03'), ('aeon', 'Kids > Boy Shoes', '03'),
+    ('aeon', 'Kids > Girls Shoes', '03'), ('aeon', 'Shoes', '03'), ('aeon', 'Footwear', '03'),
+    ('aeon', 'Men Apparel', '03'), ('aeon', 'Women Apparel', '03'), ('aeon', 'Kids Apparel', '03'),
+    ('aeon3', 'Apparel', '03'), ('aeon3', 'Clothing', '03'), ('aeon3', 'Fashion', '03'),
+    ('aeon3', 'Kids > Boy Apparel', '03'), ('aeon3', 'Kids > Girl Apparel', '03'),
+
+    -- Division 05: Furnishings, household equipment & maintenance
+    ('aeon', 'Household', '05'), ('aeon', 'Household > Dining', '05'), ('aeon', 'Household > Kitchen', '05'),
+    ('aeon', 'Home Coordy', '05'), ('aeon', 'Home Coordy > Bedding', '05'), ('aeon', 'Home Coordy > Bath Essential', '05'),
+    ('aeon', 'Home Coordy > Interior Living', '05'), ('aeon', 'Home Coordy > Interior Dining & Kitchen', '05'),
+    ('aeon', 'Home Coordy > Home Furniture', '05'), ('aeon', 'Home Coordy > Home Storage', '05'),
+    ('aeon', 'Home Coordy > Dining Goods', '05'), ('aeon', 'Home Coordy > Kitchen Goods', '05'),
+    ('aeon', 'Home Coordy > Laundry & Cleaning', '05'), ('aeon', 'Home Coordy > Sports Goods', '05'),
+    ('aeon', 'Health & Hygiene > Cleaning liquid', '05'), ('aeon', 'Cleaning liquid', '05'),
+    ('aeon', 'Laundry', '05'), ('aeon', 'Detergent', '05'),
+    ('aeon', 'D.I.Y', '05'), ('aeon', 'D.I.Y > DIY & Accessories', '05'), ('aeon', 'D.I.Y > Batteries', '05'),
+    ('aeon', 'D.I.Y > Car Care & Accessories', '05'), ('aeon', 'D.I.Y > Motor Cycle Care & Accessories', '05'),
+    ('aeon', 'D.I.Y > Gardening Goods', '05'), ('aeon', 'D.I.Y > Fresh Flower & Plants', '05'),
+    ('aeon', 'Daiso', '05'), ('aeon', 'Daiso > Home & Lifestyle', '05'),
+    ('aeon', 'Home Fashion', '05'), ('aeon', 'Home Fashion > Bath Essential', '05'),
+    ('aeon', 'Home Fashion > Towel', '05'), ('aeon', 'Home Fashion > Interior Living', '05'),
+    ('aeon', 'Home Fashion > Interior Decoration', '05'), ('aeon', 'Home Fashion > Interior, Dining & Kitchen', '05'),
+    ('aeon', 'Home Fashion > Home Storage', '05'), ('aeon', 'Home Fashion > Living Room', '05'),
+    ('aeon', 'Home Fashion > Bedding & Accessories', '05'), ('aeon', 'Home Fashion > Praying Goods', '05'),
+    ('aeon', 'Electrical & Multimedia > Small Appliance', '05'), ('aeon', 'Electrical & Multimedia > Large Appliance', '05'),
+    ('aeon', 'Electrical & Multimedia > Air Conditioner, Fan & Purifier', '05'),
+    ('aeon', 'TopValu > Non-food', '05'),
+    ('aeon3', 'Household', '05'), ('aeon3', 'Health & Hygiene > Cleaning liquid', '05'),
+    ('aeon3', 'Home Coordy', '05'), ('aeon3', 'Daiso', '05'),
+
+    -- Division 06: Health
+    ('aeon', 'Health & Hygiene > Health Support', '06'), ('aeon', 'Health Support', '06'),
+    ('aeon', 'Medicine', '06'), ('aeon', 'Pharmacy', '06'), ('aeon', 'First Aid', '06'),
+    ('aeon3', 'Health & Hygiene > Health Support', '06'), ('aeon3', 'Health Support', '06'),
+
+    -- Division 08: Communication
+    ('aeon', 'Electrical & Multimedia > Smartphone', '08'),
+    ('aeon', 'Electrical & Multimedia > Mobile Phones Accessories', '08'),
+    ('aeon', 'Daiso > Technology & Personal Essentials', '08'),
+    ('aeon', 'Smartphone', '08'), ('aeon', 'Mobile Phones Accessories', '08'),
+
+    -- Division 09: Recreation and culture
+    ('aeon', 'Health & Hygiene > Pet Care', '09'),
+    ('aeon', 'Stationery > School', '09'), ('aeon', 'Stationery > Office', '09'),
+    ('aeon', 'Stationery > iRASHIKU School', '09'), ('aeon', 'Stationery > Fancy', '09'),
+    ('aeon', 'Stationery > iR Home', '09'),
+    ('aeon', 'Toys', '09'), ('aeon', 'Toys > Vehicle Playsets', '09'), ('aeon', 'Toys > Animal Figures', '09'),
+    ('aeon', 'Toys > Soft Toys', '09'), ('aeon', 'Toys > Toys and Me', '09'), ('aeon', 'Toys > ZURU Toys', '09'),
+    ('aeon', 'Sports', '09'), ('aeon', 'Sports > Equipment & Accessories', '09'),
+    ('aeon', 'Electrical & Multimedia > Audio', '09'), ('aeon', 'Electrical & Multimedia > Visual', '09'),
+    ('aeon3', 'Health & Hygiene > Pet Care', '09'), ('aeon3', 'Toys', '09'), ('aeon3', 'Sports', '09'),
+
+    -- Division 12: Miscellaneous personal care
+    ('aeon', 'Health & Hygiene', '12'), ('aeon', 'Health & Hygiene > Sanitary', '12'),
+    ('aeon', 'Health & Hygiene > Cleaning Goods', '12'), ('aeon', 'Health & Hygiene > Personal Care', '12'),
+    ('aeon', 'Health & Hygiene > Skin Care', '12'), ('aeon', 'Health & Hygiene > Grooming', '12'),
+    ('aeon', 'Khmer Products > Local Hygiene', '12'),
+    ('aeon', 'Baby', '12'), ('aeon', 'Baby > Baby Products', '12'), ('aeon', 'Baby > Baby Care', '12'),
+    ('aeon', 'Baby > Toilet & Laundry', '12'), ('aeon', 'Baby > Baby Outdoor', '12'),
+    ('aeon', 'Sanitary', '12'), ('aeon', 'Personal Care', '12'), ('aeon', 'Skin Care', '12'),
+    ('aeon', 'Grooming', '12'), ('aeon', 'Cosmetics', '12'),
+    ('aeon', 'Kids > Boy Bags', '12'), ('aeon', 'Kids > Girl Bags', '12'), ('aeon', 'Kids > Kids Accessories', '12'),
+    ('aeon3', 'Health & Hygiene', '12'), ('aeon3', 'Baby', '12'),
+
+    -- Division 01: Food and non-alcoholic beverages
+    ('aeon', 'Perishable', '01'), ('aeon', 'Daily & Dairy', '01'), ('aeon', 'Ready to Eat', '01'),
+    ('aeon', 'Organic', '01'), ('aeon', 'Khmer Products', '01'), ('aeon', 'TopValu', '01'),
+    ('aeon', 'Grocery', '01'), ('aeon', 'Baby > Baby Feeding', '01'),
+    ('aeon3', 'Perishable', '01'), ('aeon3', 'Daily & Dairy', '01'), ('aeon3', 'Ready to Eat', '01'),
+    ('aeon3', 'Organic', '01'), ('aeon3', 'Khmer Products', '01'), ('aeon3', 'TopValu', '01'),
+    ('aeon3', 'Grocery', '01')
+ON CONFLICT (store_slug, category_native) DO UPDATE
+SET coicop_division = EXCLUDED.coicop_division;
+
 
 
 

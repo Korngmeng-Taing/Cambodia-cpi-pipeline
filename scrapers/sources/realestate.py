@@ -118,60 +118,76 @@ class RealestateKhScraper(BaseScraper):
         records: list[dict[str, Any]] = []
         if not HAS_BS4:
             return records
-        try:
-            resp = _cffi_get(cat_url, timeout=15)
-            if resp.status_code != 200:
-                return records
-            soup = BeautifulSoup(resp.text, "html.parser")
-            next_script = soup.find("script", id="__NEXT_DATA__")
-            if next_script and next_script.string:
-                data = json.loads(next_script.string)
-                cache = data.get("props", {}).get("pageProps", {}).get("cacheData", {})
-                results = cache.get("results", {}).get("data", {}).get("results") or []
-                for p in results:
-                    pid = p.get("id")
-                    if not pid:
-                        continue
-                    price_str = p.get("displayRent") or p.get("displayPrice") or ""
-                    m = re.search(r"([\d,]+(\.\d+)?)", price_str)
-                    price = float(m.group(1).replace(",", "")) if m else None
-                    if not price or price <= 0:
-                        continue
-                    headline = (
-                        p.get("headline")
-                        or p.get("titleImgAlt")
-                        or f"{p.get('categoryName', 'Property')} in Phnom Penh"
-                    )
-                    addr = p.get("address") or "Phnom Penh"
-                    p_url = (
-                        f"https://www.realestate.com.kh{p.get('url')}"
-                        if p.get("url")
-                        else f"https://www.realestate.com.kh/rent/{pid}/"
-                    )
-                    specs = p.get("specifications") or {}
-                    records.append(
-                        build_canonical_record(
-                            source_slug="realestate",
-                            source_type="realestate",
-                            store_name="Realestate.com.kh",
-                            item_id=f"re_{pid}",
-                            name=f"{headline} - {addr}".strip(" -"),
-                            price=price,
-                            currency="USD",
-                            category_native=f"Residential Rental > {p.get('categoryName') or cat_name}",
-                            url=p_url,
-                            scrape_date=ds,
-                            attrs={
-                                "address": addr,
-                                "category": p.get("categoryName"),
-                                "specs": specs,
-                                "latitude": p.get("addressLatitude"),
-                                "longitude": p.get("addressLongitude"),
-                            },
+        for attempt in range(1, 4):
+            try:
+                resp = _cffi_get(cat_url, timeout=35)
+                if resp.status_code != 200:
+                    return records
+                soup = BeautifulSoup(resp.text, "html.parser")
+                next_script = soup.find("script", id="__NEXT_DATA__")
+                if next_script and next_script.string:
+                    data = json.loads(next_script.string)
+                    cache = data.get("props", {}).get("pageProps", {}).get("cacheData", {})
+                    results = cache.get("results", {}).get("data", {}).get("results") or []
+                    for p in results:
+                        pid = p.get("id")
+                        if not pid:
+                            continue
+                        price_str = p.get("displayRent") or p.get("displayPrice") or ""
+                        m = re.search(r"([\d,]+(\.\d+)?)", price_str)
+                        price = float(m.group(1).replace(",", "")) if m else None
+                        if not price or price <= 0:
+                            continue
+                        headline = (
+                            p.get("headline")
+                            or p.get("titleImgAlt")
+                            or f"{p.get('categoryName', 'Property')} in Phnom Penh"
                         )
+                        addr = p.get("address") or "Phnom Penh"
+                        p_url = (
+                            f"https://www.realestate.com.kh{p.get('url')}"
+                            if p.get("url")
+                            else f"https://www.realestate.com.kh/rent/{pid}/"
+                        )
+                        specs = p.get("specifications") or {}
+                        records.append(
+                            build_canonical_record(
+                                source_slug="realestate",
+                                source_type="realestate",
+                                store_name="Realestate.com.kh",
+                                item_id=f"re_{pid}",
+                                name=f"{headline} - {addr}".strip(" -"),
+                                price=price,
+                                currency="USD",
+                                category_native=f"Residential Rental > {p.get('categoryName') or cat_name}",
+                                url=p_url,
+                                scrape_date=ds,
+                                attrs={
+                                    "address": addr,
+                                    "category": p.get("categoryName"),
+                                    "specs": specs,
+                                    "latitude": p.get("addressLatitude"),
+                                    "longitude": p.get("addressLongitude"),
+                                },
+                            )
+                        )
+                break
+            except Exception as exc:
+                if attempt < 3:
+                    log.warning(
+                        "Realestate live scrape attempt %d failed for %s (%s), retrying in %ds...",
+                        attempt,
+                        cat_name,
+                        exc,
+                        attempt * 2,
                     )
-        except Exception as exc:
-            log.warning("Realestate live scrape failed for %s: %s", cat_name, exc)
+                    time.sleep(attempt * 2)
+                else:
+                    log.warning(
+                        "Realestate live scrape failed for %s after 3 attempts: %s",
+                        cat_name,
+                        exc,
+                    )
         return records
 
     def fetch_records(

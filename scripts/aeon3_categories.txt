@@ -1,0 +1,99 @@
+3404	Event
+3655	Event / Fashion Fair
+3924	Event / Fashion Fair / IC Super Deal
+3939	Event / Fashion Fair / September Saving
+3873	Event / Fashion Fair / Souvenir
+943	iC Innercasual
+3401	iC Innercasual / Ladies Under Wear
+3388	iC Innercasual / Ladies Under Wear / Ladies Tank Top
+3403	iC Innercasual / Ladies Under Wear / Ladies T-Shirt
+3431	iC Innercasual / Ladies Under Wear / Bottoms
+3407	iC Innercasual / Ladies Bra
+3408	iC Innercasual / Ladies Bra / Basic Bra
+3421	iC Innercasual / Ladies Panties
+3422	iC Innercasual / Ladies Panties / Panties
+3423	iC Innercasual / Ladies Socks & Stocking
+3429	iC Innercasual / Ladies Socks & Stocking / Socks
+3424	iC Innercasual / Ladies Homewear
+3427	iC Innercasual / Ladies Homewear / Robe
+3434	iC Innercasual / Men Tops
+3753	iC Innercasual / Men Tops / Men Vest
+3436	iC Innercasual / Men Tops / Mens T-Shirt
+3437	iC Innercasual / Men Underwear
+3438	iC Innercasual / Men Underwear / Boxer
+3444	iC Innercasual / Men Underwear / Sport Bottoms
+3439	iC Innercasual / Men Socks
+3441	iC Innercasual / Men Socks / Socks
+3440	iC Innercasual / Men Homewear
+3442	iC Innercasual / Men Homewear / Mens Bottom
+937	Beauty
+3567	Beauty / Maybelline
+3568	Beauty / Maybelline / Maybelline
+3797	Beauty / Britney
+3796	Beauty / Britney / Britney
+3813	Beauty / bodia
+3559	Beauty / bodia / bodia
+3855	Beauty / Bielenda
+3856	Beauty / Bielenda / Bielenda
+3881	Beauty / NOTE
+2809	Beauty / NOTE / NOTE
+3891	Beauty / Wet & Wild
+3892	Beauty / Wet & Wild / Wet & Wild
+3911	Beauty / shiseido
+3912	Beauty / shiseido / shiseido
+3549	Beauty / Perfume
+2971	Beauty / Perfume / Perfume
+3798	Beauty / Elizabeth
+3795	Beauty / Elizabeth / Elizabeth
+3786	Beauty / EUNYUL
+3787	Beauty / EUNYUL / EUNYUL
+3790	Beauty / K-recipe
+3791	Beauty / K-recipe / K-Recipe
+3792	Beauty / ellips
+3793	Beauty / ellips / ellips
+2779	Beauty / Nature Republic
+2780	Beauty / Nature Republic / NATURE REPUBLIC
+2830	Beauty / Yadah
+2831	Beauty / Yadah / Yadah
+921	Shoes Bag & Accessories
+3545	Shoes Bag & Accessories / Shoes Ladies & Men
+3573	Shoes Bag & Accessories / Shoes Ladies & Men / Ladies Shoes
+3574	Shoes Bag & Accessories / Shoes Ladies & Men / Men Shoes
+1486	Shoes Bag & Accessories / Ladies Accessories
+3784	Shoes Bag & Accessories / Ladies Accessories / Ladies Watches & Accessories
+3579	Shoes Bag & Accessories / Ladies Accessories / Ladies Hat & Sunglasses
+1493	Shoes Bag & Accessories / Men Accessories
+3725	Shoes Bag & Accessories / Men Accessories / Men Hat & Sunglasses
+3583	Shoes Bag & Accessories / Men Accessories / Men Watch & Accessories
+1379	Shoes Bag & Accessories / Ladies Bags
+1384	Shoes Bag & Accessories / Ladies Bags / Shoulder Bags
+1387	Shoes Bag & Accessories / Ladies Bags / Carryall Bags
+1403	Shoes Bag & Accessories / Ladies Bags / Purse
+1409	Shoes Bag & Accessories / Men Bags
+1410	Shoes Bag & Accessories / Men Bags / Men Backpack
+1455	Shoes Bag & Accessories / Men Bags / Men Wallet
+1458	Shoes Bag & Accessories / Travelling Goods
+1460	Shoes Bag & Accessories / Travelling Goods / Suitcase
+1463	Shoes Bag & Accessories / Travelling Goods / Travel Accessories
+922	Fashion
+3552	Fashion / Ladies
+3569	Fashion / Ladies / Top
+1102	Fashion / Ladies / Jacket
+3572	Fashion / Ladies / Dresses
+1541	Fashion / Ladies Inner
+1543	Fashion / Ladies Inner / Inner
+1555	Fashion / Ladies Inner / Panties
+3563	Fashion / Ladies Inner / Home Wear
+3525	Fashion / Men
+1133	Fashion / Men / Top
+1134	Fashion / Men / Bottoms
+1137	Fashion / Men / Jacket
+1129	Fashion / Men / Business
+1586	Fashion / Men Inner
+1591	Fashion / Men Inner / Inner
+1588	Fashion / Men Inner / Pants
+3562	Fashion / Men Inner / Home Wear
+2501	Fashion / Sports
+3468	Fashion / Sports / Ladies Top
+1037	Fashion / Sports / Ladies Bottom
+3188	Fashion / Sports / Men Bottom

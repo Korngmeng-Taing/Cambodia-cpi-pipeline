@@ -182,24 +182,43 @@ class SamnangShopScraper(BaseScraper):
         max_pages = 5
         while page <= max_pages:
             url = f"{KHMERSAMNANG_API}?per_page={KHMERSAMNANG_PAGE_SIZE}&page={page}"
-            try:
-                resp = _cffi_get(url, timeout=15)
-                if resp.status_code in (400, 404):
+            page_success = False
+            for attempt in range(1, 4):
+                try:
+                    resp = _cffi_get(url, timeout=35)
+                    if resp.status_code in (400, 404):
+                        page_success = True
+                        break
+                    resp.raise_for_status()
+                    products = resp.json()
+                    if not products or not isinstance(products, list):
+                        page_success = True
+                        break
+                    for p in products:
+                        rec = self._to_canonical(p, ds)
+                        if rec:
+                            records.append(rec)
+                    page_success = True
+                    if len(products) < KHMERSAMNANG_PAGE_SIZE:
+                        max_pages = 0
                     break
-                resp.raise_for_status()
-                products = resp.json()
-                if not products or not isinstance(products, list):
-                    break
-                for p in products:
-                    rec = self._to_canonical(p, ds)
-                    if rec:
-                        records.append(rec)
-                if len(products) < KHMERSAMNANG_PAGE_SIZE:
-                    break
-            except Exception as exc:
-                log.warning(
-                    "SamnangShop page %d failed (%s), stopping pagination", page, exc
-                )
+                except Exception as exc:
+                    if attempt < 3:
+                        log.warning(
+                            "SamnangShop page %d attempt %d failed (%s), retrying in %ds...",
+                            page,
+                            attempt,
+                            exc,
+                            attempt * 2,
+                        )
+                        time.sleep(attempt * 2)
+                    else:
+                        log.warning(
+                            "SamnangShop page %d failed after 3 attempts (%s), stopping pagination",
+                            page,
+                            exc,
+                        )
+            if not page_success:
                 break
             page += 1
             time.sleep(THROTTLE_DELAY)

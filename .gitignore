@@ -58,6 +58,17 @@ Thumbs.db
 .agents/
 
 # ── LaTeX build artifacts ───────────────────────────────────────────────────
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.out
+*.synctex.gz
+*.toc
+*.xdv
 thesis/*.aux
 thesis/*.bbl
 thesis/*.blg
@@ -69,3 +80,4 @@ thesis/*.out
 thesis/*.synctex.gz
 thesis/*.toc
 thesis/*.xdv
+

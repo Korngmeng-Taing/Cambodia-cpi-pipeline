@@ -36,14 +36,14 @@
     linkcolor=NavyBlue,
     citecolor=Teal,
     urlcolor=NavyBlue,
-    pdftitle={Cambodia Daily CPI Medallion Pipeline - Master Technical Handbook},
+    pdftitle={Cambodia Daily CPI Medallion Pipeline - Definitive Master Handbook},
     pdfauthor={Advanced Macroeconomic Engineering Team}
 }
 
 \pagestyle{fancy}
 \fancyhf{}
 \fancyhead[L]{\small\color{gray} Cambodia Daily CPI Medallion Pipeline}
-\fancyhead[R]{\small\color{gray} Master Technical Architecture \& Econometric Handbook}
+\fancyhead[R]{\small\color{gray} Definitive Master Architecture \& Equation Handbook}
 \fancyfoot[C]{\small\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\footrulewidth}{0.4pt}
@@ -87,12 +87,12 @@
     \vspace{0.3cm}
     {\Huge\bfseries\color{NavyBlue} Medallion Pipeline\par}
     \vspace{0.8cm}
-    {\LARGE\bfseries\color{Teal} Comprehensive Technical Architecture, Econometric Foundations, and Systems Implementation Handbook\par}
+    {\LARGE\bfseries\color{Teal} Complete Technical Architecture, Econometric Foundations, Mathematical Derivations, and Systems Implementation Handbook\par}
     \vspace{1.5cm}
     
     \begin{tcolorbox}[colback=white,colframe=Teal,width=0.94\textwidth]
         \centering\normalsize
-        \textbf{Publication Status:} Production v2.4 (Enterprise Edition)\\
+        \textbf{Publication Status:} Production v2.4 (Definitive Master Edition)\\
         \textbf{Target Economy:} Kingdom of Cambodia (Dollarized Developing Economy)\\
         \textbf{Governing International Standard:} IMF/ILO/OECD/Eurostat (2020) CPI Manual\\
         \textbf{Official National Benchmark:} NIS Cambodia (CSES Oct--Dec 2006 = 100.0)\\
@@ -103,7 +103,7 @@
     
     {\large\textbf{Author:} Advanced Macroeconomic Engineering Team\par}
     {\large\textbf{Institution:} National Inflation Intelligence Platform\par}
-    {\large\textbf{Document Edition:} Definitive Reference Handbook (September 2026)\par}
+    {\large\textbf{Edition:} Definitive Architectural \& Mathematical Reference (September 2026)\par}
     \vspace{1cm}
 \end{titlepage}
 
@@ -524,6 +524,354 @@ In alignment with the National Bank of Cambodia and NIS, Core CPI strips out Div
 \newpage
 
 % =============================================================================
+\section{Comprehensive Mathematical and Programmatic Equation Dictionary}
+% =============================================================================
+
+This chapter provides an exhaustive dictionary of all fourteen mathematical formulas powering the Cambodia Daily CPI Medallion Pipeline. For each equation, we detail its formal economic derivation, variable definitions, implementation in Python and SQL, and database destination.
+
+% --- Equation 1 ---
+\subsection{Equation 1: Base Price Geometric Mean ($P_{i, 0}$)}
+\begin{equation}
+P_{i, 0} = \exp \left( \frac{1}{|S_{i, 0}|} \sum_{s \in S_{i, 0}} \ln P_{i, 0, s} \right) = \left( \prod_{s \in S_{i, 0}} P_{i, 0, s} \right)^{1 / |S_{i, 0}|}
+\end{equation}
+\begin{itemize}[noitemsep]
+    \item \textbf{Economic Purpose}: Computes an unweighted geometric mean baseline price for item $i$ across all reporting stores on the base date ($t=0$), eliminating store-selection bias.
+    \item \textbf{Variables}:
+        \begin{itemize}[noitemsep]
+            \item $i$: Unique canonical item identifier (\texttt{item\_id}).
+            \item $0$: Base period reference date (e.g., earliest valid scrape date).
+            \item $P_{i, 0}$: Baseline reference price of item $i$ in Cambodian Riel (KHR).
+            \item $s$: Retail store or data provider ($s \in S_{i, 0}$).
+            \item $|S_{i, 0}|$: Total count of distinct stores quoting item $i$ on the base date.
+            \item $P_{i, 0, s}$: Observed unit price of item $i$ at store $s$ on the base date.
+        \end{itemize}
+    \item \textbf{Code Implementation}: \texttt{pipeline/cpi\_calculator.py} $\rightarrow$ \texttt{compute\_base\_prices()}:
+\begin{lstlisting}[language=Python]
+grouped = base_df.groupby("item_id").agg(
+    base_price_khr=("unit_price_khr", lambda x: float(np.exp(np.mean(np.log(x[x > 0])))))
+)
+\end{lstlisting}
+    \item \textbf{Database Persistence}: \texttt{gold.fct\_elementary\_indices.base\_price\_khr}.
+\end{itemize}
+
+% --- Equation 2 ---
+\subsection{Equation 2: Individual Item Price Relative ($R_{i, t}$)}
+\begin{equation}
+R_{i, t} = \frac{P_{i, t}}{P_{i, 0}}
+\end{equation}
+\begin{itemize}[noitemsep]
+    \item \textbf{Economic Purpose}: Quantifies the price trajectory of a single homogeneous product on day $t$ relative to its baseline period.
+    \item \textbf{Variables}:
+        \begin{itemize}[noitemsep]
+            \item $R_{i, t}$: Price ratio of product $i$ on day $t$.
+            \item $P_{i, t}$: Realized or imputed price of product $i$ on day $t$ (KHR).
+            \item $P_{i, 0}$: Baseline reference price from Equation 1 (KHR).
+        \end{itemize}
+    \item \textbf{Code Implementation}: \texttt{pipeline/cpi\_calculator.py} $\rightarrow$ \texttt{compute\_daily\_elementary\_indices()}:
+\begin{lstlisting}[language=Python]
+valid["price_ratio"] = valid["current_price_khr"] / valid["base_price_khr"]
+valid["price_ratio_pct"] = valid["price_ratio"] * 100.0
+\end{lstlisting}
+    \item \textbf{Database Persistence}: \texttt{gold.fct\_elementary\_indices.price\_ratio}.
+\end{itemize}
+
+% --- Equation 3 ---
+\subsection{Equation 3: Class-Mean Movement Ratio ($R_{c, t}$)}
+\begin{equation}
+R_{c, t} = \exp \left( \frac{1}{|M_{c, t}|} \sum_{j \in M_{c, t}} \ln \left( \frac{P_{j, t}}{P_{j, t-1}} \right) \right) = \left( \prod_{j \in M_{c, t}} \frac{P_{j, t}}{P_{j, t-1}} \right)^{1 / |M_{c, t}|}
+\end{equation}
+\begin{itemize}[noitemsep]
+    \item \textbf{Economic Purpose}: Measures the daily geometric average rate of price change across observed products within COICOP division $c$ between day $t-1$ and day $t$.
+    \item \textbf{Variables}:
+        \begin{itemize}[noitemsep]
+            \item $c$: 2-digit COICOP division ($c \in \{01, 02, \dots, 12\}$).
+            \item $R_{c, t}$: 1-day geometric mean price movement ratio for category $c$, clamped to $[0.80, 1.25]$.
+            \item $j$: A matched product belonging to division $c$.
+            \item $M_{c, t}$: Set of matched products in division $c$ observed on both day $t$ and day $t-1$.
+            \item $|M_{c, t}|$: Total number of matched observations.
+            \item $\frac{P_{j, t}}{P_{j, t-1}}$: 1-day price relative for item $j$.
+        \end{itemize}
+    \item \textbf{Code Implementation}: \texttt{pipeline/cpi\_calculator.py} $\rightarrow$ \texttt{compute\_daily\_elementary\_indices()}:
+\begin{lstlisting}[language=Python]
+common["ratio"] = common["current_price_khr"] / common["unit_price_khr"]
+for div, group in common.groupby("coicop_division"):
+    division_movement_ratios[str(div)] = float(np.exp(np.mean(np.log(group["ratio"]))))
+\end{lstlisting}
+\end{itemize}
+
+% --- Equation 4 ---
+\subsection{Equation 4: Compounded Missing Price Imputation ($\widehat{P}_{i, t}$)}
+\begin{equation}
+\widehat{P}_{i, t} = P_{i, t - \Delta t} \times \left( R_{c, t} \right)^{\Delta t} \quad \text{for } \Delta t \in [1, 7]
+\end{equation}
+\begin{itemize}[noitemsep]
+    \item \textbf{Economic Purpose}: Imputes prices for temporarily out-of-stock items by compounding the category growth rate over the elapsed missing window, avoiding static carry-forward lag bias.
+    \item \textbf{Variables}:
+        \begin{itemize}[noitemsep]
+            \item $\widehat{P}_{i, t}$: Imputed unit price for item $i$ on day $t$ (KHR).
+            \item $\Delta t$: Elapsed days since item $i$ was last observed ($1 \le \Delta t \le 7$).
+            \item $P_{i, t - \Delta t}$: Most recent observed price of item $i$.
+            \item $R_{c, t}$: Category daily movement ratio from Equation 3.
+        \end{itemize}
+    \item \textbf{Code Implementation}: \texttt{pipeline/cpi\_calculator.py} $\rightarrow$ \texttt{compute\_daily\_elementary\_indices()}:
+\begin{lstlisting}[language=Python]
+days_gap = max(1, min((pd.to_datetime(calc_date) - pd.to_datetime(last_obs_date)).days, 7))
+imputed_price = float(val) * (movement ** days_gap)
+merged.at[idx, "current_price_khr"] = imputed_price
+merged.at[idx, "is_imputed"] = True
+\end{lstlisting}
+    \item \textbf{Database Persistence}: \texttt{gold.fct\_elementary\_indices.current\_price\_khr} (\texttt{is\_imputed = TRUE}).
+\end{itemize}
+
+% --- Equation 5 ---
+\subsection{Equation 5: Elementary Jevons Geometric Mean Index ($I_{J, c}^{0:t}$)}
+\begin{equation}
+I_{J, c}^{0:t} = \left( \prod_{i=1}^{n_c} \frac{P_{i, t}}{P_{i, 0}} \right)^{1 / n_c} \times 100.0 = \exp \left( \frac{1}{n_c} \sum_{i=1}^{n_c} \ln \left( \frac{P_{i, t}}{P_{i, 0}} \right) \right) \times 100.0
+\end{equation}
+\begin{itemize}[noitemsep]
+    \item \textbf{Economic Purpose}: Axiomatically robust elementary price index at the 4-digit/5-digit subclass level, satisfying time-reversal and transitivity tests.
+    \item \textbf{Variables}:
+        \begin{itemize}[noitemsep]
+            \item $I_{J, c}^{0:t}$: Jevons elementary index for subclass $c$ on day $t$ (base = 100.0).
+            \item $n_c$: Number of active goods in subclass $c$.
+            \item $P_{i, t}$: Price on day $t$ (realized or imputed).
+            \item $P_{i, 0}$: Base price.
+        \end{itemize}
+    \item \textbf{Code Implementation}: \texttt{pipeline/cpi\_calculator.py} $\rightarrow$ \texttt{compute\_jevons\_index()}:
+\begin{lstlisting}[language=Python]
+ratios = cur / base
+return float(np.exp(np.mean(np.log(ratios))) * 100.0)
+\end{lstlisting}
+    \item \textbf{Database Persistence}: \texttt{gold.fct\_coicop\_class\_daily.elementary\_index}.
+\end{itemize}
+
+% --- Equation 6 ---
+\subsection{Equation 6: Subclass-Weighted Division Index ($I_{\text{div}, k}^{0:t}$)}
+\begin{equation}
+I_{\text{div}, k}^{0:t} = \frac{\sum_{c \in \text{div}_k} w_c \cdot I_{J, c}^{0:t}}{\sum_{c \in \text{div}_k} w_c}
+\end{equation}
+\begin{itemize}[noitemsep]
+    \item \textbf{Economic Purpose}: Aggregates 4-digit subclass indices into 2-digit COICOP division indices using official CSES subclass weights.
+    \item \textbf{Variables}:
+        \begin{itemize}[noitemsep]
+            \item $k$: COICOP division code ($01$ to $12$).
+            \item $I_{\text{div}, k}^{0:t}$: Aggregated price index for division $k$ on day $t$.
+            \item $w_c$: Subclass expenditure weight (e.g., $17.23\%$ for Bread and Cereals).
+            \item $I_{J, c}^{0:t}$: Elementary Jevons index for subclass $c$.
+        \end{itemize}
+    \item \textbf{Code Implementation}: \texttt{pipeline/cpi\_calculator.py} $\rightarrow$ \texttt{aggregate\_division\_and\_headline()}:
+\begin{lstlisting}[language=Python]
+div_index = sum(idx * wt for idx, wt in zip(subclass_indices, subclass_wts)) / sum(subclass_wts)
+\end{lstlisting}
+    \item \textbf{Database Persistence}: \texttt{gold.fct\_cpi\_daily.division\_index}.
+\end{itemize}
+
+% --- Equation 7 ---
+\subsection{Equation 7: Macroeconomic Modified Laspeyres Headline CPI ($\text{CPI}_{\text{Headline}}^{0:t}$)}
+\begin{equation}
+\text{CPI}_{\text{Headline}}^{0:t} = \frac{\sum_{k=1}^{12} W_k \cdot I_{\text{div}, k}^{0:t}}{\sum_{k=1}^{12} W_k \cdot \mathbf{1}_{[\text{active}_k]}}
+\end{equation}
+\begin{itemize}[noitemsep]
+    \item \textbf{Economic Purpose}: Produces national headline inflation by weighting all 12 division indices by their national expenditure shares, with active-weight normalization.
+    \item \textbf{Variables}:
+        \begin{itemize}[noitemsep]
+            \item $\text{CPI}_{\text{Headline}}^{0:t}$: National headline consumer price index on day $t$ (base = 100.0).
+            \item $W_k$: National CSES expenditure weight for division $k$ ($\sum W_k = 1.0$).
+            \item $\mathbf{1}_{[\text{active}_k]}$: Binary indicator ($1$ if division $k$ has observations, $0$ if empty).
+        \end{itemize}
+    \item \textbf{Code Implementation}: \texttt{pipeline/cpi\_calculator.py} $\rightarrow$ \texttt{aggregate\_division\_and\_headline()}:
+\begin{lstlisting}[language=Python]
+active_div = df_div[df_div["item_count"] > 0]
+total_weight = active_div["weight"].sum()
+headline_cpi = float((active_div["weight"] * active_div["division_index"]).sum() / total_weight)
+\end{lstlisting}
+    \item \textbf{Database Persistence}: \texttt{gold.fct\_cpi\_daily.headline\_cpi} and \texttt{gold.fct\_cpi\_monthly.monthly\_headline\_cpi}.
+\end{itemize}
+
+% --- Equation 8 ---
+\subsection{Equation 8: Core CPI (Ex-Food \& Energy) ($\text{CPI}_{\text{Core}}^{0:t}$)}
+\begin{equation}
+\text{CPI}_{\text{Core}}^{0:t} = \frac{\sum_{k \notin \{01, 04, 07\}} W_k \cdot I_{\text{div}, k}^{0:t}}{\sum_{k \notin \{01, 04, 07\}} W_k}
+\end{equation}
+\begin{itemize}[noitemsep]
+    \item \textbf{Economic Purpose}: Measures underlying structural inflation by removing volatile Food (01), Housing/Utilities (04), and Transport/Fuel (07). Denominator is renormalized to $25.961\%$.
+    \item \textbf{Variables}:
+        \begin{itemize}[noitemsep]
+            \item $\text{CPI}_{\text{Core}}^{0:t}$: Core price index level on day $t$.
+            \item $k \notin \{01, 04, 07\}$: Condition selecting Divisions 02, 03, 05, 06, 08, 09, 10, 11, 12.
+            \item $\sum W_k$: Total core basket weight ($0.25961$).
+        \end{itemize}
+    \item \textbf{Code Implementation}: \texttt{pipeline/cpi\_calculator.py} $\rightarrow$ \texttt{aggregate\_division\_and\_headline()}:
+\begin{lstlisting}[language=Python]
+core_exclusions = {"01", "04", "07"}
+core_divisions = active_div[~active_div["coicop_division"].isin(core_exclusions)]
+core_cpi = float((core_divisions["weight"] * core_divisions["division_index"]).sum() / core_divisions["weight"].sum())
+\end{lstlisting}
+    \item \textbf{Database Persistence}: \texttt{gold.fct\_cpi\_daily.core\_cpi} and \texttt{gold.fct\_cpi\_monthly.monthly\_core\_cpi}.
+\end{itemize}
+
+% --- Equation 9 ---
+\subsection{Equation 9: Time-Dummy Log-Linear Hedonic Quality Regression}
+\begin{equation}
+\ln P_{i, t} = \alpha + \sum_{k=1}^K \beta_k z_{i, k} + \sum_{\tau=1}^T \delta_\tau D_{i, \tau} + \epsilon_{i, t}
+\end{equation}
+\begin{itemize}[noitemsep]
+    \item \textbf{Economic Purpose}: Isolates pure inflation movements ($\delta_\tau$) in consumer tech from price increases caused by hardware upgrades (RAM, storage).
+    \item \textbf{Variables}:
+        \begin{itemize}[noitemsep]
+            \item $\ln P_{i, t}$: Natural logarithm of nominal price for electronic item $i$.
+            \item $z_{i, k}$: Measured physical characteristic $k$ ($\ln(\text{Storage})$, $\ln(\text{RAM})$, brand dummy).
+            \item $\beta_k$: Shadow price (hedonic coefficient) of characteristic $k$.
+            \item $D_{i, \tau}$: Time dummy indicator ($1$ if date equals $\tau$, $0$ otherwise).
+            \item $\delta_\tau$: Quality-adjusted pure price change from baseline to period $\tau$.
+        \end{itemize}
+    \item \textbf{Code Implementation}: \texttt{pipeline/hedonic\_regression.py} $\rightarrow$ \texttt{fit\_hedonic\_model()}:
+\begin{lstlisting}[language=Python]
+beta, residuals, rank, s = np.linalg.lstsq(X, y, rcond=None)
+if rank < X.shape[1]:
+    log.warning("SKIPPED_RANK_DEFICIENT: Fall back to matched-model pricing")
+\end{lstlisting}
+    \item \textbf{Database Persistence}: \texttt{silver.hedonic\_adjusted\_prices.hedonic\_adjusted\_price\_khr}.
+\end{itemize}
+
+% --- Equation 10 ---
+\subsection{Equation 10: Nowcasting Leading Signal Drift ($\hat{\delta}_{\text{leading}}$)}
+\begin{equation}
+\hat{\delta}_{\text{leading}} = \frac{W_{01} \cdot \left(\frac{\Delta \text{Food}_{7d}}{7}\right) + W_{07} \cdot \left(\frac{\Delta \text{Trans}_{7d}}{7}\right)}{W_{01} + W_{07}}
+\end{equation}
+\begin{itemize}[noitemsep]
+    \item \textbf{Economic Purpose}: Extracts the daily baseline inflation drift from trailing 7-day momentum in the two most volatile, leading divisions (Food and Transport).
+    \item \textbf{Variables}:
+        \begin{itemize}[noitemsep]
+            \item $\hat{\delta}_{\text{leading}}$: Daily expected inflation drift.
+            \item $W_{01}$: Food weight ($0.44775$).
+            \item $W_{07}$: Transport weight ($0.12180$).
+            \item $\Delta \text{Food}_{7d}, \Delta \text{Trans}_{7d}$: 7-day percentage growth in Food and Transport indices.
+        \end{itemize}
+    \item \textbf{Code Implementation}: \texttt{ml/nowcaster.py} $\rightarrow$ \texttt{compute\_nowcast()}:
+\begin{lstlisting}[language=Python]
+leading_signal_drift = (
+    (0.44775 * (food_momentum / 7.0)) + (0.12180 * (transport_momentum / 7.0))
+) / (0.44775 + 0.12180)
+\end{lstlisting}
+\end{itemize}
+
+% --- Equation 11 ---
+\subsection{Equation 11: Linear Trajectory Midpoint Expectation ($\mathbb{E}[\bar{P}_{\text{remaining}}]$)}
+\begin{equation}
+\mathbb{E}[\bar{P}_{\text{remaining}}] = \bar{P}_{\text{obs}, t} \times \left( 1.0 + \hat{\delta}_t \cdot \frac{N_{\text{rem}} + 1}{2} \right)
+\end{equation}
+\begin{itemize}[noitemsep]
+    \item \textbf{Economic Purpose}: Computes the average expected price level over the unobserved remaining days of the month under linear drift $\hat{\delta}_t$.
+    \item \textbf{Variables}:
+        \begin{itemize}[noitemsep]
+            \item $\mathbb{E}[\bar{P}_{\text{remaining}}]$: Projected average price level for remaining days.
+            \item $\bar{P}_{\text{obs}, t}$: Realized index level on current day $t$.
+            \item $\hat{\delta}_t$: Total daily drift rate ($\hat{\delta}_{\text{leading}} + \phi_{\text{fest}}$).
+            \item $N_{\text{rem}}$: Number of remaining unobserved days ($T - t$).
+            \item $\frac{N_{\text{rem}} + 1}{2}$: Midpoint of the remaining trajectory.
+        \end{itemize}
+    \item \textbf{Code Implementation}: \texttt{ml/nowcaster.py} $\rightarrow$ \texttt{compute\_nowcast()}:
+\begin{lstlisting}[language=Python]
+projected_avg_cpi = realized_cpi * (1.0 + (projected_daily_drift * (days_remaining + 1) / 2.0))
+\end{lstlisting}
+\end{itemize}
+
+% --- Equation 12 ---
+\subsection{Equation 12: Blended Month-to-Date Expected Index ($\text{Nowcast CPI}_M$)}
+\begin{equation}
+\text{Nowcast CPI}_M = \left( \frac{N_{\text{obs}}}{T} \right) \bar{P}_{\text{obs}} + \left( \frac{N_{\text{rem}}}{T} \right) \mathbb{E}[\bar{P}_{\text{remaining}}]
+\end{equation}
+\begin{itemize}[noitemsep]
+    \item \textbf{Economic Purpose}: Blends realized days and projected remaining days, weighted by calendar day counts, to nowcast the full-month CPI level.
+    \item \textbf{Variables}:
+        \begin{itemize}[noitemsep]
+            \item $\text{Nowcast CPI}_M$: Predicted monthly CPI level for month $M$.
+            \item $T$: Total calendar days in month $M$ (28, 29, 30, or 31).
+            \item $N_{\text{obs}}$: Number of observed calendar days so far.
+            \item $\bar{P}_{\text{obs}}$: Average realized daily CPI from day 1 to day $t$.
+        \end{itemize}
+    \item \textbf{Code Implementation}: \texttt{ml/nowcaster.py} $\rightarrow$ \texttt{compute\_nowcast()}:
+\begin{lstlisting}[language=Python]
+obs_weight = days_observed / days_in_month
+rem_weight = days_remaining / days_in_month
+nowcast_headline_cpi = round((obs_weight * realized_cpi) + (rem_weight * projected_avg_cpi), 4)
+\end{lstlisting}
+    \item \textbf{Database Persistence}: \texttt{gold.fct\_cpi\_nowcast.nowcast\_headline\_cpi}.
+\end{itemize}
+
+% --- Equation 13 ---
+\subsection{Equation 13: Real-Time Splicing to Historical NIS Base ($\widehat{\text{CPI}}_{\text{NIS, } M}$)}
+\begin{equation}
+\widehat{\text{CPI}}_{\text{NIS, } M} = \text{CPI}_{\text{latest}}^{\text{NIS, 2006}} \times \left( 1.0 + \frac{\hat{\pi}_{\text{MoM}}}{100.0} \right)
+\end{equation}
+\begin{itemize}[noitemsep]
+    \item \textbf{Economic Purpose}: Chains the pipeline's Month-over-Month projected growth rate to the latest published official NIS monthly level (Base Oct--Dec 2006 = 100).
+    \item \textbf{Variables}:
+        \begin{itemize}[noitemsep]
+            \item $\widehat{\text{CPI}}_{\text{NIS, } M}$: Predicted official government CPI index level ($>219.0$).
+            \item $\text{CPI}_{\text{latest}}^{\text{NIS, 2006}}$: Last published official NIS index value.
+            \item $\hat{\pi}_{\text{MoM}}$: Projected Month-over-Month percentage change.
+        \end{itemize}
+    \item \textbf{Code Implementation}: \texttt{ml/nowcaster.py} $\rightarrow$ \texttt{compute\_nowcast()}:
+\begin{lstlisting}[language=Python]
+latest_nis_cpi = float(latest_nis_row["headline_cpi"])
+nowcast_nis_headline_cpi = round(latest_nis_cpi * (1.0 + (projected_mom_pct / 100.0)), 4)
+\end{lstlisting}
+    \item \textbf{Database Persistence}: \texttt{gold.fct\_cpi\_nowcast.nowcast\_nis\_headline\_cpi}.
+\end{itemize}
+
+% --- Equation 14 ---
+\subsection{Equation 14: Annual Continuous Series Chain-Linking Overlap Splice ($S$)}
+\begin{equation}
+S = \frac{\bar{I}_{\text{Dec}}^{\text{Old Base}}}{100.0}, \quad I_{\text{Continuous}, t} = I_{\text{New Base}, t} \times S
+\end{equation}
+\begin{itemize}[noitemsep]
+    \item \textbf{Economic Purpose}: Seamlessly splices annually rebased CPI series using December overlap averages, guaranteeing long-run index continuity without level jumps.
+    \item \textbf{Variables}:
+        \begin{itemize}[noitemsep]
+            \item $S$: Chain-linking splice factor.
+            \item $\bar{I}_{\text{Dec}}^{\text{Old Base}}$: 31-day average index level in December under the expiring base year.
+            \item $I_{\text{New Base}, t}$: Daily index computed under the newly rebased period.
+            \item $I_{\text{Continuous}, t}$: Continuous, historical linked index series.
+        \end{itemize}
+    \item \textbf{Code Implementation}: \texttt{pipeline/cpi\_calculator.py} $\rightarrow$ \texttt{run\_daily\_pipeline()}:
+\begin{lstlisting}[language=Python]
+cur.execute("SELECT avg_december_cpi FROM gold.cpi_base_dates WHERE effective_from <= %s ORDER BY effective_from DESC LIMIT 1;", (target_date,))
+row = cur.fetchone()
+if row and row[0] is not None:
+    splice_factor = float(row[0]) / 100.0
+\end{lstlisting}
+    \item \textbf{Database Persistence}: \texttt{gold.cpi\_base\_dates.avg\_december\_cpi}.
+\end{itemize}
+
+\subsection{Quick Reference: Equations to Database Columns}
+\begin{table}[h]
+\centering
+\small
+\caption{Cross-Reference: Pipeline Equations to PostgreSQL Target Tables}
+\begin{tabular}{lll}
+\toprule
+\textbf{Equation} & \textbf{Mathematical Output} & \textbf{Target PostgreSQL Table and Column} \\
+\midrule
+Eq. 1 & Base Price ($P_{i,0}$) & \texttt{gold.fct\_elementary\_indices.base\_price\_khr} \\
+Eq. 2 & Item Price Relative ($R_{i,t}$) & \texttt{gold.fct\_elementary\_indices.price\_ratio} \\
+Eq. 4 & Imputed Price ($\widehat{P}_{i,t}$) & \texttt{gold.fct\_elementary\_indices.current\_price\_khr} (\texttt{is\_imputed = TRUE}) \\
+Eq. 5 & Subclass Jevons Index ($I_{J,c}$) & \texttt{gold.fct\_coicop\_class\_daily.elementary\_index} \\
+Eq. 6 & Division Laspeyres Index ($I_{\text{div},k}$) & \texttt{gold.fct\_cpi\_daily.division\_index} \\
+Eq. 7 & National Headline CPI & \texttt{gold.fct\_cpi\_daily.headline\_cpi} \\
+Eq. 8 & National Core CPI & \texttt{gold.fct\_cpi\_daily.core\_cpi} \\
+Eq. 9 & Hedonic Price & \texttt{silver.hedonic\_adjusted\_prices.hedonic\_adjusted\_price\_khr} \\
+Eq. 12 & Month-End Nowcast & \texttt{gold.fct\_cpi\_nowcast.nowcast\_headline\_cpi} \\
+Eq. 13 & Chained NIS Estimate & \texttt{gold.fct\_cpi\_nowcast.nowcast\_nis\_headline\_cpi} \\
+Eq. 14 & Annual Splice Factor ($S$) & \texttt{gold.cpi\_base\_dates.avg\_december\_cpi} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\newpage
+
+% =============================================================================
 \section{Exhaustive UN COICOP Classification and Weights Hierarchy}
 % =============================================================================
 
@@ -928,7 +1276,7 @@ The \textbf{Cambodia Daily CPI Medallion Pipeline} proves that automated high-fr
 \begin{center}
 \rule{0.6\textwidth}{0.4pt}\\
 \vspace{0.4cm}
-\textbf{--- End of Comprehensive Technical Specification Handbook ---}
+\textbf{--- End of Definitive Technical Specification Handbook ---}
 \end{center}
 
 \end{document}

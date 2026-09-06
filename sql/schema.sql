@@ -135,6 +135,7 @@ ALTER TABLE silver.canonical_items ADD COLUMN IF NOT EXISTS coicop_division VARC
 ALTER TABLE silver.canonical_items ADD COLUMN IF NOT EXISTS coicop_code VARCHAR(16);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_canonical_items_barcode ON silver.canonical_items(barcode) WHERE barcode IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_canonical_items_name ON silver.canonical_items(canonical_name);
+CREATE INDEX IF NOT EXISTS idx_canonical_items_lower_trim ON silver.canonical_items (lower(trim(canonical_name)));
 CREATE INDEX IF NOT EXISTS idx_canonical_name_trgm ON silver.canonical_items USING gin (canonical_name gin_trgm_ops);
 
 -- Item matching audit log
@@ -590,6 +591,7 @@ CREATE INDEX IF NOT EXISTS idx_silver_clean_store_prices_item ON silver.clean_st
 CREATE INDEX IF NOT EXISTS idx_raw_prices_scraped_at ON bronze.raw_prices(scraped_at);
 CREATE INDEX IF NOT EXISTS idx_item_match_log_raw_price ON silver.item_match_log(raw_price_id);
 CREATE INDEX IF NOT EXISTS idx_canonical_items_name ON silver.canonical_items(canonical_name);
+CREATE INDEX IF NOT EXISTS idx_canonical_items_lower_trim ON silver.canonical_items (lower(trim(canonical_name)));
 
 -- ============================================================================
 -- SEED DATA: OFFICIAL CAMBODIA NIS COICOP WEIGHTS & AEON CATEGORY MAP

@@ -1,20 +1,4 @@
-# scripts/build_full_handbook.py
-"""
-Builds the 40+ page Definitive Master Handbook:
-"Cambodia Daily Consumer Price Index (CPI) Medallion Pipeline:
- Technical Architecture, Econometric Foundations, and Systems Implementation Handbook"
-"""
-
-import os
-import sys
-
-def build_handbook():
-    parts = []
-
-    # -------------------------------------------------------------------------
-    # PREAMBLE & STYLING
-    # -------------------------------------------------------------------------
-    parts.append(r"""\documentclass[11pt,a4paper,oneside]{article}
+\documentclass[11pt,a4paper,oneside]{article}
 
 \usepackage[margin=1in,headheight=14pt]{geometry}
 \usepackage{fontspec}
@@ -125,12 +109,7 @@ def build_handbook():
 
 \tableofcontents
 \newpage
-""")
 
-    # -------------------------------------------------------------------------
-    # CHAPTER 1: MACROECONOMIC CONTEXT & CAMBODIAN INFLATION
-    # -------------------------------------------------------------------------
-    parts.append(r"""
 % =============================================================================
 \section{Macroeconomic Context and Cambodian Inflation Dynamics}
 % =============================================================================
@@ -166,12 +145,7 @@ Official inflation measurement compiled by the National Institute of Statistics 
 The \textbf{Cambodia Daily CPI Medallion Pipeline} resolves these structural challenges by continuously ingesting over 35,500 daily price observations across 23 digital retail, utility, and telecom sources. The system compiles daily elementary and macroeconomic price indices conforming to IMF/ILO (2020) standards, providing real-time leading indicators and nowcasting official monthly benchmarks weeks ahead of government publication.
 
 \newpage
-""")
 
-    # -------------------------------------------------------------------------
-    # CHAPTER 2: END-TO-END SYSTEM & CLOUD ARCHITECTURE
-    # -------------------------------------------------------------------------
-    parts.append(r"""
 % =============================================================================
 \section{End-to-End System and Infrastructure Architecture}
 % =============================================================================
@@ -228,12 +202,7 @@ The pipeline is orchestrated by Apache Airflow 2.9.3 running in Docker container
 \end{enumerate}
 
 \newpage
-""")
 
-    # -------------------------------------------------------------------------
-    # CHAPTER 3: BRONZE INGESTION & ANTI-BOT ENGINEERING
-    # -------------------------------------------------------------------------
-    parts.append(r"""
 % =============================================================================
 \section{Bronze Ingestion and Anti-Bot Web Engineering}
 % =============================================================================
@@ -298,12 +267,7 @@ ON bronze.raw_prices (
 \textbf{The Price Invariance Principle:} Nominal price is strictly excluded from this unique constraint. If an Airflow retry runs mid-day, the observation updates in-place via \texttt{ON CONFLICT DO UPDATE}, preventing duplicate quote accumulation.
 
 \newpage
-""")
 
-    # -------------------------------------------------------------------------
-    # CHAPTER 4: SILVER LAYER: ENTITY RESOLUTION & AI CLASSIFICATION
-    # -------------------------------------------------------------------------
-    parts.append(r"""
 % =============================================================================
 \section{Silver Layer: Entity Resolution and AI Classification}
 % =============================================================================
@@ -342,12 +306,7 @@ Every canonical item is categorized into the UN COICOP hierarchy via:
 \end{enumerate}
 
 \newpage
-""")
 
-    # -------------------------------------------------------------------------
-    # CHAPTER 5: CONCRETE CASE STUDY: LIFE OF A PRICE QUOTE
-    # -------------------------------------------------------------------------
-    parts.append(r"""
 % =============================================================================
 \section{Concrete Walkthrough: Life of a Price Quote}
 % =============================================================================
@@ -409,12 +368,7 @@ Class 01.2.2 has an expenditure weight of $w_{01.2.2} = 2.280\%$. It aggregates 
 Thus, our single can of Coca-Cola flows into the official daily inflation figure.
 
 \newpage
-""")
 
-    # -------------------------------------------------------------------------
-    # CHAPTER 6: AXIOMATIC PRICE INDEX THEORY & MATHEMATICAL PROOFS
-    # -------------------------------------------------------------------------
-    parts.append(r"""
 % =============================================================================
 \section{Econometric Price Index Theory and Axiomatic Proofs}
 % =============================================================================
@@ -503,12 +457,7 @@ Both tests hold identically across all periods.
 \end{proof}
 
 \newpage
-""")
 
-    # -------------------------------------------------------------------------
-    # CHAPTER 7: GOLD LAYER COMPILATION, IMPUTATION & HEDONICS
-    # -------------------------------------------------------------------------
-    parts.append(r"""
 % =============================================================================
 \section{Gold Layer: Econometric Compilation, Imputation and Hedonics}
 % =============================================================================
@@ -573,12 +522,7 @@ In alignment with the National Bank of Cambodia and NIS, Core CPI strips out Div
 \end{equation}
 
 \newpage
-""")
 
-    # -------------------------------------------------------------------------
-    # CHAPTER 8: EXHAUSTIVE 92-CATEGORY COICOP TAXONOMY
-    # -------------------------------------------------------------------------
-    parts.append(r"""
 % =============================================================================
 \section{Exhaustive UN COICOP Classification and Weights Hierarchy}
 % =============================================================================
@@ -696,12 +640,7 @@ Class & 12.3.2 & Other personal effects (Bags, wallets) & 0.320\% \\
 \end{longtable}
 
 \newpage
-""")
 
-    # -------------------------------------------------------------------------
-    # CHAPTER 9: HIGH-FREQUENCY NOWCASTING & ML ENSEMBLE
-    # -------------------------------------------------------------------------
-    parts.append(r"""
 % =============================================================================
 \section{High-Frequency Inflation Nowcasting and ML Ensemble}
 % =============================================================================
@@ -749,12 +688,7 @@ Beyond the structural drift model, the pipeline trains a multi-model ensemble:
 \end{itemize}
 
 \newpage
-""")
 
-    # -------------------------------------------------------------------------
-    # CHAPTER 10: DUAL-CURRENCY ECONOMETRICS & PASS-THROUGH (ERPT)
-    # -------------------------------------------------------------------------
-    parts.append(r"""
 % =============================================================================
 \section{Dual-Currency Econometrics and Exchange Rate Pass-Through}
 % =============================================================================
@@ -792,12 +726,7 @@ where $\beta_k$ denotes the elasticity of pass-through at lag $k$.
 \textbf{Macroeconomic Implication:} A 1.0\% depreciation of the Riel against the US Dollar results in an immediate 0.88\% surge in supermarket food prices within 24 hours, whereas traditional public utilities remain insulated due to statutory price controls.
 
 \newpage
-""")
 
-    # -------------------------------------------------------------------------
-    # CHAPTER 11: HISTORICAL CHAIN-LINKING TO OFFICIAL NIS BASE
-    # -------------------------------------------------------------------------
-    parts.append(r"""
 % =============================================================================
 \section{Chain-Linking to Official NIS Historical Benchmark}
 % =============================================================================
@@ -831,12 +760,7 @@ When updating the pipeline's reference base year annually to capture newly emerg
 This formulation preserves short-run price ratios without introducing artificial index jumps at base-year transitions.
 
 \newpage
-""")
 
-    # -------------------------------------------------------------------------
-    # CHAPTER 12: DBT LINEAGE & 53 DATA QUALITY TESTS
-    # -------------------------------------------------------------------------
-    parts.append(r"""
 % =============================================================================
 \section{Data Lineage (dbt Core) and Automated Testing Suite}
 % =============================================================================
@@ -886,12 +810,7 @@ Historical Seasonal Drift Benchmark & 0.59 & 0.46 & 67.4\% \\
 \end{center}
 
 \newpage
-""")
 
-    # -------------------------------------------------------------------------
-    # CHAPTER 13: DATABASE PERFORMANCE TUNING & SCALING
-    # -------------------------------------------------------------------------
-    parts.append(r"""
 % =============================================================================
 \section{Database Performance Tuning and PostgreSQL 16 Scaling}
 % =============================================================================
@@ -934,12 +853,7 @@ random_page_cost = 1.1                -- Optimized for NVMe SSD storage
 \end{lstlisting}
 
 \newpage
-""")
 
-    # -------------------------------------------------------------------------
-    # CHAPTER 14: EXECUTIVE DASHBOARDS & PRODUCTION SQL
-    # -------------------------------------------------------------------------
-    parts.append(r"""
 % =============================================================================
 \section{Executive Business Intelligence and Production SQL Catalog}
 % =============================================================================
@@ -988,12 +902,7 @@ ORDER BY status ASC, row_count DESC;
 \end{lstlisting}
 
 \newpage
-""")
 
-    # -------------------------------------------------------------------------
-    # CHAPTER 15: STRATEGIC POLICY ROADMAP & CONCLUSION
-    # -------------------------------------------------------------------------
-    parts.append(r"""
 % =============================================================================
 \section{Strategic Policy Roadmap for the National Bank of Cambodia}
 % =============================================================================
@@ -1023,13 +932,3 @@ The \textbf{Cambodia Daily CPI Medallion Pipeline} proves that automated high-fr
 \end{center}
 
 \end{document}
-""")
-
-    full_tex = "".join(parts)
-    target_file = os.path.join(os.getcwd(), "Cambodia_CPI_Master_Handbook.tex")
-    with open(target_file, "w", encoding="utf-8") as f:
-        f.write(full_tex.strip())
-    print(f"Master Handbook written successfully: {len(full_tex)} characters to {target_file}")
-
-if __name__ == "__main__":
-    build_handbook()

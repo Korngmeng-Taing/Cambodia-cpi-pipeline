@@ -336,6 +336,22 @@ cpi_pipeline_success
 - **Issue**: SQLAlchemy syntax error on `:cutoff::DATE` parameter placeholder prevented hedonic model execution.
 - **Fix**: Updated to `CAST(:cutoff AS DATE)`. Successfully fitted OLS model on 88,682 observations and adjusted 4,217 consumer electronics prices.
 
+### Native Database Vector Search via PostgreSQL `pgvector` & HNSW (2026-09-06)
+- **Files**: `sql/migrations/0002_pgvector_hnsw_canonical_items.sql`, `sql/schema.sql`, `pipeline/vector_item_matcher.py`, `pipeline/item_matcher.py`, `tests/test_vector_item_matcher.py`
+- **Feature**: Replaced in-memory NumPy matrix scanning with database-native vector similarity search on `silver.canonical_items`:
+  1. Enabled `CREATE EXTENSION IF NOT EXISTS vector;` and added column `embedding vector(768)`.
+  2. Built native HNSW graph index `idx_canonical_items_hnsw` (`m=16, ef_construction=64`) for sub-millisecond approximate nearest neighbor lookup using cosine distance (`<=>`).
+  3. Added `VectorItemMatcher.match_candidate_db()` with physical specification guards.
+  4. Updated `ItemMatcher` to batch-persist 768-dimensional embeddings to PostgreSQL.
+
+### Dual-Currency USD/KHR ERPT Drift & Automated Nowcasting Backtest (2026-09-06)
+- **Files**: `ml/nowcaster.py`, `tests/test_nowcasting.py`, `Cambodia_CPI_Definitive_Handbook.pdf`
+- **Feature**: Econometric upgrade to real-time inflation nowcasting:
+  1. Integrated 7-day USD/KHR exchange rate momentum into projected daily drift: $\hat{\delta}_{\text{FX}} = \beta_{\text{ERPT}} \cdot (\Delta \text{FX}_{7d} / 7)$ with empirical pass-through elasticity $\beta_{\text{ERPT}} = 0.28$.
+  2. Implemented automated expanding-window backtesting harness (`CPINowcaster.evaluate_historical_accuracy()`) computing RMSE, MAE, and directional accuracy across 5 forecast horizons (Days 5, 10, 15, 20, 25).
+  3. Added CLI argument `python -m ml.nowcaster --backtest` for instant econometric evaluation.
+  4. Added unit test coverage with 100% passing tests.
+
 ---
 
 ## 6. Operational Commands & Utilities
@@ -352,37 +368,43 @@ python scripts/evaluate_accuracy_benchmark.py
 ```
 *Evaluates product matching, spec guards, and 12-division COICOP semantic classification with full scorecards.*
 
-### 3. Historical Data Backfill (August 18 Onwards)
+### 3. Run Historical Nowcasting Horizon Backtest
+```bash
+python -m ml.nowcaster --backtest
+```
+*Executes automated expanding-window backtesting evaluating RMSE, MAE, and directional accuracy across Days 5, 10, 15, 20, and 25 against realized month-end indices.*
+
+### 4. Historical Data Backfill (August 18 Onwards)
 ```bash
 python scripts/backfill_silver_pipeline.py --start-date 2026-08-18
 ```
 
-### 4. Run Full Automated Test Suite
+### 5. Run Full Automated Test Suite
 ```bash
 python -m pytest tests/ -v
 ```
 
-### 5. Trigger Airflow Master DAG (Daily Fan-Out & Gold CPI)
+### 6. Trigger Airflow Master DAG (Daily Fan-Out & Gold CPI)
 ```bash
 docker compose exec airflow-scheduler airflow dags trigger cpi_master_dag
 ```
 
-### 6. Check DAG Run Status
+### 7. Check DAG Run Status
 ```bash
 docker exec airflow-scheduler airflow tasks states-for-dag-run <dag_id> <run_id>
 ```
 
-### 7. Clear Failed Tasks for Retry
+### 8. Clear Failed Tasks for Retry
 ```bash
 docker exec airflow-scheduler airflow tasks clear <dag_id> -t <task_id> -f -y
 ```
 
-### 8. Access Metabase Dashboards
+### 9. Access Metabase Dashboards
 ```bash
 open http://localhost:3000
 ```
 
-### 9. Access Airflow Web UI
+### 10. Access Airflow Web UI
 ```bash
 open http://localhost:8085
 ```

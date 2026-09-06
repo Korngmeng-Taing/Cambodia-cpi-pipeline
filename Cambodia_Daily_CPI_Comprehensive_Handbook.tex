@@ -285,7 +285,7 @@ ON staging.raw_scrapes(scrape_date, store_slug);
 In high-frequency inflation measurement, an elementary price index requires a \textbf{matched-model} framework tracking homogeneous, identical products across time. However, web titles across Cambodian retailers exhibit substantial noise:
 \begin{itemize}[noitemsep]
     \item Retailer 1: \texttt{Coca Cola Can 330ml (Pack of 24)}
-    \item Retailer 2: \texttt{កូកាកូឡា ៣៣០មីលីលីត្រ ២៤កំប៉ុង [PROMO]}
+    \item Retailer 2: \texttt{Coca-Cola 330ml 24-can [PROMO]}
     \item Retailer 3: \texttt{Coke 330ml x 24 cans}
 \end{itemize}
 Treating these strings as separate commodities causes artificial item churn, excessive missing prices, and formula bias. Conversely, naively grouping items without strict specification checks could merge a single 330ml can (\$0.60) with a 24-can pack (\$14.00), introducing extreme artificial price spikes.
@@ -366,7 +366,7 @@ WHERE item_id IS NOT NULL;
 % =============================================================================
 
 \subsection{Axiomatic Foundations of Price Index Numbers}
-A price index $I(P_0, P_t)$ aggregates vector prices from base period $0$ to target period $t$. In international index number theory \citep{diewert1995axiomatic, imf2020cpi}, candidate index formulas are evaluated against core axiomatic properties:
+A price index $I(P_0, P_t)$ aggregates vector prices from base period $0$ to target period $t$. In international index number theory (Diewert, 1995; IMF/ILO, 2020), candidate index formulas are evaluated against core axiomatic properties:
 
 \begin{axiom}[Time Reversal Test]
 An index satisfies the Time Reversal Test if reversing the base and comparison periods yields the reciprocal index:
@@ -421,7 +421,7 @@ P_{i, 0} = \exp \left( \frac{1}{|S_{i, 0}|} \sum_{s \in S_{i, 0}} \ln P_{i, 0, s
 \end{equation}
 
 \subsection{Compounded Class-Mean Geometric Imputation Engine}
-In high-frequency web scraping, products frequently drop out temporarily due to store stockouts, weekend inventory rebalancing, or crawler timeouts. International statistical standards \citep{imf2020cpi} strictly prohibit flat carry-forward ($\widehat{P}_{i, t} = P_{i, t-1}$) because static carry-forward artificially dampens true price volatility and creates downward lag bias during inflationary cycles.
+In high-frequency web scraping, products frequently drop out temporarily due to store stockouts, weekend inventory rebalancing, or crawler timeouts. International statistical standards (IMF/ILO, 2020) strictly prohibit flat carry-forward ($\widehat{P}_{i, t} = P_{i, t-1}$) because static carry-forward artificially dampens true price volatility and creates downward lag bias during inflationary cycles.
 
 When item $i$ in COICOP division $c$ is unobserved on day $t$ with an elapsed gap $\Delta t \in [1, 7]$ days:
 \begin{enumerate}
@@ -724,7 +724,7 @@ The transformation layer is managed by dbt-core 1.8, enforcing modular data line
 \begin{enumerate}
     \item \texttt{int\_prices\_cleaned.sql}: Filters price outliers ($0.20 \le \text{ratio} \le 5.0$), applies KHR currency conversions, and standardizes metric units.
     \item \texttt{int\_coicop\_classified.sql}: Joins classification results from overrides, store purity rules, vector embeddings, and LLM memos.
-    \item \texttt{clean\_store_prices.sql}: Materializes conformed daily price observations with unique composite keys.
+    \item \texttt{clean\_store\_prices.sql}: Materializes conformed daily price observations with unique composite keys.
     \item \texttt{dim\_items.sql} \& \texttt{dim\_stores.sql}: Materializes dimensional star-schemas for executive BI querying.
 \end{enumerate}
 

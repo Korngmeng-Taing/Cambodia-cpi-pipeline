@@ -1,4 +1,18 @@
-\documentclass[11pt,a4paper]{article}
+# scripts/build_full_handbook.py
+"""
+Builds the comprehensive 30+ page Technical Specification & Econometric Handbook
+for the Cambodia Daily CPI Medallion Pipeline in LaTeX format.
+"""
+
+import os
+
+def generate_handbook():
+    parts = []
+
+    # -------------------------------------------------------------------------
+    # PREAMBLE
+    # -------------------------------------------------------------------------
+    parts.append(r"""\documentclass[11pt,a4paper]{article}
 
 \usepackage[margin=1in]{geometry}
 \usepackage{fontspec}
@@ -106,7 +120,12 @@
 
 \tableofcontents
 \newpage
+""")
 
+    # -------------------------------------------------------------------------
+    # SECTION 1: MACROECONOMIC CONTEXT
+    # -------------------------------------------------------------------------
+    parts.append(r"""
 % =============================================================================
 \section{Macroeconomic Context and Problem Statement}
 % =============================================================================
@@ -135,7 +154,12 @@ Official monthly inflation statistics published by the National Institute of Sta
 The \textbf{Cambodia Daily CPI Medallion Pipeline} resolves this structural deficit by establishing an enterprise-grade, daily price intelligence engine. By capturing over 35,500 raw daily price quotes across 23 digital retail, utility, and telecom sources, the platform compiles real-time elementary price indices, computes continuous Headline and Core inflation measures conforming to IMF/ILO (2020) econometric standards, and projects unpublished monthly benchmarks weeks ahead of official publication.
 
 \newpage
+""")
 
+    # -------------------------------------------------------------------------
+    # SECTION 2: END-TO-END MEDALLION ARCHITECTURE
+    # -------------------------------------------------------------------------
+    parts.append(r"""
 % =============================================================================
 \section{End-to-End System and Infrastructure Architecture}
 % =============================================================================
@@ -190,7 +214,12 @@ The pipeline is orchestrated by Apache Airflow 2.9.3 running in Docker, structur
 \end{enumerate}
 
 \newpage
+""")
 
+    # -------------------------------------------------------------------------
+    # SECTION 3: BRONZE INGESTION & DATA CONTRACTS
+    # -------------------------------------------------------------------------
+    parts.append(r"""
 % =============================================================================
 \section{Bronze Ingestion and Data Integrity Contracts}
 % =============================================================================
@@ -276,7 +305,12 @@ ON staging.raw_scrapes(scrape_date, store_slug);
 \end{lstlisting}
 
 \newpage
+""")
 
+    # -------------------------------------------------------------------------
+    # SECTION 4: SILVER LAYER & ENTITY RESOLUTION
+    # -------------------------------------------------------------------------
+    parts.append(r"""
 % =============================================================================
 \section{Silver Layer: Entity Resolution and AI Classification}
 % =============================================================================
@@ -285,7 +319,7 @@ ON staging.raw_scrapes(scrape_date, store_slug);
 In high-frequency inflation measurement, an elementary price index requires a \textbf{matched-model} framework tracking homogeneous, identical products across time. However, web titles across Cambodian retailers exhibit substantial noise:
 \begin{itemize}[noitemsep]
     \item Retailer 1: \texttt{Coca Cola Can 330ml (Pack of 24)}
-    \item Retailer 2: \texttt{កូកាកូឡា ៣៣០មីលីលីត្រ ២៤កំប៉ុង [PROMO]}
+    \item Retailer 2: \texttt{Coca-Cola 330ml 24-can [PROMO]}
     \item Retailer 3: \texttt{Coke 330ml x 24 cans}
 \end{itemize}
 Treating these strings as separate commodities causes artificial item churn, excessive missing prices, and formula bias. Conversely, naively grouping items without strict specification checks could merge a single 330ml can (\$0.60) with a 24-can pack (\$14.00), introducing extreme artificial price spikes.
@@ -360,13 +394,18 @@ WHERE item_id IS NOT NULL;
 \end{lstlisting}
 
 \newpage
+""")
 
+    # -------------------------------------------------------------------------
+    # SECTION 5: GOLD LAYER & ECONOMETRIC COMPILATION
+    # -------------------------------------------------------------------------
+    parts.append(r"""
 % =============================================================================
 \section{Gold Layer: Econometric CPI Compilation Engine}
 % =============================================================================
 
 \subsection{Axiomatic Foundations of Price Index Numbers}
-A price index $I(P_0, P_t)$ aggregates vector prices from base period $0$ to target period $t$. In international index number theory \citep{diewert1995axiomatic, imf2020cpi}, candidate index formulas are evaluated against core axiomatic properties:
+A price index $I(P_0, P_t)$ aggregates vector prices from base period $0$ to target period $t$. In international index number theory (Diewert, 1995; IMF/ILO, 2020), candidate index formulas are evaluated against core axiomatic properties:
 
 \begin{axiom}[Time Reversal Test]
 An index satisfies the Time Reversal Test if reversing the base and comparison periods yields the reciprocal index:
@@ -421,7 +460,7 @@ P_{i, 0} = \exp \left( \frac{1}{|S_{i, 0}|} \sum_{s \in S_{i, 0}} \ln P_{i, 0, s
 \end{equation}
 
 \subsection{Compounded Class-Mean Geometric Imputation Engine}
-In high-frequency web scraping, products frequently drop out temporarily due to store stockouts, weekend inventory rebalancing, or crawler timeouts. International statistical standards \citep{imf2020cpi} strictly prohibit flat carry-forward ($\widehat{P}_{i, t} = P_{i, t-1}$) because static carry-forward artificially dampens true price volatility and creates downward lag bias during inflationary cycles.
+In high-frequency web scraping, products frequently drop out temporarily due to store stockouts, weekend inventory rebalancing, or crawler timeouts. International statistical standards (IMF/ILO, 2020) strictly prohibit flat carry-forward ($\widehat{P}_{i, t} = P_{i, t-1}$) because static carry-forward artificially dampens true price volatility and creates downward lag bias during inflationary cycles.
 
 When item $i$ in COICOP division $c$ is unobserved on day $t$ with an elapsed gap $\Delta t \in [1, 7]$ days:
 \begin{enumerate}
@@ -511,7 +550,12 @@ CREATE TABLE IF NOT EXISTS gold.fct_cpi_monthly (
 \end{lstlisting}
 
 \newpage
+""")
 
+    # -------------------------------------------------------------------------
+    # SECTION 6: 92-CATEGORY COICOP TAXONOMY TABLE
+    # -------------------------------------------------------------------------
+    parts.append(r"""
 % =============================================================================
 \section{Exhaustive UN COICOP Classification and Weights Hierarchy}
 % =============================================================================
@@ -629,7 +673,12 @@ Class & 12.3.2 & Other personal effects (Bags, wallets) & 0.320\% \\
 \end{longtable}
 
 \newpage
+""")
 
+    # -------------------------------------------------------------------------
+    # SECTION 7: NOWCASTING ENGINE
+    # -------------------------------------------------------------------------
+    parts.append(r"""
 % =============================================================================
 \section{High-Frequency Inflation Nowcasting Engine}
 % =============================================================================
@@ -680,7 +729,12 @@ Beyond the structural drift model, the pipeline trains a multi-model ensemble:
 \end{itemize}
 
 \newpage
+""")
 
+    # -------------------------------------------------------------------------
+    # SECTION 8: CHAIN-LINKING TO OFFICIAL NIS BASE
+    # -------------------------------------------------------------------------
+    parts.append(r"""
 % =============================================================================
 \section{Chain-Linking to Official NIS Historical Benchmark}
 % =============================================================================
@@ -714,7 +768,12 @@ When updating the pipeline's reference base year annually to capture newly emerg
 This formulation preserves short-run price ratios without introducing artificial index jumps at base-year transitions.
 
 \newpage
+""")
 
+    # -------------------------------------------------------------------------
+    # SECTION 9: DBT LINEAGE & VERIFICATION
+    # -------------------------------------------------------------------------
+    parts.append(r"""
 % =============================================================================
 \section{Data Lineage, dbt Models, and Automated Testing Suite}
 % =============================================================================
@@ -724,7 +783,7 @@ The transformation layer is managed by dbt-core 1.8, enforcing modular data line
 \begin{enumerate}
     \item \texttt{int\_prices\_cleaned.sql}: Filters price outliers ($0.20 \le \text{ratio} \le 5.0$), applies KHR currency conversions, and standardizes metric units.
     \item \texttt{int\_coicop\_classified.sql}: Joins classification results from overrides, store purity rules, vector embeddings, and LLM memos.
-    \item \texttt{clean\_store_prices.sql}: Materializes conformed daily price observations with unique composite keys.
+    \item \texttt{clean\_store\_prices.sql}: Materializes conformed daily price observations with unique composite keys.
     \item \texttt{dim\_items.sql} \& \texttt{dim\_stores.sql}: Materializes dimensional star-schemas for executive BI querying.
 \end{enumerate}
 
@@ -754,7 +813,12 @@ Historical Seasonal Drift Benchmark & 0.59 & 0.46 & 67.4\% \\
 The inclusion of daily web-scraped price microdata reduces out-of-sample Root Mean Squared Error (RMSE) by \textbf{58.8\%} relative to standard autoregressive benchmarks.
 
 \newpage
+""")
 
+    # -------------------------------------------------------------------------
+    # SECTION 10: BUSINESS INTELLIGENCE & SQL CATALOG
+    # -------------------------------------------------------------------------
+    parts.append(r"""
 % =============================================================================
 \section{Executive Business Intelligence and SQL Query Catalog}
 % =============================================================================
@@ -810,7 +874,12 @@ ORDER BY status ASC, row_count DESC;
 \end{lstlisting}
 
 \newpage
+""")
 
+    # -------------------------------------------------------------------------
+    # SECTION 11: POLICY ROADMAP & CONCLUSION
+    # -------------------------------------------------------------------------
+    parts.append(r"""
 % =============================================================================
 \section{Strategic Policy Roadmap for the National Bank of Cambodia}
 % =============================================================================
@@ -840,3 +909,13 @@ The \textbf{Cambodia Daily CPI Medallion Pipeline} proves that automated high-fr
 \end{center}
 
 \end{document}
+""")
+
+    full_tex = "".join(parts)
+    target_file = os.path.join(os.getcwd(), "Cambodia_Daily_CPI_Comprehensive_Handbook.tex")
+    with open(target_file, "w", encoding="utf-8") as f:
+        f.write(full_tex.strip())
+    print(f"Handbook generated successfully: {len(full_tex)} characters written to {target_file}")
+
+if __name__ == "__main__":
+    generate_handbook()

@@ -520,51 +520,33 @@ def triage_with_local_model(
     items: list[dict[str, Any]],
     confidence_threshold: float = 0.60,
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
-    """Phase 3: Pre-classifies items using the local HybridCOICOPClassifier.
+    """Triage unclassified items locally using pure store rules.
 
-    High-confidence vector/store_purity matches skip the Gemini API entirely.
-
-    Returns:
-        - needs_gemini: items below threshold (must be sent to API)
-        - local_results: dict of name -> result for high-confidence local matches
+    Items from verified pure single-category stores are classified locally in O(1) time.
+    Remaining multi-category store items are returned for Gemini API processing.
     """
-    from pipeline.hybrid_embeddings_classifier import get_hybrid_classifier
+    from pipeline.hybrid_embeddings_classifier import PURE_STORE_MAP
 
     needs_gemini: list[dict[str, Any]] = []
     local_results: dict[str, dict[str, Any]] = {}
 
-    try:
-        classifier = get_hybrid_classifier()
-    except Exception as exc:
-        log.warning("Could not initialize local classifier for triage: %s", exc)
-        return items, local_results
-
     for item in items:
         name = item.get("canonical_name", "")
+        store_slug = item.get("store_slug", "")
         if not name or not name.strip():
             needs_gemini.append(item)
             continue
 
-        try:
-            result = classifier.classify_product(name)
-            conf = result.get("confidence_score", 0.0)
-            method = result.get("classification_method", "")
-
-            # Accept local result only for store_purity (exact known code).
-            # Vector embedding returns division-level reference codes (e.g. 01.1.1
-            # for all food) which are too imprecise for full COICOP classification —
-            # those items still need Gemini for precise 5-digit code assignment.
-            if conf >= confidence_threshold and method == "store_purity":
-                local_results[name] = {
-                    "product_name": name,
-                    "coicop_code": result.get("coicop_code", UNCLASSIFIED),
-                    "confidence_score": conf,
-                    "reasoning": f"Local triage: {result.get('reasoning', '')}",
-                    "classification_method": f"local_{method}",
-                }
-                continue
-        except Exception:
-            pass
+        if store_slug and store_slug in PURE_STORE_MAP:
+            div, code = PURE_STORE_MAP[store_slug]
+            local_results[name] = {
+                "product_name": name,
+                "coicop_code": code,
+                "confidence_score": 1.0,
+                "reasoning": f"Local triage: pure store {store_slug}",
+                "classification_method": "local_store_purity",
+            }
+            continue
 
         needs_gemini.append(item)
 
@@ -630,9 +612,9 @@ def fetch_unclassified(
                 interval_clause = _get_24h_interval_sql(engine)
                 # Phase 6: Order by observation count DESC (most-seen products first)
                 query_sql = f"""
-                    SELECT sub.item_id, sub.canonical_name, sub.observation_count
+                    SELECT sub.item_id, sub.canonical_name, sub.store_slug, sub.observation_count
                     FROM (
-                        SELECT DISTINCT p.item_id::text AS item_id, ci.canonical_name,
+                        SELECT DISTINCT p.item_id::text AS item_id, ci.canonical_name, p.store_slug,
                                COUNT(*) OVER (PARTITION BY p.item_id) AS observation_count
                         FROM (
                             SELECT DISTINCT item_id, store_slug, scrape_date
@@ -650,7 +632,7 @@ def fetch_unclassified(
                         JOIN silver.canonical_items ci
                           ON ci.item_id::text = p.item_id::text
                         LEFT JOIN silver.dim_coicop_ai_cache ai
-                          ON lower(regexp_replace(trim(ai.product_name), '\\s+', ' ', 'g')) = lower(regexp_replace(trim(ci.canonical_name), '\\s+', ' ', 'g'))
+                          ON lower(trim(ai.product_name)) = lower(trim(ci.canonical_name))
                         WHERE (ai.coicop_code IS NULL
                                OR (ai.coicop_code = '99.9.9'
                                    AND ai.classified_at < {interval_clause}))
@@ -666,7 +648,11 @@ def fetch_unclassified(
                 ci_res = conn.execute(text(query_sql), params).fetchall()
                 for r in ci_res:
                     items.append(
-                        {"canonical_item_id": str(r[0]), "canonical_name": str(r[1])}
+                        {
+                            "canonical_item_id": str(r[0]),
+                            "canonical_name": str(r[1]),
+                            "store_slug": str(r[2]) if len(r) > 2 and r[2] else "",
+                        }
                     )
             except Exception as e:
                 log.warning("Could not fetch unclassified items: %s", e)
@@ -885,35 +871,50 @@ def classify_unclassified_with_gemini(
     scrape_date: str | None = None,
     batch_size: int = BATCH_SIZE,
     model=None,
-    max_products: int = 5000,
+    max_products: int | None = None,
 ) -> dict[str, Any]:
     """
     Gemini AI COICOP classification entry point (Airflow PythonOperator callable).
 
-    Classifies every product still at '99.9.9':
-      Phase 3: Local triage first (vector/store_purity) to avoid unnecessary API calls.
-      Then Gemini JSON mode in batches for the remaining ambiguous products.
-      Phase 5: ``max_products`` caps how many items are fetched per run for chunked scheduling.
+    Classifies newly scraped products:
+      Phase 3: Fast local store purity triage to avoid unnecessary API calls.
+      Phase 4: Prunes cached items before making API calls.
+      Phase 5: Configurable limit via GEMINI_MAX_PRODUCTS_PER_RUN (default 500) for fast Airflow scheduling.
     """
+    if max_products is None:
+        max_products = int(os.getenv("GEMINI_MAX_PRODUCTS_PER_RUN", "500"))
+
     engine = engine or get_engine()
     items = fetch_unclassified(engine, scrape_date=scrape_date, limit=max_products)
     if not items:
         log.info("No unclassified products to classify with Gemini")
         return {"status": "SKIPPED_NO_UNCLASSIFIED", "candidates": 0, "classified": 0}
 
-    # Phase 3: Local-first triage — classify high-confidence items locally
+    # Phase 3: Fast local triage — classify pure-store items locally in O(1)
     items_for_gemini, local_results = triage_with_local_model(items)
 
     cache = load_cache(engine)
+
+    # Phase 4: Filter out items already in cache before sending to Gemini API
+    items_uncached = []
+    cached_results: dict[str, dict[str, Any]] = {}
+    for item in items_for_gemini:
+        norm_name = _normalize_name(item.get("canonical_name", ""))
+        cached_entry = cache.get(norm_name)
+        if cached_entry and cached_entry.get("coicop_code") not in (None, UNCLASSIFIED):
+            cached_results[item["canonical_name"]] = cached_entry
+        else:
+            items_uncached.append(item)
+
     # Only send remaining ambiguous items to Gemini
-    names = [i["canonical_name"] for i in items_for_gemini]
+    names = [i["canonical_name"] for i in items_uncached]
     if names:
         outcome = classify_names(names, model=model, cache=cache, batch_size=batch_size)
     else:
         outcome = {"results": {}, "cache_hits": 0, "api_calls": 0, "failed": 0}
 
-    # Merge local + Gemini results (Gemini overwrites local if both have a result)
-    all_results = {**local_results, **outcome["results"]}
+    # Merge cached + local + Gemini results (Gemini overwrites local if both have a result)
+    all_results = {**cached_results, **local_results, **outcome["results"]}
 
     update_cache(engine, all_results)
     n_mapping = persist_classifications(engine, all_results, items, scrape_date)
@@ -921,13 +922,14 @@ def classify_unclassified_with_gemini(
     classified = sum(
         1 for r in all_results.values() if r["coicop_code"] != UNCLASSIFIED
     )
+    total_cache_hits = len(cached_results) + outcome.get("cache_hits", 0)
     return {
         "status": "OK",
         "candidates": len(items),
         "classified_locally": len(local_results),
         "sent_to_gemini": len(names),
         "classified": classified,
-        "cache_hits": outcome["cache_hits"],
+        "cache_hits": total_cache_hits,
         "api_calls": outcome["api_calls"],
         "failed_batches": outcome["failed"],
         "mapping_rows_updated": n_mapping,

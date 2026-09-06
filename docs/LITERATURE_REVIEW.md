@@ -265,7 +265,7 @@ This document provides an exhaustive, academic-grade literature review of the **
   * To provide the definitive global standard, econometric formulas, and best practices for national statistical offices and data scientists compiling Consumer Price Indices using traditional surveys, web-scraped data, and barcode scanner datasets.
 * **Detailed Methodology**:
   * **Elementary Aggregation**: Established that the **Jevons geometric mean** is mathematically superior to the Carli (arithmetic mean of ratios) and Dutot (ratio of arithmetic means) formulas because it satisfies the time-reversal and transitivity axioms.
-  * **Missing Price Imputation**: Formulated the **Last Observed Price Carry-Forward** and class-mean imputation rules for temporary product stockouts ($\le 7$ to 30 days).
+  * **Missing Price Imputation**: Formulated targeted class-mean geometric imputation rules for temporary product stockouts ($\le 7$ days), geometrically compounding daily active class movement $(\cdot)^{\Delta t}$ to prevent artificial index dampening.
   * **Hedonic Quality Adjustment**: Standardized the use of log-linear OLS hedonic regression equations ($\ln P_i = \beta_0 + \sum \beta_k X_{ik} + \varepsilon_i$) to adjust for technological improvements in electronics and telecommunications (Divisions 08 & 09).
   * **Upper-Level Aggregation**: Defined the Laspeyres, Lowe, and Young aggregation formulas for expenditure-weighted division aggregation.
 * **Quantitative Accuracy & Axiomatic Guarantees**:
@@ -290,9 +290,10 @@ This document provides an exhaustive, academic-grade literature review of the **
 │ 3. Silver: Triage & Quality Guards    │ silver.classification_queue           │ ONS Data Science Campus (2020) [ONS]      │
 │    & Hedonic Tech Regression          │ silver.hedonic_adjusted_prices        │ IMF / ILO CPI Manual (2020) [IMF]         │
 ├───────────────────────────────────────┼───────────────────────────────────────┼───────────────────────────────────────────┤
-│ 4. Gold: Econometric Aggregation      │ Jevons Micro-Index + 7-Day Imputation │ Chessa (2016) [EURONA]                    │
-│    & Macroeconomic Indicators         │ 12-Division NIS Cambodia Laspeyres    │ Diewert & Fox (2020) [J. of Econometrics] │
-│                                       │ Headline CPI & Refined Core CPI       │ IMF / ILO CPI Manual (2020) [IMF]         │
+│ 4. Gold: Econometric Aggregation      │ Jevons Micro-Index + 7-Day Compounded │ Chessa (2016) [EURONA]                    │
+│    & Macroeconomic Indicators         │ Class-Mean Imputation                 │ Diewert & Fox (2020) [J. of Econometrics] │
+│                                       │ 12-Division NIS Cambodia Laspeyres    │ IMF / ILO CPI Manual (2020) [IMF]         │
+│                                       │ Headline CPI & Refined Core CPI       │                                           │
 ├───────────────────────────────────────┼───────────────────────────────────────┼───────────────────────────────────────────┤
 │ 5. Serving: Daily ML Inflation        │ LightGBM Regressor, Walk-Forward CV   │ Medeiros et al. (2021) [JBES]             │
 │    Forecasting Engine (H=7,14,30 Days)│ Multi-Horizon Lags, Leading Signals   │ Goulet Coulombe et al. (2022) [JAE]       │

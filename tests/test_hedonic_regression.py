@@ -50,12 +50,13 @@ def test_fit_ols_rejects_tiny_sample():
 
 
 def test_fit_ols_rank_deficiency_guard():
-    # 25 identical spec rows -> rank deficient X matrix
+    # 25 identical spec rows -> rank deficient X matrix, graceful abort
     collinear = pd.DataFrame(
         {"RAM_GB": [8] * 25, "Storage_GB": [128] * 25, "raw_price": [500.0 + i for i in range(25)]}
     )
-    with pytest.raises(ValueError, match="rank-deficient"):
-        hr.fit_ols(collinear)
+    fit = hr.fit_ols(collinear)
+    assert fit["model"] is None
+    assert fit["features"] == []
 
 
 def test_compute_hedonic_adjusted_neutralizes_spec_upgrade():
@@ -150,4 +151,26 @@ def test_persist_hedonic_adjusted_record_construction():
     assert rec["store_slug"] == "samnangshop"
     assert rec["canonical_name"] == "iPhone 15 128GB"
     assert rec["hedonic_adjusted_price_khr"] == 780.0
+
+
+def test_fit_ols_rank_deficient_graceful_abort():
+    """Verifies that fit_ols returns model=None gracefully when specs are identical/rank-deficient."""
+    # 35 identical spec items (exceeds MIN_SAMPLE_SIZE = 30)
+    identical_items = pd.DataFrame([
+        {
+            "canonical_name": "Generic Phone 8GB 128GB",
+            "raw_price": 500.0 + i * 2.0,
+            "RAM_GB": 8.0,
+            "Storage_GB": 128.0,
+            "Screen_Inches": 6.5,
+            "Camera_MP": 50,
+            "Is_5G": 1,
+        }
+        for i in range(35)
+    ])
+    fit = hr.fit_ols(identical_items)
+    assert fit["model"] is None
+    assert fit["r2"] == 0.0
+    assert fit["features"] == []
+
 

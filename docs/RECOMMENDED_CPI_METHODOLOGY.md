@@ -58,12 +58,14 @@ $$\text{Valid Range} = [Q_1 - c \cdot IQR, \; Q_3 + c \cdot IQR] \quad (c = 3.0 
 
 ### Tier 2: Missing Price Imputation & Elementary Micro-Indices
 
-#### 1. Targeted Class-Mean Imputation (Chapter 6, §6.55)
-When an item $i$ in subclass $c$ is temporarily out of stock on day $t$ (gap $\le 14$ days):
+#### 1. Targeted Compounded Class-Mean Imputation (Chapter 6, §6.55)
+When an item $i$ in subclass $c$ is temporarily out of stock on day $t$ (gap $\Delta t \le 7$ days):
 
-$$\hat{P}_{i,t} = P_{i,t-1} \times \left( \prod_{j \in \text{Observed}_c} \frac{\tilde{P}_{j,t}}{\tilde{P}_{j,t-1}} \right)^{1 / N_{c,\text{obs}}}$$
+$$\widehat{P}_{i,t} = P_{i,t-\Delta t} \times \left( \prod_{j \in \text{Observed}_c} \frac{\tilde{P}_{j,t}}{\tilde{P}_{j,t-1}} \right)^{\frac{\Delta t}{N_{c,\text{obs}}}} = P_{i,t-\Delta t} \times \left(R_{c,t}\right)^{\Delta t}$$
 
-> **Prohibition:** Static carry-forward imputation ($\hat{P}_{i,t} = P_{i,t-1}$) is **strictly avoided** as it dampens measured inflation volatility and creates severe downward lag bias during inflationary shocks.
+where $\Delta t \in [1, 7]$ days and $R_{c,t}$ represents the daily geometric mean movement of active items in the same COICOP class. Beyond 7 consecutive days of missing observations, items are classified as structural exits and excluded from the active basket.
+
+> **Prohibition:** Static carry-forward imputation ($\widehat{P}_{i,t} = P_{i,t-1}$) is **strictly avoided** as it dampens measured inflation volatility and creates severe downward lag bias during inflationary shocks. Multi-day gaps are geometrically compounded by $(\cdot)^{\Delta t}$ to accurately reflect price drift across missing days.
 
 #### 2. Jevons Elementary Price Index (Chapter 8, §8.15)
 For each unique canonical item $i$ relative to its base period price $\tilde{P}_{i,0}$:

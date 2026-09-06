@@ -394,7 +394,9 @@ class GeminiItemReviewer:
 
             else:  # SPLIT_NEW
                 first_row = rows[0]
-                barcode = first_row.get("barcode")
+                # BUG-12 FIX: Search all rows for the first valid barcode/brand
+                # instead of blindly using rows[0], which may lack them.
+                barcode = next((r.get("barcode") for r in rows if r.get("barcode")), None)
                 if barcode:
                     barcode = barcode.strip()
 
@@ -421,7 +423,7 @@ class GeminiItemReviewer:
                 new_canonical_items.append((
                     new_item_id,
                     clean_title,
-                    first_row.get("brand"),
+                    next((r.get("brand") for r in rows if r.get("brand")), None),
                     clean_barcode,
                     first_row.get("size_norm"),
                 ))

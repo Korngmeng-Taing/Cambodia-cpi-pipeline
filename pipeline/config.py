@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import os
 from typing import Any
-from urllib.parse import quote_plus, urlsplit, urlunsplit
+from urllib.parse import quote, quote_plus, urlsplit, urlunsplit
 
 try:  # Optional convenience: pick up the project .env for local runs.
     from dotenv import load_dotenv
@@ -98,16 +98,18 @@ def alternate_host_url(url: str) -> str:
     Parses the URL properly instead of fragile substring matching.
 
     NOTE: urlsplit returns username/password already URL-decoded, so we
-    re-encode exactly once via quote_plus — no unquote() step needed.
+    re-encode exactly once via quote — no unquote() step needed.
+    BUG-13 FIX: Use quote() instead of quote_plus() because PostgreSQL
+    DSNs require percent-encoding (%20) for spaces, not + encoding.
     """
     parts = urlsplit(url)
     hostname = parts.hostname or "localhost"
     alt_host = "postgres" if hostname == "localhost" else "localhost"
     netloc_parts = []
     if parts.username is not None:
-        netloc_parts.append(quote_plus(parts.username))
+        netloc_parts.append(quote(parts.username, safe=""))
         if parts.password is not None:
-            netloc_parts.append(f":{quote_plus(parts.password)}")
+            netloc_parts.append(f":{quote(parts.password, safe='')}")
         netloc_parts.append("@")
     netloc_parts.append(alt_host)
     if parts.port:

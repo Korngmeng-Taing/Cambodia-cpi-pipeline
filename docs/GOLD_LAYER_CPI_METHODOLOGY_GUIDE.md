@@ -240,16 +240,18 @@ _Axiomatic Guarantees:_ Satisfies the **Time Reversal Test** ($I^{t/0} \times I^
 
 ---
 
-### Step 4: 7-Day Missing Price Imputation (Stockout Resilience)
+### Step 4: 7-Day ILO Class-Mean Compounded Imputation (Stockout Resilience)
 
-If a product is temporarily missing on day $t$ due to e-commerce stockouts:
+If a product $i$ in division $d$ is temporarily missing on day $t$ due to e-commerce stockouts ($\Delta t \le 7$ calendar days):
 
 $$
 \widehat{P}_{i, t} = \begin{cases}
-P_{i, t-\Delta t} & \text{if } \Delta t \le 7 \text{ calendar days (Carry-Forward)} \\
+P_{i, t-\Delta t} \times \left( R_{d, t} \right)^{\Delta t} & \text{if } \Delta t \le 7 \text{ calendar days} \\
 \text{NULL} & \text{if } \Delta t > 7 \text{ days (Excluded from day } t \text{ calculation)}
 \end{cases}
 $$
+
+where $R_{d, t}$ is the 1-day geometric mean price relative of observed products within division $d$ between day $t-1$ and day $t$ (clamped to $[0.80, 1.25]$ for stability). Compounding by $\Delta t = (t - \text{last\_obs\_date})$ correctly projects intermediate price movement over multi-day gaps.
 
 Rows with imputed prices are tagged with `is_imputed = TRUE` in `gold.fct_elementary_indices` for transparency.
 
@@ -495,9 +497,9 @@ CREATE TABLE IF NOT EXISTS gold.fct_cpi_daily (
 ```
 [00:00 ICT] 20 Daily Scraper DAGs (scrape_{slug}_dag) ──► Ingest to bronze.raw_prices
       │
-[02:00 ICT] silver_dag (ItemMatcher ─► Vector Embedding ─► AI Classification ─► dbt Silver)
+[02:00 ICT] silver_dag (Matching ─► Review ─► AI Classification ─► dbt Silver ─► Hedonic Adjustment)
       │
-[03:00 ICT] gold_cpi_dag (pipeline/cpi_calculator.py: Jevons Micro-Index + Subclass/Div Laspeyres + Nowcast)
+[03:00 ICT] gold_cpi_dag (Annual Rebase [Jan 1] ─► Daily Jevons/Laspeyres ─► Monthly CPI ─► Nowcast)
       │
 [03:30 ICT] gold_dag (dbt Gold Star Schema: dim_items, dim_stores, fct_daily_prices, fct_coicop_class_daily)
       │

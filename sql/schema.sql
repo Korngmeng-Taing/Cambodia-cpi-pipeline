@@ -47,10 +47,14 @@ CREATE INDEX IF NOT EXISTS idx_raw_prices_source_scraped ON bronze.raw_prices (s
 -- unique index below via INSERT ... ON CONFLICT DO NOTHING
 -- (see pipeline/bronze_scraper.py:write_canonical_batch, which also pre-filters
 -- duplicates app-side). New rows are never mutated after insert.
+-- BUG-07 FIX: Removed `price` from the unique index — intra-day price changes
+-- (e.g. flash sales) should NOT create duplicate rows; the contract is one
+-- observation per item, per store, per day.
+DROP INDEX IF EXISTS bronze.uq_raw_prices_observation;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_raw_prices_observation
     ON bronze.raw_prices (
         store_id, source_name,
-        COALESCE(source_url, ''), item_description_raw, price,
+        COALESCE(source_url, ''), item_description_raw,
         ((scraped_at AT TIME ZONE 'UTC')::date)
     );
 

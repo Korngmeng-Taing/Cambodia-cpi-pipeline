@@ -173,7 +173,7 @@ CPI PIPELINE/
 │   ├── GOLD_LAYER_CPI_METHODOLOGY_GUIDE.md # CPI calculation methodology
 │   ├── GOLD_LAYER_IMPLEMENTATION_PLAN.md # Gold layer implementation roadmap
 │   └── rebasing_policy.md # Annual CPI rebasing methodology
-├── tests/                 # Full pytest suite (428+ unit test cases across 20 test modules)
+├── tests/                 # Full pytest suite (435+ unit test cases across 20 test modules)
 ├── postgres-init/         # PostgreSQL initialization scripts
 ├── docker-compose.yml     # Multi-service stack (PostgreSQL, Airflow, Metabase)
 ├── Literature_Review_Matrix.xlsx # Root 4-tab literature review matrix & Cambodia CPI weights
@@ -454,7 +454,7 @@ python -m pytest tests/test_item_matcher.py -v
 python -m pytest tests/ --cov=pipeline --cov-report=term-missing
 ```
 
-**Test Coverage**: **433 passed unit test cases** (100% pass rate, 0 warnings, 0 skipped) across 20 test modules covering:
+**Test Coverage**: **435 passed unit test cases** (100% pass rate, 0 warnings, 0 failed) across 20 test modules covering:
 - Item matching (barcode, SKU, fuzzy, 768-dim vector embeddings)
 - COICOP classification (4-tier ladder, reference vector cosine, Gemini fallback, pure store locks)
 - Two-Tier Subclass-Weighted Laspeyres & Jevons CPI calculations with continuous chain-linking splice factors

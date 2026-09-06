@@ -290,4 +290,43 @@ def test_chain_linking_splice_factor(cpi_engine):
             assert pytest.approx(row["division_index"], 0.001) == 100.0 * splice
 
 
+def test_compounded_imputation_with_timestamp(cpi_engine):
+    """Verifies that multi-day missing items compound movement correctly without crashing on pd.Timestamp."""
+    calc_date = date(2026, 9, 10)
+    base_df = pd.DataFrame([
+        {"item_id": "item-1", "coicop_division": "01", "coicop_code": "01.1.1", "base_price_khr": 1000.0},
+        {"item_id": "item-2", "coicop_division": "01", "coicop_code": "01.1.1", "base_price_khr": 2000.0},
+    ])
+    df_history = pd.DataFrame([
+        # item-1 observed yesterday (Sep 9) and today (Sep 10) -> movement = 1100 / 1000 = 1.10
+        {"scrape_date": pd.Timestamp("2026-09-09"), "item_id": "item-1", "unit_price_khr": 1000.0},
+        {"scrape_date": pd.Timestamp("2026-09-10"), "item_id": "item-1", "unit_price_khr": 1100.0},
+        # item-2 observed 3 days ago (Sep 7) with unit_price 2000.0, missing on Sep 8, 9, 10
+        {"scrape_date": pd.Timestamp("2026-09-07"), "item_id": "item-2", "unit_price_khr": 2000.0},
+    ])
+
+    # Ensure scrape_date in df_history contains date objects like the real pipeline
+    df_history["scrape_date"] = pd.to_datetime(df_history["scrape_date"]).dt.date
+    result = cpi_engine.compute_daily_elementary_indices(calc_date, base_df, df_history)
+    item2_row = result[result["item_id"] == "item-2"].iloc[0]
+    assert item2_row["is_imputed"] == True
+    # 3 days gap: movement = 1.10 -> compounded = 2000.0 * (1.10 ** 3) = 2662.0
+    expected = 2000.0 * (1.10 ** 3)
+    assert pytest.approx(item2_row["current_price_khr"], 0.01) == expected
+
+
+def test_base_price_fallback_earliest_date(cpi_engine):
+    """Verifies fallback uses the earliest available scrape date when base date has no data."""
+    df_prices = pd.DataFrame([
+        {"scrape_date": date(2026, 8, 1), "item_id": "item-1", "coicop_division": "01", "coicop_code": "01.1.1", "unit_price_khr": 1000.0},
+        {"scrape_date": date(2026, 8, 2), "item_id": "item-1", "coicop_division": "01", "coicop_code": "01.1.1", "unit_price_khr": 5000.0},
+    ])
+    # Target date with no data
+    missing_base_date = date(2026, 7, 1)
+    base_res = cpi_engine.compute_base_prices(missing_base_date, df_prices)
+    # Should use Aug 1 price (1000.0), NOT average of Aug 1 & Aug 2 (sqrt(1000*5000) = 2236)
+    assert pytest.approx(base_res.iloc[0]["base_price_khr"], 0.01) == 1000.0
+
+
+
 

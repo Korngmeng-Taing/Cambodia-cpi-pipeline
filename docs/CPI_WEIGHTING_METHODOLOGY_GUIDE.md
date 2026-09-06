@@ -153,10 +153,15 @@ Stored in [`dbt/seeds/category_weights.csv`](file:///D:/CPI%20PIPELINE/dbt/seeds
 In [`pipeline/cpi_calculator.py`](file:///D:/CPI%20PIPELINE/pipeline/cpi_calculator.py):
 
 #### Headline Daily CPI:
-$$CPI_{\text{headline}}^t = \frac{\sum_{d=1}^{12} W_d \cdot I_d^{t/0}}{\sum_{d \in \text{active}} W_d}$$
+$$CPI_{\text{headline}}^t = \frac{\sum_{d=1}^{12} W_d \cdot I_d^{t/0}}{\sum_{d \in \text{active}} W_d} \times S_{y}$$
 
-#### Core Daily CPI (Excluding Food & Fuel shocks):
-$$CPI_{\text{core}}^t = \frac{\sum_{d \notin \{01, 04, 07\}} W_d \cdot I_d^{t/0}}{\sum_{d \notin \{01, 04, 07\}} W_d}$$
+#### Core Daily CPI (Excluding Food & Energy shocks):
+$$CPI_{\text{core}}^t = \frac{\sum_{d \notin \{01, 04, 07\}} W_d \cdot I_d^{t/0}}{\sum_{d \notin \{01, 04, 07\}} W_d} \times S_{y}$$
+
+> **Chain-Linking Splice Factor ($S_y$):**
+> To ensure seamless annual rebasing without January 1 step jumps, the calculation engine dynamically queries `gold.cpi_base_dates` for the active December average:
+> $$S_y = \frac{\bar{I}_{\text{Dec}, y-1}}{100.0}$$
+> For the initial base year (2026), $S = 1.0000$. Subsequent rebased series scale continuously by $S_y$ back to project inception (August 18, 2026 = 100.00).
 
 ---
 

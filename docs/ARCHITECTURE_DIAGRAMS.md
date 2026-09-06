@@ -134,23 +134,23 @@ flowchart TD
         C1 -- "Tier 4" --> C5["🤖 Gemini Pro/Flash Fallback & silver.dim_coicop_ai_cache"]
     end
 
-    subgraph Stage4["Stage 4 & 5: Hedonics & Final Assembly"]
-        C2 & C3 & C4 & C5 & B2 & B4 & B5 & B6 --> D1["Hedonic Quality Adjustment\n(Division 08 & 09 Tech Specs)"]
-        D1 --> D2["Promo Clamping [0%, 95%] & Outlier Tagging\n+ Windowed Dedup on (scrape_date, store_slug, item_id)"]
-        D2 --> D3[("silver.clean_store_prices\nClean Conformed Daily Facts\n(Satisfies uq_clean_store_prices_date_store_item)")]
+    subgraph Stage4["Stage 4 & 5: dbt Assembly & Hedonics"]
+        C2 & C3 & C4 & C5 & B2 & B4 & B5 & B6 --> D1["dbt silver models (int_prices_cleaned, int_coicop_classified)\n• Promo Clamping [0%, 95%] & Outlier Tagging\n• Windowed Dedup on (scrape_date, store_slug, item_id)"]
+        D1 --> D2[("silver.clean_store_prices\nClean Conformed Daily Facts\n(Satisfies uq_clean_store_prices_date_store_item)")]
+        D2 --> D3["Hedonic Quality Adjustment (pipeline/hedonic_regression.py)\n• Evaluates Division 08 & 09 tech specs\n• silver.hedonic_adjusted_prices"]
     end
 
     classDef slvBox fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20;
     classDef slvTable fill:#ffffff,stroke:#2e7d32,stroke-width:2px,stroke-dasharray: 5 5,color:#1b5e20;
-    class A2,B1,B2,B3,B4,B5,B6,B7,C1,C2,C3,C4,C5,D1,D2 slvBox;
-    class D3 slvTable;
+    class A2,B1,B2,B3,B4,B5,B6,B7,C1,C2,C3,C4,C5,D1,D3 slvBox;
+    class D2 slvTable;
 ```
 
 ---
 
 ## 🥇 4. Gold Layer Detail (Star Schema, Two-Tier Jevons/Laspeyres Math & ML Inflation Nowcasting)
 
-The Gold layer structures data into a Kimball dimensional star schema, applies the ILO/IMF two-tier elementary aggregation standard (subclass Jevons → division Laspeyres), 7-day ILO class-mean imputation, continuous series chain-linking splice factor, single-writer monthly CPI mart (`gold.fct_cpi_monthly`), and produces daily ML-assisted inflation nowcasts with dynamic uncertainty decay and official NIS benchmark chain-linking.
+The Gold layer structures data into a Kimball dimensional star schema, applies the ILO/IMF two-tier elementary aggregation standard (subclass Jevons → division Laspeyres), 7-day compounded ILO class-mean imputation ($P_{i,t-\Delta t} \times \text{movement}^{\Delta t}$), continuous series chain-linking splice factor, single-writer monthly CPI mart (`gold.fct_cpi_monthly`), and produces daily ML-assisted inflation nowcasts with dynamic uncertainty decay and official NIS benchmark chain-linking.
 
 ```mermaid
 flowchart TD
@@ -166,7 +166,7 @@ flowchart TD
 
     subgraph IndexEngine["2. Two-Tier CPI Index Math & Econometric Engine (pipeline/cpi_calculator.py)"]
         G_FACT --> M1["Jevons Geometric Mean Elementary Micro-Index\nP_Jevons = exp( 1/N * sum( ln(P_i,t) ) )\ngold.fct_elementary_indices"]
-        M1 --> M2["ILO Class-Mean 7-Day Imputation\n(Advances missing prices by observed division movement)"]
+        M1 --> M2["ILO Class-Mean 7-Day Imputation\n(Advances missing prices by compounded division movement: P_t-k * ratio^k)"]
         M2 --> M3["Tier 1: 4-Digit Subclass Jevons Aggregation\nI_c = exp( 1/N_c * sum( ln(R_i) ) ) * 100.0"]
         M3 --> M4["Tier 2: Division Laspeyres Roll-Up\n(48 Official NIS Subclass Weights w_c)\nI_Div = sum(w_c * I_c) / sum(w_c)"]
         M4 --> M5["Continuous Chain-Linking & Laspeyres Headline/Core CPI\n• Splice Factor: S = avg_december_cpi / 100.0\n• gold.fct_cpi_daily & gold.fct_cpi_monthly (Single Writer)"]

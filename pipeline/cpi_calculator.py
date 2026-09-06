@@ -250,7 +250,8 @@ class CPICalculationEngine:
         base_df = df_prices[df_prices["scrape_date"] == base_date]
         if base_df.empty:
             log.warning(f"No observations found on base date {base_date}. Using earliest available.")
-            base_df = df_prices
+            earliest = df_prices["scrape_date"].min()
+            base_df = df_prices[df_prices["scrape_date"] == earliest]
 
         # Geometric mean base price strictly per unique item_id
         grouped = base_df.groupby("item_id").agg(
@@ -323,6 +324,7 @@ class CPICalculationEngine:
             if not recent_obs.empty:
                 # Find the most recent active scrape date for each missing item
                 latest_dates = recent_obs.groupby("item_id")["scrape_date"].max().reset_index()
+                latest_dates_dict = dict(zip(latest_dates["item_id"], latest_dates["scrape_date"]))
                 latest_obs = pd.merge(
                     recent_obs, latest_dates, on=["item_id", "scrape_date"], how="inner"
                 )
@@ -339,7 +341,17 @@ class CPICalculationEngine:
                         # Apply class-mean movement ratio if available, clamped to [0.80, 1.25]
                         movement = division_movement_ratios.get(div, 1.0)
                         movement = max(0.80, min(1.25, movement))
-                        imputed_price = float(val) * movement
+                        # BUG-01 FIX: Compound the 1-day movement ratio by the
+                        # actual number of gap days between the last observation
+                        # and calc_date.  Previously a single-day ratio was applied
+                        # regardless of how stale the price was.
+                        last_obs_date = latest_dates_dict.get(item_id)
+                        if last_obs_date is not None:
+                            days_gap = (pd.to_datetime(calc_date) - pd.to_datetime(last_obs_date)).days
+                            days_gap = max(1, min(days_gap, 7))
+                        else:
+                            days_gap = 1
+                        imputed_price = float(val) * (movement ** days_gap)
                         merged.at[idx, "current_price_khr"] = imputed_price
                         merged.at[idx, "observation_count"] = 1
                         merged.at[idx, "is_imputed"] = True
@@ -688,21 +700,29 @@ class CPICalculationEngine:
                     ),
                     calculated AS (
                         SELECT
-                            cpi_month,
-                            coicop_division,
-                            division_name,
-                            weight,
-                            monthly_division_index,
-                            monthly_headline_cpi,
-                            monthly_core_cpi,
-                            ROUND(((monthly_division_index - LAG(monthly_division_index) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_division_index) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::numeric, 4) AS mom_inflation_pct,
-                            ROUND(((monthly_division_index - LAG(monthly_division_index, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_division_index, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::numeric, 4) AS yoy_inflation_pct,
-                            ROUND(((monthly_headline_cpi - LAG(monthly_headline_cpi) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_headline_cpi) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::numeric, 4) AS headline_mom_inflation_pct,
-                            ROUND(((monthly_headline_cpi - LAG(monthly_headline_cpi, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_headline_cpi, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::numeric, 4) AS headline_yoy_inflation_pct,
-                            item_count,
-                            observation_count,
-                            active_days_in_month
-                        FROM monthly_weighted
+                            curr.cpi_month,
+                            curr.coicop_division,
+                            curr.division_name,
+                            curr.weight,
+                            curr.monthly_division_index,
+                            curr.monthly_headline_cpi,
+                            curr.monthly_core_cpi,
+                            -- BUG-02 FIX: Use self-joins on exact calendar intervals
+                            -- instead of LAG(n) which offsets by row count, not months.
+                            ROUND(((curr.monthly_division_index - mom.monthly_division_index) / NULLIF(mom.monthly_division_index, 0) * 100.0)::numeric, 4) AS mom_inflation_pct,
+                            ROUND(((curr.monthly_division_index - yoy.monthly_division_index) / NULLIF(yoy.monthly_division_index, 0) * 100.0)::numeric, 4) AS yoy_inflation_pct,
+                            ROUND(((curr.monthly_headline_cpi - mom.monthly_headline_cpi) / NULLIF(mom.monthly_headline_cpi, 0) * 100.0)::numeric, 4) AS headline_mom_inflation_pct,
+                            ROUND(((curr.monthly_headline_cpi - yoy.monthly_headline_cpi) / NULLIF(yoy.monthly_headline_cpi, 0) * 100.0)::numeric, 4) AS headline_yoy_inflation_pct,
+                            curr.item_count,
+                            curr.observation_count,
+                            curr.active_days_in_month
+                        FROM monthly_weighted curr
+                        LEFT JOIN monthly_weighted mom
+                          ON mom.coicop_division = curr.coicop_division
+                         AND mom.cpi_month = (curr.cpi_month - INTERVAL '1 month')::DATE
+                        LEFT JOIN monthly_weighted yoy
+                          ON yoy.coicop_division = curr.coicop_division
+                         AND yoy.cpi_month = (curr.cpi_month - INTERVAL '1 year')::DATE
                     )
                     SELECT * FROM calculated
                     {where_clause}

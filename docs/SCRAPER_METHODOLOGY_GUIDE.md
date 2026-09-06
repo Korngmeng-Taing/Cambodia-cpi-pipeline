@@ -40,12 +40,13 @@ Every night at 02:00, Airflow orchestrates daily data extraction across **22 Cam
                                                    ▼
                       ┌──────────────────────────────────────────────────────────┐
                       │                Silver Layer (silver_dag)                 │
-                      │   pipeline.item_matcher (RapidFuzz / Barcode)            │
-                      │   pipeline.gemini_item_reviewer (Auto-Review)            │
-                      │   pipeline.gemini_coicop_classifier (AI Memoization)     │
-                      │   pipeline.hedonic_regression (Log-linear electronics)   │
-                      │   dbt models: int_prices_cleaned, int_coicop_classified, │
-                      │   clean_store_prices, classification_queue               │
+                      │   task_item_matching (RapidFuzz / Barcode Vector)        │
+                      │   task_item_auto_review (Gemini Review)                  │
+                      │   task_gemini_coicop (AI Classification Memoization)     │
+                      │   task_dbt_seed & task_dbt_silver_run (int_prices_cleaned│
+                      │   int_coicop_classified, clean_store_prices)            │
+                      │   task_hedonic_adjustment (Log-linear quality residual) │
+                      │   task_dbt_silver_test (DQ Quality Gates)                │
                       └────────────────────────────┬─────────────────────────────┘
                                                    │
                                                    ▼
@@ -404,6 +405,27 @@ Every scraper normalizes its output via `pipeline.canonical.normalize_record()` 
   "is_out_of_stock": false
 }
 ```
+
+### 3.1 Ingestion Deduplication & Audit Integrity
+
+1. **Bronze Deduplication (`bronze.raw_prices`)**:
+   - Observations are uniquely identified per observation day:
+     ```sql
+     CREATE UNIQUE INDEX uq_raw_prices_observation 
+     ON bronze.raw_prices (store, source, COALESCE(url, ''), COALESCE(description, ''), scrape_date);
+     ```
+   - **Crucial Design Rule**: `price` is strictly excluded from this unique constraint. If a scraper runs multiple times in the same day (e.g. retries after a partial network failure), the latest scrape updates the observation rather than creating duplicate product rows with differing prices on the same calendar day.
+
+2. **Staging Audit Payloads (`staging.raw_scrapes`)**:
+   - Scrape metadata and audit logs are ingested into `staging.raw_scrapes`.
+   - On conflict over `(source, scrape_date)`, upserts perform JSONB concatenation:
+     ```sql
+     INSERT INTO staging.raw_scrapes (source, scrape_date, payload)
+     VALUES (%s, %s, %s::jsonb)
+     ON CONFLICT (source, scrape_date) 
+     DO UPDATE SET payload = staging.raw_scrapes.payload || EXCLUDED.payload;
+     ```
+   - This prevents subsequent retries or sub-batch executions from overwriting earlier batch telemetry, appending audit objects into an aggregated JSONB payload.
 
 ---
 

@@ -147,13 +147,22 @@ To achieve maximum accuracy, speed, and cost efficiency in the Cambodia CPI Meda
   - Prompt Gemini with: *"Classify this Cambodian retail item into UN COICOP (01-12)"*.
   - Cache result into silver.dim_coicop_ai_cache in PostgreSQL for instant O(1) future retrieval.
 
-### Module 2: Spec-Guarded Entity Resolution (pipeline/item_matcher.py)
-- Extract volume, weight, and hardware memory specifications (e.g. 128GB, 256GB, 500ml, 1kg) via deterministic regex.
-- If two items share a similar title but have conflicting specs (128GB vs 256GB), **strictly reject matching** to eliminate artificial price index spikes.
+### Module 2: Spec-Guarded Entity Resolution (pipeline/item_matcher.py & pipeline/hedonic_regression.py)
+- **Deterministic Regex Spec Guards**: Extract volume, weight, and hardware memory specifications (e.g. 128GB, 256GB, 500ml, 1kg). If two items share a similar title but have conflicting specs (128GB vs 256GB), **strictly reject matching** to eliminate artificial price index spikes.
+- **Log-Linear Hedonic Quality Adjustment (`pipeline/hedonic_regression.py`)**:
+  For heterogeneous consumer durables (laptops, smartphones), quality changes are decoupled from pure price movements via hedonic regression:
+  $$\ln(P_{i,t}) = \alpha_t + \sum_{k} \beta_k X_{i,k} + \epsilon_{i,t}$$
+  Constant-utility prices are computed by removing characteristic premia relative to market mean specs:
+  $$\widetilde{P}_{i,t} = P_{i,t} \cdot \exp\left(-\sum_k \widehat{\beta}_k (X_{i,k} - \bar{X}_k)\right)$$
+  When sample size is inadequate ($n < 5$), features lack variance, or the design matrix is collinear, `run_hedonic_regression()` gracefully catches the condition, logs `SKIPPED_RANK_DEFICIENT`, and passes the observed price forward untouched.
 
 ### Module 3: Machine Learning-Assisted Daily Inflation Nowcasting (ml/nowcaster.py)
 - Aggregates daily facts from `gold.fct_cpi_daily` for the active calendar month ($1 \dots t_{\text{observed}}$).
 - Projects remaining days ($t+1 \dots T$) using 7-day momentum in **Division 01 (Food - 44.8% weight)** and **Division 07 (Transport - 12.2% weight)** following *Macias et al. (2023)*.
+- **Midpoint Trajectory Drift Expectation**: For remaining unobserved days $N = T - t$, the average expected price index across the remainder of the month reflects cumulative linear progression:
+  $$E[P_{\text{remaining}}] = P_t \times \left(1.0 + \text{drift} \times \frac{N + 1}{2}\right)$$
+  The monthly mean index is then computed as the weighted time average of realized daily indices and projected remaining days:
+  $$\bar{I}_{\text{month}} = \frac{\sum_{s=1}^t P_s + N \times E[P_{\text{remaining}}]}{T}$$
 - Incorporates Cambodian festival and holiday shock calendars (`CAMBODIA_ANNUAL_HOLIDAYS` in `ml/config.py`) to model transitory consumer demand surges during Khmer New Year, Pchum Ben, and Water Festival (+0.12% peak, +0.06% lead/lag window).
 - Derives Month-over-Month (MoM %) estimated inflation and chain-links to official National Institute of Statistics (NIS) Phnom Penh benchmark levels in `gold.fct_cpi_nowcast`.
 - Computes dynamic 95% confidence intervals based on daily price dispersion and uncertainty decay ($U_t = \sqrt{(T-t)/T}$).

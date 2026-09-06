@@ -450,8 +450,17 @@ def classify_names(
                     continue
                 key = _normalize_name(item_name)
                 cache[key] = item
-                # prefer the exact input spelling for the join back to the row
+                # BUG-10 FIX: Match results back to input items via normalized
+                # key, not the raw AI-returned string.  If Gemini modifies
+                # whitespace or punctuation, the raw string won't match the
+                # original input; using the same normalization as the cache
+                # ensures robust re-association.
                 seen[item_name] = item
+                # Also store under the normalized key so the fallback loop
+                # below can find it even when the AI slightly altered the name.
+                for original_name in batch:
+                    if _normalize_name(original_name) == key:
+                        seen[original_name] = item
             # Reset backoff on success
             consecutive_failures = 0
             current_backoff = INITIAL_BACKOFF_SECONDS

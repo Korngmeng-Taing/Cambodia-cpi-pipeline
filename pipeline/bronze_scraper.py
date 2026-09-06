@@ -194,7 +194,8 @@ class BronzeScraper:
                 SET run_id = EXCLUDED.run_id,
                     record_count = GREATEST(staging.raw_scrapes.record_count, EXCLUDED.record_count),
                     payload = CASE 
-                        WHEN jsonb_array_length(EXCLUDED.payload) > 0 THEN EXCLUDED.payload 
+                        WHEN jsonb_array_length(EXCLUDED.payload) > 0 
+                        THEN staging.raw_scrapes.payload || EXCLUDED.payload 
                         ELSE staging.raw_scrapes.payload 
                     END;
                 """,

@@ -249,21 +249,42 @@ def fit_ols(df: pd.DataFrame) -> dict[str, Any]:
         if feat in train.columns and train[feat].nunique() > 1:
             active_features.append(feat)
     if not active_features:
-        raise ValueError(
+        log.warning(
             "Hedonic feature matrix is rank-deficient: no features have variance "
-            "(all items share identical specs). Cannot fit a hedonic model."
+            "(all items share identical specs). Aborting hedonic fit gracefully."
         )
+        return {
+            "model": None,
+            "features": [],
+            "params": {},
+            "r2": 0.0,
+            "n": 0,
+            "fitted": pd.Series(dtype=float),
+            "specs": pd.DataFrame(),
+        }
 
     X_raw = train[active_features].astype(float)
     X = sm.add_constant(X_raw, has_constant="add")
     
     # Rank-deficiency guard: fall back to core features if expanded set is rank-deficient
     if np.linalg.matrix_rank(X) < X.shape[1]:
-        active_features = ["RAM_GB", "Storage_GB"]
+        # BUG-11 FIX: Only include core features that actually have variance.
+        # If none do, abort gracefully instead of raising ValueError.
+        active_features = [f for f in ["RAM_GB", "Storage_GB"]
+                           if f in train.columns and train[f].nunique() > 1]
+        if not active_features:
+            log.warning(
+                "Hedonic regression aborted: all fallback features have zero "
+                "variance (identical specs). Returning 0 adjusted items."
+            )
+            return {"model": None, "features": [], "params": {}, "r2": 0.0, "n": 0,
+                    "fitted": pd.Series(dtype=float), "specs": pd.DataFrame()}
         X_raw = train[active_features].astype(float)
         X = sm.add_constant(X_raw, has_constant="add")
         if np.linalg.matrix_rank(X) < X.shape[1]:
-            raise ValueError("Hedonic feature matrix X is rank-deficient (collinear RAM/Storage or constant specs)")
+            log.warning("Hedonic feature matrix X is rank-deficient even with core features. Aborting.")
+            return {"model": None, "features": [], "params": {}, "r2": 0.0, "n": 0,
+                    "fitted": pd.Series(dtype=float), "specs": pd.DataFrame()}
 
     y_log = np.log(train["raw_price"].astype(float))
     model = sm.OLS(y_log, X).fit()
@@ -424,6 +445,17 @@ def run_hedonic_regression(scrape_date: str) -> dict[str, Any]:
         }
 
     fit = fit_ols(df)
+    if fit.get("model") is None:
+        log.warning(
+            "Hedonic model could not be fitted (rank-deficient or zero-variance specs); skipping adjustment for %s.",
+            scrape_date,
+        )
+        return {
+            "scrape_date": scrape_date,
+            "status": "SKIPPED_RANK_DEFICIENT",
+            "items_adjusted": 0,
+        }
+
     base = baseline_specs(df, scrape_date)
     current = df[
         pd.to_datetime(df["scrape_date"]).dt.date == pd.to_datetime(scrape_date).date()

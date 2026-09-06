@@ -269,5 +269,7 @@ with DAG(
         python_callable=annual_rebase_cpi,
     )
 
-    calculate_cpi_task >> calculate_monthly_cpi_task >> nowcast_cpi_task >> annual_rebase_task
+    # BUG-04 FIX: Rebase must run BEFORE daily CPI calculation so the
+    # first day of a new year uses the updated base period.
+    annual_rebase_task >> calculate_cpi_task >> calculate_monthly_cpi_task >> nowcast_cpi_task
 

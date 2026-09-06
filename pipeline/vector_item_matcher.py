@@ -317,8 +317,12 @@ class VectorItemMatcher:
             cand_unit = cand_vec
 
         # Pre-ensure all catalog items have unit vectors and cache the matrix
-        if hasattr(catalog, "_cached_matrix") and getattr(catalog, "_cached_matrix_len", 0) == len(catalog):
-            mat = catalog._cached_matrix
+        if (
+            hasattr(self, "_cached_catalog_matrix")
+            and getattr(self, "_cached_catalog_id", None) == id(catalog)
+            and getattr(self, "_cached_catalog_matrix_len", 0) == len(catalog)
+        ):
+            mat = self._cached_catalog_matrix
         else:
             missing_items = [item for item in catalog if item.get("vector") is None]
             if missing_items:
@@ -337,8 +341,13 @@ class VectorItemMatcher:
             else:
                 mat = np.zeros((0, 768), dtype=np.float32)
             try:
-                catalog._cached_matrix = mat
-                catalog._cached_matrix_len = len(catalog)
+                # BUG-14 FIX: Store cached matrix on self instead of the
+                # catalog list (lists don't support arbitrary attributes,
+                # so the old code silently failed and recomputed np.vstack
+                # on every call). Include id(catalog) to avoid collisions across different lists.
+                self._cached_catalog_matrix = mat
+                self._cached_catalog_matrix_len = len(catalog)
+                self._cached_catalog_id = id(catalog)
             except (AttributeError, TypeError):
                 pass
 

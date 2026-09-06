@@ -65,7 +65,12 @@ flowchart TD
 
 ### Process:
 1. **Multi-Source Fetching**: 20 active scrapers run daily covering retail supermarkets (`aeon`, `delishop`), fashion marketplaces (`aeon3`), e-commerce (`l192`), pharmacies (`communitypharma`), electronics (`samnangshop`, `arystore`), telecoms (`cellcard`, `smart`, `cellcard_wifi`, `smart_wifi`), real estate (`khmer24`, `realestate`), intercity transit (`redbus`, `bookmebus`), restaurants (`bayonbkk`), hospitality (`sokhahotel`, `hyyathotel`), petroleum stations (`new_gasoline`), and official exchange rates (`mef_fx`).
-2. **Raw Storage**: Observations are stored without mutation into `bronze.raw_prices` with JSONB payloads preserving barcodes, brands, categories, package sizes, and promo tags.
+2. **Raw Storage & Deduplication**: Observations are stored into `bronze.raw_prices` with JSONB payloads. The table enforces deduplication via:
+   ```sql
+   CREATE UNIQUE INDEX uq_raw_prices_observation 
+   ON bronze.raw_prices (store, source, COALESCE(url, ''), COALESCE(description, ''), scrape_date);
+   ```
+   `price` is excluded from the unique constraint so that retry scrapes update the existing observation rather than inserting duplicate records on the same day.
 
 ---
 
@@ -109,6 +114,9 @@ Candidate Scraped Title
   • Sim < 0.75 ────────────────────────────────────────► SPLIT_NEW (silver.canonical_items)
 ```
 
+> [!TIP]
+> **Catalog Cache Safety**: The vector matcher caches pre-computed target embeddings on the instance. It validates `id(catalog)` and `len(catalog)` on every match call, completely eliminating cross-catalog memory leaks or stale vector indexing across distinct retail stores.
+
 ---
 
 ## 5. Stage 4: 12-Division UN COICOP Semantic Classification
@@ -135,6 +143,7 @@ New Canonical Item
          ▼
 [ Tier 4: Gemini Pro/Flash AI Fallback ]
   • Structured JSON response cached permanently in silver.dim_coicop_ai_cache
+  • Normalizes title strings (_normalize_name) to maximize cache hit rates
 ```
 
 ---
@@ -152,9 +161,11 @@ New Canonical Item
 - **Jevons Micro-Index (`gold.fct_elementary_indices`)**:
   Calculates unweighted geometric mean price relatives for all canonical products with base period $t_0$ (August 18, 2026 = 100.00):
   $$I_{j}^{t/0} = \exp\left(\frac{1}{n_t} \sum_{i=1}^{n_t} \ln P_{i,t} - \frac{1}{n_0} \sum_{i=1}^{n_0} \ln P_{i,0}\right) \times 100.0$$
-- **7-Day Carry-Forward Imputation**:
-  Mitigates temporary retail stockouts by carrying forward the most recent price observation for up to 7 days.
+- **7-Day Compounded Class-Mean Geometric Imputation**:
+  Mitigates temporary retail stockouts by updating the last observed price using the compounded daily class movement over elapsed gap days $\Delta t$:
+  $$\widehat{P}_{i, t} = P_{i, t - \Delta t} \times \left(R_{c, t}\right)^{\Delta t} \quad \text{for } 1 \le \Delta t \le 7$$
+  where $R_{c, t}$ is the daily geometric mean price relative of observed items in the same COICOP class. Beyond 7 consecutive missing days, items are treated as structural exits.
 - **Hedonic Quality Adjustment Bridge**:
-  Directly applies constant-utility adjusted prices from `silver.hedonic_adjusted_prices` for consumer electronics.
+  Directly applies constant-utility adjusted prices from `silver.hedonic_adjusted_prices` for consumer electronics. When regression specifications lack variance or display severe multicollinearity, the engine gracefully skips adjustment with `SKIPPED_RANK_DEFICIENT` and falls back to observed prices.
 - **Laspeyres 12-Division Macro Aggregation (`gold.fct_cpi_daily`)**:
   Combines division indices with official NIS Cambodia expenditure weights into national Headline and Core CPI.

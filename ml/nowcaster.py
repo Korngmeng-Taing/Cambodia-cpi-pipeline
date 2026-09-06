@@ -227,20 +227,23 @@ class CPINowcaster:
 
         projected_daily_drift = leading_signal_drift + festival_shock
 
-        # Project end of month CPI for remaining days
+        # Project CPI for remaining days
+        # BUG-08 FIX: Use the average projected index over the remaining trajectory
+        # instead of the end-of-month extreme value applied uniformly.
+        # For linear daily drift, the average is: realized * (1 + drift * (N+1)/2)
         if days_remaining > 0:
-            projected_end_cpi = realized_cpi * (1.0 + (projected_daily_drift * days_remaining))
-            projected_core_end = realized_core * (1.0 + (leading_signal_drift * 0.5 * days_remaining))
+            projected_avg_cpi = realized_cpi * (1.0 + (projected_daily_drift * (days_remaining + 1) / 2.0))
+            projected_core_avg = realized_core * (1.0 + (leading_signal_drift * 0.5 * (days_remaining + 1) / 2.0))
         else:
-            projected_end_cpi = realized_cpi
-            projected_core_end = realized_core
+            projected_avg_cpi = realized_cpi
+            projected_core_avg = realized_core
 
         # Weighted combination: Observed days share + Remaining days share
         obs_weight = days_observed / days_in_month
         rem_weight = days_remaining / days_in_month
 
-        nowcast_headline_cpi = round((obs_weight * realized_cpi) + (rem_weight * projected_end_cpi), 4)
-        nowcast_core_cpi = round((obs_weight * realized_core) + (rem_weight * projected_core_end), 4)
+        nowcast_headline_cpi = round((obs_weight * realized_cpi) + (rem_weight * projected_avg_cpi), 4)
+        nowcast_core_cpi = round((obs_weight * realized_core) + (rem_weight * projected_core_avg), 4)
 
         # -------------------------------------------------------------------------
         # Prior Month Baseline & Projected Month-over-Month (MoM %) Inflation
@@ -290,7 +293,7 @@ class CPINowcaster:
             "days_remaining": days_remaining,
             "days_in_month": days_in_month,
             "realized_cpi_so_far": round(float(realized_cpi), 4),
-            "projected_remaining_cpi": round(float(projected_end_cpi), 4),
+            "projected_remaining_cpi": round(float(projected_avg_cpi), 4),
             "projected_mom_pct": projected_mom_pct,
             "nowcast_headline_cpi": nowcast_headline_cpi,
             "nowcast_nis_headline_cpi": nowcast_nis_headline_cpi,

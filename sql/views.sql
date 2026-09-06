@@ -96,33 +96,41 @@ ORDER BY days_since_last_scrape ASC, avg_daily_volume_7d DESC;
 
 
 -- 10.3 Daily Price Anomaly & Extreme Shift Alerts (> 20% DoD)
+-- BUG-09 FIX: Use LAG() window function instead of a strict yesterday join,
+-- so weekend and multi-day scraper gaps are handled correctly.
 CREATE OR REPLACE VIEW gold.v_monitor_price_alerts AS
+WITH price_with_prev AS (
+    SELECT
+        scrape_date,
+        store_slug,
+        item_id,
+        price_khr,
+        LAG(price_khr) OVER (PARTITION BY store_slug, item_id ORDER BY scrape_date) AS prev_price_khr
+    FROM gold.fct_daily_prices
+    WHERE price_khr > 0
+)
 SELECT
     curr.scrape_date,
     curr.store_slug,
     curr.item_id,
     m.canonical_name AS name_clean,
     m.coicop_division,
-    prev.price_khr AS yesterday_price_khr,
+    curr.prev_price_khr AS yesterday_price_khr,
     curr.price_khr AS today_price_khr,
-    ROUND((curr.price_khr - prev.price_khr) / NULLIF(prev.price_khr, 0) * 100.0, 2) AS dod_price_change_pct,
+    ROUND((curr.price_khr - curr.prev_price_khr) / NULLIF(curr.prev_price_khr, 0) * 100.0, 2) AS dod_price_change_pct,
     CASE
-        WHEN curr.price_khr > prev.price_khr * 2.0 THEN 'CRITICAL_SPIKE (+100%)'
-        WHEN curr.price_khr > prev.price_khr * 1.3 THEN 'HIGH_SURGE (+30%)'
-        WHEN curr.price_khr < prev.price_khr * 0.5 THEN 'CRITICAL_DROP (-50%)'
-        WHEN curr.price_khr < prev.price_khr * 0.7 THEN 'HIGH_DROP (-30%)'
+        WHEN curr.price_khr > curr.prev_price_khr * 2.0 THEN 'CRITICAL_SPIKE (+100%)'
+        WHEN curr.price_khr > curr.prev_price_khr * 1.3 THEN 'HIGH_SURGE (+30%)'
+        WHEN curr.price_khr < curr.prev_price_khr * 0.5 THEN 'CRITICAL_DROP (-50%)'
+        WHEN curr.price_khr < curr.prev_price_khr * 0.7 THEN 'HIGH_DROP (-30%)'
         ELSE 'MODERATE_SHIFT'
     END AS alert_level
-FROM gold.fct_daily_prices curr
-JOIN gold.fct_daily_prices prev
-  ON prev.item_id = curr.item_id
- AND prev.store_slug = curr.store_slug
- AND prev.scrape_date = (curr.scrape_date - INTERVAL '1 day')::DATE
+FROM price_with_prev curr
 LEFT JOIN gold.dim_items m ON m.item_id = curr.item_id
-WHERE curr.price_khr > 0
-  AND prev.price_khr > 0
-  AND ABS(curr.price_khr - prev.price_khr) / prev.price_khr >= 0.20
-ORDER BY curr.scrape_date DESC, ABS((curr.price_khr - prev.price_khr) / prev.price_khr) DESC;
+WHERE curr.prev_price_khr IS NOT NULL
+  AND curr.prev_price_khr > 0
+  AND ABS(curr.price_khr - curr.prev_price_khr) / curr.prev_price_khr >= 0.20
+ORDER BY curr.scrape_date DESC, ABS((curr.price_khr - curr.prev_price_khr) / curr.prev_price_khr) DESC;
 
 
 -- 10.4 MEF USD/KHR Exchange Rate Health & Freshness Monitor

@@ -180,12 +180,16 @@ with DAG(
     )
 
     # DAG Dependency Graph
+    # BUG-03 FIX: AI classification must run BEFORE dbt seed/run so the dbt
+    # model can read fresh classifications from silver.dim_coicop_ai_cache.
+    # Hedonic regression must run AFTER dbt silver run because it queries
+    # silver.clean_store_prices (which dbt builds) for current-day prices.
     (
         task_item_matching
         >> task_item_auto_review
+        >> task_gemini_coicop
         >> task_dbt_seed
         >> task_dbt_silver_run
-        >> task_gemini_coicop
         >> task_hedonic_adjustment
         >> task_dbt_silver_test
     )

@@ -6,6 +6,7 @@ from typing import Any
 import psycopg2
 from psycopg2.extras import execute_batch
 from rapidfuzz import fuzz
+import numpy as np
 
 from pipeline.config import get_database_url
 from pipeline.text_clean import clean_name_for_matching, is_size_compatible
@@ -52,6 +53,7 @@ class ItemMatcher:
         self.sku_cache: dict[tuple[str, str], uuid.UUID] = {}
         self.items_cache: list[tuple[uuid.UUID, str, str | None]] = []
         self._vector_matcher: VectorItemMatcher | None = None
+        self._has_embedding_column: bool = False
 
     @property
     def vector_matcher(self) -> VectorItemMatcher:
@@ -71,6 +73,17 @@ class ItemMatcher:
 
     def _load_cache(self, conn):
         with conn.cursor() as cur:
+            try:
+                cur.execute("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_schema = 'silver' AND table_name = 'canonical_items' AND column_name = 'embedding'
+                    );
+                """)
+                self._has_embedding_column = bool(cur.fetchone()[0])
+            except Exception:
+                self._has_embedding_column = False
+
             cur.execute(
                 "SELECT item_id, canonical_name, barcode, size_norm FROM silver.canonical_items"
             )
@@ -241,15 +254,35 @@ class ItemMatcher:
             log.warning("COICOP classification on create_canonical_item failed: %s", e)
 
         valid_bc = barcode if is_valid_barcode(barcode) else None
+        vec_str = None
+        if self._has_embedding_column:
+            try:
+                vec = self.vector_matcher.embed_text(name)
+                vnorm = np.linalg.norm(vec)
+                vec_unit = (vec / vnorm).tolist() if vnorm > 0 else vec.tolist()
+                vec_str = "[" + ",".join(str(round(float(x), 6)) for x in vec_unit) + "]"
+            except Exception as e:
+                log.debug("Embedding creation in create_canonical_item skipped: %s", e)
+
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO silver.canonical_items (item_id, canonical_name, brand, barcode, size_norm, coicop_division, coicop_code)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (item_id) DO NOTHING
-                """,
-                (item_id, name, brand, valid_bc, size_norm, coicop_div, coicop_code),
-            )
+            if self._has_embedding_column and vec_str is not None:
+                cur.execute(
+                    """
+                    INSERT INTO silver.canonical_items (item_id, canonical_name, brand, barcode, size_norm, coicop_division, coicop_code, embedding)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s::vector)
+                    ON CONFLICT (item_id) DO NOTHING
+                    """,
+                    (item_id, name, brand, valid_bc, size_norm, coicop_div, coicop_code, vec_str),
+                )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO silver.canonical_items (item_id, canonical_name, brand, barcode, size_norm, coicop_division, coicop_code)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (item_id) DO NOTHING
+                    """,
+                    (item_id, name, brand, valid_bc, size_norm, coicop_div, coicop_code),
+                )
         if valid_bc:
             self.barcode_cache[valid_bc.strip()] = item_id
         if name:
@@ -498,15 +531,21 @@ class ItemMatcher:
             if self.use_vector_matcher:
                 try:
                     vm = self.vector_matcher
-                    if catalog:
+                    match_result = None
+                    if self._has_embedding_column:
+                        try:
+                            match_result = vm.match_candidate_db(name_clean, conn)
+                        except Exception as e:
+                            log.debug("pgvector native search failed, falling back to memory: %s", e)
+                            match_result = None
+
+                    if not match_result and catalog:
                         match_result = vm.match_candidate(name_clean, catalog)
-                        item_id_match = match_result.get("matched_item_id") or match_result.get("item_id") if match_result else None
-                        if item_id_match:
-                            match = (item_id_match, match_result.get("confidence", 0.0), match_result.get("canonical_name", ""))
-                            matched_method = "vector_embedding"
-                        else:
-                            match = self.match_by_fuzzy_text(name_clean, package_size)
-                            matched_method = "fuzzy_text"
+
+                    item_id_match = match_result.get("matched_item_id") or match_result.get("item_id") if match_result else None
+                    if item_id_match:
+                        match = (item_id_match, match_result.get("confidence", 0.0), match_result.get("canonical_name", ""))
+                        matched_method = "vector_embedding"
                     else:
                         match = self.match_by_fuzzy_text(name_clean, package_size)
                         matched_method = "fuzzy_text"
@@ -542,8 +581,23 @@ class ItemMatcher:
                 coicop_code = res.get("coicop_code")
             except Exception as e:
                 log.warning("COICOP classification on batch new item failed: %s", e)
+
+            vec_str = None
+            if self._has_embedding_column:
+                try:
+                    vec = self.vector_matcher.embed_text(name_clean)
+                    vnorm = np.linalg.norm(vec)
+                    vec_unit = (vec / vnorm).tolist() if vnorm > 0 else vec.tolist()
+                    vec_str = "[" + ",".join(str(round(float(x), 6)) for x in vec_unit) + "]"
+                except Exception as e:
+                    log.debug("Embedding creation in process_batch skipped: %s", e)
+
             valid_bc = barcode if is_valid_barcode(barcode) else None
-            new_items.append((str(new_id), name_clean, brand, valid_bc, package_size, coicop_div, coicop_code))
+            if self._has_embedding_column and vec_str is not None:
+                new_items.append((str(new_id), name_clean, brand, valid_bc, package_size, coicop_div, coicop_code, vec_str))
+            else:
+                new_items.append((str(new_id), name_clean, brand, valid_bc, package_size, coicop_div, coicop_code))
+
             if valid_bc:
                 self.barcode_cache[valid_bc.strip()] = new_id
             if sku:
@@ -562,16 +616,28 @@ class ItemMatcher:
 
         with conn.cursor() as cur:
             if new_items:
-                execute_batch(
-                    cur,
-                    """
-                    INSERT INTO silver.canonical_items (item_id, canonical_name, brand, barcode, size_norm, coicop_division, coicop_code)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (item_id) DO NOTHING
-                    """,
-                    new_items,
-                    page_size=1000,
-                )
+                if self._has_embedding_column and len(new_items[0]) == 8:
+                    execute_batch(
+                        cur,
+                        """
+                        INSERT INTO silver.canonical_items (item_id, canonical_name, brand, barcode, size_norm, coicop_division, coicop_code, embedding)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s::vector)
+                        ON CONFLICT (item_id) DO NOTHING
+                        """,
+                        new_items,
+                        page_size=1000,
+                    )
+                else:
+                    execute_batch(
+                        cur,
+                        """
+                        INSERT INTO silver.canonical_items (item_id, canonical_name, brand, barcode, size_norm, coicop_division, coicop_code)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (item_id) DO NOTHING
+                        """,
+                        new_items,
+                        page_size=1000,
+                    )
             if sku_registrations:
                 execute_batch(
                     cur,

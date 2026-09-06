@@ -137,6 +137,16 @@ CREATE TABLE IF NOT EXISTS silver.canonical_items (
 ALTER TABLE silver.canonical_items DROP COLUMN IF EXISTS category;
 ALTER TABLE silver.canonical_items ADD COLUMN IF NOT EXISTS coicop_division VARCHAR(16);
 ALTER TABLE silver.canonical_items ADD COLUMN IF NOT EXISTS coicop_code VARCHAR(16);
+-- pgvector 768-dimensional product representation & HNSW index
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+        ALTER TABLE silver.canonical_items ADD COLUMN IF NOT EXISTS embedding vector(768);
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_canonical_items_hnsw ON silver.canonical_items USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64)';
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'pgvector HNSW index creation skipped on canonical_items';
+END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_canonical_items_barcode ON silver.canonical_items(barcode) WHERE barcode IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_canonical_items_name ON silver.canonical_items(canonical_name);
 CREATE INDEX IF NOT EXISTS idx_canonical_items_lower_trim ON silver.canonical_items (lower(trim(canonical_name)));
@@ -147,7 +157,7 @@ CREATE TABLE IF NOT EXISTS silver.item_match_log (
     match_id BIGSERIAL PRIMARY KEY,
     raw_price_id BIGINT NOT NULL,
     item_id UUID NOT NULL REFERENCES silver.canonical_items(item_id),
-    match_method VARCHAR(32) NOT NULL CHECK (match_method IN ('barcode_exact', 'sku_exact', 'fuzzy_text', 'new_item')),
+    match_method VARCHAR(32) NOT NULL CHECK (match_method IN ('barcode_exact', 'sku_exact', 'fuzzy_text', 'new_item', 'exact_text', 'vector_embedding')),
     confidence NUMERIC(5,4) NOT NULL CHECK (confidence BETWEEN 0 AND 1),
     matched_at TIMESTAMPTZ DEFAULT NOW(),
     matched_by VARCHAR(64) DEFAULT 'auto'

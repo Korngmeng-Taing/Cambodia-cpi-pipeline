@@ -79,3 +79,27 @@ def test_embed_texts_and_batch_matching():
     res = matcher.match_candidate("Angkor Beer 330ml Can", catalog)
     assert res["decision"] == "APPROVE_MATCH"
     assert res["matched_item_id"] == "item-1"
+
+
+def test_match_candidate_db_pgvector_hnsw():
+    from unittest.mock import MagicMock
+    matcher = VectorItemMatcher()
+
+    # Mock database connection and cursor simulating pgvector HNSW result
+    mock_conn = MagicMock()
+    mock_cur = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+
+    # Mock query returning: item_id, canonical_name, brand, size_norm, coicop_div, coicop_code, cos_sim
+    mock_cur.fetchall.return_value = [
+        ("uuid-1234", "Angkor Premium Beer 330ml", "Angkor", "330ml", "02", "02.1.3", 0.94)
+    ]
+
+    res = matcher.match_candidate_db("Angkor Beer 330ml", mock_conn, sim_auto_threshold=0.80)
+    assert res is not None
+    assert res["decision"] == "APPROVE_MATCH"
+    assert res["matched_item_id"] == "uuid-1234"
+    assert res["method"] == "vector_embedding"
+    assert res["coicop_division"] == "02"
+    assert res["confidence"] == 0.94
+

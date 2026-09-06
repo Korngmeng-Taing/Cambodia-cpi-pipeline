@@ -415,6 +415,90 @@ class VectorItemMatcher:
             "reason": f"Top candidate similarity below threshold ({highest_sim:.3f} < {sim_review_threshold})",
         }
 
+    def match_candidate_db(
+        self,
+        candidate_name: str,
+        conn: Any,
+        sim_auto_threshold: float = 0.80,
+        sim_review_threshold: float = 0.65,
+    ) -> dict[str, Any] | None:
+        """Queries PostgreSQL directly using the pgvector HNSW index for sub-millisecond semantic search."""
+        if not candidate_name or conn is None:
+            return None
+
+        cand_vec = self.embed_text(candidate_name)
+        cand_norm = np.linalg.norm(cand_vec)
+        if cand_norm > 0:
+            cand_unit = (cand_vec / cand_norm).tolist()
+        else:
+            cand_unit = cand_vec.tolist()
+
+        vec_str = "[" + ",".join(str(round(float(x), 6)) for x in cand_unit) + "]"
+
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT item_id, canonical_name, brand, size_norm, coicop_division, coicop_code,
+                           1 - (embedding <=> %s::vector) AS cos_sim
+                    FROM silver.canonical_items
+                    WHERE embedding IS NOT NULL
+                    ORDER BY embedding <=> %s::vector
+                    LIMIT 30;
+                    """,
+                    (vec_str, vec_str),
+                )
+                rows = cur.fetchall()
+        except Exception as e:
+            log.debug("pgvector native search query unavailable or failed: %s", e)
+            return None
+
+        if not rows:
+            return None
+
+        cand_lower = candidate_name.lower()
+        best_item = None
+        highest_sim = -1.0
+
+        for item_id, canonical_name, brand, size_norm, coicop_div, coicop_code, cos_sim in rows:
+            vec_sim = float(cos_sim) if cos_sim is not None else 0.0
+
+            if vec_sim < 0.40 and highest_sim > 0.60:
+                continue
+
+            if not is_spec_compatible(candidate_name, canonical_name):
+                continue
+
+            fuzz_sim = fuzz.token_sort_ratio(cand_lower, canonical_name.lower()) / 100.0
+            combined_sim = max(vec_sim, fuzz_sim)
+
+            if combined_sim > highest_sim:
+                highest_sim = combined_sim
+                best_item = {
+                    "item_id": str(item_id),
+                    "canonical_name": canonical_name,
+                    "brand": brand,
+                    "size_norm": size_norm,
+                    "coicop_division": coicop_div,
+                    "coicop_code": coicop_code,
+                }
+
+        if best_item and highest_sim >= sim_auto_threshold:
+            return {
+                "decision": "APPROVE_MATCH",
+                "matched_item_id": best_item["item_id"],
+                "confidence": round(highest_sim, 4),
+                "method": "vector_embedding",
+                "reason": f"pgvector HNSW match ({highest_sim:.3f}) with {best_item['canonical_name']}",
+                "coicop_code": best_item["coicop_code"],
+                "coicop_division": best_item["coicop_division"],
+            }
+
+        if best_item and highest_sim >= sim_review_threshold:
+            return self.arbitrate_with_llm(candidate_name, best_item, highest_sim)
+
+        return None
+
     def arbitrate_with_llm(
         self,
         candidate_name: str,

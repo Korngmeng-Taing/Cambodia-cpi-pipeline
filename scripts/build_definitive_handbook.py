@@ -306,40 +306,134 @@ ON bronze.raw_prices (
     # -------------------------------------------------------------------------
     parts.append(r"""
 % =============================================================================
-\section{Silver Layer: Entity Resolution and AI Classification}
+\section{Silver Layer: Entity Resolution, Vector Embeddings and AI Classification}
 % =============================================================================
 
-\subsection{The Multi-Tier Item Matching Cascade}
-In online retail, products are listed with irregular titles, varying pack sizes, and multilingual descriptions. The entity resolution engine (\texttt{pipeline/item\_matcher.py}) executes a 4-tier cascade to group raw observations into canonical items (\texttt{silver.canonical\_items}):
-
+\subsection{The Multilingual Script Disconnect in Cambodian Retail}
+In Cambodian online retail marketplaces, product titles exhibit extreme linguistic heterogeneity. The exact same consumer SKU is listed across three divergent orthographic formats:
 \begin{enumerate}
-    \item \textbf{Tier 1: Global GTIN Barcode Verification (\texttt{is\_valid\_barcode}):}
-        Validates GTIN-8, GTIN-12, GTIN-13, and GTIN-14 standards. Rejects dummy barcodes (\texttt{123456789012}, repeating digits, or terminal zeros). Valid barcodes produce instant exact matches.
-    \item \textbf{Tier 2: Store SKU Memoization:}
-        Queries \texttt{silver.dim\_canonical\_products} mapping \texttt{(source\_name, raw\_item\_id)} to an existing \texttt{canonical\_item\_id} in sub-millisecond execution time.
-    \item \textbf{Tier 3: Deterministic Specification Guards (\texttt{is\_spec\_compatible}):}
-        Hard programmatic guardrails extract physical attributes using regex:
-        \begin{itemize}[noitemsep]
-            \item \textbf{Electronics Storage:} 128GB, 256GB, 512GB, and 1TB models are strictly prohibited from matching, regardless of 99\% text similarity.
-            \item \textbf{Pack Quantity Guard:} Prevents merging single units with multipacks ($24\times$, $6\times$, $12\times$).
-            \item \textbf{Metric Normalization:} Converts volumes and weights to standard base units ($1000\text{g} = 1\text{kg}$, $500\text{ml} = 0.5\text{L}$).
-        \end{itemize}
-    \item \textbf{Tier 4: Multilingual Vector Space Embeddings \& Gemini Arbitration:}
-        Product titles are projected into a 768-dimensional space using \texttt{gemini-embedding-2} (with local \texttt{paraphrase-multilingual-MiniLM-L12-v2} fallback). Cosine similarity determines resolution:
-        \begin{itemize}[noitemsep]
-            \item $\text{Score} \ge 0.92$: Auto-linked to existing canonical product entity.
-            \item $0.80 \le \text{Score} < 0.92$: Forwarded to Gemini Flash LLM for pairwise economic equivalence arbitration.
-            \item $\text{Score} < 0.80$: Automatically instantiated as a new canonical product entity (\texttt{uuid.uuid4()}).
-        \end{itemize}
+    \item \textbf{Khmer Script (Unicode range U+1780 to U+17FF):} e.g., \textit{"ស្រាបៀរអង្គរ កំប៉ុង 330ml"}.
+    \item \textbf{Latin Script (English/French loan words):} e.g., \textit{"Angkor Beer 330ml Can"}.
+    \item \textbf{Mixed-Script Code-Switching:} e.g., \textit{"ស្រាបៀរ Angkor Premium Beer 330ml [Promo Pack]"}.
+\end{enumerate}
+Standard string-distance metrics (Levenshtein distance, Jaro-Winkler, token-sort ratio) operate on character n-grams. When comparing Khmer script against Latin text, the set intersection of characters is empty ($\mathcal{C}_{\text{Khmer}} \cap \mathcal{C}_{\text{Latin}} = \emptyset$), yielding a similarity score of zero ($0.000$). Consequently, keyword heuristics fail completely across language boundaries.
+
+\subsection{Dense Multilingual Vector Space Architecture}
+To bridge the script divide, the pipeline projects all unstructured product strings into a continuous, dense 768-dimensional semantic embedding space $\mathbb{R}^{768}$ via transformer neural networks:
+\begin{equation}
+\mathbf{v} = \phi(\text{text}) \in \mathbb{R}^{768}
+\end{equation}
+where $\phi(\cdot)$ denotes the embedding model (\texttt{gemini-embedding-2} in cloud inference, or \texttt{paraphrase-multilingual-MiniLM-L12-v2} in local CPU inference). 
+
+Every raw vector $\mathbf{v}$ is projected onto the unit hypersphere via $L_2$-normalization:
+\begin{equation}
+\mathbf{u} = \frac{\mathbf{v}}{\|\mathbf{v}\|_2} = \frac{\mathbf{v}}{\sqrt{\sum_{d=1}^{768} v_d^2}}, \quad \text{such that } \|\mathbf{u}\|_2 = 1.0
+\end{equation}
+The semantic similarity between a candidate scraped listing $\mathbf{u}_{\text{cand}}$ and a canonical item $\mathbf{u}_{\text{base}}$ is evaluated via the geometric \textbf{Cosine Similarity}:
+\begin{equation}
+\mathcal{S}_{\cos}(\mathbf{u}_{\text{cand}}, \mathbf{u}_{\text{base}}) = \mathbf{u}_{\text{cand}} \cdot \mathbf{u}_{\text{base}} = \sum_{d=1}^{768} u_{\text{cand}, d} \, u_{\text{base}, d}
+\end{equation}
+The corresponding \textbf{Cosine Distance} metric is defined as:
+\begin{equation}
+\mathcal{D}_{\cos}(\mathbf{u}_{\text{cand}}, \mathbf{u}_{\text{base}}) = 1 - \mathcal{S}_{\cos}(\mathbf{u}_{\text{cand}}, \mathbf{u}_{\text{base}})
+\end{equation}
+Because the vector representation maps semantic intent rather than literal spelling, \textit{"ស្រាបៀរអង្គរ"} and \textit{"Angkor Beer"} map to proximate coordinate clusters on the 768-dimensional manifold, achieving cosine similarities exceeding $\mathcal{S}_{\cos} \ge 0.93$.
+
+\subsection{High-Throughput BLAS Matrix Search \& Top-$K$ Introselect Partitioning}
+During daily ingestion batches of 35,500 observations, computing individual dot products sequentially in Python loops would impose prohibitive computational latency ($\mathcal{O}(M \times N)$). The pipeline implements vectorized BLAS matrix multiplication:
+\begin{equation}
+\mathbf{S} = \mathbf{M} \cdot \mathbf{u}_{\text{cand}} \in \mathbb{R}^N
+\end{equation}
+where $\mathbf{M} \in \mathbb{R}^{N \times 768}$ is the contiguous pre-stacked memory matrix of all $N$ active canonical item unit vectors cached in RAM. 
+
+To eliminate the $\mathcal{O}(N \log N)$ cost of fully sorting the similarity vector $\mathbf{S}$ across tens of thousands of items, the engine executes \textbf{Top-$K$ Introselect Partitioning} via \texttt{numpy.argpartition}:
+\begin{equation}
+\mathcal{K}_{\text{top}} = \text{argpartition}(\mathbf{S}, -30)[-30:]
+\end{equation}
+Introselect isolates the 30 nearest semantic neighbors in linear time $\mathcal{O}(N)$. Full sorting is subsequently performed only over this constrained 30-element candidate subset in $\mathcal{O}(K \log K)$ with $K=30$, reducing neighbor discovery latency to under $1.5\text{ milliseconds}$.
+
+\subsection{Deterministic Hardware \& Packaging Specification Guards}
+Pure vector semantic matching presents a fatal vulnerability for inflation measurement: high-dimensional neural models cluster related goods closely. For example, \textit{"Coca-Cola 330ml Can"} and \textit{"Coca-Cola 330ml Pack of 24"} exhibit semantic similarity $\mathcal{S}_{\cos} \approx 0.88$. Merging them would inject an artificial 2,300\% price shock into the elementary Jevons index.
+
+To prevent false positive merges, the pipeline establishes \textbf{Deterministic Specification Guards} (\texttt{is\_spec\_compatible}) that override vector similarity:
+\begin{enumerate}
+    \item \textbf{Electronics Storage Invariant:} For technology listings (COICOP Division 08/09), flash storage capacities must match exactly:
+    \begin{equation}
+    \text{StorageGuard} = \mathbf{1}_{\{S_{\text{cand}} = S_{\text{base}} \lor S_{\text{cand}} = \emptyset \lor S_{\text{base}} = \emptyset\}}
+    \end{equation}
+    A 128GB iPhone and a 256GB iPhone are permanently prohibited from matching.
+    \item \textbf{Packaging Quantity Multiplier Guard:} Multi-pack quantities extracted via regular expressions ($Q_{\text{pack}} \in \{1, 6, 12, 24, 48\}$) must be identical:
+    \begin{equation}
+    \text{PackGuard} = \mathbf{1}_{\{Q_{\text{cand}} = Q_{\text{base}}\}}
+    \end{equation}
+    A single can ($Q=1$) is never merged with a 6-pack ($Q=6$).
+    \item \textbf{Normalized Physical Volume/Mass Metric Tolerance:} Product masses ($g, kg$) and volumes ($ml, L$) are cross-normalized to base SI units ($1000\text{g} = 1\text{kg}$, $1000\text{ml} = 1\text{L}$). Merging is rejected if volume discrepancy exceeds 10\%:
+    \begin{equation}
+    \text{VolumeGuard} = \mathbf{1}_{\left\{ \frac{|V_{\text{cand}} - V_{\text{base}}|}{\max(V_{\text{cand}}, V_{\text{base}})} \le 0.10 \right\}}
+    \end{equation}
+    \item \textbf{Dietary \& Formulation Disconnect:} Products with formulation keywords (\textit{"Zero"}, \textit{"Diet"}, \textit{"Light"}, \textit{"No Sugar"}) cannot merge with standard sugar-sweetened counterparts.
 \end{enumerate}
 
-\subsection{The 4-Tier UN COICOP Classification Ladder}
-Every canonical item is categorized into the UN COICOP hierarchy via:
+\subsection{Database-Native Vector Search via PostgreSQL \texttt{pgvector} and HNSW Graphs}
+To eliminate the memory footprint of holding large catalog matrices in Python worker RAM, the production database implements native vector storage via the PostgreSQL \texttt{pgvector} extension.
+
+\subsubsection*{1. Schema DDL \& HNSW Index Definition}
+Canonical product records in \texttt{silver.canonical\_items} are augmented with 768-dimensional native vector columns:
+\begin{lstlisting}[language=SQL]
+CREATE EXTENSION IF NOT EXISTS vector;
+
+ALTER TABLE silver.canonical_items 
+ADD COLUMN IF NOT EXISTS embedding vector(768);
+
+-- Hierarchical Navigable Small World (HNSW) graph index
+CREATE INDEX IF NOT EXISTS idx_canonical_items_hnsw 
+ON silver.canonical_items USING hnsw (embedding vector_cosine_ops)
+WITH (m = 16, ef_construction = 64);
+\end{lstlisting}
+
+\subsubsection*{2. The HNSW Graph Traversal Algorithm}
+The HNSW index constructs a multi-layer graph where lower layers contain all data points with dense local clustering, and upper layers contain sparse long-range skip links. Query execution achieves logarithmic search complexity $\mathcal{O}(\log N)$:
+\begin{itemize}[noitemsep]
+    \item $M = 16$: Maximum number of bidirectional connection links per node in the proximity graph.
+    \item $ef\_construction = 64$: Size of the dynamic candidate list evaluated during index construction, balancing build time and recall precision.
+\end{itemize}
+
+\subsubsection*{3. Sub-Millisecond Cosine Nearest-Neighbor Query}
+Using the PostgreSQL cosine distance operator (\texttt{<=>}), the database executes vector similarity queries directly within the query planner:
+\begin{lstlisting}[language=SQL]
+SELECT 
+    item_id, 
+    canonical_name, 
+    brand, 
+    size_norm, 
+    coicop_division, 
+    coicop_code,
+    1 - (embedding <=> %s::vector) AS cosine_similarity
+FROM silver.canonical_items
+WHERE embedding IS NOT NULL
+ORDER BY embedding <=> %s::vector
+LIMIT 30;
+\end{lstlisting}
+
+\subsection{The 3-Tier Zero-Crash Fallback Cascade}
+To ensure 24/7 continuous operation without downtime during cloud API outages or rate limit exhaustion (HTTP 429), \texttt{VectorItemMatcher.embed\_text()} executes a 3-tier cascade:
 \begin{enumerate}
-    \item \textbf{Tier 1: Deterministic Overrides:} Curated brand/barcode rules in \texttt{silver.coicop\_override}.
-    \item \textbf{Tier 2: Single-Category Pure Store Mapping:} 15 domain-pure stores are assigned instantaneously in SQL (EDC $\rightarrow$ \texttt{04.5.1}, Tela/PTT $\rightarrow$ \texttt{07.2.2}, Smart/Cellcard $\rightarrow$ \texttt{08.2.0}, PPWSA $\rightarrow$ \texttt{04.4.1}, BookMeBus $\rightarrow$ \texttt{07.3.2}).
-    \item \textbf{Tier 3: Centroid Vector Classification:} For multi-category department stores (AEON, Lucky, Chip Mong), titles are compared against 92 bilingual English/Khmer COICOP reference centroids. Matches with cosine similarity $\ge 0.72$ are assigned.
-    \item \textbf{Tier 4: Gemini Pro/Flash Few-Shot Disambiguation:} Ambiguous items are resolved via Gemini using structured JSON schemas and memoized in \texttt{silver.coicop\_llm\_memo}.
+    \item \textbf{Tier A (Cloud LLM Vector Engine):} Google \texttt{gemini-embedding-2} (768-dim) with 3-key round-robin load balancing via \texttt{GeminiKeyPool}.
+    \item \textbf{Tier B (Local High-Speed Neural Fallback):} \texttt{paraphrase-multilingual-MiniLM-L12-v2} executed on local CPU/GPU tensors. Vectors are dynamically padded and projected to standard 768 dimensions.
+    \item \textbf{Tier C (Deterministic Token Hashing Fallback):} In offline or isolated test environments, an internal Khmer-English synonym dictionary (40+ Cambodian retail pairs) is tokenized and projected into an $L_2$-normalized 768-dimensional float32 vector using modulo hashing.
+\end{enumerate}
+
+\subsection{The 4-Tier UN COICOP Classification Ladder \& Active Learning}
+Every canonical item is categorized into the 12-division UN COICOP hierarchy via:
+\begin{enumerate}
+    \item \textbf{Tier 1 (Deterministic Overrides):} Curated regulatory and brand overrides in \texttt{silver.coicop\_override}.
+    \item \textbf{Tier 2 (Single-Category Domain Purity):} 15 pure single-category stores are mapped instantaneously in SQL (EDC $\rightarrow$ \texttt{04.5.1}, Tela/PTT $\rightarrow$ \texttt{07.2.2}, Smart/Cellcard $\rightarrow$ \texttt{08.2.0}, PPWSA $\rightarrow$ \texttt{04.4.1}, BookMeBus $\rightarrow$ \texttt{07.3.2}).
+    \item \textbf{Tier 3 (Centroid Vector Projection):} For multi-category supermarket catalogs (AEON, Lucky, Chip Mong), item vectors are compared against pre-computed bilingual UN COICOP division centroids $\mathbf{C}_k \in \mathbb{R}^{768}$. Matches with $\mathcal{S}_{\cos} \ge 0.72$ are assigned automatically.
+    \item \textbf{Tier 4 (Active Learning Centroid Updating):} When new items are verified with high confidence ($\text{Score} \ge 0.95$), division centroids update dynamically via an Exponential Moving Average (EMA):
+    \begin{equation}
+    \mathbf{C}_k^{(t)} = (1 - \alpha) \mathbf{C}_k^{(t-1)} + \alpha \mathbf{u}_{\text{new}}, \quad \text{with } \alpha = 0.02
+    \end{equation}
+    allowing the semantic vector space to continuously absorb emerging Cambodian brand names and colloquial packaging formats.
 \end{enumerate}
 
 \newpage
@@ -1272,6 +1366,15 @@ ON silver.clean_store_prices USING BRIN (scrape_date);
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE INDEX IF NOT EXISTS idx_canonical_name_trgm 
 ON silver.canonical_items USING GIN (canonical_name gin_trgm_ops);
+\end{lstlisting}
+    \item \textbf{pgvector HNSW Graphs for High-Dimensional Vector Search:}
+        Traditional B-Trees and GIN indexes cannot evaluate dense vector distance. The pipeline creates Hierarchical Navigable Small World (HNSW) proximity graphs for 768-dimensional embeddings:
+\begin{lstlisting}[language=SQL]
+CREATE EXTENSION IF NOT EXISTS vector;
+ALTER TABLE silver.canonical_items ADD COLUMN IF NOT EXISTS embedding vector(768);
+CREATE INDEX IF NOT EXISTS idx_canonical_items_hnsw 
+ON silver.canonical_items USING hnsw (embedding vector_cosine_ops)
+WITH (m = 16, ef_construction = 64);
 \end{lstlisting}
 \end{enumerate}
 

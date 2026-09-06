@@ -22,24 +22,30 @@
     \item \textbf{The Gold Layer (Business-Ready Econometric Marts):} Contains optimized dimensional data models structured for economic computation and public policy analysis. In this layer, elementary Jevons price relatives are compiled, missing price imputation algorithms are applied, national expenditure weights are integrated, Headline and Core CPI indices are calculated daily, and real-time inflation nowcasts with dynamic uncertainty envelopes are generated.
 \end{enumerate}
 
-\subsection{Multi-Source Coverage: The 20 Market Sources}
-\hs To ensure comprehensive coverage of Cambodian consumer spending, the ingestion engine collects price data daily across 20 distinct market sources spanning all 12 United Nations COICOP divisions:
+\subsection{Multi-Source Coverage: The 23 Market Sources}
+\hs To ensure comprehensive coverage of Cambodian consumer spending, the ingestion engine collects price data daily across 23 distinct market sources spanning all 12 United Nations COICOP divisions:
 \begin{itemize}
-    \item \textbf{Modern Retail Supermarkets (Divisions 01, 02, 05, and 12):} AEON Online Store 1, AEON Store 3 Mean Chey, and DeliShop Asia. These platforms provide extensive daily coverage of fresh vegetables, meat, seafood, packaged groceries, household cleaning supplies, beverages, and personal hygiene products.
+    \item \textbf{Modern Retail Supermarkets and Quick-Commerce (Divisions 01, 02, 05, and 12):} AEON Online Store 1, AEON Store 3 Mean Chey, DeliShop Asia, and on-demand GrabMart delivery feeds (Lucky Supermarket Chroy Changva and Chip Mong Supermarket Eden). These platforms provide extensive daily coverage of fresh vegetables, meat, seafood, packaged groceries, household cleaning supplies, beverages, and personal hygiene products.
     \item \textbf{Digital E-Commerce Marketplaces (Divisions 03, 05, 09, and 12):} L192 Marketplace and Khmer24. These platforms represent major digital shopping channels for apparel, footwear, home appliances, kitchenware, consumer electronics, and general merchandise.
-    \item \textbf{Healthcare and Pharmaceuticals (Division 06):} Community Pharmacy chain digital catalog. Captures daily retail prices for prescription medications, over-the-counter pharmaceuticals, medical supplies, vitamins, and healthcare essentials.
+    \item \textbf{Healthcare and Pharmaceuticals (Division 06):} Community Pharmacy chain digital catalog and GrabMart Ucare Pharmacy. Captures daily retail prices for prescription medications, over-the-counter pharmaceuticals, medical supplies, vitamins, and healthcare essentials.
     \item \textbf{Inter-Provincial Transport and Transit (Division 07):} redBus Cambodia and BookMeBus digital ticketing platforms. Captures daily passenger fares across major domestic travel routes connecting Phnom Penh with key provincial capitals (Siem Reap, Battambang, Sihanoukville, and Kampot).
-    \item \textbf{Housing Rentals and Real Estate (Division 04):} Khmer24 Real Estate and Realestate.com.kh. Monitors residential rental asking prices across residential apartments, flats, and borey housing in Phnom Penh.
-    \item \textbf{Telecommunications and Digital Connectivity (Division 08):} Cellcard, Smart Axiata, and Metfone digital service portals, supplemented by retail smartphone listings from Ary Store and Khmer Samnang. Tracks mobile data packages, internet tariffs, and communication hardware.
-    \item \textbf{Hospitality, Recreation, and Education (Divisions 09, 10, and 11):} Major hotel portals (Sokha Hotels, Hyatt Regency Phnom Penh), casual restaurant menus, and educational supply retailers.
+    \item \textbf{Housing Rentals, Regulated Utilities, and Real Estate (Division 04):} Khmer24 Real Estate and Realestate.com.kh for residential rental monitoring, combined with official regulated utility tariffs for residential low-voltage electricity (Electricit\'e du Cambodge -- EDC) and domestic municipal piped water (Phnom Penh Water Supply Authority -- PPWSA) maintained in \texttt{silver.utility\_tariffs}.
+    \item \textbf{Telecommunications and Digital Connectivity (Division 08):} Cellcard and Smart Axiata digital service portals (mobile subscriptions and home Wi-Fi tariffs), supplemented by retail smartphone and electronics listings from Ary Store and Khmer Samnang. Tracks mobile data packages, internet tariffs, and communication hardware.
+    \item \textbf{Hospitality, Recreation, and Education (Divisions 09, 10, and 11):} Major hotel portals (Sokha Hotels, Hyatt Regency Phnom Penh), casual restaurant menus (Bayon BKK), and educational supply retailers.
     \item \textbf{Official Government Administrative Data Feeds (Divisions 07 and 12):} The Ministry of Commerce (MOC) bi-weekly regulated retail fuel price determinations (regular gasoline, premium gasoline, and diesel) and the Ministry of Economy and Finance (MEF) official daily foreign exchange rate (USD/KHR).
 \end{itemize}
 
-\subsection{Ingestion Resilience and Quality Control Mechanisms}
-\hs Scraping external commercial websites involves technical risks, including website structure redesigns, intermittent network timeouts, and bot-detection challenges. To ensure uninterrupted daily operations, the pipeline incorporates several automated quality control guards:
+\subsection{Ingestion Resilience, Deduplication, and Quality Control Mechanisms}
+\hs Scraping external commercial websites involves technical risks, including website structure redesigns, intermittent network timeouts, and bot-detection challenges. To ensure uninterrupted daily operations and data integrity, the pipeline incorporates several automated quality control guards:
 \begin{itemize}
-    \item \textbf{Circuit Breakers for Extraction Failures:} If an automated crawler returns zero products or an abnormally low quote count (for example, less than $50\%$ of historical volume), the system triggers a circuit breaker that halts downstream processing, logs an anomaly alert, and prevents corrupt or empty batches from overwriting historical price facts.
-    \item \textbf{Automated Retry and Backoff Protocols:} Network requests implement exponential backoff retry algorithms to handle transient server errors, ensuring that temporary drops in retailer website availability do not cause permanent daily data gaps.
+    \item \textbf{Strict Atomic Deduplication Contract (\texttt{bronze.raw\_prices}):} To prevent artificial price duplication and multi-quote inflation across scraper retries, the Bronze database enforces a deterministic unique observation index:
+    \begin{equation}
+        \text{UNIQUE}\Big(\text{store\_id}, \text{source\_name}, \text{COALESCE}(\text{source\_url}, ''), \text{item\_description\_raw}, \text{scraped\_date}\Big)
+    \end{equation}
+    Critically, the nominal price column is strictly excluded from this constraint. When a scraper re-executes on the same day following a partial network timeout, it updates the existing observation in-place rather than inserting duplicate records with diverging prices.
+    \item \textbf{Staging Audit Payload Concatenation (\texttt{staging.raw\_scrapes}):} Scraper batch metadata and execution payloads are ingested with atomic JSONB concatenation on conflict (\texttt{payload = staging.raw\_scrapes.payload || EXCLUDED.payload}), preserving audit trails across multiple run retries without overwriting earlier batch telemetry.
+    \item \textbf{Circuit Breakers for Extraction Failures:} If an automated crawler returns zero products or an abnormally low quote count (less than $50\%$ of historical volume), the system triggers a circuit breaker that halts downstream processing, logs an anomaly alert, and prevents corrupt or empty batches from polluting the pipeline.
+    \item \textbf{Automated Retry and Backoff Protocols:} Network requests implement exponential backoff retry algorithms with TLS fingerprint impersonation (\texttt{curl\_cffi}) to handle transient server errors and bot challenges.
     \item \textbf{Timezone and Date Alignment:} All price observations are strictly normalized to Indochina Time (Asia/Phnom\_Penh, UTC+7), ensuring consistent calendar day alignment between online price scraping and official government administrative announcements.
 \end{itemize}
 
@@ -97,15 +103,36 @@ where $p_{i, t}$ is the price of product $i$ on day $t$, $p_{i, 0}$ is its base 
 
 \hs As established in international index number theory, using the geometric mean rather than the arithmetic average (Carli index) guarantees that the elementary index satisfies the time-reversal and circularity axioms. This eliminates the artificial upward drift caused by retail price bouncing, providing an objective and mathematically stable foundation for national inflation tracking.
 
-\subsection{Principled Missing Price Imputation Engine}
-\hs In online retail environments, products frequently experience temporary stockouts, weekend inventory resets, or brief website maintenance. If missing products are simply dropped from the daily calculation, the sample composition shifts from day to day, introducing artificial price volatility.
+\subsection{Targeted Compounded Class-Mean Geometric Imputation Engine}
+\hs In online retail environments, products frequently experience temporary stockouts, weekend inventory resets, or brief website maintenance. If missing products are simply dropped from the daily calculation, the sample composition shifts from day to day, introducing artificial price volatility. Conversely, carrying forward flat nominal prices ($\widehat{P}_{i, t} = P_{i, t-1}$) is strictly prohibited by international statistical guidelines \citep{imf2020cpi}, as static carry-forward artificially dampens true market volatility and creates severe downward lag bias during inflationary periods.
 
-\hs To preserve longitudinal time-series continuity, the pipeline implements a \textbf{7-day carry-forward imputation rule} recommended by the IMF CPI Manual \citep{imf2020cpi}:
-\begin{itemize}
-    \item If a product was observed on previous days but is temporarily unavailable on day $t$, its last observed price is carried forward for up to 7 consecutive calendar days.
-    \item If the product returns to the catalog within the 7-day window, its real observed price resumes immediately.
-    \item If the product remains absent for more than 7 consecutive days, it is flagged as permanently discontinued or out-of-season, and removed from the active daily calculation basket to prevent stale prices from accumulating.
-\end{itemize}
+\hs To preserve longitudinal time-series continuity while accurately reflecting market price movements, the pipeline implements an international ILO-standard \textbf{Targeted Compounded Class-Mean Geometric Imputation Engine}:
+\begin{enumerate}
+    \item When an item $i$ belonging to COICOP subclass $c$ is absent on day $t$ after an elapsed gap of $\Delta t$ calendar days ($1 \le \Delta t \le 7$):
+    \begin{equation}
+        \widehat{P}_{i, t} = P_{i, t - \Delta t} \times \left( R_{c, t} \right)^{\Delta t}
+    \end{equation}
+    where $R_{c, t}$ represents the daily geometric mean price relative of observed peers in the same subclass:
+    \begin{equation}
+        R_{c, t} = \exp\left( \frac{1}{|S_{c, t}|} \sum_{j \in S_{c, t}} \big(\ln P_{j, t} - \ln P_{j, t-1}\big) \right)
+    \end{equation}
+    and $S_{c, t}$ is the set of items in subclass $c$ actively observed on both day $t$ and day $t-1$.
+    \item By compounding the class-mean movement over elapsed missing days $(\cdot)^{\Delta t}$, the algorithm accurately mirrors cumulative price drift across multi-day weekend gaps or brief scraper disruptions.
+    \item If a product remains absent for more than 7 consecutive calendar days ($\Delta t > 7$), it is classified as a structural market exit or discontinued line, and is removed from the active daily calculation basket to prevent stale imputed prices from polluting the index.
+\end{enumerate}
+
+\subsection{Log-Linear Hedonic Quality Adjustment Engine for Consumer Durables}
+\hs In rapidly evolving consumer durable sectors—specifically Division 08 (Communication equipment such as smartphones) and Division 09 (Information processing equipment such as laptops and tablets)—price changes frequently reflect technological upgrades (increased RAM, larger internal storage, upgraded display panels) rather than pure monetary inflation. To decouple quality enhancements from underlying price trends, the pipeline deploys a \textbf{Time-Dummy Log-Linear Hedonic OLS Regression Engine} (\texttt{pipeline/hedonic\_regression.py}):
+\begin{equation}
+    \ln P_{i, t} = \alpha_t + \sum_{k=1}^K \beta_k X_{i, k} + \varepsilon_{i, t}
+\end{equation}
+where $P_{i, t}$ is the observed unit price in KHR, $X_{i, k}$ denotes quantified physical characteristics (processor generation, RAM gigabytes, storage gigabytes, screen dimension), and $\beta_k$ represents the implicit market shadow price (hedonic characteristic valuation) of attribute $k$.
+
+\hs The quality-adjusted (constant-utility) price $\widetilde{P}_{i, t}$ is derived by removing the characteristic premium relative to the market baseline:
+\begin{equation}
+    \widetilde{P}_{i, t} = P_{i, t} \cdot \exp\left( -\sum_{k=1}^K \widehat{\beta}_k (X_{i, k} - \bar{X}_k) \right)
+\end{equation}
+\hs To ensure pipeline resilience, the hedonic engine enforces automated numerical guards: if the sample size is inadequate ($n < 5$) or the characteristic design matrix exhibits multicollinearity or rank-deficiency, the model gracefully returns status \texttt{SKIPPED\_RANK\_DEFICIENT} and passes observed prices forward untouched, preventing matrix singularity crashes in production.
 
 \subsection{The Macro-Level: Two-Tier Subclass-Weighted Laspeyres Aggregation}
 \hs Rather than collapsing unweighted elementary items directly into 12 broad division aggregates, international best practice \citep{imf2020cpi} dictates hierarchical stratum weighting. The pipeline implements a mathematically rigorous \textbf{Two-Tier Subclass-Weighted Laspeyres Aggregation}:
@@ -177,9 +204,13 @@ where $\omega_{\text{Food}} = 0.44775$, $\omega_{\text{Trans}} = 0.12180$, and $
         0.0000 & \text{otherwise}
     \end{cases}
 \end{equation}
-The unobserved remaining days' index level is subsequently projected from the realized baseline:
+\hs For the remaining $N = T - t$ unobserved calendar days in the month, daily prices advance progressively from the latest observed quote $P_t$ subject to cumulative drift $\hat{\delta}_t$. Rather than compounding or treating each unobserved day as an identical month-end endpoint, the expected average price index across the remainder of the month corresponds to the linear midpoint trajectory expectation:
 \begin{equation}
-    \widehat{\text{CPI}}_{\text{remaining}}(t) = \overline{\text{CPI}}_{\text{realized}}(t) \times \left( 1 + \hat{\delta}_t \cdot (T - t) \right)
+    E[P_{\text{remaining}}] = P_t \times \left( 1.0 + \hat{\delta}_t \cdot \frac{N + 1}{2} \right)
+\end{equation}
+The overall projected monthly index $\widehat{\text{CPI}}_M(t)$ is subsequently computed as the weighted time-integral of realized daily indices and projected remaining days:
+\begin{equation}
+    \widehat{\text{CPI}}_M(t) = \frac{\sum_{\tau=1}^t \text{CPI}_\tau + N \times E[P_{\text{remaining}}]}{T}
 \end{equation}
 Similarly, Core CPI is projected utilizing half the pure leading drift rate ($\frac{1}{2}\hat{\delta}_{\text{core}, t}$), reflecting the reduced sensitivity of core manufactured goods to festive food and transit surges.
 
@@ -224,11 +255,27 @@ and verifying whether actual inflation fell within the estimated 95\% confidence
 \begin{itemize}
     \item \textbf{Executive Macro Overview:} Real-time dial gauges displaying current Headline and Core inflation rates, day-on-day changes, 30-day cumulative trends, and foreign exchange movements.
     \item \textbf{12-Division Drill-Down Analytics:} Interactive time-series charts allowing analysts to click into any specific COICOP division, view historical trajectories, and identify top rising or falling goods.
-    \item \textbf{Operational Scraper Observability Matrix:} Displays the daily status of all 20 scrapers, recording daily quote yields, HTTP response codes, scraping execution duration, and data quality check results.
+    \item \textbf{Operational Scraper Observability Matrix:} Displays the daily status of all 23 scrapers, recording daily quote yields, HTTP response codes, scraping execution duration, and data quality check results.
 \end{itemize}
 
-\subsection{Containerized Infrastructure}
-\hs The complete ecosystem is containerized using Docker Compose, integrating PostgreSQL 16 (Medallion database storage), Apache Airflow 2.9.3 (workflow scheduling and DAG execution), automated transformation engines, and Metabase (business intelligence serving). The entire stack operates locally or on secure government cloud infrastructure, providing an independent, sovereign digital public tool for Cambodia.
+\subsection{Containerized Infrastructure and Orchestration Lineage}
+\hs The complete ecosystem is containerized using Docker Compose, integrating PostgreSQL 16 (Medallion database storage), Apache Airflow 2.9.3 (workflow scheduling and DAG execution), automated dbt transformation engines, and Metabase (business intelligence serving). 
+
+\hs Airflow enforces a strict, dependency-validated Directed Acyclic Graph (DAG) execution topology:
+\begin{enumerate}
+    \item \textbf{Master Fan-Out (\texttt{cpi\_master\_dag}):} Triggers all 23 scraper feeds concurrently at 02:00 Phnom Penh time, enforcing Bronze quality gates before triggering downstream layers.
+    \item \textbf{Silver Layer Dependency (\texttt{silver\_dag}):} Enforces the verified sequence:
+    \begin{equation*}
+        \text{Item Matching} \longrightarrow \text{AI Review} \longrightarrow \text{COICOP AI Cache} \longrightarrow \text{dbt Seed/Run} \longrightarrow \text{Hedonic Regression} \longrightarrow \text{dbt Tests}
+    \end{equation*}
+    This ensures that COICOP classifications are memoized before dbt builds conformed tables, and hedonic regressions query clean price facts before data quality tests validate the layer.
+    \item \textbf{Gold Econometric Layer (\texttt{gold\_cpi\_dag}):} Enforces annual rebasing prior to index calculation:
+    \begin{equation*}
+        \text{Annual Rebase Task} \longrightarrow \text{Daily Jevons CPI} \longrightarrow \text{Monthly Index} \longrightarrow \text{ML Nowcaster}
+    \end{equation*}
+    guaranteeing that indices are compiled relative to the active December base period without step jumps.
+\end{enumerate}
+The entire stack operates locally or on secure government cloud infrastructure, providing an independent, sovereign digital public tool for Cambodia.
 
 \section{Methodological Activity Schedule}
 \hs Table~\ref{table:methodology_roadmap} details the project execution timeline across the 12-week operational schedule.

@@ -146,6 +146,7 @@ class CPINowcaster:
 
         # Standardize dates
         if not df_daily.empty and "calculation_date" in df_daily.columns:
+            df_daily = df_daily.copy()
             df_daily["calculation_date"] = pd.to_datetime(df_daily["calculation_date"]).dt.date
 
         # Filter daily facts to active month
@@ -225,15 +226,37 @@ class CPINowcaster:
                         festival_shock = 0.0006  # ~0.06% lead/lag festive premium
                     break
 
-        projected_daily_drift = leading_signal_drift + festival_shock
+        # -------------------------------------------------------------------------
+        # Dual-Currency Exchange Rate Pass-Through (ERPT)
+        # Empirical pass-through coefficient beta_erpt = 0.28 (Chapter 11)
+        # -------------------------------------------------------------------------
+        fx_momentum = 0.0
+        fx_daily_drift = 0.0
+        beta_erpt = 0.28
+        if df_fx is not None and not df_fx.empty and "rate" in df_fx.columns:
+            df_fx_sorted = df_fx.sort_values("execution_date") if "execution_date" in df_fx.columns else df_fx
+            if len(df_fx_sorted) >= 7:
+                fx_recent = float(df_fx_sorted["rate"].iloc[-1])
+                fx_prior = float(df_fx_sorted["rate"].iloc[-7])
+                if fx_prior > 0:
+                    fx_momentum = (fx_recent - fx_prior) / fx_prior
+                    fx_daily_drift = beta_erpt * (fx_momentum / 7.0)
+            elif len(df_fx_sorted) >= 2:
+                fx_recent = float(df_fx_sorted["rate"].iloc[-1])
+                fx_prior = float(df_fx_sorted["rate"].iloc[0])
+                n_days = max(1, len(df_fx_sorted) - 1)
+                if fx_prior > 0:
+                    fx_momentum = (fx_recent - fx_prior) / fx_prior
+                    fx_daily_drift = beta_erpt * (fx_momentum / float(n_days))
+
+        projected_daily_drift = leading_signal_drift + festival_shock + fx_daily_drift
 
         # Project CPI for remaining days
-        # BUG-08 FIX: Use the average projected index over the remaining trajectory
-        # instead of the end-of-month extreme value applied uniformly.
-        # For linear daily drift, the average is: realized * (1 + drift * (N+1)/2)
+        # Average projected index over remaining trajectory: realized * (1 + drift * (N+1)/2)
         if days_remaining > 0:
             projected_avg_cpi = realized_cpi * (1.0 + (projected_daily_drift * (days_remaining + 1) / 2.0))
-            projected_core_avg = realized_core * (1.0 + (leading_signal_drift * 0.5 * (days_remaining + 1) / 2.0))
+            # Core CPI incorporates imported USD pass-through plus dampened general drift
+            projected_core_avg = realized_core * (1.0 + ((leading_signal_drift * 0.5 + fx_daily_drift) * (days_remaining + 1) / 2.0))
         else:
             projected_avg_cpi = realized_cpi
             projected_core_avg = realized_core
@@ -303,6 +326,8 @@ class CPINowcaster:
             "ci_lower_95": ci_lower_95,
             "ci_upper_95": ci_upper_95,
             "uncertainty_pct": uncertainty_ratio,
+            "fx_momentum_7d": round(float(fx_momentum), 6),
+            "fx_daily_drift": round(float(fx_daily_drift), 6),
             "model_name": self.model_name,
         }
 
@@ -447,6 +472,149 @@ class CPINowcaster:
 
         return self.nowcast_for_date(target_date, df_daily, df_fx, df_monthly, df_nis)
 
+    def evaluate_historical_accuracy(
+        self,
+        df_daily: pd.DataFrame,
+        df_fx: pd.DataFrame,
+        df_monthly: pd.DataFrame,
+        df_nis: pd.DataFrame | None = None,
+        evaluation_days: list[int] | None = None,
+    ) -> dict[str, Any]:
+        """Automated Backtesting and Benchmark Evaluation Harness.
+
+        Evaluates nowcasting accuracy across expanding horizons (Day 5, 10, 15, 20, 25)
+        against official ground-truth monthly inflation. Computes:
+        - Root Mean Squared Error (RMSE)
+        - Mean Absolute Error (MAE)
+        - Directional Accuracy (%)
+        - Horizon Convergence Telemetry
+        """
+        if evaluation_days is None:
+            evaluation_days = [5, 10, 15, 20, 25]
+
+        if df_daily.empty:
+            return {"error": "Empty daily dataset"}
+
+        df_daily_copy = df_daily.copy()
+        df_daily_copy["calculation_date"] = pd.to_datetime(df_daily_copy["calculation_date"]).dt.date
+
+        # Identify all distinct calendar months in df_daily
+        months = sorted(list({d.replace(day=1) for d in df_daily_copy["calculation_date"]}))
+
+        eval_records: list[dict[str, Any]] = []
+
+        for m in months:
+            _, days_in_month = calendar.monthrange(m.year, m.month)
+
+            # Find ground truth actual for month m
+            actual_headline = None
+            actual_mom = None
+
+            if df_monthly is not None and not df_monthly.empty:
+                m_series = pd.to_datetime(df_monthly["cpi_month"]).dt.date
+                match = df_monthly[m_series == m]
+                if not match.empty:
+                    actual_headline = float(match.iloc[0]["monthly_headline_cpi"])
+                    if "mom_inflation_pct" in match.columns:
+                        actual_mom = float(match.iloc[0]["mom_inflation_pct"])
+
+            # If ground truth monthly row isn't in df_monthly, check if full month exists in df_daily
+            if actual_headline is None:
+                month_daily = df_daily_copy[(df_daily_copy["calculation_date"] >= m) & (df_daily_copy["calculation_date"] <= m.replace(day=days_in_month))]
+                if len(month_daily["calculation_date"].unique()) >= 10:
+                    actual_headline = float(month_daily.drop_duplicates("calculation_date")["headline_cpi"].mean())
+                    prior_m = (m - timedelta(days=5)).replace(day=1)
+                    prior_daily = df_daily_copy[(df_daily_copy["calculation_date"] >= prior_m) & (df_daily_copy["calculation_date"] < m)]
+                    if not prior_daily.empty:
+                        prior_mean = float(prior_daily.drop_duplicates("calculation_date")["headline_cpi"].mean())
+                        actual_mom = round(((actual_headline - prior_mean) / prior_mean) * 100.0, 4)
+
+            if actual_headline is None:
+                continue
+
+            for day in evaluation_days:
+                if day > days_in_month:
+                    continue
+                eval_date = m.replace(day=day)
+                # Ensure we only feed historical data up to eval_date (no lookahead bias)
+                sub_daily = df_daily_copy[df_daily_copy["calculation_date"] <= eval_date]
+                if sub_daily.empty:
+                    continue
+                sub_fx = df_fx[pd.to_datetime(df_fx["execution_date"]).dt.date <= eval_date] if df_fx is not None and not df_fx.empty else pd.DataFrame()
+                sub_monthly = df_monthly[pd.to_datetime(df_monthly["cpi_month"]).dt.date < m] if df_monthly is not None and not df_monthly.empty else pd.DataFrame()
+
+                try:
+                    res = self.nowcast_for_date(eval_date, sub_daily, sub_fx, sub_monthly, df_nis)
+                    pred_headline = res["nowcast_headline_cpi"]
+                    pred_mom = res["projected_mom_pct"]
+
+                    abs_err_cpi = abs(pred_headline - actual_headline)
+                    sq_err_cpi = (pred_headline - actual_headline) ** 2
+
+                    abs_err_mom = abs(pred_mom - actual_mom) if actual_mom is not None else None
+                    sq_err_mom = (pred_mom - actual_mom) ** 2 if actual_mom is not None else None
+
+                    dir_correct = None
+                    if actual_mom is not None:
+                        dir_correct = (pred_mom * actual_mom >= 0) or (abs(pred_mom) < 0.05 and abs(actual_mom) < 0.05)
+
+                    eval_records.append({
+                        "month": m,
+                        "day_of_month": day,
+                        "eval_date": eval_date,
+                        "actual_headline": actual_headline,
+                        "predicted_headline": pred_headline,
+                        "actual_mom": actual_mom,
+                        "predicted_mom": pred_mom,
+                        "abs_err_cpi": abs_err_cpi,
+                        "sq_err_cpi": sq_err_cpi,
+                        "abs_err_mom": abs_err_mom,
+                        "sq_err_mom": sq_err_mom,
+                        "dir_correct": dir_correct,
+                    })
+                except Exception as e:
+                    log.debug("Evaluation on %s skipped: %s", eval_date, e)
+
+        if not eval_records:
+            return {"error": "Insufficient overlapping months for backtesting evaluation"}
+
+        df_eval = pd.DataFrame(eval_records)
+
+        # Aggregate by evaluation day horizon (Day 5, 10, 15, 20, 25)
+        horizon_metrics = {}
+        for day, group in df_eval.groupby("day_of_month"):
+            rmse_cpi = float(np.sqrt(group["sq_err_cpi"].mean()))
+            mae_cpi = float(group["abs_err_cpi"].mean())
+
+            valid_mom = group.dropna(subset=["sq_err_mom"])
+            rmse_mom = float(np.sqrt(valid_mom["sq_err_mom"].mean())) if not valid_mom.empty else None
+            mae_mom = float(valid_mom["abs_err_mom"].mean()) if not valid_mom.empty else None
+            dir_acc = float(group["dir_correct"].mean() * 100.0) if "dir_correct" in group and not group["dir_correct"].isna().all() else None
+
+            horizon_metrics[f"Day_{day:02d}"] = {
+                "eval_day": int(day),
+                "n_evaluations": len(group),
+                "rmse_headline_cpi": round(rmse_cpi, 4),
+                "mae_headline_cpi": round(mae_cpi, 4),
+                "rmse_mom_pct": round(rmse_mom, 4) if rmse_mom is not None else None,
+                "mae_mom_pct": round(mae_mom, 4) if mae_mom is not None else None,
+                "directional_accuracy_pct": round(dir_acc, 2) if dir_acc is not None else None,
+            }
+
+        overall_rmse = float(np.sqrt(df_eval["sq_err_cpi"].mean()))
+        overall_mae = float(df_eval["abs_err_cpi"].mean())
+        overall_dir = float(df_eval["dir_correct"].dropna().mean() * 100.0) if not df_eval["dir_correct"].dropna().empty else None
+
+        return {
+            "evaluation_months_count": len(months),
+            "total_evaluations": len(df_eval),
+            "overall_rmse_cpi": round(overall_rmse, 4),
+            "overall_mae_cpi": round(overall_mae, 4),
+            "overall_directional_accuracy_pct": round(overall_dir, 2) if overall_dir is not None else None,
+            "horizon_convergence": horizon_metrics,
+            "details": df_eval.to_dict(orient="records"),
+        }
+
 
 def execute_nowcasting_pipeline(**context) -> dict[str, Any]:
     """Airflow-callable Python entrypoint for daily inflation nowcasting."""
@@ -458,3 +626,66 @@ def execute_nowcasting_pipeline(**context) -> dict[str, Any]:
 
     nowcaster = CPINowcaster()
     return nowcaster.run_daily_nowcast(calc_date)
+
+
+if __name__ == "__main__":
+    import argparse
+    import sys
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+    parser = argparse.ArgumentParser(description="Cambodia CPI Daily Inflation Nowcaster")
+    parser.add_argument("--date", type=str, default=None, help="Target date (YYYY-MM-DD)")
+    parser.add_argument("--backtest", action="store_true", help="Run historical backtesting evaluation")
+    args = parser.parse_args()
+
+    nowcaster = CPINowcaster()
+    if args.backtest:
+        print("[*] Running Historical Nowcasting Backtesting & Convergence Evaluation...")
+        try:
+            df_daily, df_fx, df_monthly, df_nis = nowcaster.fetch_training_data(date.today())
+            results = nowcaster.evaluate_historical_accuracy(df_daily, df_fx, df_monthly, df_nis)
+        except Exception as e:
+            print(f"Live database unavailable ({e}). Running backtest on synthetic multi-month series...")
+            # Create synthetic 2-month dataset for testing
+            dates_m1 = [date(2026, 7, 1) + timedelta(days=i) for i in range(31)]
+            dates_m2 = [date(2026, 8, 1) + timedelta(days=i) for i in range(31)]
+            mock_daily = []
+            for d in dates_m1 + dates_m2:
+                mock_daily.append({
+                    "calculation_date": d,
+                    "coicop_division": "01",
+                    "weight": 0.44775,
+                    "division_index": 100.0 + (d.month * 0.5) + (d.day * 0.01),
+                    "headline_cpi": 100.0 + (d.month * 0.5) + (d.day * 0.01),
+                    "core_cpi": 99.8 + (d.month * 0.3) + (d.day * 0.01),
+                })
+            df_d = pd.DataFrame(mock_daily)
+            df_f = pd.DataFrame([{"execution_date": d, "rate": 4050.0} for d in dates_m1 + dates_m2])
+            df_m = pd.DataFrame([
+                {"cpi_month": date(2026, 7, 1), "monthly_headline_cpi": 100.5, "mom_inflation_pct": 0.5},
+                {"cpi_month": date(2026, 8, 1), "monthly_headline_cpi": 101.0, "mom_inflation_pct": 0.5},
+            ])
+            results = nowcaster.evaluate_historical_accuracy(df_d, df_f, df_m)
+
+        print("\n=======================================================")
+        print("  CAMBODIA CPI NOWCASTING HISTORICAL CONVERGENCE")
+        print("=======================================================")
+        print(f"Overall RMSE (Headline CPI): {results.get('overall_rmse_cpi')}")
+        print(f"Overall MAE (Headline CPI):  {results.get('overall_mae_cpi')}")
+        print(f"Directional Accuracy:        {results.get('overall_directional_accuracy_pct')}%")
+        print("\nHorizon Convergence (Error Drops as Month Progresses):")
+        for horizon, metrics in results.get("horizon_convergence", {}).items():
+            print(f"  {horizon}: RMSE = {metrics.get('rmse_headline_cpi')}, MAE = {metrics.get('mae_headline_cpi')}")
+        print("=======================================================\n")
+    else:
+        target = pd.to_datetime(args.date).date() if args.date else date.today()
+        out = nowcaster.run_daily_nowcast(target)
+        print(f"\n[OK] Nowcast Completed for {out['nowcast_date']}:")
+        print(f"  Target Month:     {out['target_month']}")
+        print(f"  Observed Days:    {out['days_observed']} / {out['days_in_month']} ({round(out['days_observed']/out['days_in_month']*100, 1)}%)")
+        print(f"  Headline CPI:     {out['nowcast_headline_cpi']}")
+        print(f"  Projected MoM:    {out['projected_mom_pct']}%")
+        print(f"  95% CI Bounds:    [{out['ci_lower_95']} - {out['ci_upper_95']}]")
+        print(f"  FX 7d Momentum:   {out.get('fx_momentum_7d')}")
+

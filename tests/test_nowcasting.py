@@ -184,3 +184,46 @@ def test_festival_shock_adjustment(sample_nowcast_data):
     assert festival_res is not None
     assert "nowcast_headline_cpi" in festival_res
     assert festival_res["nowcast_headline_cpi"] > 0
+
+
+def test_exchange_rate_pass_through_drift(sample_nowcast_data):
+    """Verifies that Riel depreciation (USD/KHR increase) lifts the projected daily drift."""
+    target_date, df_daily, _, df_monthly, df_nis = sample_nowcast_data
+    nowcaster = CPINowcaster()
+
+    # Case A: Stable FX rate (4050 KHR/USD)
+    df_fx_stable = pd.DataFrame([
+        {"execution_date": target_date - timedelta(days=i), "rate": 4050.0}
+        for i in range(10)
+    ])
+    res_stable = nowcaster.nowcast_for_date(target_date, df_daily, df_fx_stable, df_monthly, df_nis)
+
+    # Case B: Depreciating Riel (4050 -> 4150 KHR/USD over 7 days, ~2.5% depreciation)
+    fx_depr_rows = []
+    for i in range(10):
+        d = target_date - timedelta(days=i)
+        rate = 4150.0 if i == 0 else 4050.0
+        fx_depr_rows.append({"execution_date": d, "rate": rate})
+    df_fx_depr = pd.DataFrame(fx_depr_rows)
+    res_depr = nowcaster.nowcast_for_date(target_date, df_daily, df_fx_depr, df_monthly, df_nis)
+
+    assert res_depr["fx_momentum_7d"] > res_stable["fx_momentum_7d"]
+    assert res_depr["fx_daily_drift"] > res_stable["fx_daily_drift"]
+    assert res_depr["nowcast_headline_cpi"] >= res_stable["nowcast_headline_cpi"]
+
+
+def test_evaluate_historical_accuracy_backtest(sample_nowcast_data):
+    """Verifies the automated backtesting evaluation harness."""
+    _, df_daily, df_fx, df_monthly, df_nis = sample_nowcast_data
+    nowcaster = CPINowcaster()
+
+    results = nowcaster.evaluate_historical_accuracy(
+        df_daily, df_fx, df_monthly, df_nis, evaluation_days=[5, 10, 15, 20]
+    )
+    assert results is not None
+    assert "overall_rmse_cpi" in results
+    assert "overall_mae_cpi" in results
+    assert "horizon_convergence" in results
+    assert results["overall_rmse_cpi"] >= 0.0
+    assert results["overall_mae_cpi"] >= 0.0
+

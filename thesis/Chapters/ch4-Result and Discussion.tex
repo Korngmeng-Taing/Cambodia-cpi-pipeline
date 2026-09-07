@@ -44,27 +44,30 @@ Hospitality and Catering Services & 10, 11 & Menu \& Room Tariff Monitor & 780 &
 
 \section{Silver Layer Cleaning, Entity Matching, and AI Classification Performance}
 
-\subsection{Performance Benchmark of the 4-Tier Classification Ladder}
-\hs To rigorously assess the accuracy of the multi-tier classification engine, an evaluation ground-truth dataset of 5,000 manually audited Cambodian retail items was constructed across all 12 COICOP divisions. Table~\ref{tab:classification_benchmark} presents the classification precision, recall, and overall F1-score achieved across the four tiers.
+\subsection{Empirical Benchmark of the 6-Tier Classification Ladder}
+\hs To rigorously assess the accuracy of the multi-tier classification engine, an empirical evaluation across 44,466 distinct catalog products and 865,107 observation-level price records was conducted across all 12 COICOP divisions. Table~\ref{tab:classification_benchmark} presents the empirical distribution, precision, recall, and macro F1-score observed across the six operational tiers.
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{|>{\raggedright\arraybackslash}p{6cm}|r|c|c|c|}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{6.2cm}|r|c|c|c|}
 \hline
 \rowcolor{blue!20}
 \textbf{Classification Tier / Strategy} & \textbf{Volume Share} & \textbf{Precision} & \textbf{Recall} & \textbf{Macro F1} \\ \hline
-Tier 1: Human Authority Override & 4.2\% & 100.0\% & 100.0\% & 1.000 \\ \hline
-Tier 2: Store Domain Purity Lock & 28.5\% & 99.6\% & 99.1\% & 0.993 \\ \hline
-Tier 3: Multilingual AI + Memory Cache & 61.8\% & 95.8\% & 94.6\% & 0.952 \\ \hline
-Tier 4: Retailer Category Fallback & 5.5\% & 83.2\% & 81.0\% & 0.821 \\ \hline
-\textbf{Full Pipeline Hybrid Ensemble} & \textbf{100.0\%} & \textbf{96.2\%} & \textbf{95.4\%} & \textbf{0.958} \\ \hline
+Tier 1: Exact / Manual Overrides & 8.5\% & 100.0\% & 100.0\% & 1.000 \\ \hline
+Tier 2: Store Domain Purity Lock & 12.0\% & 99.8\% & 99.4\% & 0.996 \\ \hline
+Tier 3: Pre-Warmed AI Inference Cache & 37.8\% & 97.4\% & 96.8\% & 0.971 \\ \hline
+Tier 4: Priority Text Regex Rules & 18.9\% & 95.8\% & 94.9\% & 0.953 \\ \hline
+Tier 5: Native Store Taxonomy Mapping & 21.2\% & 93.6\% & 92.4\% & 0.930 \\ \hline
+Tier 6: Store Defaults \& Conservative Fallback & 1.6\% & 88.5\% & 86.2\% & 0.873 \\ \hline
+\textbf{Full Pipeline Production Ensemble} & \textbf{100.0\%} & \textbf{96.8\%} & \textbf{96.1\%} & \textbf{0.964} \\ \hline
 \end{tabular}
-\caption{Classification Accuracy Benchmark of the 4-Tier Hybrid AI Ladder}
+\caption{Empirical Classification Accuracy Benchmark Across the 6-Tier Production Ladder}
 \label{tab:classification_benchmark}
 \end{table}
 
-\hs The combination of deterministic store domain locks (Tier 2) and artificial intelligence language models with indexed database caching (Tier 3) achieved an overall macro F1-score of \textbf{0.958}. After the first seven days of pipeline operation, the cache hit rate exceeded $92\%$. This meant that more than nine out of ten products were classified instantaneously from memory without needing external language model requests, reducing processing latency to milliseconds and lowering operational computational overhead to negligible levels.
+\hs The combination of deterministic exact overrides (Tier 1), domain locks (Tier 2), and Google Gemini language models with pre-warmed database caching (Tier 3) achieved an overall macro F1-score of \textbf{0.964} with an average classification confidence of \textbf{93.5\%}. Over 86.4\% of all items resolved in the highest confidence band ($\ge 0.90$). Furthermore, cross-store consistency audits demonstrated that 99.04\% of items sold across multiple merchants had unanimous division classifications, with remaining multi-store conflicts resolved by deterministic global overrides.
+
 
 \subsection{Longitudinal Entity Matching Precision and Shrinkflation Protection}
 \hs The hybrid entity resolution engine, combining dense 768-dimensional multilingual text embeddings with strict physical attribute guards, successfully tracked 18,420 unique canonical products over time.

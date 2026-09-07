@@ -81,14 +81,25 @@
 \end{itemize}
 Only listings that satisfy both semantic vector similarity and all physical specification guards are linked into canonical product identities.
 
-\subsection{The 4-Tier Hybrid AI COICOP Classification Engine}
-\hs To classify thousands of diverse consumer goods into the 12 United Nations COICOP divisions, the pipeline deploys a 4-tier hierarchical classification ladder designed to maximize accuracy while minimizing computational delay and cost:
+\subsection{The 6-Tier Hierarchical COICOP Classification Ladder}
+\hs To classify thousands of diverse consumer goods into the 12 United Nations COICOP divisions, the pipeline deploys an optimized 6-tier hierarchical classification ladder designed to maximize econometric accuracy while minimizing computational latency and API cost:
+\begin{enumerate}
+    \item \textbf{Tier 1: Human Authority and Deterministic Overrides:} Curated manual rules and GTIN barcode matches maintained in \texttt{silver.coicop\_override} and \texttt{silver.coicop\_override\_manual}. This tier holds absolute precedence ($100\%$ confidence), ensuring benchmark commodities and critical boundary items are deterministically classified.
+    \item \textbf{Tier 2: Store Domain Purity Locking:} Specialized commercial outlets operate within single dedicated economic sectors. The system assigns instantaneous $O(1)$ SQL locks: Community Pharmacy to Health (06), redBus and BookMeBus to Transport (07), Khmer24 Real Estate to Housing and Rentals (04), Cellcard and Smart Axiata to Communication (08), and Sokha and Hyatt Regency to Hotels (11).
+    \item \textbf{Tier 3: Multi-Store Substring Disambiguation Overrides:} High-priority substring rules that resolve semantic cross-store boundary ambiguities (e.g., locking dermatological spring waters to Division 12 cosmetics rather than Division 01 drinking water, and effervescent vitamins to Division 06 health products).
+    \item \textbf{Tier 4: Pre-Warmed Multilingual AI Inference Cache:} Over 39,200 product titles pre-classified using Google Gemini models with structured JSON schemas and few-shot contextual prompts. Cached predictions with confidence $\ge 0.50$ are retrieved instantly ($37.8\%$ catalog share, average confidence $95.3\%$), while low-confidence predictions are quarantined in \texttt{silver.classification\_queue}.
+    \item \textbf{Tier 5: Text Regular Expression Rules with Negative Boundary Guards:} Priority-ranked regex rules matching commodity keywords with strict negative lookarounds, preventing personal care products containing food ingredients (cucumber, aloe, coconut, milk) from misclassifying into Division 01 Food.
+    \item \textbf{Tier 6: Native Store Taxonomy Mapping and Store Defaults:} Maps retailer native catalog hierarchies (such as DeliShop and L192 category breadcrumbs) into COICOP divisions before applying conservative store defaults (\texttt{coicop\_store\_defaults}).
+\end{enumerate}
+
+\subsection{Empirical Quality Quarantines and Boundary Case Disambiguation}
+\hs Operating web scrapers in developing retail environments encounters boundary edge cases that distort elementary indices if unaddressed:
 \begin{itemize}
-    \item \textbf{Tier 1: Human Authority Override:} Verified classifications manually reviewed by economic analysts. This tier has highest priority and absolute confidence ($1.0$), ensuring that high-stakes benchmark products (such as primary staple rice varieties) are always correctly assigned.
-    \item \textbf{Tier 2: Store Domain Purity Locking:} Specialized retail platforms operate within narrow, dedicated economic sectors. For example, listings from Community Pharmacy belong exclusively to Health (Division 06); listings from redBus and BookMeBus belong exclusively to Transport (Division 07); listings from real estate portals belong to Housing and Rentals (Division 04); and listings from telecommunication providers belong to Communication (Division 08). The system locks these domain mappings directly, classifying approximately $28.5\%$ of all incoming records with near-zero latency and $99.6\%$ precision without requiring artificial intelligence queries.
-    \item \textbf{Tier 3: Multilingual Artificial Intelligence Inference with Database Memoization:} For generalized supermarket and marketplace catalogs (such as AEON and L192) that span multiple consumption divisions, the pipeline employs high-throughput Google Gemini artificial intelligence models. To prevent repeated, costly API calls for products seen previously, all AI classifications are memoized in an indexed database cache. When a previously classified product reappears on subsequent days, the system retrieves its classification instantly from the cache.
-    \item \textbf{Tier 4: Retailer Category Fallback and Review Triage:} If an item is entirely new and cannot be classified with high confidence by Tier 3, the system falls back to the retailer's native website category mapping and places the record in a verification queue for analyst inspection.
+    \item \textbf{Land for Rent Outlier Quarantine:} Real estate portals frequently list agricultural land and development leases alongside residential dwellings. Listings matching raw land keywords (\texttt{Land For Rent}) are programmatically flagged as outliers (\texttt{is\_outlier = true}, \texttt{cpi\_eligible = false}) in \texttt{int\_prices\_cleaned.sql}, preventing massive land valuations from contaminating residential rent metrics.
+    \item \textbf{Retail Transport Leakage Guardrail:} Supermarket and electronics retailers frequently sell automotive accessories (car phone chargers, dashboard diffusers). Explicit retailer slug constraints in \texttt{int\_coicop\_classified.sql} prohibit retail stores from classifying into Division 07 (Transport), routing electronics to Division 08 and air fresheners to Division 05.
+    \item \textbf{Decoding HTML Entities and Size Extraction Fallbacks:} The \texttt{clean\_product\_name} SQL macro decodes obfuscated HTML escape entities (such as quotation marks, apostrophes, and ampersands), while fallback regex rules extract package quantities directly from raw item titles when scraper attribute fields are unpopulated.
 \end{itemize}
+
 
 \section{Phase 3: Econometric CPI Compilation and Missing Price Imputation}
 

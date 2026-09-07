@@ -75,12 +75,16 @@ Response format: Strict JSON array, e.g.:
 
 
 def get_engine():
-    from pipeline.config import get_database_url
+    from pipeline.config import alternate_host_url, get_database_url
 
     conn_str = get_database_url()
-    if "localhost" in conn_str and os.path.exists("/.dockerenv"):
-        conn_str = conn_str.replace("localhost", "postgres")
-    return create_engine(conn_str)
+    try:
+        eng = create_engine(conn_str)
+        with eng.connect():
+            pass
+        return eng
+    except Exception:
+        return create_engine(alternate_host_url(conn_str))
 
 
 class GeminiModelPool:

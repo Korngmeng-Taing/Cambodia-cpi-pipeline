@@ -332,14 +332,37 @@ In online retail, products are listed with irregular titles, varying pack sizes,
         \end{itemize}
 \end{enumerate}
 
-\subsection{The 4-Tier UN COICOP Classification Ladder}
-Every canonical item is categorized into the UN COICOP hierarchy via:
+\subsection{The 6-Tier UN COICOP Classification Ladder}
+Every active catalog item is systematically resolved into the 12-division UN COICOP hierarchy through an optimized, deterministic-first classification ladder (\texttt{int\_coicop\_classified.sql} and \texttt{coicop\_classify\_macro.sql}):
 \begin{enumerate}
-    \item \textbf{Tier 1: Deterministic Overrides:} Curated brand/barcode rules in \texttt{silver.coicop\_override}.
-    \item \textbf{Tier 2: Single-Category Pure Store Mapping:} 15 domain-pure stores are assigned instantaneously in SQL (EDC $\rightarrow$ \texttt{04.5.1}, Tela/PTT $\rightarrow$ \texttt{07.2.2}, Smart/Cellcard $\rightarrow$ \texttt{08.2.0}, PPWSA $\rightarrow$ \texttt{04.4.1}, BookMeBus $\rightarrow$ \texttt{07.3.2}).
-    \item \textbf{Tier 3: Centroid Vector Classification:} For multi-category department stores (AEON, Lucky, Chip Mong), titles are compared against 92 bilingual English/Khmer COICOP reference centroids. Matches with cosine similarity $\ge 0.72$ are assigned.
-    \item \textbf{Tier 4: Gemini Pro/Flash Few-Shot Disambiguation:} Ambiguous items are resolved via Gemini using structured JSON schemas and memoized in \texttt{silver.coicop\_llm\_memo}.
+    \item \textbf{Tier 1: Exact Overrides (\texttt{coicop\_override} \& \texttt{coicop\_override\_manual}):}
+        Sub-millisecond exact matching by barcode (GTIN-8/12/13/14), internal \texttt{product\_key}, or store-scoped product titles. Ensures that manually audited or store-specific edge cases are prioritized ($100\%$ confidence, method: \texttt{override}).
+    \item \textbf{Tier 2: Single-Division Store Purity Locks:}
+        Single-domain commercial outlets are assigned instantaneous $O(1)$ division locks in SQL:
+        \begin{itemize}[noitemsep]
+            \item \textbf{Division 04 (Housing \& Utilities):} Khmer24 Rentals, Realestate.com.kh ($\rightarrow$ \texttt{04.1.1}).
+            \item \textbf{Division 06 (Health):} Community Pharma ($\rightarrow$ \texttt{06.1.2}).
+            \item \textbf{Division 07 (Transport \& Fuel):} BookMeBus, RedBus, New Gasoline ($\rightarrow$ \texttt{07.2.2} / \texttt{07.3.1}).
+            \item \textbf{Division 08 (Communication):} Cellcard, Smart Axiata, AryStore, SamnangShop ($\rightarrow$ \texttt{08.2.0} / \texttt{08.3.0}).
+            \item \textbf{Division 11 (Restaurants \& Hotels):} Sokha Hotel, Hyatt Regency, Bayon BKK ($\rightarrow$ \texttt{11.1.1} / \texttt{11.2.0}).
+        \end{itemize}
+    \item \textbf{Tier 3: Global Substring Overrides:}
+        Curated multi-store disambiguation rules that supersede text matching (e.g., distinguishing \texttt{AVENE THERMAL SPRING WATER} as Division 12 cosmetics rather than Division 01 drinking water, and \texttt{BEROCCA} as Division 06 health supplements rather than fruit beverages).
+    \item \textbf{Tier 4: Pre-Warmed Gemini AI Classification Cache (\texttt{dim\_coicop\_ai\_cache}):}
+        Over 39,200 unique product titles pre-classified using \texttt{gemini-3.1-flash-lite} with structured JSON schemas and few-shot contextual prompts. Cached predictions with confidence score $\ge 0.50$ are applied instantly ($37.8\%$ catalog share, average confidence $95.3\%$). Predictions with confidence $< 0.50$ are routed to \texttt{silver.classification\_queue} for automated re-review.
+    \item \textbf{Tier 5: Text Regex Rules with Negative Boundary Guards (\texttt{coicop\_text\_rules}):}
+        Priority-ordered regular expressions matching commodity terms while enforcing strict negative lookarounds (e.g., preventing skincare products containing cucumber, aloe, coconut, or milk from misclassifying into Division 01 Food).
+    \item \textbf{Tier 6: Native Store Taxonomy Mapping (\texttt{coicop\_category\_map}) \& Store Defaults:}
+        Maps store-specific department taxonomies (e.g., \texttt{Delishop: Pantry > Sauce} $\rightarrow$ \texttt{01.1.9}, \texttt{L192: Apparel} $\rightarrow$ \texttt{03.1.2}) as a fallback before falling back to store defaults (\texttt{coicop\_store\_defaults}).
 \end{enumerate}
+
+\subsection{Empirical Boundary Case Handling and Quality Quarantines}
+Production web-scraped data from developing economies exhibits unique boundary ambiguities requiring automated programmatic guardrails:
+\begin{itemize}[noitemsep]
+    \item \textbf{Real Estate vs. Raw Land Quarantine:} Real estate portals (\texttt{khmer24}, \texttt{realestate}) list agricultural land, development plots, and commercial leases alongside residential rentals. Raw land listings (\texttt{Land For Rent}) are programmatically flagged as outliers (\texttt{is\_outlier = true}, \texttt{cpi\_eligible = false}) in \texttt{int\_prices\_cleaned.sql}, preventing massive land sales from distorting residential rent indices.
+    \item \textbf{Retail Transport Leakage Guardrail:} Supermarkets and tech retailers frequently stock automotive accessories (e.g., Xiaomi 100W car chargers, car air fresheners). Explicit retail slug guardrails in \texttt{int\_coicop\_classified.sql} prevent retail stores from matching Division 07 (Transport), forcing car electronics to Division 08 and diffusers to Division 05.
+    \item \textbf{Store Native Taxonomy Discrepancies:} Cross-store audits revealed that 99.04\% of canonical items share identical divisions across stores, with the remaining 0.96\% resolved through deterministic global overrides for Korean/Japanese spirits (\texttt{Chamisul Soju} $\rightarrow$ \texttt{02.1.1}) and household cleaning liquids (\texttt{Sunlight} $\rightarrow$ \texttt{05.6.1}).
+\end{itemize}
 
 \newpage
 """)
@@ -370,8 +393,8 @@ DO UPDATE SET price = EXCLUDED.price;
 \subsection{Stage 2: Cleaning and Normalization (Silver Layer)}
 During the 03:00 AM Silver DAG run, the raw record is processed:
 \begin{enumerate}
-    \item \textbf{Text Standardization:} The title is cleaned of promotional tags: \texttt{'Coca Cola Can 330ml [Special Offer]'} $\rightarrow$ \texttt{'Coca Cola Can 330ml'}.
-    \item \textbf{Unit Extraction:} The regex parser identifies volume: \texttt{size\_value = 330}, \texttt{size\_unit = 'ml'}, \texttt{pack\_qty = 1}.
+    \item \textbf{Text Standardization \& HTML Entity Decoding:} The title is decoded of obfuscated HTML entities (such as quotation marks, apostrophes, and ampersands) and cleaned of promotional tags using the \texttt{clean\_product\_name} macro: \texttt{'Coca Cola Can 330ml [Special Offer]'} $\rightarrow$ \texttt{'Coca Cola Can 330ml'}.
+    \item \textbf{Package Size \& Multi-Unit Fallback Extraction:} The regex parser identifies volume: \texttt{size\_value = 330}, \texttt{size\_unit = 'ml'}, \texttt{pack\_qty = 1}. When scrapers return null package specifications, fallback regex parses metric quantities directly from raw titles, preventing distortion from store inventory counts.
     \item \textbf{Currency Conversion:} The price of \$0.65 USD is converted to KHR using the official daily NBC exchange rate (4,100 KHR/USD):
     \begin{equation}
     P_{\text{KHR}} = 0.65 \times 4,100 = 2,665.00 \text{ KHR}
@@ -864,10 +887,13 @@ The codebase enforces continuous data contracts through \textbf{53 automated dbt
 \texttt{test\_weights\_sum\_to\_100.sql} & Macroeconomic & National expenditure weights must sum to exactly 100.000\% ($\pm 0.01\%$). \\
 \texttt{test\_utility\_tariffs.sql} & Regulatory & EDC electricity and PPWSA water tariffs must strictly match official gazettes. \\
 \texttt{test\_traps.sql} & Classification & 38 deterministic trap goods (cooking wine, motor oil, slippers) land in correct COICOP. \\
+\texttt{test\_coicop\_code\_division\_match.sql} & Consistency & 2-digit division prefix strictly matches 5-digit COICOP code across all silver rows. \\
 \texttt{test\_price\_sanity.sql} & Anomaly & Unit prices must be strictly positive and within historical range bounds. \\
 \texttt{test\_coicop\_coverage.sql} & Completeness & All 12 COICOP divisions must be represented in active daily facts. \\
 \texttt{test\_idempotency.sql} & Integrity & Re-running transformations on day $t$ yields identical row counts. \\
-\texttt{test\_no\_retail\_in\_coicop\_07.sql} & Purity & Supermarket grocery items must never leak into Transport Fuel division. \\
+\texttt{test\_no\_retail\_in\_coicop\_07.sql} & Purity & Supermarkets, pharmacies, and tech shops must never classify into Transport (07). \\
+\texttt{test\_communitypharma\_coicop\_06.sql} & Purity & 100\% of pharmaceutical products from Community Pharma map to Health (06). \\
+\texttt{test\_no\_aeon\_in\_coicop\_06.sql} & Boundary & AEON general department store observations must never leak into Health (06). \\
 \bottomrule
 \end{tabular}
 \end{table}

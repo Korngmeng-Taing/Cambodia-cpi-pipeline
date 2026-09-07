@@ -25,10 +25,11 @@ END $$;
 
 -- ============================================================================
 -- 0. BRONZE (Raw Store Listings & Errors)
+-- Declarative Monthly Partitioning by scraped_at
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS bronze.raw_prices (
-    raw_price_id BIGSERIAL PRIMARY KEY,
+    raw_price_id BIGINT NOT NULL,
     store_id VARCHAR(64) NOT NULL,
     item_description_raw TEXT NOT NULL,
     price NUMERIC(12,4) NOT NULL,
@@ -37,26 +38,22 @@ CREATE TABLE IF NOT EXISTS bronze.raw_prices (
     source_url TEXT,
     source_name VARCHAR(128) NOT NULL,
     batch_id UUID,
-    raw_payload JSONB
-);
-ALTER TABLE bronze.raw_prices DROP COLUMN IF EXISTS created_at;
+    raw_payload JSONB,
+    PRIMARY KEY (raw_price_id, scraped_at)
+) PARTITION BY RANGE (scraped_at);
+
+CREATE SEQUENCE IF NOT EXISTS bronze.raw_prices_seq OWNED BY bronze.raw_prices.raw_price_id;
+ALTER TABLE bronze.raw_prices ALTER COLUMN raw_price_id SET DEFAULT nextval('bronze.raw_prices_seq');
+
+CREATE TABLE IF NOT EXISTS bronze.raw_prices_default
+    PARTITION OF bronze.raw_prices DEFAULT;
+
 CREATE INDEX IF NOT EXISTS idx_raw_prices_store_scraped ON bronze.raw_prices (store_id, scraped_at);
 CREATE INDEX IF NOT EXISTS idx_raw_prices_source_scraped ON bronze.raw_prices (source_name, scraped_at);
--- CONTRACT: bronze.raw_prices is "deduped at insert", NOT strictly append-only.
--- Re-scrapes of the same observation on the same day are collapsed by the
--- unique index below via INSERT ... ON CONFLICT DO NOTHING
--- (see pipeline/bronze_scraper.py:write_canonical_batch, which also pre-filters
--- duplicates app-side). New rows are never mutated after insert.
--- BUG-07 FIX: Removed `price` from the unique index — intra-day price changes
--- (e.g. flash sales) should NOT create duplicate rows; the contract is one
--- observation per item, per store, per day.
-DROP INDEX IF EXISTS bronze.uq_raw_prices_observation;
-CREATE UNIQUE INDEX IF NOT EXISTS uq_raw_prices_observation
-    ON bronze.raw_prices (
-        store_id, source_name,
-        COALESCE(source_url, ''), item_description_raw,
-        ((scraped_at AT TIME ZONE 'UTC')::date)
-    );
+CREATE INDEX IF NOT EXISTS idx_raw_prices_scraped_at ON bronze.raw_prices (scraped_at);
+CREATE INDEX IF NOT EXISTS idx_raw_prices_observation ON bronze.raw_prices (
+    store_id, source_name, item_description_raw, scraped_at
+);
 
 CREATE TABLE IF NOT EXISTS bronze.scrape_errors (
     error_id BIGSERIAL PRIMARY KEY,
@@ -232,54 +229,58 @@ CREATE TABLE IF NOT EXISTS silver.dim_canonical_products (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_dim_canonical_raw_item
     ON silver.dim_canonical_products(source_name, raw_item_id);
 
--- Silver Store Cleaned Fact Observation Table (1 Store 1 Table Paradigm)
+-- Silver Store Cleaned Fact Observation Table (Declarative Monthly Partitioning)
 CREATE TABLE IF NOT EXISTS silver.clean_store_prices (
-    raw_price_id BIGINT PRIMARY KEY,
+    raw_price_id BIGINT NOT NULL,
     scrape_date DATE NOT NULL,
-    store_slug VARCHAR(64) NOT NULL,
-    source_name VARCHAR(64),
+    store_slug VARCHAR(64),
+    source_name VARCHAR(128),
     item_id TEXT,
     name_raw TEXT,
     name_clean TEXT,
     category_native TEXT,
-    brand VARCHAR(256),
-    barcode VARCHAR(64),
-    currency VARCHAR(16),
-    price_original_curr NUMERIC(14, 2),
-    original_price_curr NUMERIC(14, 2),
-    usd_khr_rate NUMERIC(10, 4),
-    price_khr NUMERIC(14, 2),
-    original_price_khr NUMERIC(14, 2),
-    discount_pct NUMERIC(6, 2),
+    brand TEXT,
+    barcode TEXT,
+    currency VARCHAR(8),
+    price_original_curr NUMERIC,
+    original_price_curr NUMERIC,
+    usd_khr_rate NUMERIC,
+    price_khr NUMERIC,
+    original_price_khr NUMERIC,
+    discount_pct NUMERIC,
     on_promo BOOLEAN,
-    size_norm VARCHAR(32),
-    size_value NUMERIC(12, 4),
-    size_unit VARCHAR(32),
+    size_norm TEXT,
+    size_value NUMERIC,
+    size_unit TEXT,
     pack_qty INT,
-    unit_price_khr NUMERIC(14, 2),
-    coicop_division VARCHAR(16),
-    coicop_code VARCHAR(16),
-    coicop_method VARCHAR(32),
-    coicop_confidence NUMERIC(5, 4),
+    unit_price_khr NUMERIC,
+    coicop_division TEXT,
+    coicop_code TEXT,
+    coicop_method TEXT,
+    coicop_confidence NUMERIC,
     is_outlier BOOLEAN,
     cpi_eligible BOOLEAN,
     is_fallback BOOLEAN,
     fallback_reason TEXT,
-    match_method VARCHAR(32),
-    match_confidence NUMERIC(5, 4),
-    scraped_at TIMESTAMPTZ
-);
--- Daily grain uniqueness guard. Same item in same store on same date should appear once.
--- raw_price_id PK comes from bronze; this catches duplicate observations if a scraper
--- retries mid-day for the same item (raw_price_id is reused only after schema truncation).
-CREATE UNIQUE INDEX IF NOT EXISTS uq_clean_store_prices_date_store_item
-    ON silver.clean_store_prices (scrape_date, store_slug, item_id)
-    WHERE item_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_clean_store_prices_scrape_date_store ON silver.clean_store_prices(scrape_date, store_slug);
-CREATE INDEX IF NOT EXISTS idx_clean_store_prices_scrape_date_brin ON silver.clean_store_prices USING brin (scrape_date);
-CREATE INDEX IF NOT EXISTS idx_clean_store_prices_store_item ON silver.clean_store_prices(store_slug, item_id);
-CREATE INDEX IF NOT EXISTS idx_clean_store_prices_coicop_code ON silver.clean_store_prices(coicop_code);
-CREATE INDEX IF NOT EXISTS idx_clean_store_prices_coicop_division ON silver.clean_store_prices(coicop_division);
+    match_method TEXT,
+    match_confidence NUMERIC,
+    scraped_at TIMESTAMPTZ,
+    PRIMARY KEY (raw_price_id, scrape_date)
+) PARTITION BY RANGE (scrape_date);
+
+CREATE TABLE IF NOT EXISTS silver.clean_store_prices_default
+    PARTITION OF silver.clean_store_prices DEFAULT;
+
+CREATE INDEX IF NOT EXISTS idx_clean_store_prices_scrape_date_store 
+    ON silver.clean_store_prices (scrape_date, store_slug);
+CREATE INDEX IF NOT EXISTS idx_clean_store_prices_scrape_date_brin 
+    ON silver.clean_store_prices USING brin (scrape_date);
+CREATE INDEX IF NOT EXISTS idx_clean_store_prices_store_item 
+    ON silver.clean_store_prices (store_slug, item_id);
+CREATE INDEX IF NOT EXISTS idx_clean_store_prices_coicop_code 
+    ON silver.clean_store_prices (coicop_code);
+CREATE INDEX IF NOT EXISTS idx_clean_store_prices_coicop_division 
+    ON silver.clean_store_prices (coicop_division);
 
 -- Gold Conformed Daily Price Fact Table (Essential Metrics & Foreign Keys)
 CREATE TABLE IF NOT EXISTS gold.fct_daily_prices (

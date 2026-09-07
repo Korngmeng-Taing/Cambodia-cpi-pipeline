@@ -226,6 +226,26 @@ cpi_pipeline_success
 
 ## 5. Key Code Changes & Fixes (Recent)
 
+### Declarative Monthly Partitioning for Bronze & Silver (2026-09-07)
+- **Files**: `sql/schema.sql`, `pipeline/migrations/0003_partition_bronze_and_silver_tables.sql`, `scripts/execute_partition_migration.py`, `pipeline/partition_manager.py`, `orchestration/dags/cpi_maintenance_dag.py`
+- **Declarative Range Partitioning by Month**:
+  - Migrated `bronze.raw_prices` to declarative range partitioning on `scraped_at` (`PARTITION BY RANGE (scraped_at)`).
+  - Migrated `silver.clean_store_prices` to declarative range partitioning on `scrape_date` (`PARTITION BY RANGE (scrape_date)`).
+  - Pre-provisioned monthly partition child tables from 2026-07 through 2027-12 + default catch-all partitions.
+  - Zero-downtime transactional swap migrating **829,553 bronze rows** (51.0s) and **865,652 silver rows** (37.5s) with zero data loss.
+- **Partition Pruning & Autovacuum Scalability**:
+  - Queries filtering by `scrape_date` prune inactive months automatically (e.g. `WHERE scrape_date = '2026-08-25'` touches only `clean_store_prices_part_2026_08`).
+  - Automated weekly proactive maintenance via `cpi_maintenance_dag.py` and `ops.maintain_monthly_partitions(3)`.
+
+### Modernized & Consolidated Metabase Dashboards (2026-09-07)
+- **Files**: `scripts/setup_metabase_dashboards.py`, `scripts/test_metabase_cards.py`
+- **Consolidation into 3 Canonical Dashboards**:
+  - Consolidated legacy split collections into 3 unified analytical dashboards:
+    1. **`01 - Macro CPI & Inflation Analytics`** (ID 88, 11 cards): Headline & Core CPI, 12-Division table, top movers, ML Nowcast & 95% CI.
+    2. **`02 - Operations & 23-Source Telemetry`** (ID 89, 10 cards): Real-time Airflow DAG states, MEF USD/KHR rate, 23-store scraper progress, 14-day ingestion matrix, and field completeness audits.
+    3. **`03 - Silver Data Quality Screener`** (ID 90, 10 cards): Pre-CPI quality gate status, 100% COICOP division coverage, classification method breakdown (`gemini_ai`, exact overrides, vector cosine), Hadi/Tukey log-price relative distribution, and missingness imputation rates.
+  - 100% automated test verification (`scripts/test_metabase_cards.py`): 31/31 cards returning `[OK]` with live rows.
+
 ### Econometric & Pipeline Hardening (2026-09-05)
 - **Files**: `pipeline/cpi_calculator.py`, `orchestration/dags/cpi_master_dag.py`, `orchestration/dags/silver_dag.py`, `orchestration/dags/gold_cpi_dag.py`, `dbt/models/silver/clean_store_prices.sql`, `dbt/models/gold/fct_cpi_monthly.sql`
 - **Two-Tier Subclass Weighting (ILO/IMF Standards)**:

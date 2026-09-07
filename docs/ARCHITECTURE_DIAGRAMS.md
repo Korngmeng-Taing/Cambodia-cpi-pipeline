@@ -136,7 +136,7 @@ flowchart TD
 
     subgraph Stage4["Stage 4 & 5: dbt Assembly & Hedonics"]
         C2 & C3 & C4 & C5 & B2 & B4 & B5 & B6 --> D1["dbt silver models (int_prices_cleaned, int_coicop_classified)\n• Promo Clamping [0%, 95%] & Outlier Tagging\n• Windowed Dedup on (scrape_date, store_slug, item_id)"]
-        D1 --> D2[("silver.clean_store_prices\nClean Conformed Daily Facts\n(Satisfies uq_clean_store_prices_date_store_item)")]
+        D1 --> D2[("silver.clean_store_prices\nClean Conformed Daily Facts\n(Monthly Partitioned by scrape_date)")]
         D2 --> D3["Hedonic Quality Adjustment (pipeline/hedonic_regression.py)\n• Evaluates Division 08 & 09 tech specs\n• silver.hedonic_adjusted_prices"]
     end
 

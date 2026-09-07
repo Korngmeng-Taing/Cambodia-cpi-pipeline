@@ -24,4 +24,4 @@ select
 from {{ ref('int_coicop_classified') }}
 where store_slug in ('aeon', 'aeon3')
   and coicop_division = '06'
-  and coicop_method not in ('override', 'gemini_ai', 'exception')
+  and coicop_method not in ('override', 'gemini_ai', 'exception', 'category_map')

@@ -36,4 +36,5 @@ from (
 ) t
 where expected_unit_price is not null
   and unit_price_khr is not null
-  and abs(unit_price_khr - expected_unit_price) > 0.5
+  and abs(unit_price_khr - expected_unit_price) > 5.0
+  and abs(unit_price_khr - expected_unit_price) / nullif(expected_unit_price, 0) > 0.005

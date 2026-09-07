@@ -97,7 +97,7 @@ parsed as (
                  and raw.price_original_curr > 0
             then round((raw.original_price_curr - raw.price_original_curr) / raw.original_price_curr * 100.0, 2)
             else null
-        end as raw_discount_pct,
+        end::numeric(5, 2) as raw_discount_pct,
         -- C2 fix: cleaned name preserves package sizes (e.g. "330ml", "500g").
         -- Logic mirrors `pipeline/text_clean.py:clean_name_for_matching()` via
         -- the `clean_product_name` macro so Python + dbt stay in lockstep.
@@ -130,7 +130,7 @@ select
         when p.original_price_khr is not null and p.original_price_khr > p.price_khr and p.price_khr > 0
         then round((p.original_price_khr - p.price_khr) / p.original_price_khr * 100.0, 2)
         else 0.00
-    end as discount_pct,
+    end::numeric(5, 2) as discount_pct,
     -- on_promo: true if discount >= 1.0% or raw on_promo was set
     case
         when coalesce(p.raw_on_promo, false) then true
@@ -139,7 +139,7 @@ select
         then true
         else false
     end as on_promo,
-    p.size_value,
+    round(p.size_value::numeric, 2)::numeric(10, 2) as size_value,
     case
          when p.size_unit in ('g', 'gm', 'gram', 'grams') then 'g'
          when p.size_unit in ('kg', 'kilo', 'kilos', 'kilogram', 'kilograms') then 'kg'

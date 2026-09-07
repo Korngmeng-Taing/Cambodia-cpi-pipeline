@@ -143,7 +143,7 @@ unit_tests:
           - {raw_price_id: 302, item_id: 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a16', match_method: 'exact', confidence: 1.0}
     expect:
       rows:
-        - {raw_price_id: 301, pack_qty: 2, size_value: 500.0, size_unit: 'ml'}
+        - {raw_price_id: 301, pack_qty: 2, size_value: 500, size_unit: 'ml'}
         - {raw_price_id: 302, pack_qty: 1, size_value: 1.5, size_unit: 'kg'}
 
   - name: test_int_coicop_classified_store_purity
@@ -170,6 +170,8 @@ unit_tests:
       - input: source('silver', 'dim_coicop_ai_cache')
         rows: []
       - input: source('silver', 'coicop_category_map')
+        rows: []
+      - input: ref('coicop_text_rules')
         rows: []
       - input: ref('coicop_store_defaults')
         rows: []

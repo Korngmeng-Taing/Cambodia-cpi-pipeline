@@ -407,16 +407,23 @@ Every product must be assigned to one of the official United Nations COICOP cate
         \item Brands like \texttt{CHIVAS}, \texttt{PASTIS}, \texttt{RICARD}, \texttt{MARLBORO}, \texttt{MEVIUS} $\rightarrow$ Division 02 (Alcoholic Beverages \& Tobacco), preventing them from slipping into general grocery seasonings or groceries.
         \item Brands like \texttt{LIBRESSE}, \texttt{PANASONIC HAIR DRYER} $\rightarrow$ Division 12 (Personal Care \& Appliances), preventing them from misclassifying into textiles or kitchenware.
     \end{itemize}
-    \item \textbf{Tier 4: Database AI Cache (Zero API Cost \& Sub-Millisecond Speed):} For mixed-retail items previously classified by Gemini AI, assignments are cached permanently in \texttt{silver.dim\_coicop\_ai\_cache}. Any item cached with a confidence score $\ge 0.50$ is instantly resolved from memory in under 1 millisecond with zero API tokens consumed.
+    \item \textbf{Tier 4: Vector Embeddings \& Gemini AI Classification Engine (\texttt{pipeline/hybrid\_embeddings\_classifier.py} \& \texttt{gemini\_coicop\_classifier.py}):}
+    For mixed-retail stores (e.g. AEON, DeliShop, GrabMart), classification uses a two-stage hybrid ML/AI architecture:
+    \begin{itemize}[noitemsep]
+        \item \textit{Sub-Millisecond Vector Embeddings:} High-dimensional multilingual dense embeddings (768-dim vectors) project product names into vector space and compute cosine similarity against the 12 UN COICOP reference spaces and 4-digit subclasses. High-confidence vector matches ($\ge 0.85$) are resolved locally without cloud roundtrips.
+        \item \textit{Gemini 2.5 Flash Structured JSON API:} Genuinely novel or ambiguous items are batched and classified by Gemini AI into official 5-digit UN COICOP codes with strict confidence metrics and economic reasoning.
+        \item \textit{Persistent Memoized Database Cache:} All vector and Gemini classifications are permanently cached in \texttt{silver.dim\_coicop\_ai\_cache}. Any product with confidence $\ge 0.50$ is subsequently resolved in $< 1\text{ms}$ at \$0.00 cost.
+    \end{itemize}
     \item \textbf{Tier 5: Text Regular Expression Rules (Structured Heuristics):} Matches vetted regex patterns and negative exclusion rules from \texttt{silver.coicop\_text\_rules}, handling standard product descriptions with linguistic variances.
     \item \textbf{Tier 6: Native Category Taxonomy Map (E-Commerce Breadcrumbs):} Maps native merchant category hierarchies from \texttt{silver.coicop\_category\_map} when raw scrapers capture verified store breadcrumbs (e.g. \textit{"Home Appliances > Hair Care"}).
     \item \textbf{Tier 7: Store Default Fallbacks \& AI Review Triage (Safeguard Final Tier):} Unmatched items fall back to broad store-level defaults from \texttt{silver.coicop\_store\_defaults}. Any low-confidence prediction ($< 0.50$) or unclassified item is flagged with \texttt{'REVIEW'} status, queuing it for offline audit without corrupting production indices.
 \end{enumerate}
 
-\begin{tcolorbox}[colback=white,colframe=Teal,title=\textbf{Step-by-Step Example: Classifying a New Fish Sauce with Gemini AI}]
+\begin{tcolorbox}[colback=white,colframe=Teal,title=\textbf{Step-by-Step Example: Vector Embeddings + Gemini AI Classifying Fish Sauce}]
 \textbf{1. Input Product:} \textit{"MegaChef Premium Fish Sauce 500ml"} (Store: Lucky Supermarket)\\
-\textbf{2. Resolution Path:} Tiers 1--3 find no override. Tier 4 checks cache; if absent, the item queues for batch AI embedding.\\
-\textbf{3. JSON Response Received from Gemini 2.5 Flash:}
+\textbf{2. Resolution Path:} Tiers 1--3 find no override. The pipeline checks the persistent database cache \texttt{silver.dim\_coicop\_ai\_cache}.\\
+\textbf{3. Vector Embedding Analysis:} The text is encoded into a 768-dim embedding vector $\vec{v}$. Cosine distance against the Food Division (01) reference vector yields a strong affinity.\\
+\textbf{4. Gemini 2.5 Flash Structured Classification:} For exact 5-digit COICOP precision, Gemini returns structured JSON:
 \begin{lstlisting}[language=json]
 {
   "product_name": "MegaChef Premium Fish Sauce 500ml",
@@ -425,7 +432,7 @@ Every product must be assigned to one of the official United Nations COICOP cate
   "reasoning": "Fish sauce is a culinary seasoning falling under food products n.e.c."
 }
 \end{lstlisting}
-\textbf{4. Cache Storage:} The system saves \texttt{("MegaChef Premium Fish Sauce 500ml", "01.1.9", 0.98)} into \texttt{silver.dim\_coicop\_ai\_cache}. Tomorrow, Tier 4 resolves this classification in 0.001 seconds for free!
+\textbf{5. Cache Storage:} The system saves \texttt{("MegaChef Premium Fish Sauce 500ml", "01.1.9", 0.98)} into \texttt{silver.dim\_coicop\_ai\_cache}. Every future scrape of this item is resolved instantly from PostgreSQL at zero API cost!
 \end{tcolorbox}
 
 \newpage

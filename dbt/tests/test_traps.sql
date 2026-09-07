@@ -47,6 +47,13 @@ with trap_cases as (
     union all select 'TOOTHPASTE', '12'
     union all select 'PARACETAMOL', '06'
     union all select 'HEINEKEN', '02'
+    union all select 'CHIVAS', '02'
+    union all select 'MARLBORO', '02'
+    union all select 'MEVIUS', '02'
+    union all select 'LIBRESSE', '12'
+    union all select 'PASTIS', '02'
+    union all select 'RICARD', '02'
+    union all select 'PANASONIC HAIR DRYER', '12'
 )
 select
     f.scrape_date,

@@ -105,6 +105,11 @@
             when {{ cat_map_div }} is not null
                 then {{ coicop_code_from_division(cat_map_div) }}
         end,
+        -- 6b. Low-confidence AI check (aligned with resolve_coicop_division 'REVIEW')
+        case
+            when {{ ai_div }} is not null
+                 and coalesce({{ ai_conf }}, 0.90) < 0.50 then 'REVIEW'
+        end,
         -- 7. Store-level defaults & single-source fallbacks
         case when {{ store_slug }} in ('khmer24', 'realestate') then '04.1.1' end,
         case when {{ store_slug }} in ('communitypharma') then '06.1.2' end,

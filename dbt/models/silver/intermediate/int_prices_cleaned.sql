@@ -139,7 +139,7 @@ select
         then true
         else false
     end as on_promo,
-    round(p.size_value::numeric, 2)::numeric(10, 2) as size_value,
+    round(p.size_value::numeric, 3)::numeric(10, 3) as size_value,
     case
          when p.size_unit in ('g', 'gm', 'gram', 'grams') then 'g'
          when p.size_unit in ('kg', 'kilo', 'kilos', 'kilogram', 'kilograms') then 'kg'

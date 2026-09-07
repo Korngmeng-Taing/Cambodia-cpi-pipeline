@@ -24,6 +24,13 @@ from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 
+try:
+    from cosmos import DbtTaskGroup, ProjectConfig, ProfileConfig, RenderConfig, ExecutionConfig
+    from cosmos.constants import ExecutionMode
+    HAS_COSMOS = True
+except ImportError:
+    HAS_COSMOS = False
+
 log = logging.getLogger(__name__)
 
 DAG_ID = "gold_dag"
@@ -80,24 +87,12 @@ with DAG(
     catchup=False,
     max_active_runs=1,
     default_args=DEFAULT_ARGS,
-    tags=["gold", "star-schema", "dbt", "cpi"],
+    tags=["gold", "star-schema", "dbt", "cpi", "cosmos"],
 ) as dag:
 
     dbt_ds_expr = '{{ (dag_run.conf.get("ds") if dag_run and dag_run.conf else None) or ds }}'
     _dbt_vars = f'{{"ds": "{dbt_ds_expr}"}}'
     _dbt_flags = f"--project-dir {DBT_PROJECT_DIR} --target-path /tmp/dbt/target --log-path /tmp/dbt/logs"
-
-    t_dbt_gold_run = BashOperator(
-        task_id="dbt_gold_run",
-        bash_command=f"dbt run --select gold --threads 4 {_dbt_flags} --vars '{_dbt_vars}'",
-        execution_timeout=timedelta(minutes=30),
-    )
-
-    t_dbt_gold_test = BashOperator(
-        task_id="dbt_gold_test",
-        bash_command=f"dbt test --select gold --threads 4 {_dbt_flags}",
-        execution_timeout=timedelta(minutes=15),
-    )
 
     t_refresh_views = PythonOperator(
         task_id="refresh_serving_views",
@@ -105,4 +100,43 @@ with DAG(
         execution_timeout=timedelta(minutes=5),
     )
 
-    t_dbt_gold_run >> t_dbt_gold_test >> t_refresh_views
+    if HAS_COSMOS:
+        log.info("Astronomer Cosmos detected: instantiating DbtTaskGroup for Gold models.")
+        cosmos_profile_config = ProfileConfig(
+            profile_name="cpi",
+            target_name="cpi_target",
+            profiles_yml_filepath=os.path.join(DBT_PROJECT_DIR, "profiles.yml"),
+        )
+        cosmos_project_config = ProjectConfig(
+            dbt_project_path=DBT_PROJECT_DIR,
+            dbt_vars={"ds": dbt_ds_expr},
+        )
+        cosmos_render_config = RenderConfig(
+            select=["gold"],
+        )
+        cosmos_execution_config = ExecutionConfig(
+            execution_mode=ExecutionMode.LOCAL,
+        )
+        tg_dbt_gold = DbtTaskGroup(
+            group_id="dbt_gold",
+            project_config=cosmos_project_config,
+            profile_config=cosmos_profile_config,
+            render_config=cosmos_render_config,
+            execution_config=cosmos_execution_config,
+        )
+        tg_dbt_gold >> t_refresh_views
+    else:
+        log.info("Astronomer Cosmos not detected: falling back to BashOperator for Gold dbt.")
+        t_dbt_gold_run = BashOperator(
+            task_id="dbt_gold_run",
+            bash_command=f"dbt run --select gold --threads 4 {_dbt_flags} --vars '{_dbt_vars}'",
+            execution_timeout=timedelta(minutes=30),
+        )
+
+        t_dbt_gold_test = BashOperator(
+            task_id="dbt_gold_test",
+            bash_command=f"dbt test --select gold --threads 4 {_dbt_flags}",
+            execution_timeout=timedelta(minutes=15),
+        )
+
+        t_dbt_gold_run >> t_dbt_gold_test >> t_refresh_views

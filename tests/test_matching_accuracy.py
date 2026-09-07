@@ -316,6 +316,7 @@ class TestMatchingLadderPriority:
         self.matcher.sku_cache = {}
         self.matcher.items_cache = []
         self.matcher._vector_matcher = None
+        self.matcher._has_embedding_column = False
 
     def test_barcode_beats_all(self):
         """Barcode match should win over fuzzy and exact name."""

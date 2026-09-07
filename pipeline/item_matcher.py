@@ -35,6 +35,7 @@ def is_valid_barcode(barcode: str | None) -> bool:
 
 class ItemMatcher:
     use_vector_matcher: bool = True
+    _has_embedding_column: bool = False
 
     def __init__(
         self,
@@ -60,6 +61,17 @@ class ItemMatcher:
         if self._vector_matcher is None:
             self._vector_matcher = VectorItemMatcher()
         return self._vector_matcher
+
+    def _format_vector(self, text: str) -> str | None:
+        """Generates unit-normalized pgvector string representation for a text."""
+        try:
+            vec = self.vector_matcher.embed_text(text)
+            vnorm = np.linalg.norm(vec)
+            vec_unit = (vec / vnorm).tolist() if vnorm > 0 else vec.tolist()
+            return "[" + ",".join(str(round(float(x), 6)) for x in vec_unit) + "]"
+        except Exception as e:
+            log.debug("Vector formatting for '%s' skipped: %s", text, e)
+            return None
 
     def _get_connection(self):
         from pipeline.config import alternate_host_url
@@ -254,15 +266,7 @@ class ItemMatcher:
             log.warning("COICOP classification on create_canonical_item failed: %s", e)
 
         valid_bc = barcode if is_valid_barcode(barcode) else None
-        vec_str = None
-        if self._has_embedding_column:
-            try:
-                vec = self.vector_matcher.embed_text(name)
-                vnorm = np.linalg.norm(vec)
-                vec_unit = (vec / vnorm).tolist() if vnorm > 0 else vec.tolist()
-                vec_str = "[" + ",".join(str(round(float(x), 6)) for x in vec_unit) + "]"
-            except Exception as e:
-                log.debug("Embedding creation in create_canonical_item skipped: %s", e)
+        vec_str = self._format_vector(name) if self._has_embedding_column else None
 
         with conn.cursor() as cur:
             if self._has_embedding_column and vec_str is not None:
@@ -582,16 +586,7 @@ class ItemMatcher:
             except Exception as e:
                 log.warning("COICOP classification on batch new item failed: %s", e)
 
-            vec_str = None
-            if self._has_embedding_column:
-                try:
-                    vec = self.vector_matcher.embed_text(name_clean)
-                    vnorm = np.linalg.norm(vec)
-                    vec_unit = (vec / vnorm).tolist() if vnorm > 0 else vec.tolist()
-                    vec_str = "[" + ",".join(str(round(float(x), 6)) for x in vec_unit) + "]"
-                except Exception as e:
-                    log.debug("Embedding creation in process_batch skipped: %s", e)
-
+            vec_str = self._format_vector(name_clean) if self._has_embedding_column else None
             valid_bc = barcode if is_valid_barcode(barcode) else None
             if self._has_embedding_column and vec_str is not None:
                 new_items.append((str(new_id), name_clean, brand, valid_bc, package_size, coicop_div, coicop_code, vec_str))

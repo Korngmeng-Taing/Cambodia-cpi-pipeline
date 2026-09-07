@@ -1,4 +1,4 @@
-FROM apache/airflow:2.9.3
+FROM apache/airflow:2.9.3-python3.11
 
 USER root
 
@@ -34,7 +34,7 @@ RUN pip install --no-cache-dir \
     --default-timeout=300 \
     --retries=5 \
     psycopg2-binary>=2.9.9 \
-    sqlalchemy>=1.4.0 \
+    sqlalchemy>=2.0.0 \
     pandas>=2.2.0 \
     numpy>=1.26.0 \
     scipy>=1.12.0 \
@@ -52,6 +52,7 @@ RUN pip install --no-cache-dir \
     google-generativeai>=0.4.0 \
     dbt-core>=1.8.0 \
     dbt-postgres>=1.8.0 \
+    astronomer-cosmos>=1.5.0 \
     black>=24.0.0 \
     ruff>=0.4.0 \
     "shandy-sqlfmt[jinjafmt]>=0.21.0" \

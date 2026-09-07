@@ -24,6 +24,13 @@ from airflow.exceptions import AirflowSkipException
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 
+try:
+    from cosmos import DbtTaskGroup, ProjectConfig, ProfileConfig, RenderConfig, ExecutionConfig
+    from cosmos.constants import ExecutionMode
+    HAS_COSMOS = True
+except ImportError:
+    HAS_COSMOS = False
+
 from pipeline.gemini_coicop_classifier import classify_unclassified_with_gemini
 from pipeline.gemini_item_reviewer import auto_review_pending_items
 from pipeline.hedonic_regression import run_hedonic_regression
@@ -50,10 +57,14 @@ def _run_item_matching(**context) -> dict:
     dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
     ds = dag_run_conf.get("ds") or context["ds"]
     log.info("Executing Silver Item Matching service (Vector + RapidFuzz + Spec Guard) for %s", ds)
-    matcher = ItemMatcher()
-    matched_stats = matcher.process_unmatched_batch(limit=100000, scrape_date=ds)
-    log.info("ItemMatcher mapped batch stats: %s", matched_stats)
-    return matched_stats
+    try:
+        matcher = ItemMatcher()
+        matched_stats = matcher.process_unmatched_batch(limit=100000, scrape_date=ds)
+        log.info("ItemMatcher mapped batch stats: %s", matched_stats)
+        return matched_stats
+    except Exception as err:
+        log.error("Item matching service encountered fatal error for date %s: %s", ds, err, exc_info=True)
+        raise
 
 
 def _run_item_auto_review(**context) -> dict:
@@ -157,40 +168,69 @@ with DAG(
         python_callable=_run_hedonic_adjustment,
     )
 
-    # 6. dbt Run
+    # 6. dbt Execution (Cosmos DbtTaskGroup if available, else BashOperator)
     dbt_ds_expr = '{{ (dag_run.conf.get("ds") if dag_run and dag_run.conf else None) or ds }}'
     _dbt_vars = f'{{"ds": "{dbt_ds_expr}"}}'
-    task_dbt_silver_run = BashOperator(
-        task_id="dbt_silver_run",
-        trigger_rule="none_failed",
-        bash_command=(
-            f"dbt run {_dbt_flags} "
-            "--select silver "
-            f"--vars '{_dbt_vars}'"
-        ),
-    )
 
-    # 7. dbt Test
-    task_dbt_silver_test = BashOperator(
-        task_id="dbt_silver_test",
-        bash_command=(
-            f"dbt test {_dbt_flags} "
-            "--select silver"
-        ),
-    )
+    if HAS_COSMOS:
+        log.info("Astronomer Cosmos detected: instantiating DbtTaskGroup for Silver models.")
+        cosmos_profile_config = ProfileConfig(
+            profile_name="cpi",
+            target_name="cpi_target",
+            profiles_yml_filepath=os.path.join(DBT_PROJECT_DIR, "profiles.yml"),
+        )
+        cosmos_project_config = ProjectConfig(
+            dbt_project_path=DBT_PROJECT_DIR,
+            dbt_vars={"ds": dbt_ds_expr},
+        )
+        cosmos_render_config = RenderConfig(
+            select=["silver"],
+        )
+        cosmos_execution_config = ExecutionConfig(
+            execution_mode=ExecutionMode.LOCAL,
+        )
+        tg_dbt_silver = DbtTaskGroup(
+            group_id="dbt_silver",
+            project_config=cosmos_project_config,
+            profile_config=cosmos_profile_config,
+            render_config=cosmos_render_config,
+            execution_config=cosmos_execution_config,
+        )
+        (
+            task_item_matching
+            >> task_item_auto_review
+            >> task_gemini_coicop
+            >> task_dbt_seed
+            >> tg_dbt_silver
+            >> task_hedonic_adjustment
+        )
+    else:
+        log.info("Astronomer Cosmos not detected: falling back to BashOperator for Silver dbt.")
+        task_dbt_silver_run = BashOperator(
+            task_id="dbt_silver_run",
+            trigger_rule="none_failed",
+            bash_command=(
+                f"dbt run {_dbt_flags} "
+                "--select silver "
+                f"--vars '{_dbt_vars}'"
+            ),
+        )
 
-    # DAG Dependency Graph
-    # BUG-03 FIX: AI classification must run BEFORE dbt seed/run so the dbt
-    # model can read fresh classifications from silver.dim_coicop_ai_cache.
-    # Hedonic regression must run AFTER dbt silver run because it queries
-    # silver.clean_store_prices (which dbt builds) for current-day prices.
-    (
-        task_item_matching
-        >> task_item_auto_review
-        >> task_gemini_coicop
-        >> task_dbt_seed
-        >> task_dbt_silver_run
-        >> task_hedonic_adjustment
-        >> task_dbt_silver_test
-    )
+        task_dbt_silver_test = BashOperator(
+            task_id="dbt_silver_test",
+            bash_command=(
+                f"dbt test {_dbt_flags} "
+                "--select silver"
+            ),
+        )
+
+        (
+            task_item_matching
+            >> task_item_auto_review
+            >> task_gemini_coicop
+            >> task_dbt_seed
+            >> task_dbt_silver_run
+            >> task_dbt_silver_test
+            >> task_hedonic_adjustment
+        )
 

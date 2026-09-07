@@ -6,7 +6,6 @@ Validates the structural integrity and schema conformity of dbt 1.8+ unit tests.
 
 import os
 import yaml
-import pytest
 
 DBT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dbt")
 SILVER_SCHEMA_PATH = os.path.join(DBT_DIR, "models", "silver", "schema.yml")

@@ -4,8 +4,7 @@ tests/test_partition_manager.py
 Unit tests for pipeline.partition_manager.
 """
 
-from unittest.mock import MagicMock, call
-import pytest
+from unittest.mock import MagicMock
 from pipeline.partition_manager import ensure_monthly_partitions
 
 

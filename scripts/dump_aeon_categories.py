@@ -1,4 +1,3 @@
-import json
 from scrapers.sources._common import _cffi_get
 from scrapers.sources.aeon import AEON1_API, AEON3_API, AEON_HEADERS
 

@@ -7,13 +7,10 @@ Generates publication-quality charts for Chapter 4 of the graduation thesis:
 """
 
 import os
-from datetime import date, timedelta
 import numpy as np
-import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 
 # Set academic typography and style
 plt.rcParams.update({

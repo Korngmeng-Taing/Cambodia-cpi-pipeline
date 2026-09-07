@@ -6,13 +6,6 @@ from typing import Any
 import pendulum
 
 try:
-    from curl_cffi import requests as cffi_requests
-
-    HAS_CURL_CFFI = True
-except ImportError:
-    HAS_CURL_CFFI = False
-
-try:
     from bs4 import BeautifulSoup
 
     HAS_BS4 = True

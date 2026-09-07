@@ -7,7 +7,6 @@ Unit tests for pipeline.nis_cpi_importer and scrapers.sources.nis_cpi.
 import os
 import tempfile
 from unittest.mock import MagicMock
-import pytest
 
 from pipeline.nis_cpi_importer import NISBenchmarkImporter
 from scrapers.sources.nis_cpi import NISCPIScraper

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import os
 from typing import Any
-from urllib.parse import quote, quote_plus, urlsplit, urlunsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 
 try:  # Optional convenience: pick up the project .env for local runs.
     from dotenv import load_dotenv

@@ -10,7 +10,7 @@ Using 100% clean Silver classifications with zero mismatches and zero reviews.
 """
 import sys
 import logging
-from datetime import date, timedelta
+from datetime import timedelta
 from pathlib import Path
 import time
 

@@ -7,7 +7,6 @@ and analytical definitions for Real-Time Inflation Nowcasting.
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
 
 # Official NIS Cambodia 12 COICOP Division Weights (Phnom Penh CSES Oct-Dec 2006 = 100)

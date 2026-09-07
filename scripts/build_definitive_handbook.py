@@ -7,7 +7,6 @@ Explains all concepts, math, architecture, and defense questions in simple words
 """
 
 import os
-import sys
 
 def build_definitive_handbook():
     parts = []

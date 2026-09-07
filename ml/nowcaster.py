@@ -31,7 +31,6 @@ import pandas as pd
 
 from ml.config import (
     CAMBODIA_ANNUAL_HOLIDAYS,
-    CI_ALPHA,
     NIS_COICOP_WEIGHTS,
     Z_SCORE_95,
 )
@@ -652,7 +651,6 @@ def execute_nowcasting_pipeline(**context) -> dict[str, Any]:
 
 if __name__ == "__main__":
     import argparse
-    import sys
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 

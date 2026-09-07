@@ -45,6 +45,10 @@ KHMER_ENGLISH_SYNONYMS = {
     # Beer & Beverages
     "ស្រាបៀរអង្គរ": "angkor beer",
     "ស្រាបៀរ": "beer",
+    "កំប៉ុង": "can",
+    "ដប": "bottle",
+    "កញ្ចប់": "pack",
+    "ប្រអប់": "box",
     "កូកាកូឡា": "coca cola",
     "ទឹកក្រូច": "soft drink",
     "ទឹកបរិសុទ្ធ": "water",
@@ -173,8 +177,11 @@ def _build_semantic_item_vector(text: str) -> np.ndarray:
     tokens = set(re.findall(r"\b[a-zA-Z0-9\u1780-\u17ff]+\b", t_clean))
     vec = np.zeros(768, dtype=np.float32)
 
+    # BUG FIX: Use hashlib instead of hash() which is randomized per-process
+    # since Python 3.3, breaking reproducibility across Airflow task runs.
+    import hashlib
     for tok in tokens:
-        h = abs(hash(tok)) % 768
+        h = int(hashlib.md5(tok.encode("utf-8")).hexdigest(), 16) % 768
         vec[h] += 1.0
 
     norm = np.linalg.norm(vec)
@@ -317,10 +324,15 @@ class VectorItemMatcher:
             cand_unit = cand_vec
 
         # Pre-ensure all catalog items have unit vectors and cache the matrix
+        catalog_fingerprint = (
+            id(catalog),
+            len(catalog),
+            catalog[0].get("item_id") if catalog else None,
+            catalog[-1].get("item_id") if catalog else None,
+        )
         if (
             hasattr(self, "_cached_catalog_matrix")
-            and getattr(self, "_cached_catalog_id", None) == id(catalog)
-            and getattr(self, "_cached_catalog_matrix_len", 0) == len(catalog)
+            and getattr(self, "_cached_catalog_fingerprint", None) == catalog_fingerprint
         ):
             mat = self._cached_catalog_matrix
         else:
@@ -341,13 +353,12 @@ class VectorItemMatcher:
             else:
                 mat = np.zeros((0, 768), dtype=np.float32)
             try:
-                # BUG-14 FIX: Store cached matrix on self instead of the
-                # catalog list (lists don't support arbitrary attributes,
-                # so the old code silently failed and recomputed np.vstack
-                # on every call). Include id(catalog) to avoid collisions across different lists.
+                # BUG FIX: Store cached matrix and robust fingerprint on self.
+                # Fingerprint includes item IDs so memory address recycling doesn't use a stale matrix.
                 self._cached_catalog_matrix = mat
                 self._cached_catalog_matrix_len = len(catalog)
                 self._cached_catalog_id = id(catalog)
+                self._cached_catalog_fingerprint = catalog_fingerprint
             except (AttributeError, TypeError):
                 pass
 
@@ -511,7 +522,7 @@ class VectorItemMatcher:
 
         use_local_first = os.getenv("USE_LOCAL_FALLBACK_FIRST", "true").lower() in ("true", "1", "yes")
         if use_local_first or not HAS_GENAI or self.key_pool.get_key_count() == 0:
-            is_match = sim_score >= 0.75
+            is_match = sim_score >= 0.70
             return {
                 "decision": "APPROVE_MATCH" if is_match else "SPLIT_NEW",
                 "matched_item_id": item_id if is_match else None,

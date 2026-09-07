@@ -289,9 +289,9 @@ def normalize_record(
 
     cpi_eligible = _to_bool(_first(raw.get("cpi_eligible"), True), default=True)
     # Circuit breaker: guard against 1000x scaling glitch or extreme price typos in retail goods
-    if curr == "KHR" and price > 50_000_000.0 and stype not in ("housing", "hotel"):
+    if curr == "KHR" and price > 50_000_000.0 and stype not in ("housing", "realestate", "hotel"):
         cpi_eligible = False
-    elif curr == "USD" and price > 15_000.0 and stype not in ("housing", "hotel"):
+    elif curr == "USD" and price > 15_000.0 and stype not in ("housing", "realestate", "hotel"):
         cpi_eligible = False
 
     return {

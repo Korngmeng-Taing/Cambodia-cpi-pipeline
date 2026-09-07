@@ -50,10 +50,15 @@ class AryStorePhoneScraper(BaseScraper):
 
     def _to_canonical(self, product: dict, scrape_date: str) -> dict[str, Any] | None:
         prices = product.get("prices") or {}
+        minor_unit = int(prices.get("currency_minor_unit", 0) or 0)
         price = _to_float(prices.get("price"))
+        if price is not None and minor_unit > 0:
+            price = price / (10**minor_unit)
         if price is None or price <= 0:
             return None
         regular = _to_float(prices.get("regular_price"))
+        if regular is not None and minor_unit > 0:
+            regular = regular / (10**minor_unit)
         on_sale = bool(product.get("on_sale"))
         brands = product.get("brands") or []
         categories = product.get("categories") or []

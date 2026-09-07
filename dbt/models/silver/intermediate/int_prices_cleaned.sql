@@ -52,9 +52,9 @@ raw as (
     where rp.price > 0
     {% if is_incremental() %}
         {% if var('ds', '') and var('ds') != 'None' and var('ds') != 'null' and var('ds') != 'none' %}
-            and rp.scraped_at::date = '{{ var("ds") }}'::date
+            and rp.scraped_at >= '{{ var("ds") }}'::date and rp.scraped_at < ('{{ var("ds") }}'::date + interval '1 day')
         {% else %}
-            and rp.scraped_at::date >= (select coalesce(max(scrape_date) - interval '7 days', '2020-01-01'::date) from {{ this }})
+            and rp.scraped_at >= (select coalesce(max(scrape_date) - interval '7 days', '2020-01-01'::date) from {{ this }})
         {% endif %}
     {% endif %}
 ),
@@ -166,14 +166,14 @@ select
     case
         -- Weight-based unit price (always KHR/kg)
         when p.size_unit in ('kg', 'kilo', 'kilos', 'kilogram', 'kilograms') and p.size_value > 0 
-            then p.price_khr / (p.size_value * coalesce(p.pack_qty, 1))
+            then p.price_khr / (p.size_value * coalesce(nullif(p.pack_qty, 0), 1))
         when p.size_unit in ('g', 'gm', 'gram', 'grams') and p.size_value > 0 
-            then p.price_khr / ((p.size_value * coalesce(p.pack_qty, 1)) / 1000.0)
+            then p.price_khr / ((p.size_value * coalesce(nullif(p.pack_qty, 0), 1)) / 1000.0)
         -- Volume-based unit price (always KHR/l)
         when p.size_unit in ('l', 'ltr', 'litre', 'liter', 'litres', 'liters') and p.size_value > 0 
-            then p.price_khr / (p.size_value * coalesce(p.pack_qty, 1))
+            then p.price_khr / (p.size_value * coalesce(nullif(p.pack_qty, 0), 1))
         when p.size_unit in ('ml', 'millilitre', 'milliliter', 'millilitres', 'milliliters') and p.size_value > 0 
-            then p.price_khr / ((p.size_value * coalesce(p.pack_qty, 1)) / 1000.0)
+            then p.price_khr / ((p.size_value * coalesce(nullif(p.pack_qty, 0), 1)) / 1000.0)
         else null
     end as unit_price_khr,
     -- Outlier detection: flag extreme pricing anomalies or corrupt inputs

@@ -466,8 +466,11 @@ def _build_semantic_fallback_vector(text: str) -> np.ndarray:
     vec = np.zeros(768, dtype=np.float32)
 
     # 1. Base deterministic hash noise (indices 0..699)
+    # BUG FIX: Use hashlib instead of hash() which is randomized per-process
+    # since Python 3.3 (PYTHONHASHSEED), breaking reproducibility across runs.
+    import hashlib
     for tok in tokens:
-        h = abs(hash(tok)) % 700
+        h = int(hashlib.md5(tok.encode("utf-8")).hexdigest(), 16) % 700
         vec[h] += 1.0
 
     # 2. Key COICOP 12-Division feature dimensions (indices 700..711)

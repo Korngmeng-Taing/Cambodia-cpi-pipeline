@@ -219,8 +219,8 @@ def check_bronze_gate(source_slug: str, scrape_date: str) -> int:
         if count <= 0:
             with conn.cursor() as cur_repair:
                 cur_repair.execute(
-                    "SELECT COUNT(*) FROM bronze.raw_prices WHERE source_name = %s AND scraped_at::date = %s::date",
-                    (source_slug, scrape_date),
+                    "SELECT COUNT(*) FROM bronze.raw_prices WHERE source_name = %s AND scraped_at >= %s::date AND scraped_at < (%s::date + INTERVAL '1 day')",
+                    (source_slug, scrape_date, scrape_date),
                 )
                 row_b = cur_repair.fetchone()
                 if row_b and row_b[0] > 0:

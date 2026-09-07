@@ -50,10 +50,8 @@ def get_base_date(target_date: date | None = None) -> date:
         target_date = date.today()
 
     try:
-        import psycopg2
-        from pipeline.config import get_database_url
-        conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://", 1)
-        with psycopg2.connect(conn_str) as conn:
+        from pipeline.config import get_db_connection
+        with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT base_date FROM gold.cpi_base_dates
@@ -159,13 +157,11 @@ def annual_rebase_cpi(**context):
     effective_from = date(run_date.year, 1, 1)
 
     # Determine prior active base date and link factor to evaluate December price level relative to continuous series
-    import psycopg2
-    from pipeline.config import get_database_url
-    conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://", 1)
+    from pipeline.config import get_db_connection
     prior_base = None
     prior_splice = 1.0
     try:
-        with psycopg2.connect(conn_str) as conn:
+        with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT base_date, avg_december_cpi FROM gold.cpi_base_dates WHERE effective_from <= %s ORDER BY effective_from DESC LIMIT 1;",
@@ -209,7 +205,7 @@ def annual_rebase_cpi(**context):
         avg_cpi = sum(cpi_values) / len(cpi_values)
 
         # Persist to date-effective lookup table (backfill-safe)
-        with psycopg2.connect(conn_str) as conn:
+        with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS gold.cpi_base_dates (

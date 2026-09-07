@@ -127,8 +127,10 @@ class RealestateKhScraper(BaseScraper):
                 next_script = soup.find("script", id="__NEXT_DATA__")
                 if next_script and next_script.string:
                     data = json.loads(next_script.string)
-                    cache = data.get("props", {}).get("pageProps", {}).get("cacheData", {})
-                    results = cache.get("results", {}).get("data", {}).get("results") or []
+                    # BUG FIX: .get("key", {}) returns None (not {}) when
+                    # JSON value is explicitly null, causing AttributeError.
+                    cache = data.get("props", {}).get("pageProps", {}).get("cacheData") or {}
+                    results = (cache.get("results") or {}).get("data", {}).get("results") or []
                     for p in results:
                         pid = p.get("id")
                         if not pid:

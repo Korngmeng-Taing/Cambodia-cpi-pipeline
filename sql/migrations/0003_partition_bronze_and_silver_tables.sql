@@ -127,12 +127,14 @@ CREATE INDEX IF NOT EXISTS idx_raw_prices_part_source_scraped
 CREATE INDEX IF NOT EXISTS idx_raw_prices_part_scraped_at 
     ON bronze.raw_prices_part (scraped_at);
 
--- Unique index guard on bronze.raw_prices_part (includes partition key expression)
+-- BUG FIX: Use date-truncated scraped_at to enforce one observation per
+-- item per store per day (matching original schema.sql dedup constraint).
+-- Without the date cast, mid-day rescrapes create duplicate daily rows.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_raw_prices_part_observation
     ON bronze.raw_prices_part (
         store_id, source_name,
         COALESCE(source_url, ''), item_description_raw,
-        scraped_at
+        ((scraped_at AT TIME ZONE 'UTC')::date)
     );
 
 
@@ -179,10 +181,10 @@ CREATE TABLE IF NOT EXISTS silver.clean_store_prices_part (
 CREATE TABLE IF NOT EXISTS silver.clean_store_prices_part_default
     PARTITION OF silver.clean_store_prices_part DEFAULT;
 
--- Partition indexes for silver.clean_store_prices_part
+-- BUG FIX: Removed "WHERE item_id IS NOT NULL" — PostgreSQL forbids partial
+-- unique indexes on partitioned tables (ERROR: cannot create partial index).
 CREATE UNIQUE INDEX IF NOT EXISTS uq_clean_store_prices_part_date_store_item
-    ON silver.clean_store_prices_part (scrape_date, store_slug, item_id)
-    WHERE item_id IS NOT NULL;
+    ON silver.clean_store_prices_part (scrape_date, store_slug, item_id);
 
 CREATE INDEX IF NOT EXISTS idx_clean_store_prices_part_scrape_date_store 
     ON silver.clean_store_prices_part (scrape_date, store_slug);

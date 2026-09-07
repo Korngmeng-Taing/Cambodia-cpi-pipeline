@@ -131,9 +131,9 @@ class GrabLuckySupermarketScraper(BaseScraper):
                     preloaded = (
                         data.get("props", {})
                         .get("pageProps", {})
-                        .get("preloadedState", {})
-                    )
-                    queries = preloaded.get("merchantApi", {}).get("queries", {})
+                        .get("preloadedState")
+                    ) or {}  # BUG FIX: null JSON value returns None, not {}
+                    queries = (preloaded.get("merchantApi") or {}).get("queries") or {}
                     merchant_data = None
                     for qv in queries.values():
                         if isinstance(qv, dict) and "merchant" in qv.get("data", {}):

@@ -33,7 +33,8 @@ def run_backfill():
     
     # 1. Determine all unique scrape dates available in silver.clean_store_prices
     log.info("Fetching available scrape dates from silver.clean_store_prices...")
-    with engine.get_connection() as conn:
+    conn = engine.get_connection()
+    try:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT DISTINCT scrape_date 
@@ -42,6 +43,8 @@ def run_backfill():
                 ORDER BY scrape_date ASC;
             """)
             dates = [r[0] for r in cur.fetchall()]
+    finally:
+        conn.close()
 
     if not dates:
         log.error("No valid scrape dates found in silver.clean_store_prices!")
@@ -68,22 +71,26 @@ def run_backfill():
 
     # 4. Fetch chain-linking splice factor from gold.cpi_base_dates if available
     splice_factor = 1.0
+    conn_splice = None
     try:
-        with engine.get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT avg_december_cpi 
-                    FROM gold.cpi_base_dates 
-                    WHERE effective_from <= %s 
-                    ORDER BY effective_from DESC 
-                    LIMIT 1;
-                """, (max_date,))
-                row = cur.fetchone()
-                if row and row[0] is not None and float(row[0]) > 0:
-                    splice_factor = float(row[0]) / 100.0
-                    log.info(f"Applying chain-linking splice factor: {splice_factor:.4f}")
+        conn_splice = engine.get_connection()
+        with conn_splice.cursor() as cur:
+            cur.execute("""
+                SELECT avg_december_cpi 
+                FROM gold.cpi_base_dates 
+                WHERE effective_from <= %s 
+                ORDER BY effective_from DESC 
+                LIMIT 1;
+            """, (max_date,))
+            row = cur.fetchone()
+            if row and row[0] is not None and float(row[0]) > 0:
+                splice_factor = float(row[0]) / 100.0
+                log.info(f"Applying chain-linking splice factor: {splice_factor:.4f}")
     except Exception as e:
         log.debug(f"Splice factor lookup skipped: {e}")
+    finally:
+        if conn_splice is not None:
+            conn_splice.close()
 
     # 5. Loop over all target dates and calculate daily CPI
     log.info(f"🚀 Starting calculation loop across {len(dates)} dates...")

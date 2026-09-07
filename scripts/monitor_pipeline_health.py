@@ -46,10 +46,12 @@ log = logging.getLogger("pipeline_health_monitor")
 def get_db_connection():
     from pipeline.config import alternate_host_url
     conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://", 1)
+    # BUG FIX: Set 30s statement timeout so health checks never hang on slow/locked queries.
+    timeout_opt = "-c statement_timeout=30000"
     try:
-        return psycopg2.connect(conn_str)
+        return psycopg2.connect(conn_str, options=timeout_opt)
     except psycopg2.OperationalError:
-        return psycopg2.connect(alternate_host_url(conn_str))
+        return psycopg2.connect(alternate_host_url(conn_str), options=timeout_opt)
 
 
 def run_health_audit(scrape_date: str | None = None, send_notifications: bool = False) -> dict:

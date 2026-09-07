@@ -71,21 +71,29 @@ monthly_weighted as (
 
 with_lags as (
     select
-        cpi_month,
-        coicop_division,
-        division_name,
-        weight,
-        monthly_division_index,
-        monthly_headline_cpi,
-        monthly_core_cpi,
-        round(((monthly_division_index - lag(monthly_division_index) over (partition by coicop_division order by cpi_month)) / nullif(lag(monthly_division_index) over (partition by coicop_division order by cpi_month), 0) * 100.0)::numeric, 4) as mom_inflation_pct,
-        round(((monthly_division_index - lag(monthly_division_index, 12) over (partition by coicop_division order by cpi_month)) / nullif(lag(monthly_division_index, 12) over (partition by coicop_division order by cpi_month), 0) * 100.0)::numeric, 4) as yoy_inflation_pct,
-        round(((monthly_headline_cpi - lag(monthly_headline_cpi) over (partition by coicop_division order by cpi_month)) / nullif(lag(monthly_headline_cpi) over (partition by coicop_division order by cpi_month), 0) * 100.0)::numeric, 4) as headline_mom_inflation_pct,
-        round(((monthly_headline_cpi - lag(monthly_headline_cpi, 12) over (partition by coicop_division order by cpi_month)) / nullif(lag(monthly_headline_cpi, 12) over (partition by coicop_division order by cpi_month), 0) * 100.0)::numeric, 4) as headline_yoy_inflation_pct,
-        item_count,
-        observation_count,
-        active_days_in_month,
+        curr.cpi_month,
+        curr.coicop_division,
+        curr.division_name,
+        curr.weight,
+        curr.monthly_division_index,
+        curr.monthly_headline_cpi,
+        curr.monthly_core_cpi,
+        -- BUG FIX: Self-join on exact calendar intervals (1 month, 1 year)
+        -- instead of LAG(n) which offsets by row count and breaks with monthly gaps.
+        round(((curr.monthly_division_index - mom.monthly_division_index) / nullif(mom.monthly_division_index, 0) * 100.0)::numeric, 4) as mom_inflation_pct,
+        round(((curr.monthly_division_index - yoy.monthly_division_index) / nullif(yoy.monthly_division_index, 0) * 100.0)::numeric, 4) as yoy_inflation_pct,
+        round(((curr.monthly_headline_cpi - mom.monthly_headline_cpi) / nullif(mom.monthly_headline_cpi, 0) * 100.0)::numeric, 4) as headline_mom_inflation_pct,
+        round(((curr.monthly_headline_cpi - yoy.monthly_headline_cpi) / nullif(yoy.monthly_headline_cpi, 0) * 100.0)::numeric, 4) as headline_yoy_inflation_pct,
+        curr.item_count,
+        curr.observation_count,
+        curr.active_days_in_month,
         now() as created_at
-    from monthly_weighted
+    from monthly_weighted curr
+    left join monthly_weighted mom
+      on mom.coicop_division = curr.coicop_division
+     and mom.cpi_month = (curr.cpi_month - interval '1 month')::date
+    left join monthly_weighted yoy
+      on yoy.coicop_division = curr.coicop_division
+     and yoy.cpi_month = (curr.cpi_month - interval '1 year')::date
 )
 select * from with_lags

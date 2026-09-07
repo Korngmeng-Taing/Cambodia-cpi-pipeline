@@ -282,12 +282,14 @@ class BayonRestaurantScraper(BaseScraper):
                 apollo_state = self._extract_apollo_state(resp.text)
                 menu_items = self._parse_menu_items(apollo_state)
                 for idx, item in enumerate(menu_items):
+                    item_slug = re.sub(r"[^a-z0-9]+", "_", item["name"].lower()).strip("_")
+                    item_id = f"bayon_{item_slug}" if item_slug else f"bayon_{idx}"
                     records.append(
                         build_canonical_record(
                             source_slug="bayonbkk",
                             source_type="restaurant",
                             store_name="Bayon Restaurant BKK I",
-                            item_id=f"bayon_{idx}",
+                            item_id=item_id,
                             name=item["name"],
                             price=item["price"],
                             currency="USD",

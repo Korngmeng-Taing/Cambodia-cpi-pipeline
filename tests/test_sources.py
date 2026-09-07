@@ -103,6 +103,8 @@ def _arystore_page(page: int) -> list[dict]:
 
 _CANNED = {
     "ucare_html": """<html><head><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"preloadedState":{"merchantApi":{"queries":{"q1":{"data":{"merchant":{"name":"Ucare Pharmacy Chroy Changva","currency":{"code":"KHR"},"menu":{"departments":[{"name":"OTC Medicine","items":[{"ID":"KHITE001","name":"Panadol - Extra 500mg","priceInMinorUnit":850000,"available":true,"barcode":"885012345678","SKU":"SKU001","imgHref":"https://img.grab.com/1.jpg"}]}]}}}}}}}}}</script></head><body></body></html>""",
+    "chipmong_html": """<html><head><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"preloadedState":{"merchantApi":{"queries":{"q1":{"data":{"merchant":{"name":"Chip Mong Supermarket Eden","currency":{"code":"KHR"},"menu":{"departments":[{"name":"Fresh Produce","items":[{"ID":"CM001","name":"Cambodian Jasmine Rice 5kg","priceInMinorUnit":2100000,"available":true,"barcode":"885011122233","SKU":"CMSKU1","imgHref":"https://img.grab.com/cm1.jpg"}]}]}}}}}}}}}</script></head><body></body></html>""",
+    "lucky_html": """<html><head><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"preloadedState":{"merchantApi":{"queries":{"q1":{"data":{"merchant":{"name":"Lucky Supermarket Chroy Changva","currency":{"code":"KHR"},"menu":{"departments":[{"name":"Grocery","items":[{"ID":"LK001","name":"Angkor Harvest Jasmine Rice 5kg","priceInMinorUnit":2050000,"available":true,"barcode":"885022233344","SKU":"LKSKU1","imgHref":"https://img.grab.com/lk1.jpg"}]}]}}}}}}}}}</script></head><body></body></html>""",
     "aeon": {
         "products": {
             "data": [

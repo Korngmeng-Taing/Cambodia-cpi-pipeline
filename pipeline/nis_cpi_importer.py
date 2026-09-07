@@ -65,7 +65,10 @@ class NISBenchmarkImporter:
         """
         # Normalize date types
         if isinstance(cpi_month, str):
-            cpi_month_dt = datetime.strptime(cpi_month, "%Y-%m-%d").date()
+            cpi_month_clean = cpi_month.strip()
+            if len(cpi_month_clean) == 7 and re.match(r"^\d{4}-\d{2}$", cpi_month_clean):
+                cpi_month_clean += "-01"
+            cpi_month_dt = datetime.strptime(cpi_month_clean, "%Y-%m-%d").date()
         else:
             cpi_month_dt = cpi_month
 
@@ -73,7 +76,7 @@ class NISBenchmarkImporter:
         cpi_month_dt = cpi_month_dt.replace(day=1)
 
         if isinstance(release_date, str):
-            release_date_dt = datetime.strptime(release_date, "%Y-%m-%d").date()
+            release_date_dt = datetime.strptime(release_date.strip(), "%Y-%m-%d").date()
         elif isinstance(release_date, (date, datetime)):
             release_date_dt = release_date
         else:

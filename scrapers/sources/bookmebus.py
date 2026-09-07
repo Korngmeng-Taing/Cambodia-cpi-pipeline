@@ -916,7 +916,8 @@ class BookMeBusScraper(BaseScraper):
                         for idx, trip in enumerate(trips):
                             operator_clean = trip["operator"]
                             bus_type_clean = trip["bus_type"]
-                            item_id = f"bmb_{slug}_{re.sub(r'[^a-zA-Z0-9]', '_', operator_clean).lower()}_{idx}"
+                            dep_slug = re.sub(r"[^a-zA-Z0-9]", "", str(trip.get("departure_time", ""))).lower() or str(idx)
+                            item_id = f"bmb_{slug}_{re.sub(r'[^a-zA-Z0-9]', '_', operator_clean).lower()}_{dep_slug}"
 
                             records.append(
                                 build_canonical_record(

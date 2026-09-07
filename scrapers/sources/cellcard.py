@@ -117,7 +117,7 @@ class CellcardScraper(BaseScraper):
                 script = soup.find("script", id="__NEXT_DATA__")
                 if script and script.string:
                     next_data = json.loads(script.string)
-                    props = next_data.get("props", {}).get("pageProps", {})
+                    props = (next_data.get("props") or {}).get("pageProps") or {}
                     for key in ("plans", "mobilePlans", "data"):
                         plans = props.get(key)
                         if isinstance(plans, list) and plans:

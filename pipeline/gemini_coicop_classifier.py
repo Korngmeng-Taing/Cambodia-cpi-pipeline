@@ -623,7 +623,7 @@ def fetch_unclassified(
                 query_sql = f"""
                     SELECT sub.item_id, sub.canonical_name, sub.store_slug, sub.observation_count
                     FROM (
-                        SELECT DISTINCT p.item_id::text AS item_id, ci.canonical_name, p.store_slug,
+                        SELECT DISTINCT CAST(p.item_id AS TEXT) AS item_id, ci.canonical_name, p.store_slug,
                                COUNT(*) OVER (PARTITION BY p.item_id) AS observation_count
                         FROM (
                             SELECT DISTINCT item_id, store_slug, scrape_date
@@ -639,7 +639,7 @@ def fetch_unclassified(
                               )
                         ) p
                         JOIN silver.canonical_items ci
-                          ON ci.item_id::text = p.item_id::text
+                          ON CAST(ci.item_id AS TEXT) = CAST(p.item_id AS TEXT)
                         LEFT JOIN silver.dim_coicop_ai_cache ai
                           ON lower(trim(ai.product_name)) = lower(trim(ci.canonical_name))
                         WHERE (ai.coicop_code IS NULL
@@ -669,17 +669,41 @@ def fetch_unclassified(
     return items
 
 
-def load_cache(engine) -> dict[str, dict[str, Any]]:
-    """Loads the whole Gemini cache & verified Ground Truth labels keyed by normalized product name."""
+def load_cache(engine, item_names: list[str] | None = None) -> dict[str, dict[str, Any]]:
+    """Loads Gemini cache & verified Ground Truth labels keyed by normalized product name.
+    If item_names is provided, queries only matching products for fast, memory-safe execution.
+    """
     cache = {}
     with engine.connect() as conn:
+        names_to_query = None
+        if item_names:
+            norm_map = {_normalize_name(name): name for name in item_names if name}
+            names_to_query = list(set(list(norm_map.keys()) + [name for name in item_names if name]))
+
         # 1. Load AI Cache
         try:
-            query = text(
-                "SELECT product_name, coicop_code, confidence_score, reasoning "
-                "FROM silver.dim_coicop_ai_cache"
-            )
-            rows = conn.execute(query).fetchall()
+            if names_to_query:
+                if engine.dialect.name == "postgresql":
+                    query = text(
+                        "SELECT product_name, coicop_code, confidence_score, reasoning "
+                        "FROM silver.dim_coicop_ai_cache "
+                        "WHERE product_name = ANY(:names)"
+                    )
+                    rows = conn.execute(query, {"names": names_to_query}).fetchall()
+                else:
+                    from sqlalchemy import bindparam
+                    query = text(
+                        "SELECT product_name, coicop_code, confidence_score, reasoning "
+                        "FROM silver.dim_coicop_ai_cache "
+                        "WHERE product_name IN :names"
+                    ).bindparams(bindparam("names", expanding=True))
+                    rows = conn.execute(query, {"names": names_to_query}).fetchall()
+            else:
+                query = text(
+                    "SELECT product_name, coicop_code, confidence_score, reasoning "
+                    "FROM silver.dim_coicop_ai_cache"
+                )
+                rows = conn.execute(query).fetchall()
             for name, coicop, confidence, reasoning in rows:
                 cache[_normalize_name(name)] = {
                     "product_name": str(name),
@@ -692,11 +716,28 @@ def load_cache(engine) -> dict[str, dict[str, Any]]:
 
         # 2. Load Ground Truth (Highest Priority, Overwrites AI Cache)
         try:
-            gt_query = text(
-                "SELECT product_name, coicop_code, confidence_score, notes "
-                "FROM silver.classification_ground_truth"
-            )
-            gt_rows = conn.execute(gt_query).fetchall()
+            if names_to_query:
+                if engine.dialect.name == "postgresql":
+                    gt_query = text(
+                        "SELECT product_name, coicop_code, confidence_score, notes "
+                        "FROM silver.classification_ground_truth "
+                        "WHERE product_name = ANY(:names)"
+                    )
+                    gt_rows = conn.execute(gt_query, {"names": names_to_query}).fetchall()
+                else:
+                    from sqlalchemy import bindparam
+                    gt_query = text(
+                        "SELECT product_name, coicop_code, confidence_score, notes "
+                        "FROM silver.classification_ground_truth "
+                        "WHERE product_name IN :names"
+                    ).bindparams(bindparam("names", expanding=True))
+                    gt_rows = conn.execute(gt_query, {"names": names_to_query}).fetchall()
+            else:
+                gt_query = text(
+                    "SELECT product_name, coicop_code, confidence_score, notes "
+                    "FROM silver.classification_ground_truth"
+                )
+                gt_rows = conn.execute(gt_query).fetchall()
             for name, coicop, confidence, notes in gt_rows:
                 cache[_normalize_name(name)] = {
                     "product_name": str(name),
@@ -902,7 +943,8 @@ def classify_unclassified_with_gemini(
     # Phase 3: Fast local triage — classify pure-store items locally in O(1)
     items_for_gemini, local_results = triage_with_local_model(items)
 
-    cache = load_cache(engine)
+    names_to_lookup = [i.get("canonical_name", "") for i in items_for_gemini if i.get("canonical_name")]
+    cache = load_cache(engine, item_names=names_to_lookup)
 
     # Phase 4: Filter out items already in cache before sending to Gemini API
     items_uncached = []

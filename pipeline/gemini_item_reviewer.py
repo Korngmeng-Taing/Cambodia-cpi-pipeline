@@ -247,10 +247,17 @@ class GeminiItemReviewer:
 
             log.info("Processing %d pending reviews from silver.needs_review...", len(pending_rows))
 
-            # Group unique (raw_desc, candidate_name) pairs
-            unique_pairs: dict[tuple[str, str], list[dict[str, Any]]] = {}
+            # Group unique (raw_desc, candidate_name, barcode, brand) pairs
+            # BUG FIX: Include barcode and brand so distinct variants with identical descriptions
+            # are not erroneously merged under a single arbitrary barcode on SPLIT_NEW.
+            unique_pairs: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
             for row in pending_rows:
-                key = (row["item_description_raw"].strip(), row["best_match_name"].strip() if row["best_match_name"] else "")
+                key = (
+                    row["item_description_raw"].strip(),
+                    row["best_match_name"].strip() if row["best_match_name"] else "",
+                    (row.get("barcode") or "").strip(),
+                    (row.get("brand") or "").strip(),
+                )
                 unique_pairs.setdefault(key, []).append(row)
 
             log.info("Found %d distinct product title comparison pairs.", len(unique_pairs))
@@ -260,7 +267,7 @@ class GeminiItemReviewer:
             pair_decisions: dict[int, dict[str, Any]] = {}
             pair_id_counter = 1
 
-            for (raw_name, cand_name), rows in unique_pairs.items():
+            for (raw_name, cand_name, _bcode, _bbrand), rows in unique_pairs.items():
                 rule_res = evaluate_rule_guard(raw_name, cand_name)
                 if rule_res:
                     decision, conf, reason = rule_res

@@ -588,7 +588,7 @@ class ItemMatcher:
 
             vec_str = self._format_vector(name_clean) if self._has_embedding_column else None
             valid_bc = barcode if is_valid_barcode(barcode) else None
-            if self._has_embedding_column and vec_str is not None:
+            if self._has_embedding_column:
                 new_items.append((str(new_id), name_clean, brand, valid_bc, package_size, coicop_div, coicop_code, vec_str))
             else:
                 new_items.append((str(new_id), name_clean, brand, valid_bc, package_size, coicop_div, coicop_code))
@@ -611,7 +611,7 @@ class ItemMatcher:
 
         with conn.cursor() as cur:
             if new_items:
-                if self._has_embedding_column and len(new_items[0]) == 8:
+                if self._has_embedding_column:
                     execute_batch(
                         cur,
                         """

@@ -157,11 +157,18 @@ class CPINowcaster:
 
         # Fallback if active month has no data yet: use latest available
         if df_month.empty and not df_daily.empty:
-            latest_cpi = float(df_daily["headline_cpi"].dropna().iloc[-1])
-            latest_core = float(df_daily["core_cpi"].dropna().iloc[-1]) if "core_cpi" in df_daily.columns else latest_cpi
-            realized_cpi = latest_cpi
-            realized_core = latest_core
-            daily_volatility = 0.25
+            headline_series = df_daily["headline_cpi"].dropna()
+            if not headline_series.empty:
+                latest_cpi = float(headline_series.iloc[-1])
+                core_series = df_daily["core_cpi"].dropna() if "core_cpi" in df_daily.columns else pd.Series()
+                latest_core = float(core_series.iloc[-1]) if not core_series.empty else latest_cpi
+                realized_cpi = latest_cpi
+                realized_core = latest_core
+                daily_volatility = 0.25
+            else:
+                realized_cpi = 100.0
+                realized_core = 100.0
+                daily_volatility = 0.25
         elif not df_month.empty:
             # Dedup by calculation_date to get daily headline series
             daily_series = df_month.drop_duplicates(subset=["calculation_date"])
@@ -181,12 +188,18 @@ class CPINowcaster:
         # -------------------------------------------------------------------------
         food_momentum = 0.0
         transport_momentum = 0.0
+        food_days = 7.0
+        trans_days = 7.0
         if not df_daily.empty and "coicop_division" in df_daily.columns:
             # Division 01 Food 7-day momentum
             df_food = df_daily[df_daily["coicop_division"] == "01"].sort_values("calculation_date")
             if len(df_food) >= 7:
                 food_recent = float(df_food["division_index"].iloc[-1])
                 food_prior = float(df_food["division_index"].iloc[-7])
+                if "calculation_date" in df_food.columns:
+                    d1 = pd.to_datetime(df_food["calculation_date"].iloc[-1])
+                    d0 = pd.to_datetime(df_food["calculation_date"].iloc[-7])
+                    food_days = max(1.0, float((d1 - d0).days))
                 if food_prior > 0:
                     food_momentum = (food_recent - food_prior) / food_prior
 
@@ -195,6 +208,10 @@ class CPINowcaster:
             if len(df_trans) >= 7:
                 trans_recent = float(df_trans["division_index"].iloc[-1])
                 trans_prior = float(df_trans["division_index"].iloc[-7])
+                if "calculation_date" in df_trans.columns:
+                    d1 = pd.to_datetime(df_trans["calculation_date"].iloc[-1])
+                    d0 = pd.to_datetime(df_trans["calculation_date"].iloc[-7])
+                    trans_days = max(1.0, float((d1 - d0).days))
                 if trans_prior > 0:
                     transport_momentum = (trans_recent - trans_prior) / trans_prior
 
@@ -202,7 +219,7 @@ class CPINowcaster:
         # Food (44.8% weight) + Transport (12.2% weight), normalized to their combined share (0.56955)
         combined_momentum_weight = 0.44775 + 0.12180
         leading_signal_drift = (
-            (0.44775 * (food_momentum / 7.0)) + (0.12180 * (transport_momentum / 7.0))
+            (0.44775 * (food_momentum / food_days)) + (0.12180 * (transport_momentum / trans_days))
         ) / combined_momentum_weight
 
         # -------------------------------------------------------------------------
@@ -238,9 +255,14 @@ class CPINowcaster:
             if len(df_fx_sorted) >= 7:
                 fx_recent = float(df_fx_sorted["rate"].iloc[-1])
                 fx_prior = float(df_fx_sorted["rate"].iloc[-7])
+                fx_days = 7.0
+                if "execution_date" in df_fx_sorted.columns:
+                    d_recent = pd.to_datetime(df_fx_sorted["execution_date"].iloc[-1])
+                    d_prior = pd.to_datetime(df_fx_sorted["execution_date"].iloc[-7])
+                    fx_days = max(1.0, float((d_recent - d_prior).days))
                 if fx_prior > 0:
                     fx_momentum = (fx_recent - fx_prior) / fx_prior
-                    fx_daily_drift = beta_erpt * (fx_momentum / 7.0)
+                    fx_daily_drift = beta_erpt * (fx_momentum / fx_days)
             elif len(df_fx_sorted) >= 2:
                 fx_recent = float(df_fx_sorted["rate"].iloc[-1])
                 fx_prior = float(df_fx_sorted["rate"].iloc[0])

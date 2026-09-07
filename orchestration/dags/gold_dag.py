@@ -47,8 +47,7 @@ DEFAULT_ARGS = {
 
 
 def _refresh_serving_views(**context):
-    from pipeline.config import get_database_url
-    import psycopg2
+    from pipeline.config import get_db_connection
 
     sql_path = os.getenv("SQL_VIEWS_PATH", "/opt/airflow/sql/views.sql")
     if not os.path.exists(sql_path):
@@ -64,9 +63,8 @@ def _refresh_serving_views(**context):
         log.error("Views SQL file not found at %s", sql_path)
         raise
 
-    conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://", 1)
     try:
-        with psycopg2.connect(conn_str) as conn:
+        with get_db_connection() as conn:
             with conn.cursor() as cur:
                 # views.sql must use CREATE OR REPLACE VIEW — we no longer
                 # drop all views first because that would destroy dbt-managed

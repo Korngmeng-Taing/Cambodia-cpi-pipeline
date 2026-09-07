@@ -88,9 +88,9 @@ class BronzeScraper:
                 SELECT COALESCE(source_url, ''), item_description_raw, price
                 FROM bronze.raw_prices
                 WHERE store_id = %s AND source_name = %s
-                  AND scraped_at::date = %s::date
+                  AND scraped_at >= %s::date AND scraped_at < (%s::date + INTERVAL '1 day')
                 """,
-                (store_id, source_name, scrape_date or time.strftime("%Y-%m-%d")),
+                (store_id, source_name, scrape_date or time.strftime("%Y-%m-%d"), scrape_date or time.strftime("%Y-%m-%d")),
             )
             return {(row[0], row[1], float(row[2])) for row in cur.fetchall()}
 
@@ -173,9 +173,10 @@ class BronzeScraper:
 
             staging_count = count
             if staging_count == 0 and len(records) > 0:
+                target_dt = scrape_date or time.strftime("%Y-%m-%d")
                 cur.execute(
-                    "SELECT COUNT(*) FROM bronze.raw_prices WHERE source_name = %s AND scraped_at::date = %s::date",
-                    (source_name, scrape_date or time.strftime("%Y-%m-%d")),
+                    "SELECT COUNT(*) FROM bronze.raw_prices WHERE source_name = %s AND scraped_at >= %s::date AND scraped_at < (%s::date + INTERVAL '1 day')",
+                    (source_name, target_dt, target_dt),
                 )
                 row_existing = cur.fetchone()
                 if row_existing and row_existing[0] > 0:

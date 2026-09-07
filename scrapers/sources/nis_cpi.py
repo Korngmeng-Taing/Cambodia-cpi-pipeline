@@ -16,6 +16,7 @@ import pendulum
 
 from pipeline.nis_cpi_importer import NISBenchmarkImporter
 from scrapers.base import BaseScraper, OnEmpty
+from scrapers.sources._common import build_canonical_record
 
 log = logging.getLogger(__name__)
 
@@ -39,14 +40,23 @@ class NISCPIScraper(BaseScraper):
             import csv
             import os
 
+            ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
             if os.path.exists(self.importer.seed_file_path):
                 with open(self.importer.seed_file_path, "r", encoding="utf-8") as f:
                     for r in csv.DictReader(f):
-                        records.append({
-                            "name": f"NIS Official CPI {r.get('cpi_month')}",
-                            "price": float(r.get("headline_cpi", 100.0)),
-                            "currency": "KHR",
-                            "category_native": "Official Macro CPI",
-                            "raw_payload": r,
-                        })
+                        records.append(
+                            build_canonical_record(
+                                source_slug="nis_official_cpi",
+                                source_type="official_benchmark",
+                                store_name="National Institute of Statistics (NIS)",
+                                item_id=f"nis_cpi_{r.get('cpi_month')}",
+                                name=f"NIS Official CPI {r.get('cpi_month')}",
+                                price=float(r.get("headline_cpi", 100.0)),
+                                currency="KHR",
+                                category_native="Official Macro CPI",
+                                scrape_date=ds,
+                                attrs=r,
+                                is_fallback=True,
+                            )
+                        )
         return records

@@ -48,7 +48,7 @@ def reset_silver_for_date_range(start_date: str, end_date: str, conn, full_reset
             DELETE FROM silver.item_match_log
             WHERE raw_price_id IN (
                 SELECT raw_price_id FROM bronze.raw_prices
-                WHERE scraped_at::date >= %s::date AND scraped_at::date <= %s::date
+                WHERE scraped_at >= %s::date AND scraped_at < (%s::date + INTERVAL '1 day')
             )
             """,
             (start_date, end_date)
@@ -61,7 +61,7 @@ def reset_silver_for_date_range(start_date: str, end_date: str, conn, full_reset
             DELETE FROM silver.needs_review
             WHERE raw_price_id IN (
                 SELECT raw_price_id FROM bronze.raw_prices
-                WHERE scraped_at::date >= %s::date AND scraped_at::date <= %s::date
+                WHERE scraped_at >= %s::date AND scraped_at < (%s::date + INTERVAL '1 day')
             )
             """,
             (start_date, end_date)

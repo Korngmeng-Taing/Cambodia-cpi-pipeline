@@ -94,9 +94,9 @@ store_purity as materialized (
         i.store_slug,
         case
             when i.store_slug in ('khmer24', 'realestate') then '04'
-            when i.store_slug in ('communitypharma') then '06'
-            when i.store_slug in ('sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk') then '11'
-            when i.store_slug in ('bookmebus', 'redbus', 'redmebus', 'new_gasoline') then '07'
+            when i.store_slug in ('communitypharma', 'grab_ucare') then '06'
+            when i.store_slug in ('sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk') then '11'
+            when i.store_slug in ('bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'gasoline') then '07'
             when i.store_slug in ('arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then '08'
         end as purity_division
     from items i
@@ -158,10 +158,10 @@ text_rule_match as materialized (
     join text_rules_prejoined r
       on i.norm_name ~* r.pattern
      and (r.negative_pattern is null or i.norm_name !~* r.negative_pattern)
-     and not (r.coicop_division = '11' and i.store_slug not in ('sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk'))
-     and not (r.coicop_division = '07' and i.store_slug in ('communitypharma', 'delishop', 'arystore', 'samnangshop', 'khmer24', 'realestate', 'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk'))
+     and not (r.coicop_division = '11' and i.store_slug not in ('sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk'))
+     and not (r.coicop_division = '07' and i.store_slug in ('communitypharma', 'grab_ucare', 'delishop', 'arystore', 'samnangshop', 'khmer24', 'realestate', 'sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk'))
      and not (r.coicop_division = '06' and i.store_slug in ('aeon', 'aeon3'))
-     and not (r.coicop_division = '04' and i.store_slug in ('communitypharma', 'delishop', 'aeon', 'aeon3', 'samnangshop', 'arystore', 'bookmebus', 'redbus'))
+     and not (r.coicop_division = '04' and i.store_slug in ('communitypharma', 'grab_ucare', 'delishop', 'aeon', 'aeon3', 'samnangshop', 'arystore', 'bookmebus', 'redbus', 'grab_lucky', 'grab_chipmong'))
     order by i.item_id, i.store_slug, r.priority asc
 ),
 store_defaults_prejoined as materialized (
@@ -190,9 +190,9 @@ items_evaluated as materialized (
         ps.purity_division,
         ov_ng.coicop_division as ov_global_div,
         case
-            when split_part(ai.coicop_code, '.', 1) = '11' and i.store_slug not in ('sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk') then null
-            when split_part(ai.coicop_code, '.', 1) = '04' and i.store_slug in ('communitypharma', 'delishop', 'aeon', 'aeon3', 'samnangshop', 'arystore', 'bookmebus', 'redbus') then null
-            when split_part(ai.coicop_code, '.', 1) = '07' and i.store_slug in ('communitypharma', 'delishop', 'arystore', 'samnangshop', 'khmer24', 'realestate', 'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk') then null
+            when split_part(ai.coicop_code, '.', 1) = '11' and i.store_slug not in ('sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk') then null
+            when split_part(ai.coicop_code, '.', 1) = '04' and i.store_slug in ('communitypharma', 'grab_ucare', 'delishop', 'aeon', 'aeon3', 'samnangshop', 'arystore', 'bookmebus', 'redbus', 'grab_lucky', 'grab_chipmong') then null
+            when split_part(ai.coicop_code, '.', 1) = '07' and i.store_slug in ('communitypharma', 'grab_ucare', 'delishop', 'arystore', 'samnangshop', 'khmer24', 'realestate', 'sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk') then null
             else ai.coicop_division
         end as ai_div,
         ai.confidence_score as ai_conf,

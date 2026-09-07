@@ -86,7 +86,7 @@ def get_database_url() -> str:
     port = os.getenv("DB_PORT") or os.getenv("POSTGRES_PORT", "5432")
     name = os.getenv("DB_NAME") or os.getenv("CPI_DB_NAME", "cpi_db")
     return (
-        f"postgresql://{quote_plus(user)}:{quote_plus(password)}"
+        f"postgresql://{quote(user, safe='')}:{quote(password, safe='')}"
         f"@{host}:{port}/{name}"
     )
 

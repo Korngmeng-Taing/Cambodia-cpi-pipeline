@@ -7,6 +7,10 @@ if sys.stdout.encoding.lower() != 'utf-8':
 
 conn_mb = psycopg2.connect("postgresql://metabase:metabase@localhost:5432/metabase")
 conn_cpi = psycopg2.connect("postgresql://cpi_user:cpi_pass@localhost:5432/cpi_db")
+# BUG FIX: Prevent Metabase cards from mutating the CPI database.
+# Without this, a malicious/accidental DELETE/DROP in a card query
+# would permanently alter production data.
+conn_cpi.set_session(readonly=True)
 
 print("=" * 80)
 print(" METABASE CARDS AUDIT & SQL DIAGNOSTIC TEST")
@@ -52,6 +56,7 @@ with conn_cpi.cursor(cursor_factory=RealDictCursor) as cur_cpi:
         try:
             cur_cpi.execute(sql)
             rows = cur_cpi.fetchall()
+            conn_cpi.rollback()  # BUG FIX: Always rollback to clear transaction state
             row_cnt = len(rows)
             sample = rows[0] if row_cnt > 0 else "EMPTY RESULT"
             print(f"[OK] Dash {dash_id} | Card {card_id} '{card_name}' ({display}) -> {row_cnt} rows. Sample: {sample}")

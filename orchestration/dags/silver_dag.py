@@ -22,6 +22,7 @@ import pendulum
 from airflow import DAG
 from airflow.exceptions import AirflowSkipException
 from airflow.operators.bash import BashOperator
+from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
 
 try:
@@ -203,19 +204,25 @@ with DAG(
             render_config=cosmos_render_config,
             execution_config=cosmos_execution_config,
         )
-        (
-            task_item_matching
-            >> task_item_auto_review
-            >> task_gemini_coicop
-            >> task_dbt_seed
-            >> tg_dbt_silver
-            >> task_hedonic_adjustment
+
+        task_join_silver_prep = EmptyOperator(
+            task_id="silver_prep_completed",
+            trigger_rule="none_failed_min_one_success",
         )
+
+        task_item_matching >> task_dbt_seed >> task_join_silver_prep
+        task_item_matching >> task_item_auto_review >> task_join_silver_prep
+        task_item_matching >> task_gemini_coicop >> task_join_silver_prep
+        task_join_silver_prep >> tg_dbt_silver >> task_hedonic_adjustment
     else:
         log.info("Astronomer Cosmos not detected: falling back to BashOperator for Silver dbt.")
+        task_join_silver_prep = EmptyOperator(
+            task_id="silver_prep_completed",
+            trigger_rule="none_failed_min_one_success",
+        )
+
         task_dbt_silver_run = BashOperator(
             task_id="dbt_silver_run",
-            trigger_rule="none_failed",
             bash_command=(
                 f"dbt run {_dbt_flags} "
                 "--select silver "
@@ -231,13 +238,8 @@ with DAG(
             ),
         )
 
-        (
-            task_item_matching
-            >> task_item_auto_review
-            >> task_gemini_coicop
-            >> task_dbt_seed
-            >> task_dbt_silver_run
-            >> task_dbt_silver_test
-            >> task_hedonic_adjustment
-        )
+        task_item_matching >> task_dbt_seed >> task_join_silver_prep
+        task_item_matching >> task_item_auto_review >> task_join_silver_prep
+        task_item_matching >> task_gemini_coicop >> task_join_silver_prep
+        task_join_silver_prep >> task_dbt_silver_run >> task_dbt_silver_test >> task_hedonic_adjustment
 

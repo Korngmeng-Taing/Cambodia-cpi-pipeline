@@ -210,33 +210,21 @@ WITH monthly_base AS (
         GROUP BY calculation_date
     ) d
     GROUP BY DATE_TRUNC('month', calculation_date)::DATE
-),
-monthly_lags AS (
-    SELECT
-        cpi_month,
-        monthly_headline_cpi,
-        monthly_core_cpi,
-        active_days_in_month,
-        total_observations,
-        total_items,
-        LAG(monthly_headline_cpi, 1) OVER (ORDER BY cpi_month) AS prev_month_headline_cpi,
-        LAG(monthly_core_cpi, 1) OVER (ORDER BY cpi_month) AS prev_month_core_cpi,
-        LAG(monthly_headline_cpi, 12) OVER (ORDER BY cpi_month) AS prev_year_headline_cpi,
-        LAG(monthly_core_cpi, 12) OVER (ORDER BY cpi_month) AS prev_year_core_cpi
-    FROM monthly_base
 )
 SELECT
-    cpi_month,
-    monthly_headline_cpi,
-    monthly_core_cpi,
-    active_days_in_month,
-    total_observations,
-    ROUND(((monthly_headline_cpi - prev_month_headline_cpi) / NULLIF(prev_month_headline_cpi, 0) * 100.0)::NUMERIC, 2) AS headline_mom_inflation_pct,
-    ROUND(((monthly_core_cpi - prev_month_core_cpi) / NULLIF(prev_month_core_cpi, 0) * 100.0)::NUMERIC, 2) AS core_mom_inflation_pct,
-    ROUND(((monthly_headline_cpi - prev_year_headline_cpi) / NULLIF(prev_year_headline_cpi, 0) * 100.0)::NUMERIC, 2) AS headline_yoy_inflation_pct,
-    ROUND(((monthly_core_cpi - prev_year_core_cpi) / NULLIF(prev_year_core_cpi, 0) * 100.0)::NUMERIC, 2) AS core_yoy_inflation_pct
-FROM monthly_lags
-ORDER BY cpi_month DESC;
+    curr.cpi_month,
+    curr.monthly_headline_cpi,
+    curr.monthly_core_cpi,
+    curr.active_days_in_month,
+    curr.total_observations,
+    ROUND(((curr.monthly_headline_cpi - prev_m.monthly_headline_cpi) / NULLIF(prev_m.monthly_headline_cpi, 0) * 100.0)::NUMERIC, 2) AS headline_mom_inflation_pct,
+    ROUND(((curr.monthly_core_cpi - prev_m.monthly_core_cpi) / NULLIF(prev_m.monthly_core_cpi, 0) * 100.0)::NUMERIC, 2) AS core_mom_inflation_pct,
+    ROUND(((curr.monthly_headline_cpi - prev_y.monthly_headline_cpi) / NULLIF(prev_y.monthly_headline_cpi, 0) * 100.0)::NUMERIC, 2) AS headline_yoy_inflation_pct,
+    ROUND(((curr.monthly_core_cpi - prev_y.monthly_core_cpi) / NULLIF(prev_y.monthly_core_cpi, 0) * 100.0)::NUMERIC, 2) AS core_yoy_inflation_pct
+FROM monthly_base curr
+LEFT JOIN monthly_base prev_m ON prev_m.cpi_month = (curr.cpi_month - INTERVAL '1 month')::DATE
+LEFT JOIN monthly_base prev_y ON prev_y.cpi_month = (curr.cpi_month - INTERVAL '1 year')::DATE
+ORDER BY curr.cpi_month DESC;
 
 
 -- 10.8 Monthly 12-Division COICOP Breakdown Matrix
@@ -254,17 +242,19 @@ WITH div_monthly AS (
     GROUP BY DATE_TRUNC('month', calculation_date)::DATE, coicop_division
 )
 SELECT
-    cpi_month,
-    coicop_division,
-    division_name,
-    weight,
-    monthly_division_index,
-    ROUND(((monthly_division_index - LAG(monthly_division_index) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_division_index) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::NUMERIC, 2) AS division_mom_change_pct,
-    ROUND(((monthly_division_index - LAG(monthly_division_index, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month)) / NULLIF(LAG(monthly_division_index, 12) OVER (PARTITION BY coicop_division ORDER BY cpi_month), 0) * 100.0)::NUMERIC, 2) AS division_yoy_change_pct,
-    total_observations,
-    active_days_in_month
-FROM div_monthly
-ORDER BY cpi_month DESC, coicop_division ASC;
+    curr.cpi_month,
+    curr.coicop_division,
+    curr.division_name,
+    curr.weight,
+    curr.monthly_division_index,
+    ROUND(((curr.monthly_division_index - prev_m.monthly_division_index) / NULLIF(prev_m.monthly_division_index, 0) * 100.0)::NUMERIC, 2) AS division_mom_change_pct,
+    ROUND(((curr.monthly_division_index - prev_y.monthly_division_index) / NULLIF(prev_y.monthly_division_index, 0) * 100.0)::NUMERIC, 2) AS division_yoy_change_pct,
+    curr.total_observations,
+    curr.active_days_in_month
+FROM div_monthly curr
+LEFT JOIN div_monthly prev_m ON prev_m.coicop_division = curr.coicop_division AND prev_m.cpi_month = (curr.cpi_month - INTERVAL '1 month')::DATE
+LEFT JOIN div_monthly prev_y ON prev_y.coicop_division = curr.coicop_division AND prev_y.cpi_month = (curr.cpi_month - INTERVAL '1 year')::DATE
+ORDER BY curr.cpi_month DESC, curr.coicop_division ASC;
 
 
 -- 10.9 Out-of-Sample Nowcasting Evaluation & Tracking vs. Official NIS Benchmarks

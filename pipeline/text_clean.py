@@ -35,8 +35,8 @@ _RE_PRICE = re.compile(
         \s*(?:KHR|USD|RIEL|៛|\$) #   required currency suffix
     )
     |
-    (?:                              # OR currency-word prefix "USD 1.99":
-        (?:KHR|USD|RIEL)\s+      #   required currency prefix token
+    (?:                              # OR currency-word prefix "USD 1.99" or "USD1.99":
+        (?:KHR|USD|RIEL)\s*      #   required currency prefix token (opt. space)
         \d{1,9}(?:[,.\s]\d{3})*      #   integer part (1-9 digits; opt. thousands)
         (?:[.,]\d{1,2})?             #   optional decimal
     )

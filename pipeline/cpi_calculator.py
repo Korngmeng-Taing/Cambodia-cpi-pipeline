@@ -198,12 +198,17 @@ class CPICalculationEngine:
               AND s.price_khr > 0
               AND s.item_id IS NOT NULL;
         """
-        with self.get_connection() as conn:
+        # BUG FIX: psycopg2 context manager only manages transactions
+        # (commit/rollback), NOT connection lifecycle. Must close explicitly.
+        conn = self.get_connection()
+        try:
             with conn.cursor() as cur:
                 cur.execute(query, (start_date, end_date))
                 cols = [desc[0] for desc in cur.description]
                 rows = cur.fetchall()
                 df = pd.DataFrame(rows, columns=cols)
+        finally:
+            conn.close()
         df["scrape_date"] = pd.to_datetime(df["scrape_date"]).dt.date
         df["unit_price_khr"] = pd.to_numeric(df["unit_price_khr"], errors="coerce")
         df = df[df["unit_price_khr"] > 0]
@@ -247,21 +252,34 @@ class CPICalculationEngine:
         if df_prices is None:
             df_prices = self.load_clean_prices(base_date, base_date)
         
+        if df_prices.empty:
+            log.warning("No price history available to compute base prices.")
+            return pd.DataFrame(columns=["item_id", "coicop_division", "coicop_code", "base_price_khr", "base_obs_count"])
+
         base_df = df_prices[df_prices["scrape_date"] == base_date]
         if base_df.empty:
             log.warning(f"No observations found on base date {base_date}. Using earliest available.")
             earliest = df_prices["scrape_date"].min()
             base_df = df_prices[df_prices["scrape_date"] == earliest]
 
+        if base_df.empty:
+            return pd.DataFrame(columns=["item_id", "coicop_division", "coicop_code", "base_price_khr", "base_obs_count"])
+
+        def _safe_geom_mean(x):
+            valid = x[x > 0]
+            if len(valid) == 0:
+                return np.nan
+            return float(np.exp(np.mean(np.log(valid))))
+
         # Geometric mean base price strictly per unique item_id
         grouped = base_df.groupby("item_id").agg(
             coicop_division=("coicop_division", "first"),
             coicop_code=("coicop_code", "first"),
-            base_price_khr=("unit_price_khr", lambda x: float(np.exp(np.mean(np.log(x[x > 0]))))),
+            base_price_khr=("unit_price_khr", _safe_geom_mean),
             base_obs_count=("unit_price_khr", "count")
         ).reset_index()
 
-        return grouped
+        return grouped[grouped["base_price_khr"] > 0]
 
     def compute_daily_elementary_indices(
         self, 
@@ -494,7 +512,8 @@ class CPICalculationEngine:
 
         # When base_date is unset, infer it as the earliest scrape_date with data.
         if base_date is None:
-            with self.get_connection() as conn:
+            conn = self.get_connection()
+            try:
                 with conn.cursor() as cur:
                     cur.execute("""
                         SELECT MIN(scrape_date) 
@@ -503,6 +522,8 @@ class CPICalculationEngine:
                     """)
                     row = cur.fetchone()
                     base_date = row[0] if row and row[0] else None
+            finally:
+                conn.close()
 
             if base_date is None:
                 log.error("No price history available in silver.clean_store_prices to infer base_date.")
@@ -531,7 +552,8 @@ class CPICalculationEngine:
         if splice_factor is None:
             splice_factor = 1.0
             try:
-                with self.get_connection() as conn:
+                conn = self.get_connection()
+                try:
                     with conn.cursor() as cur:
                         cur.execute("""
                             SELECT avg_december_cpi 
@@ -544,6 +566,8 @@ class CPICalculationEngine:
                         if row and row[0] is not None and float(row[0]) > 0:
                             splice_factor = float(row[0]) / 100.0
                             log.info("Applying chain-linking splice factor: %.4f (avg_december_cpi=%.2f)", splice_factor, float(row[0]))
+                finally:
+                    conn.close()
             except Exception as e:
                 log.debug("Could not query gold.cpi_base_dates for splice factor: %s. Defaulting to 1.0", e)
 
@@ -555,8 +579,9 @@ class CPICalculationEngine:
 
     def _save_to_database(self, elementary_df: pd.DataFrame, df_div: pd.DataFrame, headline: dict):
         """Persists elementary indices and daily CPI facts to PostgreSQL."""
-        with self.get_connection() as conn:
-            with conn.cursor() as cur:
+        conn = self.get_connection()
+        try:
+          with conn.cursor() as cur:
                 # Ensure Gold schema tables exist
                 cur.execute("""
                      CREATE TABLE IF NOT EXISTS gold.fct_elementary_indices (
@@ -650,10 +675,13 @@ class CPICalculationEngine:
 
                 conn.commit()
                 log.info(f"✅ Successfully persisted {len(elem_rows)} elementary indices and {len(cpi_rows)} division CPI facts!")
+        finally:
+            conn.close()
 
     def compute_monthly_cpi(self, month_date: date | None = None) -> pd.DataFrame:
         """Computes conformed monthly CPI facts across all 12 COICOP divisions and headline/core indices."""
-        with self.get_connection() as conn:
+        conn = self.get_connection()
+        try:
             with conn.cursor() as cur:
                 where_clause = ""
                 params = []
@@ -732,7 +760,9 @@ class CPICalculationEngine:
                 cols = [desc[0] for desc in cur.description]
                 rows = cur.fetchall()
                 df = pd.DataFrame(rows, columns=cols)
-                return df
+        finally:
+            conn.close()
+        return df
 
     def save_monthly_cpi(self, monthly_df: pd.DataFrame) -> None:
         """Upserts computed monthly CPI facts into gold.fct_cpi_monthly."""
@@ -740,7 +770,8 @@ class CPICalculationEngine:
             log.warning("No monthly CPI records to save.")
             return
 
-        with self.get_connection() as conn:
+        conn = self.get_connection()
+        try:
             with conn.cursor() as cur:
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS gold.fct_cpi_monthly (
@@ -801,6 +832,8 @@ class CPICalculationEngine:
                 """, rows)
                 conn.commit()
                 log.info(f"✅ Successfully persisted {len(rows)} monthly CPI facts into gold.fct_cpi_monthly!")
+        finally:
+            conn.close()
 
 if __name__ == "__main__":
     engine = CPICalculationEngine()

@@ -153,22 +153,19 @@ enriched_observations as (
             ov_ns.coicop_division,
             case
                 when p.store_slug in ('khmer24', 'realestate') then '04'
-                when p.store_slug in ('sokhahotel', 'hyyathotel', 'bayonbkk') then '11'
-                when p.store_slug in ('bookmebus', 'redbus', 'new_gasoline') then '07'
-                when p.store_slug in ('cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then '08'
+                when p.store_slug in ('communitypharma') then '06'
+                when p.store_slug in ('sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk') then '11'
+                when p.store_slug in ('bookmebus', 'redbus', 'redmebus', 'new_gasoline') then '07'
+                when p.store_slug in ('arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then '08'
             end,
             ov_ng.coicop_division,
             case when c.coicop_method <> 'store_default' then c.coicop_division end,
             case
-                when p.store_slug in ('communitypharma') then '06'
-                when p.store_slug in ('arystore', 'samnangshop') then '08'
-            end,
-            case
                 when ai.coicop_division is not null and coalesce(ai.confidence_score, 0.90) >= 0.50 then
                     case
-                        when split_part(ai.coicop_code, '.', 1) = '11' and p.store_slug not in ('sokhahotel', 'hyyathotel', 'bayonbkk') then null
+                        when split_part(ai.coicop_code, '.', 1) = '11' and p.store_slug not in ('sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk') then null
                         when split_part(ai.coicop_code, '.', 1) = '04' and p.store_slug in ('communitypharma', 'delishop', 'aeon', 'aeon3', 'samnangshop', 'arystore', 'bookmebus', 'redbus') then null
-                        when split_part(ai.coicop_code, '.', 1) = '07' and p.store_slug in ('communitypharma', 'khmer24', 'realestate', 'sokhahotel', 'hyyathotel', 'bayonbkk') then null
+                        when split_part(ai.coicop_code, '.', 1) = '07' and p.store_slug in ('communitypharma', 'khmer24', 'realestate', 'sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk') then null
                         else ai.coicop_division
                     end
             end,
@@ -186,23 +183,23 @@ enriched_observations as (
             when coalesce(ov_b.coicop_division, ov_ns.coicop_division) is not null then
                 {{ coicop_code_from_division("coalesce(ov_b.coicop_division, ov_ns.coicop_division)") }}
             when p.store_slug in ('khmer24', 'realestate') then '04.1.1'
-            when p.store_slug in ('sokhahotel', 'hyyathotel') then '11.2.0'
+            when p.store_slug in ('communitypharma') then '06.1.2'
+            when p.store_slug in ('sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt') then '11.2.0'
             when p.store_slug = 'bayonbkk' then '11.1.1'
-            when p.store_slug in ('bookmebus', 'redbus') then '07.3.1'
+            when p.store_slug in ('bookmebus', 'redbus', 'redmebus') then '07.3.1'
             when p.store_slug = 'new_gasoline' then '07.2.2'
             when p.store_slug in ('cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then '08.3.0'
+            when p.store_slug in ('arystore', 'samnangshop') then '08.2.0'
             when ov_ng.coicop_division is not null then
                 {{ coicop_code_from_division("ov_ng.coicop_division") }}
             when c.coicop_division is not null and c.coicop_method <> 'store_default'
                  and c.coicop_code is not null and c.coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$'
                  and lpad(split_part(c.coicop_code, '.', 1), 2, '0') = c.coicop_division
                  then c.coicop_code
-            when p.store_slug in ('communitypharma') then '06.1.2'
-            when p.store_slug in ('arystore', 'samnangshop') then '08.2.0'
             when ai.coicop_division is not null and coalesce(ai.confidence_score, 0.90) >= 0.50
-                 and not (split_part(ai.coicop_code, '.', 1) = '11' and p.store_slug not in ('sokhahotel', 'hyyathotel', 'bayonbkk'))
+                 and not (split_part(ai.coicop_code, '.', 1) = '11' and p.store_slug not in ('sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk'))
                  and not (split_part(ai.coicop_code, '.', 1) = '04' and p.store_slug in ('communitypharma', 'delishop', 'aeon', 'aeon3', 'samnangshop', 'arystore', 'bookmebus', 'redbus'))
-                 and not (split_part(ai.coicop_code, '.', 1) = '07' and p.store_slug in ('communitypharma', 'khmer24', 'realestate', 'sokhahotel', 'hyyathotel', 'bayonbkk')) then
+                 and not (split_part(ai.coicop_code, '.', 1) = '07' and p.store_slug in ('communitypharma', 'khmer24', 'realestate', 'sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk')) then
                 case
                     when ai.coicop_code is not null and ai.coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$'
                          and lpad(split_part(ai.coicop_code, '.', 1), 2, '0') = ai.coicop_division
@@ -222,13 +219,13 @@ enriched_observations as (
         case
             when ov_b.coicop_division is not null or ov_ns.coicop_division is not null then 'override'
             when p.store_slug in (
-                'khmer24', 'realestate', 'sokhahotel', 'hyyathotel', 'bayonbkk',
-                'bookmebus', 'redbus', 'new_gasoline', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi'
+                'khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk',
+                'bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi'
             ) then 'store_purity'
             when ov_ng.coicop_division is not null then 'override'
             when c.coicop_division is not null and c.coicop_method <> 'store_default' then c.coicop_method
             when c.coicop_method is not null and c.coicop_method <> 'store_default' then c.coicop_method
-            when p.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'bayonbkk', 'bookmebus', 'redbus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then 'store_default'
+            when p.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk', 'bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then 'store_default'
             when ai.coicop_division is not null and coalesce(ai.confidence_score, 0.90) >= 0.50 then 'gemini_ai'
             when cm.coicop_division is not null then 'category_map'
             when c.coicop_method is not null then c.coicop_method
@@ -293,7 +290,14 @@ select
     pack_qty,
     unit_price_khr,
     coicop_division,
-    coicop_code,
+    -- BUG FIX: Guarantee coicop_code prefix strictly matches coicop_division.
+    -- If an override or fallback changed division, derive the proper subcode.
+    case
+        when coicop_code is not null and coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$'
+             and lpad(split_part(coicop_code, '.', 1), 2, '0') = coicop_division
+        then coicop_code
+        else {{ coicop_code_from_division("coicop_division") }}
+    end as coicop_code,
     coicop_method,
     coicop_confidence,
     is_outlier,

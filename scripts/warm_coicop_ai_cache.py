@@ -165,9 +165,9 @@ def fetch_uncached_products(engine, limit: int = 1000, scrape_date: str | None =
             WHERE {date_filter}
               AND p.item_id IS NOT NULL
               AND p.store_slug NOT IN (
-                  'communitypharma', 'khmer24', 'realestate',
-                  'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk',
-                  'bookmebus', 'redbus', 'redmebus', 'new_gasoline',
+                  'communitypharma', 'grab_ucare', 'khmer24', 'realestate',
+                  'sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk',
+                  'bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'gasoline',
                   'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi',
                   'smart', 'smart_wifi'
               )

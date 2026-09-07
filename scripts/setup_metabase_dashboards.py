@@ -1,9 +1,10 @@
 """
 =============================================================================
-CAMBODIA CPI PIPELINE — METABASE PROVISIONER
+CAMBODIA CPI PIPELINE — CONSOLIDATED 3 METABASE DASHBOARDS PROVISIONER
 Provisions:
-  1. 🇰🇭 Cambodia Daily Consumer Price Index (CPI) Dashboard
-  2. 🚀 Cambodia CPI Pipeline Operations & Monitoring Dashboard
+  1. 01 - Macro CPI & Inflation Analytics
+  2. 02 - Operations & 23-Source Telemetry
+  3. 03 - Silver Data Quality Screener
 =============================================================================
 """
 
@@ -165,23 +166,23 @@ def provision_all():
     purge_all_cpi_collections(cur)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # 1. 🇰🇭 CAMBODIA CPI & INFLATION EXECUTIVE DASHBOARD (Macro Policy)
+    # 1. 🇰🇭 DASHBOARD 1: MACRO CPI & INFLATION ANALYTICS (Executive BI)
     # ═══════════════════════════════════════════════════════════════════════════
-    col_name_1 = "01 - Cambodia Daily CPI & Inflation Analytics"
-    dash_name_1 = "🇰🇭 Cambodia Daily Consumer Price Index (CPI) Dashboard"
+    col_name_1 = "01 - Macro CPI & Inflation Analytics"
+    dash_name_1 = "🇰🇭 Macro CPI & Inflation Analytics"
 
-    print("[1/5] Setting up Collection 01: CPI Macro & Inflation Analytics...")
+    print("[1/3] Setting up Collection 01: Macro CPI & Inflation Analytics...")
     c_cpi = get_or_create_collection(
         cur,
         col_name_1,
-        "Official macroeconomic inflation indicators, Headline vs Core CPI, and 12-division COICOP performance.",
+        "Official macroeconomic inflation indicators, Headline vs Core CPI, 12-division COICOP performance, and Nowcast projections.",
         "#008080"
     )
 
     d_cpi_id = create_or_update_dashboard(
         cur,
         dash_name_1,
-        "Daily Consumer Price Index (CPI) tracking headline inflation, core inflation, and 12-division COICOP movements.",
+        "Executive inflation overview: Daily and Monthly Headline CPI, Core CPI, 12-division COICOP index matrix, and Month-End Nowcasting.",
         c_cpi
     )
 
@@ -367,67 +368,272 @@ def provision_all():
         place_card_on_dashboard(cur, d_cpi_id, cid, col, row, sx, sy, item["viz"])
 
 
-    # ═══════════════════════════════════════════════════════════════════════════
-    # 2. 📊 PRE-CPI ECONOMETRIC DATA DIAGNOSTICS (Quality Screening)
-    # ═══════════════════════════════════════════════════════════════════════════
-    col_name_2 = "02 - Pre-CPI Econometric Data Diagnostics"
-    dash_name_2 = "📊 Pre-CPI Econometric Data Visualization & Screening Dashboard"
 
-    print("[2/5] Setting up Collection 02: Pre-CPI Econometric QA Screener...")
-    c_pre = get_or_create_collection(
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 2. 🚀 DASHBOARD 2: OPERATIONS & 23-SOURCE TELEMETRY
+    # ═══════════════════════════════════════════════════════════════════════════
+    col_name_2 = "02 - Operations & 23-Source Telemetry"
+    dash_name_2 = "02 - Operations & 23-Source Telemetry"
+
+    print("[2/3] Setting up Collection 02: Operations & 23-Source Telemetry...")
+    c_ops = get_or_create_collection(
         cur,
         col_name_2,
-        "Econometric data screening prior to Jevons calculation: log-relative bell curves, price spells, clearance dumps, and imputation exposure.",
-        "#E67E22"
+        "Live pipeline orchestration, DAG monitor, 23 digital store scrapers, SLA lag, volume trends, and extraction completeness.",
+        "#2E5BFF"
     )
 
-    d_pre_id = create_or_update_dashboard(
+    d_ops_id = create_or_update_dashboard(
         cur,
         dash_name_2,
-        "Pre-CPI econometric screening validating price quotes before running elementary Jevons calculations.",
-        c_pre
+        "Live real-time monitoring of Airflow DAG runs, all 23 store scrapers ingestion progress, failure alerts, and warehouse SLAs.",
+        c_ops
     )
 
-    pre_cpi_cards = [
+    ops_cards = [
         {
-            "name": "Total Clean Price Quotes (Pre-Calculation)",
-            "desc": "Total valid clean price quotes available for the current calculation cycle.",
+            "name": "Active Stores Ingested Today",
+            "desc": "Distinct active retail store channels successfully ingested on the latest scrape date.",
             "display": "scalar",
             "sql": """
-                SELECT COUNT(*) AS "Clean Quotes Today"
+                SELECT COUNT(DISTINCT store_slug) AS "Active Stores Today"
                 FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
-                  AND price_khr > 0;
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
             """,
             "viz": {},
             "grid": (0, 0, 6, 3)
         },
         {
-            "name": "CPI Price Outliers Quarantined",
-            "desc": "Price observations flagged as extreme statistical outliers (excluded from Jevons).",
+            "name": "Scraper Ingestion Success Rate (%)",
+            "desc": "Percentage of 21 scrapers that successfully delivered data today.",
             "display": "scalar",
             "sql": """
-                SELECT COUNT(*) AS "Outliers Quarantined"
+                SELECT 
+                    ROUND((COUNT(DISTINCT store_slug) * 100.0 / 21.0)::numeric, 1) AS "Scraper Success Rate (%)"
                 FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
-                  AND is_outlier = TRUE;
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
             """,
             "viz": {},
             "grid": (6, 0, 6, 3)
         },
         {
-            "name": "Live Observed Basket Share (%)",
-            "desc": "Percentage of basket items directly observed in retail stores (vs synthetically imputed).",
+            "name": "DAGs Running In-Flight Now",
+            "desc": "Count of Airflow DAGs currently actively executing right now.",
             "display": "scalar",
             "sql": """
-                SELECT 
-                    ROUND((COUNT(*) FILTER (WHERE is_imputed = FALSE) * 100.0 / NULLIF(COUNT(*), 0))::numeric, 1) AS "Live Observed Share (%)"
-                FROM gold.fct_elementary_indices
-                WHERE calculation_date = (SELECT MAX(calculation_date) FROM gold.fct_elementary_indices);
+                SELECT COUNT(*) AS "DAGs Running Now"
+                FROM airflow_monitor.dag_run
+                WHERE state = 'running'
+                  AND DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh') = (SELECT MAX(DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh')) FROM airflow_monitor.dag_run);
             """,
             "viz": {},
             "grid": (12, 0, 6, 3)
         },
+
+        {
+            "name": "Official MEF USD/KHR Rate Today",
+            "desc": "Official daily exchange rate from Ministry of Economy and Finance (MEF API).",
+            "display": "scalar",
+            "sql": """
+                SELECT rate AS "USD/KHR Rate Today"
+                FROM staging.exchange_rates
+                WHERE execution_date = (SELECT MAX(execution_date) FROM staging.exchange_rates);
+            """,
+            "viz": {},
+            "grid": (18, 0, 6, 3)
+        },
+        {
+            "name": "Daily Store Scraper Ingestion Progress",
+            "desc": "Real-time checklist of all 23 retail store scrapers running today.",
+            "display": "table",
+            "sql": """
+                WITH latest_scrape AS (
+                    SELECT store_slug, COUNT(*) AS raw_count_today
+                    FROM staging.raw_scrapes
+                    WHERE scrape_date = (SELECT MAX(scrape_date) FROM staging.raw_scrapes)
+                    GROUP BY store_slug
+                ),
+                dag_states AS (
+                    SELECT DISTINCT ON (dag_id) 
+                        REPLACE(REPLACE(dag_id, 'scrape_', ''), '_dag', '') AS store_key,
+                        state,
+                        start_date,
+                        end_date
+                    FROM airflow_monitor.dag_run
+                    WHERE DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh') = (SELECT MAX(DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh')) FROM airflow_monitor.dag_run)
+                    ORDER BY dag_id, start_date DESC
+                )
+                SELECT 
+                    s.store_slug AS "Store Slug",
+                    s.store_name AS "Store Name",
+                    s.channel AS "Channel Type",
+                    COALESCE(UPPER(d.state), 'PENDING') AS "DAG State",
+                    COALESCE(ls.raw_count_today, 0) AS "Raw Records Today",
+                    CASE 
+                        WHEN COALESCE(ls.raw_count_today, 0) > 0 THEN '✅ INGESTED'
+                        WHEN d.state = 'running' THEN '⏳ SCRAPING'
+                        WHEN d.state = 'failed' THEN '❌ FAILED'
+                        ELSE '⏸️ IDLE / WAITING'
+                    END AS "Ingest Status"
+                FROM gold.dim_stores s
+                LEFT JOIN latest_scrape ls ON ls.store_slug = s.store_slug
+                LEFT JOIN dag_states d ON d.store_key = s.store_slug
+                WHERE s.is_active = TRUE
+                ORDER BY "Raw Records Today" DESC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (0, 3, 24, 8)
+        },
+        {
+            "name": "Real-Time Airflow DAG Pipeline Monitor (Today)",
+            "desc": "Live execution state of all DAGs triggered today (Scrapers, Silver, Master, Gold).",
+            "display": "table",
+            "sql": """
+                WITH latest_runs AS (
+                    SELECT DISTINCT ON (dag_id) 
+                        dag_id,
+                        state,
+                        run_type,
+                        start_date,
+                        end_date
+                    FROM airflow_monitor.dag_run
+                    WHERE DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh') = (SELECT MAX(DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh')) FROM airflow_monitor.dag_run)
+                    ORDER BY dag_id, start_date DESC
+                )
+                SELECT 
+                    dag_id AS "DAG Name",
+                    UPPER(state) AS "Status",
+                    run_type AS "Run Type",
+                    TO_CHAR(start_date AT TIME ZONE 'Asia/Phnom_Penh', 'HH24:MI:SS') AS "Start (ICT)",
+                    TO_CHAR(end_date AT TIME ZONE 'Asia/Phnom_Penh', 'HH24:MI:SS') AS "End (ICT)",
+                    ROUND(EXTRACT(EPOCH FROM (COALESCE(end_date, NOW()) - start_date))::numeric, 1) AS "Duration (s)"
+                FROM latest_runs
+                ORDER BY 
+                    CASE WHEN state = 'running' THEN 1 WHEN state = 'failed' THEN 2 ELSE 3 END,
+                    start_date DESC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (0, 11, 14, 8)
+        },
+        {
+            "name": "Data Freshness SLA & Lag by Source",
+            "desc": "Elapsed hours since last raw batch landed for each data source with color-coded SLA status.",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    source_name AS "Source Name",
+                    COUNT(*) AS "Total Ingested (7D)",
+                    MAX(scraped_at) AS "Last Ingested (UTC)",
+                    ROUND(EXTRACT(EPOCH FROM (NOW() - MAX(scraped_at))) / 3600.0, 1) AS "Lag (Hours)",
+                    CASE 
+                        WHEN NOW() - MAX(scraped_at) <= INTERVAL '24 hours' THEN '🟢 FRESH (<24h)'
+                        WHEN NOW() - MAX(scraped_at) <= INTERVAL '48 hours' THEN '🟡 DELAYED (24-48h)'
+                        ELSE '🔴 STALE (>48h)'
+                    END AS "Freshness SLA"
+                FROM bronze.raw_prices
+                GROUP BY source_name
+                ORDER BY "Lag (Hours)" ASC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (14, 11, 10, 8)
+        },
+        {
+            "name": "Daily Scraped Observation Volume by Store (Last 30 Days)",
+            "desc": "Stacked daily scrape observation volume per store channel over the last 30 days.",
+            "display": "bar",
+            "sql": """
+                SELECT 
+                    scrape_date AS "Scrape Date",
+                    store_slug AS "Store",
+                    COUNT(*) AS "Records Scraped"
+                FROM silver.clean_store_prices
+                WHERE scrape_date >= (SELECT MAX(scrape_date) - INTERVAL '30 days' FROM silver.clean_store_prices)
+                GROUP BY scrape_date, store_slug
+                ORDER BY scrape_date ASC, "Records Scraped" DESC;
+            """,
+            "viz": {
+                "graph.dimensions": ["Scrape Date", "Store"],
+                "graph.metrics": ["Records Scraped"],
+                "stackable.stack_type": "stacked"
+            },
+            "grid": (0, 19, 24, 8)
+        },
+        {
+            "name": "Store Scrape Ingestion Matrix (Last 14 Days)",
+            "desc": "Detailed daily volume matrix for each store channel across the last 14 calendar days.",
+            "display": "table",
+            "sql": """
+                WITH date_bounds AS (
+                    SELECT MAX(scrape_date) AS max_d FROM silver.clean_store_prices
+                )
+                SELECT 
+                    store_slug AS "Store Slug",
+                    COUNT(*) FILTER (WHERE scrape_date = max_d) AS "Latest",
+                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '1 day') AS "D-1",
+                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '2 days') AS "D-2",
+                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '3 days') AS "D-3",
+                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '4 days') AS "D-4",
+                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '5 days') AS "D-5",
+                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '6 days') AS "D-6",
+                    COUNT(*) AS "Total 14D Records"
+                FROM silver.clean_store_prices, date_bounds
+                WHERE scrape_date >= max_d - INTERVAL '14 days'
+                GROUP BY store_slug
+                ORDER BY "Latest" DESC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (0, 27, 12, 8)
+        },
+        {
+            "name": "Scraper Field Extraction Completeness (%)",
+            "desc": "Completeness audit of barcode, brand, category, size unit, and promo rates per store.",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    store_slug AS "Store",
+                    COUNT(*) AS "Total Items",
+                    ROUND((COUNT(barcode) FILTER (WHERE barcode IS NOT NULL AND TRIM(barcode) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Barcode (%)",
+                    ROUND((COUNT(brand) FILTER (WHERE brand IS NOT NULL AND TRIM(brand) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Brand (%)",
+                    ROUND((COUNT(category_native) FILTER (WHERE category_native IS NOT NULL AND TRIM(category_native) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Category Native (%)",
+                    ROUND((COUNT(size_unit) FILTER (WHERE size_unit IS NOT NULL AND TRIM(size_unit) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Unit Size (%)",
+                    ROUND((COUNT(*) FILTER (WHERE discount_pct IS NOT NULL AND discount_pct > 0) * 100.0 / COUNT(*))::numeric, 1) AS "Promo Rate (%)"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                GROUP BY store_slug
+                ORDER BY "Total Items" DESC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (12, 27, 12, 8)
+        }
+    ]
+
+    for item in ops_cards:
+        cid = create_or_update_card(cur, item["name"], item["desc"], item["display"], item["sql"], item["viz"], c_ops, db_id=db_id)
+        col, row, sx, sy = item["grid"]
+        place_card_on_dashboard(cur, d_ops_id, cid, col, row, sx, sy, item["viz"])
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 3. 🛡️ DASHBOARD 3: SILVER DATA QUALITY SCREENER
+    # ═══════════════════════════════════════════════════════════════════════════
+    col_name_3 = "03 - Silver Data Quality Screener"
+    dash_name_3 = "03 - Silver Data Quality Screener"
+
+    print("[3/3] Setting up Collection 03: Silver Data Quality Screener...")
+    c_class = get_or_create_collection(
+        cur,
+        col_name_3,
+        "Pre-CPI quality gate, COICOP classification completeness, log-price distributions, outlier screening, and human review queues.",
+        "#9B59B6"
+    )
+
+    d_class_id = create_or_update_dashboard(
+        cur,
+        dash_name_3,
+        "Silver layer quality control: Pre-CPI Quality Gate, COICOP coverage & method breakdown, price outliers, imputation rates, and review queue.",
+        c_class
+    )
+
+    class_cards = [
         {
             "name": "Pre-CPI Quality Gate Status",
             "desc": "Axiomatic readiness status for running Jevons elementary index calculation.",
@@ -443,7 +649,83 @@ def provision_all():
                 WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
             """,
             "viz": {},
+            "grid": (0, 0, 6, 3)
+        },
+        {
+            "name": "COICOP Classification Coverage (%)",
+            "desc": "Percentage of items successfully classified into a valid COICOP division.",
+            "display": "scalar",
+            "sql": """
+                SELECT 
+                    ROUND((COUNT(*) FILTER (WHERE coicop_division IS NOT NULL AND coicop_division <> 'UNCLASSIFIED') * 100.0 / NULLIF(COUNT(*), 0))::numeric, 2) AS "Classification Coverage (%)"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
+            """,
+            "viz": {},
+            "grid": (6, 0, 6, 3)
+        },
+        {
+            "name": "CPI Price Outliers Quarantined",
+            "desc": "Price observations flagged as extreme statistical outliers (excluded from Jevons).",
+            "display": "scalar",
+            "sql": """
+                SELECT COUNT(*) AS "Outliers Quarantined"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                  AND is_outlier = TRUE;
+            """,
+            "viz": {},
+            "grid": (12, 0, 6, 3)
+        },
+        {
+            "name": "Pending Human Review Queue",
+            "desc": "Count of ambiguous fuzzy matched items currently awaiting review.",
+            "display": "scalar",
+            "sql": """
+                SELECT COUNT(*) AS "Pending Review Items"
+                FROM silver.needs_review
+                WHERE status = 'pending';
+            """,
+            "viz": {},
             "grid": (18, 0, 6, 3)
+        },
+        {
+            "name": "COICOP 12-Division Product Distribution",
+            "desc": "Product count distribution across all 12 COICOP divisions in the Silver layer.",
+            "display": "bar",
+            "sql": """
+                SELECT 
+                    COALESCE(coicop_division, 'UNCLASSIFIED') AS "COICOP Division",
+                    COUNT(*) AS "Product Count"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                GROUP BY coicop_division
+                ORDER BY "Product Count" DESC;
+            """,
+            "viz": {
+                "graph.dimensions": ["COICOP Division"],
+                "graph.metrics": ["Product Count"]
+            },
+            "grid": (0, 3, 12, 8)
+        },
+        {
+            "name": "COICOP Classification Method Breakdown",
+            "desc": "Distribution of classification methods: Gemini AI, manual override, barcode, or category mapping.",
+            "display": "bar",
+            "sql": """
+                SELECT 
+                    COALESCE(coicop_method, 'unknown') AS "Classification Method",
+                    COUNT(*) AS "Item Count"
+                FROM silver.clean_store_prices
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                GROUP BY coicop_method
+                ORDER BY "Item Count" DESC;
+            """,
+            "viz": {
+                "graph.dimensions": ["Classification Method"],
+                "graph.metrics": ["Item Count"]
+            },
+            "grid": (12, 3, 12, 8)
         },
         {
             "name": "Log-Price Relative Distribution (Hadi / Tukey Outlier Check)",
@@ -480,7 +762,7 @@ def provision_all():
                 "graph.dimensions": ["Log Price Relative [ln(Pt/Pt-1)]"],
                 "graph.metrics": ["Observation Count"]
             },
-            "grid": (0, 3, 12, 8)
+            "grid": (0, 11, 12, 8)
         },
         {
             "name": "Basket Imputation & Missingness Rate by COICOP Division",
@@ -501,496 +783,7 @@ def provision_all():
                 "graph.dimensions": ["Division Code"],
                 "graph.metrics": ["Imputation Rate (%)"]
             },
-            "grid": (12, 3, 12, 8)
-        },
-        {
-            "name": "Pre-Flight Extreme Price Spikes & Drops (>25% DoD)",
-            "desc": "Pre-aggregation outlier table capturing single-day jumps or drops exceeding 25%.",
-            "display": "table",
-            "sql": """
-                WITH prev_date AS (
-                    SELECT DISTINCT scrape_date 
-                    FROM silver.clean_store_prices 
-                    WHERE scrape_date < (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
-                    ORDER BY scrape_date DESC LIMIT 1
-                )
-                SELECT 
-                    curr.store_slug AS "Store",
-                    LEFT(curr.name_clean, 35) AS "Product Name",
-                    curr.coicop_division AS "Div",
-                    ROUND(prev.price_khr, 0) AS "Prev Price (KHR)",
-                    ROUND(curr.price_khr, 0) AS "Today Price (KHR)",
-                    ROUND(((curr.price_khr / NULLIF(prev.price_khr, 0)) - 1.0) * 100.0, 1) AS "Shift (%)",
-                    CASE WHEN curr.discount_pct > 0 THEN 'PROMO ' || curr.discount_pct || '%' ELSE 'REGULAR' END AS "Promo State"
-                FROM silver.clean_store_prices curr
-                JOIN silver.clean_store_prices prev 
-                  ON curr.item_id = prev.item_id 
-                 AND curr.store_slug = prev.store_slug
-                WHERE curr.scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
-                  AND prev.scrape_date = (SELECT scrape_date FROM prev_date)
-                  AND curr.price_khr > 0 
-                  AND prev.price_khr > 0
-                  AND ABS((curr.price_khr / NULLIF(prev.price_khr, 0)) - 1.0) > 0.25
-                ORDER BY ABS((curr.price_khr / NULLIF(prev.price_khr, 0)) - 1.0) DESC
-                LIMIT 25;
-            """,
-            "viz": {"table.pivot_column": None},
-            "grid": (0, 11, 14, 8)
-        },
-        {
-            "name": "Benchmark Commodity Price Trajectories (Price Spells)",
-            "desc": "Time series of staple goods checking for sticky price step-functions.",
-            "display": "line",
-            "sql": """
-                SELECT 
-                    scrape_date AS "Date",
-                    store_slug || ' - ' || LEFT(name_clean, 20) AS "Commodity SKU",
-                    AVG(unit_price_khr) AS "Unit Price (KHR/kg or L)"
-                FROM silver.clean_store_prices
-                WHERE coicop_division IN ('01', '07')
-                  AND name_clean ILIKE ANY (ARRAY['%rice%', '%gasoline%', '%oil%', '%milk%', '%pork%'])
-                  AND scrape_date >= (SELECT MAX(scrape_date) FROM silver.clean_store_prices) - INTERVAL '14 days'
-                  AND is_outlier = FALSE
-                  AND unit_price_khr > 0
-                GROUP BY scrape_date, store_slug, name_clean
-                ORDER BY scrape_date ASC;
-            """,
-            "viz": {
-                "graph.dimensions": ["Date"],
-                "graph.metrics": ["Unit Price (KHR/kg or L)"]
-            },
-            "grid": (14, 11, 10, 8)
-        }
-    ]
-
-    for item in pre_cpi_cards:
-        cid = create_or_update_card(cur, item["name"], item["desc"], item["display"], item["sql"], item["viz"], c_pre, db_id=db_id)
-        col, row, sx, sy = item["grid"]
-        place_card_on_dashboard(cur, d_pre_id, cid, col, row, sx, sy, item["viz"])
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    # 3. 🚀 PIPELINE OPERATIONS & AIRFLOW MONITOR (ETL Infrastructure)
-    # ═══════════════════════════════════════════════════════════════════════════
-    col_name_3 = "03 - Pipeline Orchestration & SLA Health"
-    dash_name_3 = "🚀 Cambodia CPI Pipeline Operations & Monitoring Dashboard"
-
-    print("[3/5] Setting up Collection 03: Pipeline Operations & SLA Health...")
-    c_ops = get_or_create_collection(
-        cur,
-        col_name_3,
-        "Live DAG monitoring, incident tracking, source ingestion health, fuel prices, and dimensional fact tables.",
-        "#2E5BFF"
-    )
-
-    d_ops_id = create_or_update_dashboard(
-        cur,
-        dash_name_3,
-        "Live real-time monitoring of Airflow DAG runs, scraper ingestion progress, failure alerts, and warehouse SLAs.",
-        c_ops
-    )
-
-    ops_cards = [
-        {
-            "name": "DAGs Running In-Flight Now",
-            "desc": "Count of Airflow DAGs currently actively executing right now.",
-            "display": "scalar",
-            "sql": """
-                SELECT COUNT(*) AS "DAGs Running Now"
-                FROM airflow_monitor.dag_run
-                WHERE state = 'running'
-                  AND DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh') = (SELECT MAX(DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh')) FROM airflow_monitor.dag_run);
-            """,
-            "viz": {},
-            "grid": (0, 0, 8, 3)
-        },
-        {
-            "name": "Failed DAGs / Tasks Today",
-            "desc": "Count of DAG runs or task instances that encountered failures today.",
-            "display": "scalar",
-            "sql": """
-                SELECT COUNT(*) AS "Failed Tasks Today"
-                FROM airflow_monitor.task_instance
-                WHERE state IN ('failed', 'upstream_failed')
-                  AND DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh') = (SELECT MAX(DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh')) FROM airflow_monitor.task_instance);
-            """,
-            "viz": {},
-            "grid": (8, 0, 8, 3)
-        },
-        {
-            "name": "Official MEF USD/KHR Rate Today",
-            "desc": "Official daily exchange rate from Ministry of Economy and Finance (MEF API).",
-            "display": "scalar",
-            "sql": """
-                SELECT rate AS "USD/KHR Rate Today"
-                FROM staging.exchange_rates
-                WHERE execution_date = (SELECT MAX(execution_date) FROM staging.exchange_rates);
-            """,
-            "viz": {},
-            "grid": (16, 0, 8, 3)
-        },
-        {
-            "name": "Real-Time Airflow DAG Pipeline Monitor (Today)",
-            "desc": "Live execution state of all DAGs triggered today (Scrapers, Silver, Master, Gold).",
-            "display": "table",
-            "sql": """
-                WITH latest_runs AS (
-                    SELECT DISTINCT ON (dag_id) 
-                        dag_id,
-                        state,
-                        run_type,
-                        start_date,
-                        end_date
-                    FROM airflow_monitor.dag_run
-                    WHERE DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh') = (SELECT MAX(DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh')) FROM airflow_monitor.dag_run)
-                    ORDER BY dag_id, start_date DESC
-                )
-                SELECT 
-                    dag_id AS "DAG Name",
-                    UPPER(state) AS "Status",
-                    run_type AS "Run Type",
-                    TO_CHAR(start_date AT TIME ZONE 'Asia/Phnom_Penh', 'HH24:MI:SS') AS "Start (ICT)",
-                    TO_CHAR(end_date AT TIME ZONE 'Asia/Phnom_Penh', 'HH24:MI:SS') AS "End (ICT)",
-                    ROUND(EXTRACT(EPOCH FROM (COALESCE(end_date, NOW()) - start_date))::numeric, 1) AS "Duration (s)"
-                FROM latest_runs
-                ORDER BY 
-                    CASE WHEN state = 'running' THEN 1 WHEN state = 'failed' THEN 2 ELSE 3 END,
-                    start_date DESC;
-            """,
-            "viz": {"table.pivot_column": None},
-            "grid": (0, 3, 14, 8)
-        },
-        {
-            "name": "Data Freshness SLA & Lag by Source",
-            "desc": "Elapsed hours since last raw batch landed for each data source with color-coded SLA status.",
-            "display": "table",
-            "sql": """
-                SELECT 
-                    source_name AS "Source Name",
-                    COUNT(*) AS "Total Ingested (7D)",
-                    MAX(scraped_at) AS "Last Ingested (UTC)",
-                    ROUND(EXTRACT(EPOCH FROM (NOW() - MAX(scraped_at))) / 3600.0, 1) AS "Lag (Hours)",
-                    CASE 
-                        WHEN NOW() - MAX(scraped_at) <= INTERVAL '24 hours' THEN '🟢 FRESH (<24h)'
-                        WHEN NOW() - MAX(scraped_at) <= INTERVAL '48 hours' THEN '🟡 DELAYED (24-48h)'
-                        ELSE '🔴 STALE (>48h)'
-                    END AS "Freshness SLA"
-                FROM bronze.raw_prices
-                GROUP BY source_name
-                ORDER BY "Lag (Hours)" ASC;
-            """,
-            "viz": {"table.pivot_column": None},
-            "grid": (14, 3, 10, 8)
-        },
-        {
-            "name": "Daily Store Scraper Ingestion Progress",
-            "desc": "Real-time checklist of all 23 retail store scrapers running today.",
-            "display": "table",
-            "sql": """
-                WITH latest_scrape AS (
-                    SELECT store_slug, COUNT(*) AS raw_count_today
-                    FROM staging.raw_scrapes
-                    WHERE scrape_date = (SELECT MAX(scrape_date) FROM staging.raw_scrapes)
-                    GROUP BY store_slug
-                ),
-                dag_states AS (
-                    SELECT DISTINCT ON (dag_id)
-                        REPLACE(REPLACE(dag_id, 'scrape_', ''), '_dag', '') AS store_key,
-                        state,
-                        start_date,
-                        end_date
-                    FROM airflow_monitor.dag_run
-                    WHERE DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh') = (SELECT MAX(DATE(start_date AT TIME ZONE 'Asia/Phnom_Penh')) FROM airflow_monitor.dag_run)
-                    ORDER BY dag_id, start_date DESC
-                )
-                SELECT 
-                    s.store_slug AS "Store Slug",
-                    s.store_name AS "Store Name",
-                    s.channel AS "Channel Type",
-                    COALESCE(UPPER(d.state), 'PENDING') AS "DAG State",
-                    COALESCE(ls.raw_count_today, 0) AS "Raw Records Today",
-                    CASE 
-                        WHEN COALESCE(ls.raw_count_today, 0) > 0 THEN '✅ INGESTED'
-                        WHEN d.state = 'running' THEN '⏳ SCRAPING'
-                        WHEN d.state = 'failed' THEN '❌ FAILED'
-                        ELSE '⏸️ IDLE / WAITING'
-                    END AS "Ingest Status"
-                FROM gold.dim_stores s
-                LEFT JOIN latest_scrape ls ON ls.store_slug = s.store_slug
-                LEFT JOIN dag_states d ON d.store_key = s.store_slug
-                WHERE s.is_active = TRUE
-                ORDER BY "Raw Records Today" DESC;
-            """,
-            "viz": {"table.pivot_column": None},
-            "grid": (0, 11, 24, 8)
-        }
-    ]
-
-    for item in ops_cards:
-        cid = create_or_update_card(cur, item["name"], item["desc"], item["display"], item["sql"], item["viz"], c_ops, db_id=db_id)
-        col, row, sx, sy = item["grid"]
-        place_card_on_dashboard(cur, d_ops_id, cid, col, row, sx, sy, item["viz"])
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    # 4. 🕷️ SCRAPER INGESTION & FIELD EXTRACTION TELEMETRY
-    # ═══════════════════════════════════════════════════════════════════════════
-    col_name_4 = "04 - Scraper Ingestion & Field Extraction Telemetry"
-    dash_name_4 = "🕷️ Scraper Data Health & Extraction Quality Dashboard"
-
-    print("[4/5] Setting up Collection 04: Scraper Extraction Telemetry...")
-    c_scrape = get_or_create_collection(
-        cur,
-        col_name_4,
-        "Comprehensive scrape ingestion volume, field extraction completeness, fallback rates, and 30-day ingestion trends.",
-        "#509EE3"
-    )
-
-    d_scrape_id = create_or_update_dashboard(
-        cur,
-        dash_name_4,
-        "Telemetry for web scrapers: volume stability, field completeness matrix, and selector fallback rates.",
-        c_scrape
-    )
-
-    scrape_cards = [
-        {
-            "name": "Scraper Ingestion Success Rate (%)",
-            "desc": "Percentage of 21 scrapers that successfully delivered data today.",
-            "display": "scalar",
-            "sql": """
-                SELECT 
-                    ROUND((COUNT(DISTINCT store_slug) * 100.0 / 21.0)::numeric, 1) AS "Scraper Success Rate (%)"
-                FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
-            """,
-            "viz": {},
-            "grid": (0, 0, 8, 3)
-        },
-        {
-            "name": "Active Store Channels Ingested",
-            "desc": "Distinct active retail store channels successfully ingested on the latest scrape date.",
-            "display": "scalar",
-            "sql": """
-                SELECT COUNT(DISTINCT store_slug) AS "Active Stores Today"
-                FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
-            """,
-            "viz": {},
-            "grid": (8, 0, 8, 3)
-        },
-        {
-            "name": "Selector Fallback Rate (%)",
-            "desc": "Percentage of items extracted using fallback selectors (potential website HTML structure change).",
-            "display": "scalar",
-            "sql": """
-                SELECT 
-                    ROUND((COUNT(*) FILTER (WHERE is_fallback = TRUE) * 100.0 / NULLIF(COUNT(*), 0))::numeric, 2) AS "Fallback Rate (%)"
-                FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
-            """,
-            "viz": {},
-            "grid": (16, 0, 8, 3)
-        },
-        {
-            "name": "Daily Scraped Observation Volume by Store (Last 30 Days)",
-            "desc": "Stacked daily scrape observation volume per store channel over the last 30 days.",
-            "display": "bar",
-            "sql": """
-                SELECT 
-                    scrape_date AS "Scrape Date",
-                    store_slug AS "Store",
-                    COUNT(*) AS "Records Scraped"
-                FROM silver.clean_store_prices
-                WHERE scrape_date >= (SELECT MAX(scrape_date) - INTERVAL '30 days' FROM silver.clean_store_prices)
-                GROUP BY scrape_date, store_slug
-                ORDER BY scrape_date ASC, "Records Scraped" DESC;
-            """,
-            "viz": {
-                "graph.dimensions": ["Scrape Date", "Store"],
-                "graph.metrics": ["Records Scraped"],
-                "stackable.stack_type": "stacked"
-            },
-            "grid": (0, 3, 24, 8)
-        },
-        {
-            "name": "Store Scrape Ingestion Matrix (Last 14 Days)",
-            "desc": "Detailed daily volume matrix for each store channel across the last 14 calendar days.",
-            "display": "table",
-            "sql": """
-                WITH date_bounds AS (
-                    SELECT MAX(scrape_date) AS max_d FROM silver.clean_store_prices
-                )
-                SELECT 
-                    store_slug AS "Store Slug",
-                    COUNT(*) FILTER (WHERE scrape_date = max_d) AS "Latest",
-                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '1 day') AS "D-1",
-                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '2 days') AS "D-2",
-                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '3 days') AS "D-3",
-                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '4 days') AS "D-4",
-                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '5 days') AS "D-5",
-                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '6 days') AS "D-6",
-                    COUNT(*) AS "Total 14D Records"
-                FROM silver.clean_store_prices, date_bounds
-                WHERE scrape_date >= max_d - INTERVAL '14 days'
-                GROUP BY store_slug
-                ORDER BY "Latest" DESC;
-            """,
-            "viz": {"table.pivot_column": None},
-            "grid": (0, 11, 12, 8)
-        },
-        {
-            "name": "Scraper Field Extraction Completeness (%)",
-            "desc": "Completeness audit of barcode, brand, category, size unit, and promo rates per store.",
-            "display": "table",
-            "sql": """
-                SELECT 
-                    store_slug AS "Store",
-                    COUNT(*) AS "Total Items",
-                    ROUND((COUNT(barcode) FILTER (WHERE barcode IS NOT NULL AND TRIM(barcode) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Barcode (%)",
-                    ROUND((COUNT(brand) FILTER (WHERE brand IS NOT NULL AND TRIM(brand) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Brand (%)",
-                    ROUND((COUNT(category_native) FILTER (WHERE category_native IS NOT NULL AND TRIM(category_native) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Category Native (%)",
-                    ROUND((COUNT(size_unit) FILTER (WHERE size_unit IS NOT NULL AND TRIM(size_unit) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Unit Size (%)",
-                    ROUND((COUNT(*) FILTER (WHERE discount_pct IS NOT NULL AND discount_pct > 0) * 100.0 / COUNT(*))::numeric, 1) AS "Promo Rate (%)"
-                FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
-                GROUP BY store_slug
-                ORDER BY "Total Items" DESC;
-            """,
-            "viz": {"table.pivot_column": None},
             "grid": (12, 11, 12, 8)
-        }
-    ]
-
-    for item in scrape_cards:
-        cid = create_or_update_card(cur, item["name"], item["desc"], item["display"], item["sql"], item["viz"], c_scrape, db_id=db_id)
-        col, row, sx, sy = item["grid"]
-        place_card_on_dashboard(cur, d_scrape_id, cid, col, row, sx, sy, item["viz"])
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    # 5. 🏷️ SILVER CLASSIFICATION & REVIEW QUEUE (AI & Human QA)
-    # ═══════════════════════════════════════════════════════════════════════════
-    col_name_5 = "05 - Silver Classification & Review Queue"
-    dash_name_5 = "🏷️ Silver Classification & Human Review Dashboard"
-
-    print("[5/5] Setting up Collection 05: Silver Classification & Review Queue...")
-    c_class = get_or_create_collection(
-        cur,
-        col_name_5,
-        "AI COICOP classification distribution, matching method breakdown, price outlier investigation, and fuzzy matching review queues.",
-        "#9B59B6"
-    )
-
-    d_class_id = create_or_update_dashboard(
-        cur,
-        dash_name_5,
-        "Silver layer classification intelligence: method breakdown, division distribution, and human-in-the-loop review queue.",
-        c_class
-    )
-
-    class_cards = [
-        {
-            "name": "Cleaned Products in Silver",
-            "desc": "Unique distinct canonical items matched and cleaned in the Silver layer today.",
-            "display": "scalar",
-            "sql": """
-                SELECT COUNT(*) AS "Cleaned Products in Silver"
-                FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
-            """,
-            "viz": {},
-            "grid": (0, 0, 6, 3)
-        },
-        {
-            "name": "COICOP Classification Coverage (%)",
-            "desc": "Percentage of items successfully classified into a valid COICOP division.",
-            "display": "scalar",
-            "sql": """
-                SELECT 
-                    ROUND((COUNT(*) FILTER (WHERE coicop_division IS NOT NULL AND coicop_division <> 'UNCLASSIFIED') * 100.0 / NULLIF(COUNT(*), 0))::numeric, 2) AS "Classification Coverage (%)"
-                FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
-            """,
-            "viz": {},
-            "grid": (6, 0, 6, 3)
-        },
-        {
-            "name": "Direct Resolution Share (Exact/Domain)",
-            "desc": "Percentage of items matched directly without needing AI review.",
-            "display": "scalar",
-            "sql": """
-                SELECT 
-                    ROUND((COUNT(*) FILTER (WHERE match_method IN ('barcode_exact', 'sku_exact', 'exact_text')) * 100.0 / NULLIF(COUNT(*), 0))::numeric, 1) AS "Direct Exact Match (%)"
-                FROM silver.item_match_log;
-            """,
-            "viz": {},
-            "grid": (12, 0, 6, 3)
-        },
-        {
-            "name": "Pending Human Review Queue",
-            "desc": "Count of ambiguous fuzzy matched items currently awaiting review.",
-            "display": "scalar",
-            "sql": """
-                SELECT COUNT(*) AS "Pending Review Items"
-                FROM silver.needs_review
-                WHERE status = 'pending';
-            """,
-            "viz": {},
-            "grid": (18, 0, 6, 3)
-        },
-        {
-            "name": "COICOP 12-Division Product Distribution",
-            "desc": "Product count distribution across all 12 COICOP divisions in the Silver layer.",
-            "display": "bar",
-            "sql": """
-                SELECT 
-                    COALESCE(coicop_division, 'UNCLASSIFIED') AS "COICOP Division",
-                    COUNT(*) AS "Product Count"
-                FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
-                GROUP BY coicop_division
-                ORDER BY "Product Count" DESC;
-            """,
-            "viz": {
-                "graph.dimensions": ["COICOP Division"],
-                "graph.metrics": ["Product Count"]
-            },
-            "grid": (0, 3, 8, 8)
-        },
-        {
-            "name": "Item Matching Method Distribution",
-            "desc": "Breakdown of entity resolution methods: Barcode, SKU, Exact Text, Vector Cosine, New Item.",
-            "display": "bar",
-            "sql": """
-                SELECT 
-                    COALESCE(match_method, 'unknown') AS "Matching Method",
-                    COUNT(*) AS "Matched Count"
-                FROM silver.item_match_log
-                GROUP BY match_method
-                ORDER BY "Matched Count" DESC;
-            """,
-            "viz": {
-                "graph.dimensions": ["Matching Method"],
-                "graph.metrics": ["Matched Count"]
-            },
-            "grid": (8, 3, 8, 8)
-        },
-        {
-            "name": "COICOP Classification Method Breakdown",
-            "desc": "Distribution of classification methods: Gemini AI, manual override, barcode, or category mapping.",
-            "display": "bar",
-            "sql": """
-                SELECT 
-                    COALESCE(coicop_method, 'unknown') AS "Classification Method",
-                    COUNT(*) AS "Item Count"
-                FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
-                GROUP BY coicop_method
-                ORDER BY "Item Count" DESC;
-            """,
-            "viz": {
-                "graph.dimensions": ["Classification Method"],
-                "graph.metrics": ["Item Count"]
-            },
-            "grid": (16, 3, 8, 8)
         },
         {
             "name": "Silver Flagged Price Outliers & Fallback Audits",
@@ -1013,7 +806,7 @@ def provision_all():
                 LIMIT 30;
             """,
             "viz": {"table.pivot_column": None},
-            "grid": (0, 11, 14, 8)
+            "grid": (0, 19, 14, 8)
         },
         {
             "name": "Silver Needs Review Queue (Fuzzy Matching)",
@@ -1032,7 +825,7 @@ def provision_all():
                 LIMIT 30;
             """,
             "viz": {"table.pivot_column": None},
-            "grid": (14, 11, 10, 8)
+            "grid": (14, 19, 10, 8)
         }
     ]
 
@@ -1046,12 +839,10 @@ def provision_all():
     conn.close()
 
     print("\n=============================================================================")
-    print("SUCCESS: 5 Deduplicated Metabase Dashboards fully provisioned!")
-    print(f"  [1] Macro CPI Inflation Dashboard ID: {d_cpi_id} | Collection: {col_name_1}")
-    print(f"  [2] Pre-CPI Econometric Screener ID: {d_pre_id} | Collection: {col_name_2}")
-    print(f"  [3] Pipeline Operations Dashboard ID: {d_ops_id} | Collection: {col_name_3}")
-    print(f"  [4] Scraper Extraction Telemetry ID: {d_scrape_id} | Collection: {col_name_4}")
-    print(f"  [5] Silver Classification Queue ID: {d_class_id} | Collection: {col_name_5}")
+    print("SUCCESS: 3 Canonical Metabase Dashboards fully provisioned!")
+    print(f"  [1] Macro CPI & Inflation Analytics ID: {d_cpi_id} | Collection: {col_name_1}")
+    print(f"  [2] Operations & 23-Source Telemetry ID: {d_ops_id} | Collection: {col_name_2}")
+    print(f"  [3] Silver Data Quality Screener ID: {d_class_id} | Collection: {col_name_3}")
     print("  Metabase URL: http://localhost:3001 (or :3000)")
     print("=============================================================================")
 

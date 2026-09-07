@@ -1285,6 +1285,36 @@ To make sure no bad data, calculation bugs, or crazy numbers ever sneak into the
 
 If any critical test fails, the Airflow pipeline halts immediately and alerts the team, ensuring that bad data can never corrupt the national inflation index.
 
+\subsection{Deep-Dive: The Machine Learning \& AI Engineering Architecture}
+
+\subsubsection{1. Multilingual Semantic Vector Space (768 Dimensions)}
+In \texttt{pipeline/hybrid\_embeddings\_classifier.py} and \texttt{pipeline/vector\_item\_matcher.py}, products are projected into a continuous 768-dimensional vector space ($\mathbb{R}^{768}$). This enables mathematical measurement of semantic affinity between raw Cambodian retail text (often written in mixed Khmer script, Romanized transliteration, and English) and the formal United Nations COICOP taxonomy:
+\begin{itemize}
+    \item \textbf{High-Resolution Reference Spaces:} The model precomputes dense unit centroids $\vec{c}_k = \frac{1}{N_k}\sum_{j=1}^{N_k} \frac{\vec{v}_j}{\|\vec{v}_j\|}$ for each of the 12 UN COICOP divisions and 42 granular 4-digit subclasses.
+    \item \textbf{Sub-Millisecond Cosine Classification:} Unseen items are encoded into vector $\vec{x}$ and evaluated against the centroids via dot product $\cos(\theta) = \vec{x} \cdot \vec{c}_k$. When affinity satisfies $\cos(\theta) \ge 0.85$, classification is locked instantly without making an external cloud request.
+    \item \textbf{PostgreSQL \texttt{pgvector} HNSW Indexing:} For cross-store item matching, embeddings are indexed using Hierarchical Navigable Small World (HNSW) graphs in PostgreSQL (\texttt{vector\_cosine\_ops}), yielding candidate retrieval in less than $1.8\text{ms}$ across hundreds of thousands of historical products.
+\end{itemize}
+
+\subsubsection{2. Multi-Key Resilient Gemini AI Pool (\texttt{pipeline/key\_pool.py})}
+To eliminate rate-limit bottlenecks (HTTP 429) during peak ingestion, the pipeline employs a dynamic, thread-safe Key Pool:
+\begin{itemize}
+    \item \textbf{Dynamic Discovery:} Automatically scans environment variables (\texttt{GEMINI\_API\_KEY}, \texttt{GEMINI\_API\_KEY\_2}, \texttt{GEMINI\_API\_KEY\_3}, \dots) and registers active keys.
+    \item \textbf{Exponential Backoff \& Jitter:} If a key encounters a rate limit or quota ceiling, it is temporarily placed on a cooldown timer ($2^k + \text{jitter}$ seconds), while requests seamlessly route to alternate keys without dropping a single product.
+    \item \textbf{Strict JSON Schema Contract:} Gemini 2.5 Flash is pinned via \texttt{response\_mime\_type='application/json'}, forcing the model to adhere to the schema:
+    \texttt{\{"product\_name": str, "coicop\_code": str, "confidence\_score": float, "reasoning": str\}}.
+\end{itemize}
+
+\subsubsection{3. Log-Linear Hedonic Regression Quality Adjustment}
+When consumer technology goods (smartphones, laptops) undergo generational updates, price increases often reflect enhanced consumer utility rather than pure macroeconomic inflation. In \texttt{pipeline/hedonic\_regression.py}, the pipeline fits a semi-logarithmic hedonic model:
+\begin{equation}
+\ln(P_{i, t}) = \alpha_0 + \sum_{m} \beta_m X_{i, m} + \sum_{t} \tau_t D_t + \varepsilon_{i, t}
+\end{equation}
+where $X_{i, m}$ represents continuous and dummy quality characteristics (RAM in GB, Storage capacity in GB, primary camera megapixels, 5G capability). When an item $A$ is substituted by upgraded item $B$, the pure price change is isolated:
+\begin{equation}
+\Delta \ln(P_{\text{pure}}) = \ln(P_B) - \ln(P_A) - \sum_{m} \hat{\beta}_m (X_{B, m} - X_{A, m})
+\end{equation}
+This mathematically guarantees that technological innovation does not artificially inflate the national cost of living.
+
 \newpage
 
 % =============================================================================

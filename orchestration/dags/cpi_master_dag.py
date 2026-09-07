@@ -78,6 +78,15 @@ def _send_alert(subject: str, message: str, level: str = "warning") -> None:
             log.warning("Failed to dispatch Telegram alert: %s", err)
 
 
+def _ensure_monthly_partitions(**context) -> dict:
+    """Proactively ensures monthly partitions exist for Bronze and Silver tables."""
+    from pipeline.partition_manager import ensure_monthly_partitions
+    log.info("Checking and maintaining declarative table partitions (3 months ahead)...")
+    res = ensure_monthly_partitions(months_ahead=3)
+    log.info("Partition maintenance completed: %s", res)
+    return res
+
+
 def _verify_minimum_scrapers_success(**context) -> None:
     """Verifies that at least MIN_SUCCESSFUL_SCRAPERS succeeded in the current Bronze run.
 
@@ -154,6 +163,12 @@ with DAG(
 
     start_task = EmptyOperator(task_id="start_pipeline")
 
+    maintain_partitions_task = PythonOperator(
+        task_id="ensure_monthly_partitions",
+        python_callable=_ensure_monthly_partitions,
+        execution_timeout=timedelta(minutes=5),
+    )
+
     target_date_expr = "{{ (dag_run.conf.get('ds') if dag_run and dag_run.conf else None) or data_interval_end.in_timezone('Asia/Phnom_Penh').to_date_string() }}"
 
     # 1. Trigger all registered Scraper DAGs dynamically
@@ -221,4 +236,4 @@ with DAG(
     end_task = EmptyOperator(task_id="cpi_pipeline_success")
 
     # Wire DAG dependencies
-    start_task >> scraper_trigger_tasks >> bronze_gate_task >> trigger_silver_task >> trigger_gold_cpi_task >> trigger_gold_task >> end_task
+    start_task >> maintain_partitions_task >> scraper_trigger_tasks >> bronze_gate_task >> trigger_silver_task >> trigger_gold_cpi_task >> trigger_gold_task >> end_task

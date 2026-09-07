@@ -8,6 +8,7 @@ DAGS_DIR = _host_dags if os.path.exists(_host_dags) else _container_dags
 
 DAG_FILES = [
     "cpi_master_dag.py",
+    "cpi_maintenance_dag.py",
     "scraper_dags.py",
     "silver_dag.py",
     "gold_dag.py",

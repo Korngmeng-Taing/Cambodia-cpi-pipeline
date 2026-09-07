@@ -26,7 +26,7 @@ from airflow.operators.python import PythonOperator
 
 try:
     from cosmos import DbtTaskGroup, ProjectConfig, ProfileConfig, RenderConfig, ExecutionConfig
-    from cosmos.constants import ExecutionMode
+    from cosmos.constants import ExecutionMode, LoadMode, TestBehavior
     HAS_COSMOS = True
 except ImportError:
     HAS_COSMOS = False
@@ -102,6 +102,9 @@ with DAG(
 
     if HAS_COSMOS:
         log.info("Astronomer Cosmos detected: instantiating DbtTaskGroup for Gold models.")
+        manifest_path = os.path.join(DBT_PROJECT_DIR, "target", "manifest.json")
+        has_manifest = os.path.isfile(manifest_path)
+
         cosmos_profile_config = ProfileConfig(
             profile_name="cpi",
             target_name="cpi_target",
@@ -109,10 +112,14 @@ with DAG(
         )
         cosmos_project_config = ProjectConfig(
             dbt_project_path=DBT_PROJECT_DIR,
+            manifest_path=manifest_path if has_manifest else None,
             dbt_vars={"ds": dbt_ds_expr},
+            install_dbt_deps=False,
         )
         cosmos_render_config = RenderConfig(
             select=["gold"],
+            load_method=LoadMode.DBT_MANIFEST if has_manifest else LoadMode.AUTOMATIC,
+            test_behavior=TestBehavior.AFTER_EACH,
         )
         cosmos_execution_config = ExecutionConfig(
             execution_mode=ExecutionMode.LOCAL,

@@ -100,5 +100,80 @@ unit_tests:
         - {raw_price_id: 101, price_khr: 10000.00, cpi_eligible: true}
         - {raw_price_id: 102, price_khr: 2800.00, cpi_eligible: true}
 
-  # Note: Operational tables (classification_queue, ai_cache, etc.) are declared directly under sources/silver_sources.yml.
+  - name: test_int_prices_cleaned_promo_clamping
+    description: "Verify promo discounts are correctly calculated and clamped when sale price is less than original price"
+    model: int_prices_cleaned
+    overrides:
+      macros:
+        is_incremental: false
+    given:
+      - input: source('bronze', 'raw_prices')
+        rows:
+          - {raw_price_id: 201, store_id: 'chipmong', source_name: 'chipmong', item_description_raw: 'Orange Juice 1L', price: 8.00, currency: 'USD', scraped_at: '2026-08-28 10:00:00', raw_payload: '{"original_price": 10.00, "on_promo": true}'}
+          - {raw_price_id: 202, store_id: 'chipmong', source_name: 'chipmong', item_description_raw: 'Apple Juice 1L', price: 9.00, currency: 'USD', scraped_at: '2026-08-28 10:00:00', raw_payload: '{"original_price": 7.00}'}
+      - input: source('staging', 'exchange_rates')
+        rows:
+          - {execution_date: '2026-08-28', rate: 4000.0}
+      - input: source('silver', 'item_match_log')
+        rows:
+          - {raw_price_id: 201, item_id: 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13', match_method: 'exact', confidence: 1.0}
+          - {raw_price_id: 202, item_id: 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14', match_method: 'exact', confidence: 1.0}
+    expect:
+      rows:
+        - {raw_price_id: 201, price_khr: 32000.00, original_price_khr: 40000.00, discount_pct: 20.00, on_promo: true}
+        - {raw_price_id: 202, price_khr: 36000.00, original_price_khr: 28000.00, discount_pct: 0.00, on_promo: false}
 
+  - name: test_int_prices_cleaned_pack_size_parsing
+    description: "Verify regex extraction of multi-pack and metric unit package sizes"
+    model: int_prices_cleaned
+    overrides:
+      macros:
+        is_incremental: false
+    given:
+      - input: source('bronze', 'raw_prices')
+        rows:
+          - {raw_price_id: 301, store_id: 'aeon', source_name: 'aeon', item_description_raw: 'Mineral Water 2 x 500ml', price: 4000, currency: 'KHR', scraped_at: '2026-08-28 10:00:00', raw_payload: '{"package_size": "2 x 500ml"}'}
+          - {raw_price_id: 302, store_id: 'aeon', source_name: 'aeon', item_description_raw: 'Jasmine Rice 1.5 kg', price: 6000, currency: 'KHR', scraped_at: '2026-08-28 10:00:00', raw_payload: '{"package_size": "1.5 kg"}'}
+      - input: source('staging', 'exchange_rates')
+        rows:
+          - {execution_date: '2026-08-28', rate: 4000.0}
+      - input: source('silver', 'item_match_log')
+        rows:
+          - {raw_price_id: 301, item_id: 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a15', match_method: 'exact', confidence: 1.0}
+          - {raw_price_id: 302, item_id: 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a16', match_method: 'exact', confidence: 1.0}
+    expect:
+      rows:
+        - {raw_price_id: 301, pack_qty: 2, size_value: 500.0, size_unit: 'ml'}
+        - {raw_price_id: 302, pack_qty: 1, size_value: 1.5, size_unit: 'kg'}
+
+  - name: test_int_coicop_classified_store_purity
+    description: "Verify single-division pure store locks map reliably to their intended division"
+    model: int_coicop_classified
+    overrides:
+      macros:
+        is_incremental: false
+      vars:
+        reclassify_all: true
+    given:
+      - input: ref('int_prices_cleaned')
+        rows:
+          - {item_id: 'e0eebc99-9c0b-4ef8-bb6d-6bb9bd380a17', store_slug: 'communitypharma', category_native: 'Medicine', scrape_date: '2026-08-28'}
+          - {item_id: 'e0eebc99-9c0b-4ef8-bb6d-6bb9bd380a18', store_slug: 'bookmebus', category_native: 'Bus Ticket', scrape_date: '2026-08-28'}
+      - input: source('silver', 'canonical_items')
+        rows:
+          - {item_id: 'e0eebc99-9c0b-4ef8-bb6d-6bb9bd380a17', canonical_name: 'Paracetamol 500mg', barcode: '884000000001'}
+          - {item_id: 'e0eebc99-9c0b-4ef8-bb6d-6bb9bd380a18', canonical_name: 'Phnom Penh to Siem Reap Express', barcode: ''}
+      - input: ref('coicop_override')
+        rows: []
+      - input: source('silver', 'coicop_override_manual')
+        rows: []
+      - input: source('silver', 'dim_coicop_ai_cache')
+        rows: []
+      - input: source('silver', 'coicop_category_map')
+        rows: []
+      - input: ref('coicop_store_defaults')
+        rows: []
+    expect:
+      rows:
+        - {item_id: 'e0eebc99-9c0b-4ef8-bb6d-6bb9bd380a17', store_slug: 'communitypharma', coicop_division: '06', coicop_method: 'store_purity'}
+        - {item_id: 'e0eebc99-9c0b-4ef8-bb6d-6bb9bd380a18', store_slug: 'bookmebus', coicop_division: '07', coicop_method: 'store_purity'}

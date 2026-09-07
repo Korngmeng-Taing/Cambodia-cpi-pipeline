@@ -3,7 +3,7 @@
 
 ![Cambodia CPI Architecture Diagram](docs/cpi_end_to_end_architecture_diagram.jpg)
 
-> **✅ Implementation Status:** The **data pipeline is 100% live and verified in production** end-to-end — scraping → Bronze ingestion → Silver cleaning / hybrid vector item matching / zero-mismatch 12-division AI classification → Gold star schema → Jevons/Laspeyres CPI calculation & ML nowcasting. All **821,462 price observations** across 20 historical scrape dates (August 18 onwards) are 100% classified with **0 code-division mismatches** and **0 unclassified items**. Test suites: **53 dbt tests (`PASS=53 WARN=0 ERROR=0`)** and **440 Python tests passing**. For details on the architecture and visual workflows, see [Architecture Diagrams](docs/ARCHITECTURE_DIAGRAMS.md).
+> **✅ Implementation Status:** The **data pipeline is 100% live and verified in production** end-to-end — scraping → Bronze ingestion → Silver cleaning / hybrid vector item matching / zero-mismatch 12-division AI classification → Gold star schema → Jevons/Laspeyres CPI calculation & ML nowcasting. All **821,462 price observations** across 20 historical scrape dates (August 18 onwards) are 100% classified with **0 code-division mismatches** and **0 unclassified items**. Test suites: **57 dbt tests (53 data tests + 4 native unit tests `PASS=57 WARN=0 ERROR=0`)** and **447 Python tests passing**. For details on the architecture and visual workflows, see [Architecture Diagrams](docs/ARCHITECTURE_DIAGRAMS.md).
 
 ---
 
@@ -112,6 +112,8 @@ CPI PIPELINE/
 │       └── __init__.py    # Registry mapping source_slug -> ScraperClass
 ├── pipeline/              # Core pipeline services
 │   ├── cpi_calculator.py  # Jevons micro-index, 7-day imputation & Laspeyres CPI engine
+│   ├── partition_manager.py # Proactive declarative table partition manager (ops.maintain_monthly_partitions)
+│   ├── nis_cpi_importer.py # Official NIS monthly CPI ground-truth benchmark importer & seed synchronizer
 │   ├── key_pool.py        # 3-Key Round-Robin Gemini API Pool & Failover Manager
 │   ├── vector_item_matcher.py # 768-dim Vector Item Matcher & Spec Guards
 │   ├── hybrid_embeddings_classifier.py # 12-Division Vector COICOP Classifier
@@ -136,21 +138,22 @@ CPI PIPELINE/
 │   ├── bootstrap_vector_embeddings.py # Vector catalog pre-warming utility
 │   ├── auto_review_items.py # CLI for running AI item match review queue
 │   └── setup_metabase_dashboards.py # Provisions Metabase analytics dashboards
-├── dbt/                   # dbt-core transformation project
+├── dbt/                   # dbt-core transformation project (dbt 1.8+ with native unit tests)
 │   ├── dbt_project.yml
 │   ├── profiles.yml
 │   ├── models/            # Staging, Silver intermediate, and Gold analytical views
 │   │   ├── staging/       # Source definitions & staging models
-│   │   ├── silver/        # Silver intermediate models (int_coicop_classified, clean_store_prices)
+│   │   ├── silver/        # Silver intermediate models (int_coicop_classified, clean_store_prices, unit_tests)
 │   │   └── gold/          # Gold dimensional models (dim_items, dim_stores, fct_daily_prices)
-│   └── seeds/             # Category weights, COICOP overrides & utility tariffs
-├── orchestration/         # Airflow orchestration stack
-│   ├── Dockerfile         # Unified container image (Airflow 2.9.3 + deps)
+│   └── seeds/             # Category weights, COICOP overrides, NIS official benchmarks & utility tariffs
+├── orchestration/         # Airflow orchestration stack & Astronomer Cosmos
+│   ├── Dockerfile         # Unified container image (Airflow 2.9.3 + Cosmos + Playwright)
 │   └── dags/              # DAG definitions
-│       ├── cpi_master_dag.py   # Master orchestrator (20 scrapers → silver → gold)
+│       ├── cpi_master_dag.py   # Master orchestrator (Partition maintenance → 20 scrapers → silver → gold)
+│       ├── cpi_maintenance_dag.py # Weekly database maintenance, partition pre-creation & ANALYZE
 │       ├── scraper_dags.py     # Per-source scraper DAGs
-│       ├── silver_dag.py       # Silver layer transformation
-│       ├── gold_dag.py         # Gold star schema + serving views
+│       ├── silver_dag.py       # Silver layer transformation (Astronomer Cosmos DbtTaskGroup)
+│       ├── gold_dag.py         # Gold star schema + serving views (Astronomer Cosmos DbtTaskGroup)
 │       ├── gold_cpi_dag.py     # Jevons/Laspeyres CPI calculation
 │       └── alerts.py           # Task failure & SLA callbacks
 ├── sql/                   # Database DDL & serving views
@@ -486,6 +489,14 @@ python -m pytest tests/ --cov=pipeline --cov-report=term-missing
 
 ---
 
-## 10. License
+## 10. Master Documentation & Definitive Handbook
+
+The complete system architecture, daily scraping methodologies, AI vector embedding algorithms, COICOP hierarchical aggregation math, and policy use cases are compiled in the master guide:
+* **[Cambodia Daily Consumer Price Index (CPI) System: Definitive Master Handbook](Cambodia_CPI_Definitive_Handbook.pdf)** (46 pages, PDF format with native Khmer font support).
+* Explains all **24 core mathematical equations** and the complete **10-equation inflation nowcasting system** in plain language with real shopping arithmetic.
+
+---
+
+## 11. License
 
 Internal project — Cambodia CPI Pipeline Team.

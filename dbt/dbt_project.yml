@@ -55,6 +55,16 @@ seeds:
         weight_pct: numeric(6, 3)
         parent_division: varchar(16)
         source: text
+    nis_official_cpi:
+      +schema: gold
+      +column_types:
+        cpi_month: date
+        headline_cpi: numeric(10, 4)
+        core_cpi: numeric(10, 4)
+        mom_inflation_pct: numeric(8, 4)
+        yoy_inflation_pct: numeric(8, 4)
+        release_date: date
+        source_notes: text
     coicop_store_defaults:
       +schema: silver
       +column_types:

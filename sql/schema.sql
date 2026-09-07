@@ -724,6 +724,8 @@ VALUES
     ('delishop', 'Wine', '02'),
     ('delishop', 'Spirit', '02'),
     ('delishop', 'Beer & Cider', '02'),
+    ('delishop', 'Homewares & Accessories > Tobacco & Accessories', '02'),
+    ('delishop', 'Tobacco & Accessories', '02'),
     ('delishop', 'Homewares & Accessories', '05'),
     ('delishop', 'Household Essentials', '05'),
     ('delishop', 'Tableware', '05'),

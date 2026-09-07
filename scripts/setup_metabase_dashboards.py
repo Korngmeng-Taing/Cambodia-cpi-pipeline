@@ -287,7 +287,7 @@ def provision_all():
                     ROUND((e.price_ratio - 1.0) * 100.0, 1) AS "Price Change (%)",
                     CASE WHEN e.is_imputed THEN 'Imputed' ELSE 'Observed' END AS "Method"
                 FROM gold.fct_elementary_indices e
-                JOIN silver.canonical_items i ON i.item_id::text = e.item_id
+                JOIN silver.canonical_items i ON i.item_id = e.item_id::uuid
                 WHERE e.calculation_date = (SELECT MAX(calculation_date) FROM gold.fct_elementary_indices)
                 ORDER BY ABS(e.price_ratio - 1.0) DESC
                 LIMIT 20;
@@ -683,7 +683,7 @@ def provision_all():
         },
         {
             "name": "Daily Store Scraper Ingestion Progress",
-            "desc": "Real-time checklist of all 21 retail store scrapers running today.",
+            "desc": "Real-time checklist of all 23 retail store scrapers running today.",
             "display": "table",
             "sql": """
                 WITH latest_scrape AS (

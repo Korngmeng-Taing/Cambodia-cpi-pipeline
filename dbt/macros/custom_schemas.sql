@@ -67,7 +67,34 @@
                         -- 2. Khmer numerals → ASCII
                         translate(
                             -- 1. HTML entity decode
-                            coalesce({{ raw_name }}, ''),
+                            replace(
+                            replace(
+                            replace(
+                            replace(
+                            replace(
+                            replace(
+                            replace(
+                            replace(
+                            replace(
+                                coalesce({{ raw_name }}, ''),
+                                '&#8211;', '-'
+                            ),
+                            '&#8212;', '-'
+                            ),
+                            '&#8243;', '"'
+                            ),
+                            '&#038;', '&'
+                            ),
+                            '&amp;', '&'
+                            ),
+                            '&quot;', '"'
+                            ),
+                            '&#39;', ''''
+                            ),
+                            '&apos;', ''''
+                            ),
+                            '&nbsp;', ' '
+                            ),
                             '០១២៣៤៥៦៧៨៩',
                             '0123456789'
                         ),

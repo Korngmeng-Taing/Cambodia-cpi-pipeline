@@ -71,16 +71,24 @@ parsed as (
             else raw.original_price_curr * coalesce(er.rate, 4044.0)
         end as original_price_khr,
         coalesce(
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[1]::numeric,
+            (regexp_match(raw.name_raw, '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[1]::numeric,
             (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[1]::numeric,
             1
         ) as pack_qty,
         coalesce(
-            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[2]::numeric,
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[2]::numeric,
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[1]::numeric,
+            (regexp_match(raw.name_raw, '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[2]::numeric,
+            (regexp_match(raw.name_raw, '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[1]::numeric,
             (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[1]::numeric,
             null
         ) as size_value,
         lower(coalesce(
-            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[3],
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[3],
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[2],
+            (regexp_match(raw.name_raw, '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[3],
+            (regexp_match(raw.name_raw, '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[2],
             (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[2],
             ''
         )) as size_unit,
@@ -174,9 +182,14 @@ select
         when p.price_khr > 100000000 then true -- Upper bound for consumer retail item (>100M KHR ~ $25,000 USD)
         when p.original_price_curr is not null and p.price_original_curr > 0 
              and p.price_original_curr > p.original_price_curr * 10 then true
+        when p.store_slug in ('khmer24', 'realestate') and p.category_native ilike '%Land For Rent%' then true
         else false
     end as is_outlier,
-    (p.price_khr > 0 and p.price_khr <= 100000000) as cpi_eligible,
+    (
+        p.price_khr > 0 
+        and p.price_khr <= 100000000
+        and not (p.store_slug in ('khmer24', 'realestate') and p.category_native ilike '%Land For Rent%')
+    ) as cpi_eligible,
     -- Carry through is_fallback flag + operator reason from scraper (raw_payload JSONB)
     coalesce(p.is_fallback_raw::boolean, false) as is_fallback,
     p.fallback_reason,

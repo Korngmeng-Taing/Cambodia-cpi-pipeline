@@ -192,7 +192,7 @@ items_evaluated as materialized (
         case
             when split_part(ai.coicop_code, '.', 1) = '11' and i.store_slug not in ('sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk') then null
             when split_part(ai.coicop_code, '.', 1) = '04' and i.store_slug in ('communitypharma', 'delishop', 'aeon', 'aeon3', 'samnangshop', 'arystore', 'bookmebus', 'redbus') then null
-            when split_part(ai.coicop_code, '.', 1) = '07' and i.store_slug in ('communitypharma', 'khmer24', 'realestate', 'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk') then null
+            when split_part(ai.coicop_code, '.', 1) = '07' and i.store_slug in ('communitypharma', 'delishop', 'arystore', 'samnangshop', 'khmer24', 'realestate', 'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk') then null
             else ai.coicop_division
         end as ai_div,
         ai.confidence_score as ai_conf,

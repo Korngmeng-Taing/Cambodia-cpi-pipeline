@@ -22,7 +22,7 @@ with cleaned_prices as (
         {% if var('ds', '') and var('ds') != 'None' and var('ds') != 'null' and var('ds') != 'none' %}
             and scrape_date = '{{ var("ds") }}'::date
         {% else %}
-            and scrape_date >= (select coalesce(max(scrape_date) - interval '2 days', '2020-01-01'::date) from {{ this }})
+            and scrape_date >= (select coalesce(max(scrape_date) - interval '7 days', '2020-01-01'::date) from {{ this }})
         {% endif %}
     {% endif %}
 ),
@@ -183,21 +183,6 @@ enriched_observations as (
             'UNCLASSIFIED'
         ) as coicop_division,
         case
-            when c.coicop_code is not null
-                 and c.coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$'
-                 and lpad(split_part(c.coicop_code, '.', 1), 2, '0') = coalesce(
-                     ov_b.coicop_division,
-                     ov_ns.coicop_division,
-                     case
-                         when p.store_slug in ('khmer24', 'realestate') then '04'
-                         when p.store_slug in ('sokhahotel', 'hyyathotel', 'bayonbkk') then '11'
-                         when p.store_slug in ('bookmebus', 'redbus', 'new_gasoline') then '07'
-                         when p.store_slug in ('cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then '08'
-                     end,
-                     ov_ng.coicop_division,
-                     c.coicop_division,
-                     '01'
-                 ) then c.coicop_code
             when coalesce(ov_b.coicop_division, ov_ns.coicop_division) is not null then
                 {{ coicop_code_from_division("coalesce(ov_b.coicop_division, ov_ns.coicop_division)") }}
             when p.store_slug in ('khmer24', 'realestate') then '04.1.1'
@@ -208,11 +193,27 @@ enriched_observations as (
             when p.store_slug in ('cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then '08.3.0'
             when ov_ng.coicop_division is not null then
                 {{ coicop_code_from_division("ov_ng.coicop_division") }}
-            when c.coicop_code is not null and c.coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then c.coicop_code
+            when c.coicop_division is not null and c.coicop_method <> 'store_default'
+                 and c.coicop_code is not null and c.coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$'
+                 and lpad(split_part(c.coicop_code, '.', 1), 2, '0') = c.coicop_division
+                 then c.coicop_code
+            when p.store_slug in ('communitypharma') then '06.1.2'
+            when p.store_slug in ('arystore', 'samnangshop') then '08.2.0'
+            when ai.coicop_division is not null and coalesce(ai.confidence_score, 0.90) >= 0.50
+                 and not (split_part(ai.coicop_code, '.', 1) = '11' and p.store_slug not in ('sokhahotel', 'hyyathotel', 'bayonbkk'))
+                 and not (split_part(ai.coicop_code, '.', 1) = '04' and p.store_slug in ('communitypharma', 'delishop', 'aeon', 'aeon3', 'samnangshop', 'arystore', 'bookmebus', 'redbus'))
+                 and not (split_part(ai.coicop_code, '.', 1) = '07' and p.store_slug in ('communitypharma', 'khmer24', 'realestate', 'sokhahotel', 'hyyathotel', 'bayonbkk')) then
+                case
+                    when ai.coicop_code is not null and ai.coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$'
+                         and lpad(split_part(ai.coicop_code, '.', 1), 2, '0') = ai.coicop_division
+                        then ai.coicop_code
+                    else {{ coicop_code_from_division("ai.coicop_division") }}
+                end
             when cm.coicop_division is not null then
                 {{ coicop_code_from_division("cm.coicop_division") }}
-            when p.store_slug in ('communitypharma', 'grab_ucare') then '06.1.2'
-            when p.store_slug in ('arystore', 'samnangshop') then '08.2.0'
+            when c.coicop_code is not null and c.coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$'
+                 and lpad(split_part(c.coicop_code, '.', 1), 2, '0') = c.coicop_division then c.coicop_code
+            when p.store_slug in ('grab_ucare') then '06.1.2'
             when p.store_slug in ('delishop', 'aeon', 'grab_lucky', 'grab_chipmong') then '01.1.1'
             when p.store_slug in ('aeon3') then '03.1.2'
             when p.store_slug in ('l192') then '05.1.1'

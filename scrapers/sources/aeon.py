@@ -224,7 +224,7 @@ class AeonSupermarketScraper(BaseScraper):
                             barcode=p.get("barcode"),
                             brand=p.get("brand"),
                             category_native=item_cat_name,
-                            package_size=p.get("size") or p.get("quantity"),
+                            package_size=p.get("size") or p.get("net_weight") or p.get("volume"),
                             url=p.get("url")
                             or f"https://aeononlineshopping.com/product/{p_id}",
                             image_url=p.get("image")

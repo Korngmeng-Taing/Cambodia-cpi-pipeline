@@ -7,8 +7,7 @@ Rendered on a crisp, professional Pure White Background (#FFFFFF).
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch, Ellipse, Polygon
-import numpy as np
+from matplotlib.patches import FancyBboxPatch, Ellipse
 
 # ═══════════════════════════════════════════════════════════════════════
 # CANVAS SETUP (16:9 High-Res Landscape, Pure White Background)

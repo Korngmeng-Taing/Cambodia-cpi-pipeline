@@ -15,6 +15,10 @@
     ]
 ) }}
 
+{% if flags.FULL_REFRESH %}
+    {{ exceptions.raise_compiler_error("Full refresh on partitioned table silver.clean_store_prices is prohibited to protect partition tree. Use incremental refresh with --vars '{\"reclassify_all\": true}' instead.") }}
+{% endif %}
+
 with cleaned_prices as (
     select
         p.*,

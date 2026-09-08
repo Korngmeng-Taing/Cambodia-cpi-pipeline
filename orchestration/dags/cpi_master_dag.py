@@ -179,11 +179,11 @@ with DAG(
             trigger_dag_id=f"scrape_{store_slug}_dag",
             conf={"ds": target_date_expr},
             wait_for_completion=True,
-            deferrable=False,
+            deferrable=True,
             poke_interval=WAIT_POKE_INTERVAL,
             execution_timeout=timedelta(seconds=WAIT_TIMEOUT_SECONDS),
             reset_dag_run=True,
-            failed_states=["failed"],
+            failed_states=["failed", "upstream_failed"],
         )
         scraper_trigger_tasks.append(trigger_op)
 

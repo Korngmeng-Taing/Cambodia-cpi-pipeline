@@ -6,7 +6,6 @@ Features a clean pure white background (#FFFFFF) with crisp, high-contrast, mode
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 from matplotlib.patches import FancyBboxPatch, Ellipse
 
 # Canvas Setup with Pure White Background (Optimized dimensions for clean rendering)

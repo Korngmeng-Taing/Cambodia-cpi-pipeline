@@ -163,7 +163,7 @@ class GeminiItemReviewer:
                 LIMIT %s;
             """, (limit,))
             cols = [desc[0] for desc in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return [dict(zip(cols, row, strict=False)) for row in cur.fetchall()]
 
     def resolve_with_gemini(self, pairs: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
         """Calls Gemini Flash in batch JSON mode to resolve ambiguous pairs.

@@ -40,6 +40,7 @@ metabase/*.trace.db
 # ── Playwright / Scrapers ───────────────────────────────────────────────────
 .playwright-mcp/
 data/parquet_snapshots/
+data/cold_storage/
 playwright-report/
 test-results/
 

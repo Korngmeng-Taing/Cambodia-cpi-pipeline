@@ -36,6 +36,7 @@ RUN pip install --no-cache-dir \
     psycopg2-binary>=2.9.9 \
     sqlalchemy>=2.0.0 \
     pandas>=2.2.0 \
+    pyarrow>=15.0.0 \
     numpy>=1.26.0 \
     scipy>=1.12.0 \
     statsmodels>=0.14.0 \

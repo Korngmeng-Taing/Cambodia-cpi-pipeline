@@ -58,6 +58,7 @@ x-airflow-common: &airflow-common
     GEMINI_MAX_ITEMS_PER_RUN: ${GEMINI_MAX_ITEMS_PER_RUN:-1000}
     USE_LOCAL_FALLBACK_FIRST: ${USE_LOCAL_FALLBACK_FIRST:-true}
     AEON_MAX_PAGES: ${AEON_MAX_PAGES:-0}
+    CPI_COLD_STORAGE_DIR: ${CPI_COLD_STORAGE_DIR:-/opt/airflow/data/cold_storage}
   volumes:
     - ./orchestration/dags:/opt/airflow/dags
     - ./orchestration/logs:/opt/airflow/logs
@@ -70,6 +71,7 @@ x-airflow-common: &airflow-common
     - ./scripts:/opt/airflow/scripts
     - ./dbt:/opt/airflow/dbt
     - ./ml:/opt/airflow/ml
+    - ./data:/opt/airflow/data
   depends_on:
     postgres:
       condition: service_healthy
@@ -94,7 +96,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d
       - ./sql:/sql
-      - ./pipeline/migrations:/migrations
+      - ./sql/migrations:/migrations
     deploy:
       resources:
         limits:

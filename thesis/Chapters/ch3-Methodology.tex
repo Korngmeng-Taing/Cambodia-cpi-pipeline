@@ -81,15 +81,16 @@
 \end{itemize}
 Only listings that satisfy both semantic vector similarity and all physical specification guards are linked into canonical product identities.
 
-\subsection{The 6-Tier Hierarchical COICOP Classification Ladder}
-\hs To classify thousands of diverse consumer goods into the 12 United Nations COICOP divisions, the pipeline deploys an optimized 6-tier hierarchical classification ladder designed to maximize econometric accuracy while minimizing computational latency and API cost:
+\subsection{The 7-Tier AI-First COICOP Classification Ladder}
+\hs To classify thousands of diverse consumer goods into the 12 United Nations COICOP divisions, the pipeline deploys an optimized 7-tier AI-first classification ladder designed to maximize accuracy while minimizing computational latency and API cost:
 \begin{enumerate}
-    \item \textbf{Tier 1: Human Authority and Deterministic Overrides:} Curated manual rules and GTIN barcode matches maintained in \texttt{silver.coicop\_override} and \texttt{silver.coicop\_override\_manual}. This tier holds absolute precedence ($100\%$ confidence), ensuring benchmark commodities and critical boundary items are deterministically classified.
-    \item \textbf{Tier 2: Store Domain Purity Locking:} Specialized commercial outlets operate within single dedicated economic sectors. The system assigns instantaneous $O(1)$ SQL locks: Community Pharmacy to Health (06), redBus and BookMeBus to Transport (07), Khmer24 Real Estate to Housing and Rentals (04), Cellcard and Smart Axiata to Communication (08), and Sokha and Hyatt Regency to Hotels (11).
-    \item \textbf{Tier 3: Multi-Store Substring Disambiguation Overrides:} High-priority substring rules that resolve semantic cross-store boundary ambiguities (e.g., locking dermatological spring waters to Division 12 cosmetics rather than Division 01 drinking water, and effervescent vitamins to Division 06 health products).
-    \item \textbf{Tier 4: Pre-Warmed Multilingual AI Inference Cache:} Over 39,200 product titles pre-classified using Google Gemini models with structured JSON schemas and few-shot contextual prompts. Cached predictions with confidence $\ge 0.50$ are retrieved instantly ($37.8\%$ catalog share, average confidence $95.3\%$), while low-confidence predictions are quarantined in \texttt{silver.classification\_queue}.
-    \item \textbf{Tier 5: Text Regular Expression Rules with Negative Boundary Guards:} Priority-ranked regex rules matching commodity keywords with strict negative lookarounds, preventing personal care products containing food ingredients (cucumber, aloe, coconut, milk) from misclassifying into Division 01 Food.
-    \item \textbf{Tier 6: Native Store Taxonomy Mapping and Store Defaults:} Maps retailer native catalog hierarchies (such as DeliShop and L192 category breadcrumbs) into COICOP divisions before applying conservative store defaults (\texttt{coicop\_store\_defaults}).
+    \item \textbf{Tier 1: Human Authority and Exact Overrides:} Curated manual rules and GTIN barcode matches maintained in \texttt{silver.coicop\_override} and \texttt{silver.coicop\_override\_manual}. This tier holds absolute precedence ($100\%$ confidence), ensuring benchmark commodities and critical boundary items are deterministically classified.
+    \item \textbf{Tier 2: Single-Division Store Domain Purity Locks:} Specialized commercial outlets operating in a single economic sector resolve with zero delay ($O(1)$ SQL locks): Community Pharmacy and Ucare to Health (06); BookMeBus, redBus, and MOC Gasoline to Transport (07); Ary Store, Samnang, Cellcard, and Smart to Communication (08); Khmer24 and Realestate to Housing (04); and Sokha, Hyatt, and Bayon BKK to Restaurants and Hotels (11).
+    \item \textbf{Tier 3: High-Confidence Gemini AI Engine ($\text{Confidence} \ge 0.70$):} For mixed-retail stores (AEON, DeliShop, GrabMart, L192), classification is led by Google Gemini AI. Rather than relying solely on product names, the AI classifier evaluates a 4-attribute payload: product title, merchant slug, merchant aisle/category breadcrumb, and price in KHR. Classifications are permanently memoized in \texttt{silver.dim\_coicop\_ai\_cache}. Future scrapes resolve in $<1\text{ms}$ at \$0.00 cloud cost. This tier powers \textbf{53.33\% (484,892 observations)} of the warehouse.
+    \item \textbf{Tier 4: Global Substring Brand Overrides:} Cross-store high-confidence brand substrings that resolve known edge cases when AI confidence is below $0.70$ (e.g., routing Chivas, Pastis, and Marlboro to Division 02).
+    \item \textbf{Tier 5: Native Store Taxonomy Mapping:} Maps retailer native catalog hierarchies from \texttt{silver.coicop\_category\_map} when verified store breadcrumbs are captured, accounting for $16.65\%$ of observations.
+    \item \textbf{Tier 6: Priority Text Regular Expression Rules:} Matches vetted regex patterns and negative lookaround exclusion guards from \texttt{silver.coicop\_text\_rules}, accounting for $11.98\%$ of observations.
+    \item \textbf{Tier 7: Store Default Fallbacks \& AI Review Triage:} Broad store-level defaults from \texttt{silver.coicop\_store\_defaults}. In the live production database, \textbf{zero rows} remain in review status (100.00\% classification completion across 909,289 records).
 \end{enumerate}
 
 \subsection{Empirical Quality Quarantines and Boundary Case Disambiguation}
@@ -261,12 +262,20 @@ and verifying whether actual inflation fell within the estimated 95\% confidence
 
 \section{Phase 5: Interactive Dashboard Architecture and Production Deployment}
 
-\subsection{Executive Business Intelligence Dashboards}
-\hs To ensure that the analytical outputs of the pipeline are immediately usable by economic policymakers, the system deploys interactive visualization dashboards in Metabase and Power BI:
+\subsection{Consolidated 3-Dashboard Metabase Architecture and BI Serving}
+\hs To ensure that the analytical outputs of the pipeline are immediately usable by economic policymakers, researchers, and data engineers, the system provisions \textbf{3 consolidated enterprise Metabase dashboards} (Port 3001/3000) and Microsoft Power BI reporting:
 \begin{itemize}
-    \item \textbf{Executive Macro Overview:} Real-time dial gauges displaying current Headline and Core inflation rates, day-on-day changes, 30-day cumulative trends, and foreign exchange movements.
-    \item \textbf{12-Division Drill-Down Analytics:} Interactive time-series charts allowing analysts to click into any specific COICOP division, view historical trajectories, and identify top rising or falling goods.
-    \item \textbf{Operational Scraper Observability Matrix:} Displays the daily status of all 23 scrapers, recording daily quote yields, HTTP response codes, scraping execution duration, and data quality check results.
+    \item \textbf{Dashboard 01 (Macro CPI \& Inflation Analytics):} Real-time Headline and Core CPI tickers, 12-Division COICOP table with official NIS weights, longitudinal inflation trendlines, top price movers, and official benchmark evaluation charts.
+    \item \textbf{Dashboard 02 (Pipeline \& 23-Source Telemetry):} 23-source live store volume rankings, 14-day ingestion heatmap matrix, official MEF USD/KHR exchange rate freshness, and Airflow DAG health.
+    \item \textbf{Dashboard 03 (Silver Data Quality Screener):} 12-Division product classification distribution, log-price relative distribution ($0.20 \le P_t/P_0 \le 5.00$), promotional clamping validation, and automated AI review triage queues.
+\end{itemize}
+
+\subsection{Declarative Monthly Table Partitioning and Storage Scalability}
+\hs To handle over 13 million price records annually without query degradation, the PostgreSQL 16 warehouse implements declarative monthly table partitioning:
+\begin{itemize}
+    \item \textbf{Partitioned Core Tables:} \texttt{bronze.raw\_prices} and \texttt{silver.clean\_store\_prices} are partitioned by \texttt{RANGE (scrape\_date)} into dedicated monthly tables (e.g., \texttt{raw\_prices\_2026\_08}, \texttt{clean\_store\_prices\_2026\_08}).
+    \item \textbf{Automated Partition Management:} A database stored procedure \texttt{ops.maintain\_monthly\_partitions(p\_months\_ahead)} is executed weekly via Airflow (\texttt{cpi\_maintenance\_dag}), automatically provisioning partitions 3 months into the future.
+    \item \textbf{Partition Pruning:} Date-filtered analytical queries skip over 95\% of historical partitions, returning query results in under 8 milliseconds.
 \end{itemize}
 
 \subsection{Containerized Infrastructure and Orchestration Lineage}

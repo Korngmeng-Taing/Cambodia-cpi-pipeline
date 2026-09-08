@@ -341,7 +341,7 @@ class CPICalculationEngine:
             if not recent_obs.empty:
                 # Find the most recent active scrape date for each missing item
                 latest_dates = recent_obs.groupby("item_id")["scrape_date"].max().reset_index()
-                latest_dates_dict = dict(zip(latest_dates["item_id"], latest_dates["scrape_date"]))
+                latest_dates_dict = dict(zip(latest_dates["item_id"], latest_dates["scrape_date"], strict=False))
                 latest_obs = pd.merge(
                     recent_obs, latest_dates, on=["item_id", "scrape_date"], how="inner"
                 )
@@ -427,7 +427,7 @@ class CPICalculationEngine:
 
                     valid_wts = [w for w in subclass_wts if w is not None and w > 0]
                     if len(valid_wts) == len(subclass_wts) and sum(valid_wts) > 0:
-                        div_index = sum(idx * wt for idx, wt in zip(subclass_indices, subclass_wts)) / sum(subclass_wts)
+                        div_index = sum(idx * wt for idx, wt in zip(subclass_indices, subclass_wts, strict=False)) / sum(subclass_wts)
                     else:
                         # Fallback if subclass weights are missing: unweighted geometric mean across all division items
                         div_index = float(np.exp(np.mean(np.log(div_items["price_ratio"]))) * 100.0)

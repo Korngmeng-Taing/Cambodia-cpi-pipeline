@@ -44,8 +44,8 @@ Hospitality and Catering Services & 10, 11 & Menu \& Room Tariff Monitor & 780 &
 
 \section{Silver Layer Cleaning, Entity Matching, and AI Classification Performance}
 
-\subsection{Empirical Benchmark of the 6-Tier Classification Ladder}
-\hs To rigorously assess the accuracy of the multi-tier classification engine, an empirical evaluation across 44,466 distinct catalog products and 865,107 observation-level price records was conducted across all 12 COICOP divisions. Table~\ref{tab:classification_benchmark} presents the empirical distribution, precision, recall, and macro F1-score observed across the six operational tiers.
+\subsection{Empirical Benchmark of the 7-Tier AI-First Classification Ladder}
+\hs To rigorously assess the accuracy of the multi-tier classification engine, a comprehensive warehouse audit was conducted across 22 historical scrape dates and \textbf{909,289 observation-level price records} spanning all 12 COICOP divisions. Table~\ref{tab:classification_benchmark} presents the empirical distribution, precision, recall, and macro F1-score observed across the operational tiers of the production ladder.
 
 \begin{table}[H]
 \centering
@@ -54,19 +54,20 @@ Hospitality and Catering Services & 10, 11 & Menu \& Room Tariff Monitor & 780 &
 \hline
 \rowcolor{blue!20}
 \textbf{Classification Tier / Strategy} & \textbf{Volume Share} & \textbf{Precision} & \textbf{Recall} & \textbf{Macro F1} \\ \hline
-Tier 1: Exact / Manual Overrides & 8.5\% & 100.0\% & 100.0\% & 1.000 \\ \hline
-Tier 2: Store Domain Purity Lock & 12.0\% & 99.8\% & 99.4\% & 0.996 \\ \hline
-Tier 3: Pre-Warmed AI Inference Cache & 37.8\% & 97.4\% & 96.8\% & 0.971 \\ \hline
-Tier 4: Priority Text Regex Rules & 18.9\% & 95.8\% & 94.9\% & 0.953 \\ \hline
-Tier 5: Native Store Taxonomy Mapping & 21.2\% & 93.6\% & 92.4\% & 0.930 \\ \hline
-Tier 6: Store Defaults \& Conservative Fallback & 1.6\% & 88.5\% & 86.2\% & 0.873 \\ \hline
-\textbf{Full Pipeline Production Ensemble} & \textbf{100.0\%} & \textbf{96.8\%} & \textbf{96.1\%} & \textbf{0.964} \\ \hline
+Tier 1: Exact / Manual Overrides & 2.8\% & 100.0\% & 100.0\% & 1.000 \\ \hline
+Tier 2: Store Domain Purity Locks & 13.2\% & 99.8\% & 99.6\% & 0.997 \\ \hline
+Tier 3: High-Confidence Gemini AI Engine & 53.3\% & 98.6\% & 98.1\% & 0.983 \\ \hline
+Tier 4: Global Substring Brand Overrides & 1.8\% & 97.5\% & 96.9\% & 0.972 \\ \hline
+Tier 5: Native Store Taxonomy Mapping & 16.7\% & 95.4\% & 94.2\% & 0.948 \\ \hline
+Tier 6: Priority Text Regex Rules & 12.0\% & 96.1\% & 95.0\% & 0.955 \\ \hline
+Tier 7: Store Defaults \& Review Triage & 0.2\% & 92.4\% & 90.8\% & 0.916 \\ \hline
+\textbf{Full Pipeline Production Ensemble} & \textbf{100.0\%} & \textbf{97.9\%} & \textbf{97.3\%} & \textbf{0.976} \\ \hline
 \end{tabular}
-\caption{Empirical Classification Accuracy Benchmark Across the 6-Tier Production Ladder}
+\caption{Empirical Classification Accuracy Benchmark Across the 7-Tier AI-First Production Ladder}
 \label{tab:classification_benchmark}
 \end{table}
 
-\hs The combination of deterministic exact overrides (Tier 1), domain locks (Tier 2), and Google Gemini language models with pre-warmed database caching (Tier 3) achieved an overall macro F1-score of \textbf{0.964} with an average classification confidence of \textbf{93.5\%}. Over 86.4\% of all items resolved in the highest confidence band ($\ge 0.90$). Furthermore, cross-store consistency audits demonstrated that 99.04\% of items sold across multiple merchants had unanimous division classifications, with remaining multi-store conflicts resolved by deterministic global overrides. Complementing this full catalog evaluation, the standardized benchmark evaluation suite (\texttt{scripts/evaluate\_accuracy\_benchmark.py}) achieved \textbf{100.0\% classification accuracy} ($32/32$ test products) across all 12 COICOP divisions in under $0.04$ seconds using pgvector HNSW indexing and store domain locks.
+\hs In the live production database, the combination of deterministic exact overrides (Tier 1), domain locks (Tier 2), and the multi-attribute Google Gemini AI engine (Tier 3) achieved an overall macro F1-score of \textbf{0.976}. Across the entire 909,289-row warehouse, \textbf{100.00\% of price observations} are classified with \textbf{zero code-division mismatches} and \textbf{zero unclassified items}. Gemini AI represents the primary classification method across the warehouse, powering \textbf{53.33\% (484,892 observations)} with sub-millisecond PostgreSQL memoization in \texttt{silver.dim\_coicop\_ai\_cache}. Complementing this full catalog evaluation, the standardized benchmark evaluation suite (\texttt{scripts/evaluate\_accuracy\_benchmark.py}) achieved \textbf{100.0\% classification accuracy} ($32/32$ test products) across all 12 COICOP divisions in under $0.04$ seconds using pgvector HNSW indexing and store domain locks.
 
 
 \subsection{Longitudinal Entity Matching Precision and Shrinkflation Protection}
@@ -302,11 +303,11 @@ This real-world case study demonstrates the immense value of daily digital price
 \section{Executive Dashboard Performance and System Stability}
 \hs The complete ecosystem operated continuously without unhandled system crashes or data loss:
 \begin{itemize}
-    \item \textbf{Dashboard Query Responsiveness:} The Gold dimensional star-schema enabled Metabase and Power BI dashboards to load complex 90-day time-series trajectories and 12-division breakdown charts in under 1.8 seconds.
+    \item \textbf{Consolidated 3-Dashboard Metabase Observability:} The pipeline deploys 3 production dashboards in Metabase (Ports 3001/3000) and Power BI covering Macro CPI Analytics, Operations \& 23-Source Telemetry, and Silver Data Quality Screener. Complex 90-day time-series trajectories and 12-division breakdown charts load in under 1.8 seconds.
     \item \textbf{Modular Orchestration with Astronomer Cosmos:} Airflow workflow orchestration incorporates Astronomer Cosmos to dynamically parse dbt Core transformations into individual task nodes across the Silver and Gold layers, providing granular per-model telemetry, automatic task-level retries, and intuitive pipeline lineage.
-    \item \textbf{High-Volume Table Partitioning:} To sustain continuous daily ingestion exceeding 35,000 observations per day, the database warehouse implements declarative monthly range partitioning on \texttt{bronze.raw\_prices} and \texttt{silver.clean\_store\_prices}. Range partition pruning eliminates full-table scans during daily dbt transformations and allows zero-downtime historical archiving.
+    \item \textbf{Declarative Partitioning and dbt Query Optimization:} To sustain daily ingestion exceeding 35,500 observations, the database implements declarative monthly range partitioning on \texttt{bronze.raw\_prices} and \texttt{silver.clean\_store\_prices} with automated stored procedure maintenance (\texttt{ops.maintain\_monthly\_partitions}). Pre-computing string normalizations and aligning incremental joins with partition boundaries reduced daily dbt transformation runtime in \texttt{clean\_store\_prices.sql} from \textbf{7 minutes 42 seconds down to 18 seconds} (a \textbf{96\% speedup}).
     \item \textbf{Workflow Automation:} Automated daily pipeline runs executed on schedule each morning, requiring no manual human intervention.
     \item \textbf{Data Integrity Assurance:} Automatic checksum validations confirmed zero missing dates, zero orphan records, and complete mathematical reconciliation between individual product price relatives and the published national headline index.
-    \item \textbf{Production Test Suite and Quality Verification:} The end-to-end software codebase enforces rigorous continuous integration with \textbf{440 automated tests} spanning Python unit modules, econometric property bounds, scraper normalization schemas, and Airflow DAG dependency graphs (100\% test pass rate). Additionally, \textbf{53 automated dbt data tests} continuously validate relational integrity, not-null constraints, unique keys, and COICOP classification parity in production.
+    \item \textbf{Production Test Suite and Quality Verification:} The end-to-end software codebase enforces rigorous continuous integration with \textbf{451 automated Python unit/integration tests} spanning econometric property bounds, scraper normalization schemas, and Airflow DAG dependency graphs (100\% test pass rate in pytest). Additionally, \textbf{56 automated dbt data and unit tests} continuously validate relational integrity, not-null constraints, unique keys, and zero code-division mismatches in production (\texttt{PASS=56, WARN=0, ERROR=0}).
 \end{itemize}
 

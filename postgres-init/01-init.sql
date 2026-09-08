@@ -43,6 +43,10 @@ GRANT ALL ON SCHEMA public TO cpi_user;
 -- pre-creating them makes dbt's view replacement CASCADE-drop them. They are
 -- (re)created by gold_dag's refresh_serving_views task after dbt.
 \i /sql/schema.sql
+\i /sql/migrations/0001_ops_schema_split.sql
+\i /sql/migrations/0002_pgvector_hnsw_canonical_items.sql
+\i /sql/migrations/0003_partition_bronze_and_silver_tables.sql
+\i /sql/migrations/0004_cold_storage_catalog.sql
 
 -- Transfer ownership of all pipeline objects to cpi_user so DDL run by the
 -- application user (e.g. DROP VIEW / ALTER COLUMN TYPE) is permitted.

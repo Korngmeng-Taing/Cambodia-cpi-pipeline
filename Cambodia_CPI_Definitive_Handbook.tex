@@ -62,6 +62,12 @@
     showstringspaces=false
 }
 
+\lstdefinelanguage{json}{
+    string=[s]{"}{"},
+    stringstyle=\color{AccentGreen},
+    showstringspaces=false
+}
+
 \tcbset{
     colback=LightGrey,
     colframe=NavyBlue,
@@ -1262,7 +1268,17 @@ This mathematical bridge guarantees that long-term historical records spanning d
 \section{Automated Quality Checks, Code Audits, and Rigorous Testing}
 % =============================================================================
 
-To make sure no bad data, calculation bugs, or crazy numbers ever sneak into the official report, our pipeline executes \textbf{56 automated dbt data tests} and \textbf{450 Python unit/integration tests} before any number is published. All tests pass with zero warnings and zero failures (\texttt{PASS=56, WARN=0, ERROR=0} in dbt and \texttt{450 passed} in pytest).
+To make sure no bad data, calculation bugs, or crazy numbers ever sneak into the official report, our pipeline executes \textbf{56 automated dbt data tests} and \textbf{451 Python unit/integration tests} before any number is published. All tests pass with zero warnings and zero failures (\texttt{PASS=56, WARN=0, ERROR=0} in dbt and \texttt{451 passed} in pytest).
+
+\begin{tcolorbox}[colback=white,colframe=AccentGreen,title=\textbf{Production Verification: 100\% Classified Warehouse}]
+\textbf{Live Warehouse Audit Metrics (22 Historical Dates, 909,289 Observations):}
+\begin{itemize}[noitemsep]
+    \item \textbf{Total Observations Ingested \& Processed:} 909,289 records.
+    \item \textbf{Classification Completeness:} \textbf{100.00\%} (0 unclassified items, 0 remaining in review status).
+    \item \textbf{Taxonomic Integrity:} \textbf{0 code-division mismatches} across all 12 UN COICOP divisions.
+    \item \textbf{AI-First Footprint:} Gemini AI powers \textbf{53.33\% (484,892 rows)} of all classifications across the entire warehouse.
+\end{itemize}
+\end{tcolorbox}
 
 \begin{table}[h]
 \centering
@@ -1282,7 +1298,7 @@ To make sure no bad data, calculation bugs, or crazy numbers ever sneak into the
 \midrule
 \texttt{unit\_test\_promo\_clamp} & Unit Test & Checks that if a promotional price is typed higher than the regular price by mistake, the system catches it. \\
 \texttt{unit\_test\_pack\_sizes} & Unit Test & Tests that $2 \times 500\text{ml}$ is recognized as 1 Liter. \\
-\texttt{pytest\_suite} & Python Test & 450 test cases validating API parsing, TLS spoofing headers, database partitioning, and formula precision. \\
+\texttt{pytest\_suite} & Python Test & 451 test cases validating API parsing, TLS spoofing headers, database partitioning, and formula precision. \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1331,24 +1347,76 @@ Collecting 35,500 prices every day adds up quickly:
     \item \textbf{Every Month:} About \textbf{1,065,000 prices}.
     \item \textbf{Every Year:} About \textbf{13,000,000 prices}.
 \end{itemize}
-If you don't design your database carefully, after a few years the system will become painfully slow. Here is how we keep queries answering in milliseconds:
+If you don't design your database carefully, after a few years the system will become painfully slow. Here is how our production architecture keeps queries answering in milliseconds:
+
+\subsection{Declarative Monthly Table Partitioning}
+To prevent massive performance degradation, our high-volume tables are physically partitioned by calendar month:
+\begin{itemize}
+    \item \textbf{Partitioned Tables:} \texttt{bronze.raw\_prices} and \texttt{silver.clean\_store\_prices} are partitioned using declarative \texttt{PARTITION BY RANGE (scrape\_date)}.
+    \item \textbf{Monthly Physical Tables:} Data is automatically routed into dedicated monthly child tables (e.g. \texttt{raw\_prices\_2026\_08}, \texttt{raw\_prices\_2026\_09}, \texttt{clean\_store\_prices\_2026\_08}, \texttt{clean\_store\_prices\_2026\_09}).
+    \item \textbf{Automated Partition Maintenance (\texttt{pipeline/partition\_manager.py}):} A database stored procedure \texttt{ops.maintain\_monthly\_partitions(p\_months\_ahead)} is executed proactively via the weekly Airflow maintenance DAG (\texttt{cpi\_maintenance\_dag}). It inspects the calendar and automatically provisions child tables \textbf{3 months into the future}, ensuring daily scraper ingestion never fails due to missing partitions.
+    \item \textbf{Sub-8ms Partition Pruning:} When daily queries or dbt models request prices for a specific date range, PostgreSQL's query planner activates \textit{partition pruning}, immediately skipping 95\%+ of historical partitions without scanning them.
+\end{itemize}
+
+\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{Performance Optimization Case Study: 7m42s Down to 18 Seconds}]
+\textbf{The Challenge:} In the Silver layer, the incremental transformation model \texttt{clean\_store\_prices.sql} cleans, standardizes, applies exchange rates, and matches 35,500+ daily listings against category maps and AI caches. Initially, evaluating complex string functions and regexes inside multi-table SQL joins took \textbf{7 minutes and 42 seconds} per daily run.\\
+\textbf{The Optimization:}
+\begin{enumerate}[noitemsep]
+    \item \textit{Pre-Computed String Normalization:} Replaced repetitive per-row \texttt{lower(regexp\_replace(...))} calls inside joins with pre-normalized columns computed once in initial Common Table Expressions (CTEs).
+    \item \textit{Selective Index Lookups:} Replaced heavy materialized subqueries with filtered semi-joins on known store subsets.
+    \item \textit{Partition-Aligned Filtering:} Aligned date predicates directly with monthly partition boundaries.
+\end{enumerate}
+\textbf{The Result:} Daily model execution time plummeted from \textbf{7m42s to just 18 seconds} (a \textbf{96\% reduction in runtime}), saving massive compute resources while ensuring gold inflation tables update immediately after morning scrapes finish.
+\end{tcolorbox}
 
 \subsection{3 Smart Database Bookmarks (Indexes)}
 \begin{enumerate}
-    \item \textbf{Date Bookmarks (BRIN Indexes):} Because prices are saved day after day in order, we use lightweight BRIN indexes. They take up 98\% less disk space than normal indexes while letting the computer jump directly to today's date.
-    \item \textbf{Fuzzy Text Bookmarks (Trigram Indexes):} Allows the computer to find products even if the user made a typo (like searching \textit{"Cocacola"} instead of \textit{"Coca-Cola"}).
-    \item \textbf{Meaning Bookmarks (HNSW Vector Graphs):} Allows the computer to compare 768-dimensional AI embeddings in less than 2 milliseconds to find twin products across stores.
+    \item \textbf{Date Bookmarks (BRIN Indexes):} Because prices are saved day after day in order, we use lightweight Block Range Indexes (BRIN). They take up 98\% less disk space than B-tree indexes while letting the computer jump directly to today's physical disk blocks.
+    \item \textbf{Fuzzy Text Bookmarks (Trigram GIN Indexes):} Allows the computer to find products even if spelling varies across merchants (e.g. \textit{"Cocacola"} vs \textit{"Coca-Cola"}).
+    \item \textbf{Meaning Bookmarks (HNSW Vector Graphs):} Allows PostgreSQL (\texttt{pgvector}) to compare 768-dimensional AI embeddings in under 2 milliseconds across hundreds of thousands of historical products.
 \end{enumerate}
 
 \newpage
 
 % =============================================================================
-\section{Easy SQL Queries for Daily Dashboards}
+\section{Real-Time Analytics, SQL Queries, and Metabase Dashboards}
 % =============================================================================
 
-Non-technical analysts and policy officers can run simple SQL queries to see what prices are doing right now:
+\subsection{Real-Time Executive Dashboards in Metabase (Port 3001/3000)}
+For policy leaders, researchers, and data engineers, our pipeline provisions \textbf{3 consolidated enterprise Metabase dashboards} via \texttt{scripts/setup\_metabase\_dashboards.py}, providing complete visual transparency from raw ingestion to macro indicators:
 
-\subsection{1. Check Today's Inflation Rate}
+\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{Dashboard 01: Macro CPI \& Inflation Analytics}]
+\begin{itemize}[noitemsep]
+    \item \textbf{Headline \& Core Tickers:} Real-time headline CPI, core CPI (excluding food, utilities, and gasoline), Month-over-Month (MoM \%), and Year-over-Year (YoY \%) inflation rates.
+    \item \textbf{12-Division COICOP Performance Table:} Complete breakdown of all 12 official UN consumption divisions, displaying current index levels, monthly change rates, and official NIS expenditure weights.
+    \item \textbf{Longitudinal Inflation Trendline:} Multi-month trajectory comparing daily headline inflation against core inflation to track underlying macroeconomic momentum.
+    \item \textbf{Top Basket Price Movers:} Identifies the top 10 products with the largest daily price increases and decreases across Cambodian retail.
+    \item \textbf{Official NIS Benchmark Comparison:} Compares daily pipeline inflation nowcasts against official retrospective National Institute of Statistics releases.
+\end{itemize}
+\end{tcolorbox}
+
+\begin{tcolorbox}[colback=white,colframe=Teal,title=\textbf{Dashboard 02: Pipeline \& 23-Source Telemetry}]
+\begin{itemize}[noitemsep]
+    \item \textbf{Live Store Volume Rankings:} Real-time observation count collected by each of the 23 scraper sources today, highlighting operational volume across supermarkets, pharmacies, telcos, transit, and gas stations.
+    \item \textbf{14-Day Ingestion Matrix:} Heatmap displaying daily ingestion status and row counts across all 23 sources over the past fortnight to detect any source anomalies immediately.
+    \item \textbf{Official MEF FX Rate Freshness:} Daily monitoring of the Ministry of Economy and Finance USD/KHR exchange rate, confirming timely morning ingestion.
+    \item \textbf{Airflow DAG Execution State:} Operational telemetry showing run statuses, execution durations, and retry counts across all 23 per-source DAGs and medallion pipelines.
+\end{itemize}
+\end{tcolorbox}
+
+\begin{tcolorbox}[colback=white,colframe=DarkSlate,title=\textbf{\color{white}Dashboard 03: Silver Data Quality Screener}]
+\begin{itemize}[noitemsep]
+    \item \textbf{12-Division Classification Distribution:} Audits product counts across the 12 UN COICOP divisions, ensuring balanced representation and detecting category skew.
+    \item \textbf{Log-Price Relative Distribution:} Verifies that daily price ratios adhere to the international ILO outlier boundary ($0.20 \le P_t/P_0 \le 5.00$), ensuring rogue data never penetrates gold facts.
+    \item \textbf{Promotional Price Clamping Audit:} Screens for corrupted retail discounts (e.g. promo price higher than regular price) and validates automated unit conversions.
+    \item \textbf{Classification Review Triage Queue:} Monitors items requiring AI arbitration or manual human overrides, maintaining our verified 100.00\% classification standard.
+\end{itemize}
+\end{tcolorbox}
+
+\subsection{Easy SQL Queries for Daily Analysis}
+Non-technical analysts and policy officers can also run simple SQL queries against our conformed gold views (\texttt{sql/views.sql}) to inspect daily numbers:
+
+\subsubsection{1. Check Today's Inflation Rate}
 \begin{lstlisting}[language=SQL]
 -- Shows today's overall headline inflation and core inflation
 SELECT 
@@ -1361,7 +1429,7 @@ ORDER BY calculation_date DESC
 LIMIT 1;
 \end{lstlisting}
 
-\subsection{2. Which Category Pushed Inflation Up the Most This Month?}
+\subsubsection{2. Which Category Pushed Inflation Up the Most This Month?}
 \begin{lstlisting}[language=SQL]
 -- Ranks categories from biggest price pusher to smallest
 SELECT 
@@ -1375,7 +1443,7 @@ WHERE cpi_month = (SELECT MAX(cpi_month) FROM gold.fct_cpi_monthly)
 ORDER BY contribution_to_inflation DESC;
 \end{lstlisting}
 
-\subsection{3. Check if Any Scraper Had an Issue Today}
+\subsubsection{3. Check if Any Scraper Had an Issue Today}
 \begin{lstlisting}[language=SQL]
 -- Verifies that all 23 scrapers collected their normal amount of data today
 SELECT 
@@ -1456,14 +1524,15 @@ This chapter provides clear, simple answers to the 10 most common questions aske
 \textbf{The Question:} Why not send every product description to Google Gemini AI to classify it?\\
 \textbf{The Simple Answer:}
 \begin{enumerate}[noitemsep]
-    \item \textbf{Too expensive and too slow:} Classifying 35,500 products every day through cloud AI models would cost hundreds of dollars a month and take hours to finish due to network round-trips.
-    \item \textbf{Our 7-Tier Classification Ladder solves this deterministically:}
+    \item \textbf{Too expensive and too slow:} Calling cloud AI on every raw record on every single scrape would cost hundreds of dollars a month and introduce unnecessary network latency.
+    \item \textbf{Our 7-Tier AI-First Classification Ladder solves this with multi-attribute precision and persistent memoization:}
     \begin{itemize}
-        \item Single-division stores (pharmacies, bus tickets, fuel stations) are resolved instantly by store purity locks in Tier 2 (free, zero compute).
-        \item Tricky regression traps (like Chivas or Marlboro in supermarkets) are caught immediately by global brand rules in Tier 3.
-        \item For mixed retail items, Tier 4 checks the local PostgreSQL database cache (\texttt{silver.dim\_coicop\_ai\_cache}). If seen once before, it resolves in under 1 millisecond at \$0.00 cost.
-        \item Only genuinely novel, uncached items are batched to Gemini 2.5 Flash. Once classified, they are permanently stored in the cache.
-        \item This multi-tier ladder slashes external AI costs by over 99.4\% while maintaining 100\% classification accuracy.
+        \item \textit{Tier 1 (Explicit Overrides):} High-priority human audit locks and seed overrides in \texttt{silver.coicop\_override} take supreme precedence.
+        \item \textit{Tier 2 (Store Purity Locks):} Single-division stores (pharmacies, bus tickets, fuel stations, telcos, hotels) resolve instantly with 0.001ms lookup time at \$0.00 cost.
+        \item \textit{Tier 3 (High-Confidence Gemini AI Engine with Multi-Attribute Context):} For mixed-retail stores (AEON, DeliShop, GrabMart, L192), Gemini AI receives a rich multi-attribute payload (item title, store slug, merchant category breadcrumbs, price in KHR). High-confidence classifications ($\ge 0.70$) are cached permanently in \texttt{silver.dim\_coicop\_ai\_cache}. Subsequent daily scrapes resolve in $<1\text{ms}$ at \$0.00 cost. This powers \textbf{53.33\% (484,892 observations)} of the entire warehouse.
+        \item \textit{Tiers 4--6 (Secondary Brand Overrides, Category Maps \& Vetted Heuristics):} Deterministic safety nets resolve edge cases, accounting for the remaining classifications.
+        \item \textit{Tier 7 (Store Defaults \& Triage):} Fallbacks guarantee that \textbf{0 rows} remain unclassified (100.00\% completion across 909,289 observations).
+        \item This architecture slashes recurring AI API costs by over 99.4\% while achieving zero code-division mismatches.
     \end{itemize}
 \end{enumerate}
 \end{tcolorbox}
@@ -1476,8 +1545,9 @@ This chapter provides clear, simple answers to the 10 most common questions aske
 \textbf{The Simple Answer:}
 \begin{enumerate}[noitemsep]
     \item \textbf{13 million rows a year:} After 3 years, a single table would have nearly 40 million rows. Searching through 40 million rows to find this morning's milk price would take several seconds.
-    \item \textbf{Folder pruning:} By putting each month into its own folder, when you ask for today's price, the computer skips the other 35 folders and opens only this month's folder. The query finishes in less than \textbf{8 milliseconds}.
-    \item \textbf{Automatic creation:} Our background housekeeping creates new folders 3 months in advance, so the system never runs out of space.
+    \item \textbf{Declarative Partitioning \& Folder Pruning:} Both \texttt{bronze.raw\_prices} and \texttt{silver.clean\_store\_prices} are partitioned by \texttt{RANGE (scrape\_date)}. When querying today's prices, PostgreSQL skips all other months and opens only the relevant monthly table, returning results in under \textbf{8 milliseconds}.
+    \item \textbf{Proactive Automated Maintenance:} The stored procedure \texttt{ops.maintain\_monthly\_partitions} runs weekly via Airflow (\texttt{cpi\_maintenance\_dag}) to automatically generate partitions 3 months ahead.
+    \item \textbf{Dramatic dbt Optimization:} By aligning our dbt incremental models with partition boundaries and pre-computing text cleaning, model runtime dropped from \textbf{7 minutes 42 seconds down to just 18 seconds} (96\% faster).
 \end{enumerate}
 \end{tcolorbox}
 

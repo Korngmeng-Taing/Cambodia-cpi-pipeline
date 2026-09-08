@@ -42,6 +42,16 @@ def _run_partition_maintenance(**context) -> dict:
     return result
 
 
+def _run_cold_storage_offload(**context) -> dict:
+    """Offloads completed historical monthly partitions to compressed columnar Parquet files."""
+    from pipeline.cold_storage import run_cold_storage_offloading
+
+    log.info("Starting scheduled cold storage Parquet offloading...")
+    result = run_cold_storage_offloading(months_threshold=1, compression="zstd")
+    log.info("Cold storage offloading completed with result: %s", result)
+    return result
+
+
 def _run_table_vacuum_analyze(**context) -> None:
     """Refreshes statistics on high-turnover tables to optimize PostgreSQL query plans."""
     from pipeline.config import get_db_connection
@@ -89,6 +99,12 @@ with DAG(
         execution_timeout=timedelta(minutes=10),
     )
 
+    task_offload_cold_storage = PythonOperator(
+        task_id="offload_cold_storage_parquet",
+        python_callable=_run_cold_storage_offload,
+        execution_timeout=timedelta(minutes=20),
+    )
+
     task_analyze_tables = PythonOperator(
         task_id="analyze_warehouse_tables",
         python_callable=_run_table_vacuum_analyze,
@@ -97,4 +113,10 @@ with DAG(
 
     end_task = EmptyOperator(task_id="maintenance_complete")
 
-    start_task >> task_maintain_partitions >> task_analyze_tables >> end_task
+    (
+        start_task
+        >> task_maintain_partitions
+        >> task_offload_cold_storage
+        >> task_analyze_tables
+        >> end_task
+    )

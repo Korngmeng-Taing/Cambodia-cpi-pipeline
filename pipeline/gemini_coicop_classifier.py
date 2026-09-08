@@ -705,6 +705,39 @@ def fetch_unclassified(
                 if scrape_date:
                     params["ds"] = scrape_date
                 ci_res = conn.execute(text(query_sql), params).fetchall()
+
+                # If int_prices_cleaned hasn't run yet for this scrape_date, discover from bronze + item_match_log
+                if not ci_res and scrape_date:
+                    fallback_sql = f"""
+                        SELECT sub.item_id, sub.canonical_name, sub.store_slug, sub.category_native, sub.price_khr, sub.observation_count
+                        FROM (
+                            SELECT DISTINCT CAST(iml.item_id AS TEXT) AS item_id, ci.canonical_name, rp.store_id AS store_slug,
+                                   rp.raw_payload ->> 'category_native' AS category_native,
+                                   (CASE WHEN rp.currency = 'USD' THEN rp.price * 4044 ELSE rp.price END) AS price_khr,
+                                   COUNT(*) OVER (PARTITION BY iml.item_id) AS observation_count
+                            FROM bronze.raw_prices rp
+                            JOIN silver.item_match_log iml ON iml.raw_price_id = rp.raw_price_id
+                            JOIN silver.canonical_items ci ON CAST(ci.item_id AS TEXT) = CAST(iml.item_id AS TEXT)
+                            LEFT JOIN silver.dim_coicop_ai_cache ai ON lower(trim(ai.product_name)) = lower(trim(ci.canonical_name))
+                            WHERE rp.scraped_at::date = CAST(:ds AS DATE)
+                              AND rp.store_id NOT IN (
+                                  'communitypharma', 'khmer24', 'realestate',
+                                  'sokhahotel', 'hyyathotel', 'hyatt', 'bayonbkk',
+                                  'bookmebus', 'redbus', 'redmebus', 'new_gasoline',
+                                  'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi',
+                                  'smart', 'smart_wifi'
+                              )
+                              AND (ai.coicop_code IS NULL
+                                   OR (ai.coicop_code = '99.9.9'
+                                       AND ai.classified_at < {interval_clause}))
+                              AND ci.canonical_name IS NOT NULL
+                              AND length(trim(ci.canonical_name)) > 1
+                        ) sub
+                        ORDER BY sub.observation_count DESC, sub.canonical_name
+                        LIMIT :lim
+                    """
+                    ci_res = conn.execute(text(fallback_sql), params).fetchall()
+
                 for r in ci_res:
                     items.append(
                         {

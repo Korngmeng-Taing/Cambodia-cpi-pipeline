@@ -507,10 +507,12 @@ def test_scraper_registry_complete():
         "grab_chipmong",
         "khmermoto",
         "metfone",
+        "edc",
+        "ppwsa",
     ]
     for src in expected_sources:
         assert src in SCRAPER_REGISTRY, f"Missing scraper source in registry: {src}"
-    assert len(SCRAPER_REGISTRY) == 23
+    assert len(SCRAPER_REGISTRY) == 25
 
 
 @pytest.mark.parametrize("source_slug,scraper_cls", SCRAPER_REGISTRY.items())
@@ -1082,5 +1084,34 @@ def test_metfone_scraper(monkeypatch):
     names = [r["name"] for r in records]
     assert any("KADO" in name for name in names)
     assert any("Fiber" in name for name in names)
+
+
+def test_edc_electricity_scraper(monkeypatch):
+    """Verifies EDC electricity scraper outputs progressive regulated tiers."""
+    from scrapers.sources.utilities import EdcElectricityScraper
+
+    scraper = EdcElectricityScraper()
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 8))
+    assert len(records) >= 4  # Tiers 1-4
+    assert all(r["source_slug"] == "edc" for r in records)
+    assert all(r["currency"] == "KHR" for r in records)
+    prices = [r["price"] for r in records]
+    assert 380.0 in prices
+    assert 610.0 in prices
+
+
+def test_ppwsa_water_scraper(monkeypatch):
+    """Verifies PPWSA water scraper outputs volumetric domestic and commercial tiers."""
+    from scrapers.sources.utilities import PpwsaWaterScraper
+
+    scraper = PpwsaWaterScraper()
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 8))
+    assert len(records) >= 6
+    assert all(r["source_slug"] == "ppwsa" for r in records)
+    assert all(r["currency"] == "KHR" for r in records)
+    prices = [r["price"] for r in records]
+    assert 400.0 in prices
+    assert 960.0 in prices
+
 
 

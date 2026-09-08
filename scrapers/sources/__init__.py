@@ -58,6 +58,7 @@ from scrapers.sources.sokhahotel import SokhaHotelScraper
 from scrapers.sources.nis_cpi import NISCPIScraper
 from scrapers.sources.khmermoto import KhmerMotoShopScraper
 from scrapers.sources.metfone import MetfoneScraper
+from scrapers.sources.utilities import EdcElectricityScraper, PpwsaWaterScraper
 
 SCRAPER_REGISTRY: dict[str, type[BaseScraper]] = {
     "aeon": AeonSupermarketScraper,
@@ -83,10 +84,14 @@ SCRAPER_REGISTRY: dict[str, type[BaseScraper]] = {
     "grab_lucky": GrabLuckySupermarketScraper,
     "grab_chipmong": GrabChipMongSupermarketScraper,
     "khmermoto": KhmerMotoShopScraper,
+    "edc": EdcElectricityScraper,
+    "ppwsa": PpwsaWaterScraper,
 }
 
 __all__ = [
     "SCRAPER_REGISTRY",
+    "EdcElectricityScraper",
+    "PpwsaWaterScraper",
     "MetfoneScraper",
     "KhmerMotoShopScraper",
     "AeonSupermarketScraper",

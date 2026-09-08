@@ -1067,3 +1067,19 @@ def test_khmermoto_fallback(monkeypatch):
     assert all(r["is_fallback"] is True for r in records)
     assert any("Dream" in r["name"] for r in records)
 
+
+def test_metfone_scraper(monkeypatch):
+    """Verifies Metfone Cambodia scraper extracts prepaid bundles and home fiber packages."""
+    from scrapers.sources.metfone import MetfoneScraper
+
+    scraper = MetfoneScraper()
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 8))
+    assert len(records) >= 14  # 10 mobile + 4 fiber plans
+    assert all(r["source_slug"] == "metfone" for r in records)
+    assert all(r["currency"] == "USD" for r in records)
+    assert all(r["price"] > 0 for r in records)
+    names = [r["name"] for r in records]
+    assert any("KADO" in name for name in names)
+    assert any("Fiber" in name for name in names)
+
+

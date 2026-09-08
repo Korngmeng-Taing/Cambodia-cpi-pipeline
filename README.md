@@ -3,7 +3,7 @@
 
 ![Cambodia CPI Architecture Diagram](docs/cpi_end_to_end_architecture_diagram.jpg)
 
-> **✅ Implementation Status:** The **data pipeline is 100% live and verified in production** end-to-end — scraping → Bronze ingestion → Silver cleaning / hybrid vector item matching / zero-mismatch 12-division AI classification → Gold star schema → Jevons/Laspeyres CPI calculation & ML nowcasting. All **821,462 price observations** across 20 historical scrape dates (August 18 onwards) are 100% classified with **0 code-division mismatches** and **0 unclassified items**. Test suites: **57 dbt tests (53 data tests + 4 native unit tests `PASS=57 WARN=0 ERROR=0`)** and **447 Python tests passing**. For details on the architecture and visual workflows, see [Architecture Diagrams](docs/ARCHITECTURE_DIAGRAMS.md).
+> **✅ Implementation Status:** The **data pipeline is 100% live and verified in production** end-to-end — scraping → Bronze ingestion → Silver cleaning / hybrid vector item matching / zero-mismatch 12-division AI-First classification → Gold star schema → Jevons/Laspeyres CPI calculation & ML nowcasting. All **909,289 price observations** across 22 historical scrape dates are 100% classified with **0 code-division mismatches** and **0 unclassified items**, with **Gemini AI powering >53% of all classifications**. Test suites: **dbt data & unit tests (`PASS=33 WARN=0 ERROR=0`)** and **451 Python tests passing**. For details on the architecture and visual workflows, see [Architecture Diagrams](docs/ARCHITECTURE_DIAGRAMS.md).
 
 ---
 

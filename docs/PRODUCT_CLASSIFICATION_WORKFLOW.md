@@ -30,16 +30,19 @@ flowchart TD
         D -- "4. No Match (< 0.75)" --> G["Create Canonical Item (Auto)\n(silver.canonical_items)"]
     end
 
-    subgraph S4["Stage 4: 12-Division COICOP Classification Ladder (hybrid_embeddings_classifier.py)"]
-        G --> H{"4-Tier Classification Ladder\n(First Match Wins)"}
-        H -- "Tier 1" --> I["Human Authority Overrides\n(coicop_override.csv)"]
-        H -- "Tier 2" --> I2["15 Single-Category Pure Store Locks\n(Fuel->07, Telecom->08, Housing->04)"]
-        H -- "Tier 3" --> J["Vector Cosine vs 12 UN COICOP Reference Spaces\n• Panadol -> 06 Health\n• Cetaphil / Shampoo -> 12 Personal Care\n• AEON Multi-Division Catalog"]
-        H -- "Tier 4" --> M["🤖 3-Key Gemini Pro/Flash AI Fallback\n(silver.dim_coicop_ai_cache)"]
+    subgraph S4["Stage 4: AI-First 12-Division COICOP Classification Ladder (coicop_classify_macro.sql)"]
+        G --> H{"AI-First Classification Ladder\n(First Match Wins)"}
+        H -- "Tier 1" --> I["Exact Authority Overrides\n(barcode / exact product_key in coicop_override.csv)"]
+        H -- "Tier 2" --> I2["Single-Category Pure Store Locks\n(Fuel->07, Telco->08, Housing->04, Hotels->11, Pharma->06)"]
+        H -- "Tier 3" --> M["🤖 High-Confidence Gemini AI Engine (>= 0.70)\nMulti-Attribute Context: Store, Category, Price, Title\n(silver.dim_coicop_ai_cache — 53.3% of warehouse)"]
+        H -- "Tier 4" --> J["Global Substring Brand Overrides\n(Secondary trap overrides for remaining items)"]
+        H -- "Tier 5" --> K["Store Category Taxonomy Maps\n(E-Commerce aisle & department breadcrumbs)"]
+        H -- "Tier 6" --> L["Vetted Text Regex Rules\n(Deterministic multi-token patterns with negative exclusions)"]
+        H -- "Tier 7" --> N["Store Defaults & Review Triage\n(0 unclassified rows in warehouse)"]
     end
 
     subgraph S7["Stage 5: Gold Layer Star Schema"]
-        E & F & F1 & I & I2 & J & M --> T[("silver.clean_store_prices")]
+        E & F & F1 & I & I2 & M & J & K & L & N --> T[("silver.clean_store_prices")]
         T --> U[("gold.dim_items & gold.dim_stores")]
         T --> V[("gold.fct_daily_prices")]
     end
@@ -129,21 +132,33 @@ Candidate Scraped Title
 New Canonical Item
          │
          ▼
-[ Tier 1: Human Authority Overrides (coicop_override.csv) ]
+[ Tier 1: Exact Authority Overrides (coicop_override.csv) ]
          │ Not overridden
          ▼
-[ Tier 2: 15 Single-Category Pure Store Domain Locks ]
-  • Gasoline -> 07, Telecom -> 08, Housing -> 04, Hotels -> 11 (0.001ms)
-         │ Multi-Category Store (aeon, delishop, communitypharma, l192)
+[ Tier 2: Single-Category Pure Store Domain Locks ]
+  • Gasoline -> 07, Telecom -> 08, Housing -> 04, Hotels -> 11, Pharma -> 06 (0.001ms)
+         │ Multi-Category Store (aeon, delishop, grab_*, l192)
          ▼
-[ Tier 3: Vector Cosine vs 12 UN COICOP Reference Spaces ]
-  • Compares dense embedding against official UN COICOP descriptions
-  • Panadol -> 06 Health | Cetaphil -> 12 Personal Care
-         │ Borderline (< 0.72)
+[ Tier 3: High-Confidence Gemini AI Engine (>= 0.70) ]
+  • Multi-attribute rich context: product name, store slug, department category, price in KHR
+  • Disambiguates domain traps: instant noodles -> 01.1.1, cooking wine -> 01.1.9, coffee filters -> 05.5.1, slippers -> 03.2.1
+  • Memoized permanently in silver.dim_coicop_ai_cache (53.33% of warehouse, 484,892 observations)
+         │ Low confidence (< 0.70) or un-cached
          ▼
-[ Tier 4: Gemini Pro/Flash AI Fallback ]
-  • Structured JSON response cached permanently in silver.dim_coicop_ai_cache
-  • Normalizes title strings (_normalize_name) to maximize cache hit rates
+[ Tier 4: Global Substring Brand Overrides ]
+  • Secondary authority overrides for remaining ambiguous items
+         │ Not matched
+         ▼
+[ Tier 5: Store Category Taxonomy Maps ]
+  • Mapped native merchant aisle and department breadcrumbs
+         │ Not matched
+         ▼
+[ Tier 6: Vetted Text Regex Rules ]
+  • Multi-token regular expressions with negative exclusion guards
+         │ Not matched
+         ▼
+[ Tier 7: Store Defaults & Review Triage ]
+  • Fallback to store default category (0 unclassified rows in warehouse)
 ```
 
 ---

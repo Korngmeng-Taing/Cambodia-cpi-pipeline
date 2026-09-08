@@ -53,24 +53,24 @@ Every silver fact row in `silver.clean_store_prices` carries `coicop_division` +
 
 ---
 
-## 3. Unified Classification Ladder & Priority Order
+## 3. Unified AI-First Classification Ladder & Priority Order
 
-To eliminate code-division divergence, the priority order in [`resolve_coicop_code`](file:///D:/CPI%20PIPELINE/dbt/macros/coicop_classify_macro.sql) and [`resolve_coicop_division`](file:///D:/CPI%20PIPELINE/dbt/macros/coicop_classify_macro.sql) is strictly aligned across all dbt models:
+To eliminate code-division divergence and elevate artificial intelligence above rigid substring rules, the priority order in [`resolve_coicop_code`](file:///D:/CPI%20PIPELINE/dbt/macros/coicop_classify_macro.sql) and [`resolve_coicop_division`](file:///D:/CPI%20PIPELINE/dbt/macros/coicop_classify_macro.sql) is strictly aligned across all dbt models:
 
 ```
 1. Tier 1: Exact Overrides         → Human Authority Overrides (barcode / exact title in coicop_override.csv).
-2. Tier 2: Store Domain Purity     → 15 Single-Category Store Locks (0.001ms in SQL).
-3. Tier 3: Global Overrides        → Cross-store canonical overrides (ov_global).
-4. Tier 4: Gemini AI Engine        → Gated LLM classification cached in silver.dim_coicop_ai_cache (UN COICOP 2018 5-digit prompt).
-5. Tier 5: Text Regex Rules        → Deterministic multi-token regex rules in coicop_text_rules.csv.
-6. Tier 6: Store Category Maps     → Department/aisle category maps in coicop_category_map.csv.
+2. Tier 2: Store Domain Purity     → Single-Category Store Locks (khmer24=04, bookmebus=07, smart=08, sokhahotel=11, communitypharma=06).
+3. Tier 3: High-Confidence AI      → Gemini AI (ai_conf >= 0.70) with multi-attribute context (store, category breadcrumb, price, title).
+4. Tier 4: Global Overrides        → Cross-store canonical overrides (ov_global) for remaining low-confidence items.
+5. Tier 5: Store Category Maps     → Department/aisle category maps in coicop_category_map.csv.
+6. Tier 6: Text Regex Rules        → Deterministic multi-token regex rules in coicop_text_rules.csv.
 7. Fallback: Store Defaults        → Retailer default division.
 ```
 
 ### Strict 2-Digit Prefix Guard
 Every classification case branch enforces the mathematical constraint:
 $$\text{LPAD}(\text{SPLIT\_PART}(\text{code}, '.', 1), 2, '0') = \text{division}$$
-If an upstream rule or AI candidate returns an incompatible 5-digit code (e.g. Code `11.1.1` on Division `01`), the macro automatically overrides the code to the division's canonical anchor (e.g. `01.1.1`), guaranteeing **0 mismatches across all 821,462 historical price observations**.
+If an upstream rule or AI candidate returns an incompatible 5-digit code (e.g. Code `11.1.1` on Division `01`), the macro automatically overrides the code to the division's canonical anchor (e.g. `01.1.1`), guaranteeing **0 mismatches across all 909,289 historical price observations**.
 
 ### Automated Regression Guard
 The dbt regression test [`test_coicop_code_division_match.sql`](file:///D:/CPI%20PIPELINE/dbt/tests/test_coicop_code_division_match.sql) executes automatically on every pipeline run, verifying that:

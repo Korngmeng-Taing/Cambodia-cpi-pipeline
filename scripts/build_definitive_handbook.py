@@ -405,50 +405,54 @@ To stop this, \texttt{vector\_item\_matcher.py} enforces 4 deterministic guardra
 \textbf{6. Final Action:} Because $0.875 \ge 0.80$, the price is automatically approved and linked to \texttt{CAN-02-0041}.
 \end{tcolorbox}
 
-\subsection{Part 2: Product Classification into UN COICOP Baskets}
-Every product must be assigned to one of the official United Nations COICOP categories (e.g., Bread, Meat, Fish, Medicine, Gasoline). To classify tens of thousands of items quickly, deterministically, and cost-effectively, our pipeline executes an official \textbf{7-Tier Classification Ladder} codified in \texttt{dbt/macros/coicop\_classify\_macro.sql} and mirrored in Python:
+\subsection{Part 2: AI-First Product Classification into UN COICOP Baskets}
+Every product must be assigned to one of the official United Nations COICOP categories (e.g., Bread, Meat, Fish, Medicine, Gasoline). To classify tens of thousands of items quickly, deterministically, and cost-effectively, our pipeline executes an official \textbf{AI-First Classification Ladder} codified in \texttt{dbt/macros/coicop\_classify\_macro.sql} and mirrored in Python:
 
 \begin{enumerate}
-    \item \textbf{Tier 1: Exact Explicit Overrides (Deterministic Master Table):} Matches exact barcodes, unique product keys, or curated store-product combinations recorded in \texttt{silver.coicop\_override} and \texttt{silver.coicop\_override\_manual}. If a manual audit locks an item, this takes supreme precedence.
+    \item \textbf{Tier 1: Exact Explicit Overrides (Supreme Human Authority):} Matches exact barcodes, unique product keys, or curated store-product combinations recorded in \texttt{silver.coicop\_override} and \texttt{silver.coicop\_override\_manual}. If a manual audit locks an item, this takes supreme precedence.
     \item \textbf{Tier 2: Single-Division Store Purity Locks (Instant Store Integrity):} Stores with pure domain integrity are locked directly to their respective division with zero lookup delay:
     \begin{itemize}[noitemsep]
-        \item \texttt{communitypharma} $\rightarrow$ Division 06 (Health \& Pharmacy).
-        \item \texttt{bookmebus}, \texttt{redbus}, \texttt{new\_gasoline} $\rightarrow$ Division 07 (Transport \& Passenger Fares).
+        \item \texttt{communitypharma}, \texttt{grab\_ucare} $\rightarrow$ Division 06 (Health \& Pharmacy).
+        \item \texttt{bookmebus}, \texttt{redbus}, \texttt{new\_gasoline} $\rightarrow$ Division 07 (Transport, Passenger Fares \& Automotive Fuel).
         \item \texttt{arystore}, \texttt{samnangshop}, \texttt{cellcard}, \texttt{smart} $\rightarrow$ Division 08 (Information \& Communication Equipment / Telco).
         \item \texttt{khmer24}, \texttt{realestate} $\rightarrow$ Division 04 (Housing, Rentals \& Utilities).
         \item \texttt{sokhahotel}, \texttt{hyyathotel}, \texttt{bayonbkk} $\rightarrow$ Division 11 (Restaurants \& Accommodation Services).
     \end{itemize}
-    \item \textbf{Tier 3: Global Substring Brand Overrides (Trap Regression Guards):} Cross-store high-confidence brand substrings that prevent regression misclassifications across mixed supermarkets:
+    \item \textbf{Tier 3: High-Confidence Gemini AI Engine ($\text{Confidence} \ge 0.70$):}
+    For mixed-retail stores (e.g. AEON, DeliShop, GrabMart, L192), high-confidence Gemini AI classifications are elevated directly above rigid regexes and global text substrings.
     \begin{itemize}[noitemsep]
-        \item Brands like \texttt{CHIVAS}, \texttt{PASTIS}, \texttt{RICARD}, \texttt{MARLBORO}, \texttt{MEVIUS} $\rightarrow$ Division 02 (Alcoholic Beverages \& Tobacco), preventing them from slipping into general grocery seasonings or groceries.
-        \item Brands like \texttt{LIBRESSE}, \texttt{PANASONIC HAIR DRYER} $\rightarrow$ Division 12 (Personal Care \& Appliances), preventing them from misclassifying into textiles or kitchenware.
+        \item \textit{Multi-Attribute Rich Context:} Unlike simple name-only models, our Gemini AI classifier receives a full multi-dimensional payload: product title, merchant slug, merchant aisle/category breadcrumbs, and price in KHR. This prevents classic retail domain traps (e.g. distinguishing cooking mirin from drinking wine, or coffee filter paper from drinking coffee).
+        \item \textit{Persistent Memoized Database Cache:} All Gemini classifications are permanently cached in \texttt{silver.dim\_coicop\_ai\_cache}. Any product with confidence $\ge 0.70$ is subsequently resolved in $< 1\text{ms}$ at \$0.00 cloud cost.
+        \item \textit{Primary Method Across the Warehouse:} Gemini AI is the \textbf{\#1 classification method}, powering \textbf{53.33\% (484,892 observations)} of the entire 909,289-row warehouse.
     \end{itemize}
-    \item \textbf{Tier 4: Vector Embeddings \& Gemini AI Classification Engine (\texttt{pipeline/hybrid\_embeddings\_classifier.py} \& \texttt{gemini\_coicop\_classifier.py}):}
-    For mixed-retail stores (e.g. AEON, DeliShop, GrabMart), classification uses a two-stage hybrid ML/AI architecture:
-    \begin{itemize}[noitemsep]
-        \item \textit{Sub-Millisecond Vector Embeddings:} High-dimensional multilingual dense embeddings (768-dim vectors) project product names into vector space and compute cosine similarity against the 12 UN COICOP reference spaces and 4-digit subclasses. High-confidence vector matches ($\ge 0.85$) are resolved locally without cloud roundtrips.
-        \item \textit{Gemini 2.5 Flash Structured JSON API:} Genuinely novel or ambiguous items are batched and classified by Gemini AI into official 5-digit UN COICOP codes with strict confidence metrics and economic reasoning.
-        \item \textit{Persistent Memoized Database Cache:} All vector and Gemini classifications are permanently cached in \texttt{silver.dim\_coicop\_ai\_cache}. Any product with confidence $\ge 0.50$ is subsequently resolved in $< 1\text{ms}$ at \$0.00 cost.
-    \end{itemize}
-    \item \textbf{Tier 5: Text Regular Expression Rules (Structured Heuristics):} Matches vetted regex patterns and negative exclusion rules from \texttt{silver.coicop\_text\_rules}, handling standard product descriptions with linguistic variances.
-    \item \textbf{Tier 6: Native Category Taxonomy Map (E-Commerce Breadcrumbs):} Maps native merchant category hierarchies from \texttt{silver.coicop\_category\_map} when raw scrapers capture verified store breadcrumbs (e.g. \textit{"Home Appliances > Hair Care"}).
-    \item \textbf{Tier 7: Store Default Fallbacks \& AI Review Triage (Safeguard Final Tier):} Unmatched items fall back to broad store-level defaults from \texttt{silver.coicop\_store\_defaults}. Any low-confidence prediction ($< 0.50$) or unclassified item is flagged with \texttt{'REVIEW'} status, queuing it for offline audit without corrupting production indices.
+    \item \textbf{Tier 4: Global Substring Brand Overrides (Secondary Deterministic Fallbacks):} Cross-store high-confidence brand substrings that resolve known edge cases when AI confidence is below $0.70$ (e.g. \texttt{CHIVAS}, \texttt{MARLBORO} $\rightarrow$ Division 02).
+    \item \textbf{Tier 5: Native Category Taxonomy Maps (Merchant Breadcrumb Fallback):} Maps native merchant category hierarchies from \texttt{silver.coicop\_category\_map} when raw scrapers capture verified store breadcrumbs (accounting for 16.65\% of warehouse classifications).
+    \item \textbf{Tier 6: Text Regular Expression Rules (Vetted Heuristics):} Matches vetted regex patterns and negative exclusion rules from \texttt{silver.coicop\_text\_rules}, handling standard product descriptions with linguistic variances (accounting for 11.98\% of warehouse classifications).
+    \item \textbf{Tier 7: Store Default Fallbacks \& AI Review Triage (Safeguard Final Tier):} Unmatched items fall back to broad store-level defaults from \texttt{silver.coicop\_store\_defaults}. In the live production database, \textbf{zero rows} remain in unclassified or review status (100.00\% classification rate).
 \end{enumerate}
 
-\begin{tcolorbox}[colback=white,colframe=Teal,title=\textbf{Step-by-Step Example: Vector Embeddings + Gemini AI Classifying Fish Sauce}]
-\textbf{1. Input Product:} \textit{"MegaChef Premium Fish Sauce 500ml"} (Store: Lucky Supermarket)\\
-\textbf{2. Resolution Path:} Tiers 1--3 find no override. The pipeline checks the persistent database cache \texttt{silver.dim\_coicop\_ai\_cache}.\\
-\textbf{3. Vector Embedding Analysis:} The text is encoded into a 768-dim embedding vector $\vec{v}$. Cosine distance against the Food Division (01) reference vector yields a strong affinity.\\
-\textbf{4. Gemini 2.5 Flash Structured Classification:} For exact 5-digit COICOP precision, Gemini returns structured JSON:
+\begin{tcolorbox}[colback=white,colframe=Teal,title=\textbf{Step-by-Step Example: Multi-Attribute Gemini AI Classifying Instant Noodle Bowls}]
+\textbf{1. Input Product:} \textit{"Indomie Mi Goreng Fried Noodles Cup 75g"} (Store: AEON, Category: \textit{"Grocery > Instant Noodles"}, Price: 3,200 KHR)\\
+\textbf{2. Resolution Path:} Tiers 1--2 find no override or store purity lock. The pipeline consults the AI-First engine.\\
+\textbf{3. Rich Context Multi-Attribute Prompt:} The classifier receives:
 \begin{lstlisting}[language=json]
 {
-  "product_name": "MegaChef Premium Fish Sauce 500ml",
-  "coicop_code": "01.1.9",
-  "confidence_score": 0.98,
-  "reasoning": "Fish sauce is a culinary seasoning falling under food products n.e.c."
+  "name": "Indomie Mi Goreng Fried Noodles Cup 75g",
+  "store": "aeon",
+  "category": "Grocery > Instant Noodles",
+  "price_khr": 3200
 }
 \end{lstlisting}
-\textbf{5. Cache Storage:} The system saves \texttt{("MegaChef Premium Fish Sauce 500ml", "01.1.9", 0.98)} into \texttt{silver.dim\_coicop\_ai\_cache}. Every future scrape of this item is resolved instantly from PostgreSQL at zero API cost!
+\textbf{4. Gemini 2.5 Flash Structured Classification:} Rather than misclassifying the keyword \textit{"Cup"} into Division 05 (Kitchenware), Gemini uses the full context and returns:
+\begin{lstlisting}[language=json]
+{
+  "product_name": "Indomie Mi Goreng Fried Noodles Cup 75g",
+  "coicop_code": "01.1.1",
+  "confidence_score": 0.99,
+  "reasoning": "Instant noodle cup is an edible cereal-based food product falling under bread and cereals (01.1.1), not kitchen tableware."
+}
+\end{lstlisting}
+\textbf{5. Cache Storage:} The system saves \texttt{("Indomie Mi Goreng Fried Noodles Cup 75g", "01.1.1", 0.99)} into \texttt{silver.dim\_coicop\_ai\_cache}. Every future scrape across all dates is resolved instantly from PostgreSQL at zero API cost!
 \end{tcolorbox}
 
 \newpage

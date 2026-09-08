@@ -4,8 +4,15 @@ name,COOKING WINE 750ML,,01,Food - cooking wine trap
 name,SOMERSBY CIDER 4X330ML,,02,Alcohol - cider trap
 name,WOLF BLASS SHIRAZ 750ML,,02,Alcohol - wine trap
 name,TVHC SLIPPER UNISEX,,03,Clothing - slipper trap
+name,SLIPPER,,03,Clothing - slipper trap
+name,SLIPPERS,,03,Clothing - slipper trap
+name,ANTI-SLIPPERY,,05,Household - mat trap
 name,LIX FLOOR CLEANER 3.8L,,05,Household - cleaner trap
 name,TV COFFEE FILTER 40,,05,Household - coffee filter trap
+name,COFFEE FILTER,,05,Household - coffee filter trap
+name,COFFEE FILTERS,,05,Household - coffee filter trap
+name,TEA FILTER,,05,Household - tea filter trap
+name,TEA FILTERS,,05,Household - tea filter trap
 name,GREEN ONION SLICER,,05,Household - kitchen tool trap
 name,LITTLE TREES BLACK ICE,,05,Household - air freshener
 name,LITTLE TREES WASH&WAX,,05,Household - cleaner
@@ -16,10 +23,17 @@ name,SUNPLAY SKIN AQUA SPF50,,12,Miscellaneous - cosmetics
 name,HAIRCUT CLIPPER,,12,Personal care - hair clipper
 name,HAIRCUT TOOL,,12,Personal care - hair tool
 name,HAIRCUT,,12,Personal care - haircut
+name,NAIL CLIPPER,,12,Personal care - nail clipper
+name,NAIL CLIPPERS,,12,Personal care - nail clipper
+name,HAIRCLIPPER,,12,Personal care - hair clipper
+name,HAIR CLIPPER,,12,Personal care - hair clipper
+name,BIKINI TRIMMER,,12,Personal care - trimmer
+name,BEARD TRIMMER,,12,Personal care - trimmer
 name,BARBER SHOP,,12,Personal care - barber tools
 name,BARBER SPRAY,,12,Personal care - barber tools
 name,LIPICE,,12,Miscellaneous - cosmetics
 name,PENCIL HB 2B,,09,Recreation - stationery pencil
+name,BOARD CLIPPER,,09,Recreation - stationery
 name,BIC BALL PEN,,09,Recreation - stationery pen
 name,CRAYOLA CRAYON 24 COLORS,,09,Recreation - stationery crayons
 name,PENCIL CASE,,09,Recreation - pencil case
@@ -38,6 +52,7 @@ name,OYSTER SAUCE 250ML,,01,Food - condiment
 name,SOY SAUCE 500ML,,01,Food - condiment
 name,CURRY PASTE RED,,01,Food - condiment
 name,INSTANT NOODLE CUP,,01,Food - instant noodles
+name,MEE CHIET,,01,Food - Mee Chiet instant noodles
 name,INSTANT COFFEE 3IN1,,01,Food - instant coffee
 name,COCONUT MILK 400ML,,01,Food - cooking ingredient
 name,COCONUT CREAM 400ML,,01,Food - cooking ingredient

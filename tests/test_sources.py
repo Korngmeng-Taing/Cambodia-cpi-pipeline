@@ -506,10 +506,11 @@ def test_scraper_registry_complete():
         "grab_lucky",
         "grab_chipmong",
         "khmermoto",
+        "metfone",
     ]
     for src in expected_sources:
         assert src in SCRAPER_REGISTRY, f"Missing scraper source in registry: {src}"
-    assert len(SCRAPER_REGISTRY) == 22
+    assert len(SCRAPER_REGISTRY) == 23
 
 
 @pytest.mark.parametrize("source_slug,scraper_cls", SCRAPER_REGISTRY.items())

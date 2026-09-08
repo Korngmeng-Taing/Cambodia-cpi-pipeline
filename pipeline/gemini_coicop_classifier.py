@@ -50,14 +50,28 @@ from typing import Any
 from sqlalchemy import create_engine, text
 
 try:
-    import google.generativeai as genai
-except ImportError:  # pragma: no cover - only present in the Airflow image
+    from google import genai
+    from google.genai import types as genai_types
+    HAS_NEW_GENAI = True
+except ImportError:
     genai = None
+    genai_types = None
+    HAS_NEW_GENAI = False
+
+if not HAS_NEW_GENAI:
+    try:
+        import google.generativeai as legacy_genai
+        HAS_LEGACY_GENAI = True
+    except ImportError:
+        legacy_genai = None
+        HAS_LEGACY_GENAI = False
+else:
+    HAS_LEGACY_GENAI = False
 
 log = logging.getLogger(__name__)
 
 BATCH_SIZE = int(os.getenv("GEMINI_BATCH_SIZE", "200"))  # Gemini batch size (was 50)
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.1-flash-lite"
 UNCLASSIFIED = "99.9.9"
 CLASSIFICATION_METHOD = "gemini_ai"
 
@@ -254,7 +268,9 @@ def _build_generation_config() -> Any:
 
 
 class GeminiModelPool:
-    """Manages a pool of Gemini API keys with round-robin rotation and automatic quota failover."""
+    """Manages a pool of Gemini API keys with round-robin rotation and automatic quota failover.
+    Supports both google.genai (new SDK) and legacy google.generativeai.
+    """
 
     def __init__(self, keys: list[str], model_name: str = DEFAULT_MODEL):
         if not keys:
@@ -277,8 +293,8 @@ class GeminiModelPool:
         )
 
     def generate_content(self, contents, **kwargs):
-        if genai is None:
-            raise RuntimeError("google-generativeai is required (pip install google-generativeai)")
+        if not HAS_NEW_GENAI and not HAS_LEGACY_GENAI:
+            raise RuntimeError("google-genai or google-generativeai is required")
 
         active = self.active_keys
         if not active:
@@ -292,13 +308,26 @@ class GeminiModelPool:
             key = active[self._current_idx % len(active)]
             self._current_idx += 1
             try:
-                genai.configure(api_key=key)
-                gen_config = _build_generation_config()
-                model = genai.GenerativeModel(
-                    model_name=self.model_name,
-                    generation_config=gen_config,
-                )
-                return model.generate_content(contents, **kwargs)
+                if HAS_NEW_GENAI:
+                    client = genai.Client(api_key=key)
+                    config = genai_types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=COICOP_RESPONSE_SCHEMA,
+                    )
+                    return client.models.generate_content(
+                        model=self.model_name,
+                        contents=contents,
+                        config=config,
+                        **kwargs,
+                    )
+                else:
+                    legacy_genai.configure(api_key=key)
+                    gen_config = _build_generation_config()
+                    model = legacy_genai.GenerativeModel(
+                        model_name=self.model_name,
+                        generation_config=gen_config,
+                    )
+                    return model.generate_content(contents, **kwargs)
             except Exception as exc:
                 last_exc = exc
                 if _is_quota_exhausted_error(exc):
@@ -323,9 +352,9 @@ class GeminiModelPool:
 
 
 def _build_model(keys: list[str] | None = None, model_name: str | None = None):
-    if genai is None:
+    if not HAS_NEW_GENAI and not HAS_LEGACY_GENAI:
         raise RuntimeError(
-            "google-generativeai is required (pip install google-generativeai)"
+            "google-genai or google-generativeai is required (pip install google-genai)"
         )
     api_keys = keys or _get_api_keys()
     if not api_keys:
@@ -334,9 +363,10 @@ def _build_model(keys: list[str] | None = None, model_name: str | None = None):
         )
     model_name = model_name or os.getenv("GEMINI_MODEL", DEFAULT_MODEL)
     log.info(
-        "Building Gemini Model Pool with %d key(s) for model %s with JSON mode",
+        "Building Gemini Model Pool with %d key(s) for model %s (SDK: %s)",
         len(api_keys),
         model_name,
+        "google-genai" if HAS_NEW_GENAI else "google-generativeai",
     )
     return GeminiModelPool(api_keys, model_name=model_name)
 

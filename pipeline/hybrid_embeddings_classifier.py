@@ -25,11 +25,20 @@ from pipeline.key_pool import get_key_pool
 from pipeline.text_clean import is_khmer_text, extract_khmer_tokens
 
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types as genai_types
+    HAS_NEW_GENAI = True
     HAS_GENAI = True
-except ImportError:  # pragma: no cover
+except ImportError:
     genai = None
-    HAS_GENAI = False
+    genai_types = None
+    HAS_NEW_GENAI = False
+    try:
+        import google.generativeai as genai
+        HAS_GENAI = True
+    except ImportError:  # pragma: no cover
+        genai = None
+        HAS_GENAI = False
 
 try:
     from sentence_transformers import SentenceTransformer

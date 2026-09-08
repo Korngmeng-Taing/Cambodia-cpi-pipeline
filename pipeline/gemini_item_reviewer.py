@@ -29,10 +29,29 @@ from psycopg2.extras import execute_batch, register_uuid
 from pipeline.config import get_database_url
 from pipeline.text_clean import clean_name_for_matching
 
+try:
+    from google import genai
+    from google.genai import types as genai_types
+    HAS_NEW_GENAI = True
+except ImportError:
+    genai = None
+    genai_types = None
+    HAS_NEW_GENAI = False
+
+if not HAS_NEW_GENAI:
+    try:
+        import google.generativeai as legacy_genai
+        HAS_LEGACY_GENAI = True
+    except ImportError:
+        legacy_genai = None
+        HAS_LEGACY_GENAI = False
+else:
+    HAS_LEGACY_GENAI = False
+
 log = logging.getLogger(__name__)
 
 # Model and batch defaults
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 BATCH_SIZE = int(os.getenv("GEMINI_REVIEW_BATCH_SIZE", "40"))
 RATE_LIMIT_DELAY = float(os.getenv("GEMINI_BATCH_DELAY_SECONDS", "1.5"))
@@ -116,6 +135,7 @@ class GeminiItemReviewer:
 
     def _init_gemini(self):
         self.model = None
+        self.client = None
         raw_key = GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")
         # Extract individual key in case GEMINI_API_KEY is comma-separated
         api_key = raw_key.split(",")[0].strip() if raw_key else ""
@@ -127,17 +147,23 @@ class GeminiItemReviewer:
                 pass
 
         if api_key:
-            try:
-                import google.generativeai as genai
-                genai.configure(api_key=api_key)
-                self.model = genai.GenerativeModel(
-                    model_name=self.model_name,
-                    system_instruction=SYSTEM_PROMPT,
-                    generation_config={"response_mime_type": "application/json", "temperature": 0.1},
-                )
-                log.info("Gemini AI Reviewer initialized with model: %s", self.model_name)
-            except Exception as e:
-                log.warning("Could not initialize google.generativeai: %s", e)
+            if HAS_NEW_GENAI:
+                try:
+                    self.client = genai.Client(api_key=api_key)
+                    log.info("Gemini AI Reviewer initialized with google-genai Client (model: %s)", self.model_name)
+                except Exception as e:
+                    log.warning("Could not initialize google-genai Client: %s", e)
+            elif HAS_LEGACY_GENAI:
+                try:
+                    legacy_genai.configure(api_key=api_key)
+                    self.model = legacy_genai.GenerativeModel(
+                        model_name=self.model_name,
+                        system_instruction=SYSTEM_PROMPT,
+                        generation_config={"response_mime_type": "application/json", "temperature": 0.1},
+                    )
+                    log.info("Gemini AI Reviewer initialized with legacy google.generativeai (model: %s)", self.model_name)
+                except Exception as e:
+                    log.warning("Could not initialize google.generativeai: %s", e)
 
     def _get_connection(self):
         from pipeline.config import alternate_host_url
@@ -178,7 +204,9 @@ class GeminiItemReviewer:
         """Calls Gemini Flash in batch JSON mode to resolve ambiguous pairs.
         Retries up to 3 times with exponential backoff on transient errors.
         """
-        if not self.model or not pairs:
+        client = getattr(self, "client", None)
+        model = getattr(self, "model", None)
+        if not pairs or (not client and not model):
             return {}
 
         prompt_data = [
@@ -197,7 +225,19 @@ class GeminiItemReviewer:
         # H5 fix: exponential backoff — 2s, 4s, 8s between attempts
         for attempt in range(3):
             try:
-                response = self.model.generate_content(prompt_str)
+                if client:
+                    config = genai_types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        system_instruction=SYSTEM_PROMPT,
+                        temperature=0.1,
+                    )
+                    response = client.models.generate_content(
+                        model=self.model_name,
+                        contents=prompt_str,
+                        config=config,
+                    )
+                else:
+                    response = model.generate_content(prompt_str)
                 resp_text = response.text.strip()
                 # M3 FIX: Strip markdown code fences before JSON parse
                 if resp_text.startswith("```"):

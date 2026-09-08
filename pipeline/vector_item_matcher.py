@@ -158,10 +158,7 @@ def is_spec_compatible(cand_name: str, base_name: str) -> bool:
     cand_lower, base_lower = cand_name.lower(), base_name.lower()
     is_cand_diet = any(k in cand_lower for k in ("zero", "diet", "light", "no sugar"))
     is_base_diet = any(k in base_lower for k in ("zero", "diet", "light", "no sugar"))
-    if is_cand_diet != is_base_diet:
-        return False
-
-    return True
+    return is_cand_diet == is_base_diet
 
 
 def _build_semantic_item_vector(text: str) -> np.ndarray:

@@ -477,6 +477,6 @@ def run_hedonic_regression(scrape_date: str) -> dict[str, Any]:
         "model_r2": round(fit["r2"], 4),
         "model_n": fit["n"],
         "baseline": base,
-        "items_adjusted": int(len(adjusted)),
+        "items_adjusted": len(adjusted),
         "persisted_rows": n_persisted,
     }

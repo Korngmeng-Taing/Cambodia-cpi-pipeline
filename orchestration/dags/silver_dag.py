@@ -84,7 +84,7 @@ def _safe_run_item_auto_review(**context) -> dict:
     """Graceful-degradation wrapper around Gemini item match reviewer."""
     try:
         return _run_item_auto_review(**context)
-    except Exception as e:  # noqa: BLE001 - AI review must never block the Silver layer
+    except Exception as e:  # AI review must never block the Silver layer
         log.warning("Gemini item auto-review encountered error (non-blocking): %s", e)
         raise AirflowSkipException(f"Item auto-review skipped: {e}") from e
 
@@ -108,7 +108,7 @@ def _safe_run_gemini(**context) -> dict:
         raise AirflowSkipException("No Gemini API keys configured.")
     try:
         return _run_coicop_ai_classification(**context)
-    except Exception as e:  # noqa: BLE001 - AI must never block the Silver layer
+    except Exception as e:  # AI must never block the Silver layer
         log.warning("Gemini classification failed (non-blocking): %s", e)
         raise AirflowSkipException(f"Gemini classification skipped: {e}") from e
 

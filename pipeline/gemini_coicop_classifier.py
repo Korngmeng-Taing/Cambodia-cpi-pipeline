@@ -341,7 +341,7 @@ def classify_batch(model, names: list[str]) -> list[dict[str, Any]]:
         try:
             response = model.generate_content([SYSTEM_PROMPT] + [str(n) for n in names])
             break
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if attempt == 1 and _is_rate_limit_error(exc):
                 if _is_quota_exhausted_error(exc):
                     # Hard daily/free-tier quota exceeded; retrying immediately won't succeed
@@ -464,7 +464,7 @@ def classify_names(
             # Reset backoff on success
             consecutive_failures = 0
             current_backoff = INITIAL_BACKOFF_SECONDS
-        except Exception as exc:  # noqa: BLE001 - one bad batch must not kill the run
+        except Exception as exc:  # one bad batch must not kill the run
             failed += 1
             consecutive_failures += 1
             log.warning("Gemini batch %d/%d of %d name(s) failed (consecutive=%d): %s",
@@ -547,7 +547,7 @@ def triage_with_local_model(
             continue
 
         if store_slug and store_slug in PURE_STORE_MAP:
-            div, code = PURE_STORE_MAP[store_slug]
+            _div, code = PURE_STORE_MAP[store_slug]
             local_results[name] = {
                 "product_name": name,
                 "coicop_code": code,

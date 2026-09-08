@@ -57,7 +57,7 @@ class TestRuleGuard:
     def test_storage_gb_mismatch_forces_split(self):
         result = evaluate_rule_guard("iPhone 13 128GB", "iPhone 13 256GB")
         assert result is not None
-        decision, _, reason = result
+        decision, _, _reason = result
         assert decision == "SPLIT_NEW"
 
     def test_wattage_mismatch_forces_split(self):
@@ -76,7 +76,7 @@ class TestRuleGuard:
 class TestApproveMatch:
     def test_ai_approved_increments_ai_approved_stat(self):
         reviewer = _make_reviewer()
-        conn, cur = _mock_conn()
+        conn, _cur = _mock_conn()
         row = _row(review_id=10, raw_price_id=200, match_name="Coca Cola 330ml")
         pair_decisions = {1: {"decision": "APPROVE_MATCH", "confidence": 0.95,
                               "reason": "AI ok", "method": "gemini_ai", "rows": [row]}}
@@ -86,7 +86,7 @@ class TestApproveMatch:
 
     def test_rule_approved_increments_rule_approved_stat(self):
         reviewer = _make_reviewer()
-        conn, cur = _mock_conn()
+        conn, _cur = _mock_conn()
         row = _row(review_id=11, raw_price_id=201)
         pair_decisions = {1: {"decision": "APPROVE_MATCH", "confidence": 1.0,
                               "reason": "rule guard", "method": "rule_guard", "rows": [row]}}
@@ -101,7 +101,7 @@ class TestApproveMatch:
 class TestSplitNew:
     def test_split_increments_ai_split_stat(self):
         reviewer = _make_reviewer()
-        conn, cur = _mock_conn()
+        conn, _cur = _mock_conn()
         row = _row(review_id=20, raw_price_id=300, raw_desc="Samsung S24 256GB")
         pair_decisions = {1: {"decision": "SPLIT_NEW", "confidence": 0.85,
                               "reason": "spec conflict", "method": "gemini_ai", "rows": [row]}}

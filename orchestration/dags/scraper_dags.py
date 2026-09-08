@@ -83,5 +83,5 @@ def _build_scraper_dag(source_slug: str, dag_id: str | None = None):
 
 
 # Create exactly one standard DAG per source in the registry (21 DAGs total)
-for _source_slug in SCRAPER_REGISTRY.keys():
+for _source_slug in SCRAPER_REGISTRY:
     globals()[f"scrape_{_source_slug}_dag"] = _build_scraper_dag(_source_slug)

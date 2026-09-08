@@ -172,16 +172,16 @@ def annual_rebase_cpi(**context):
                     prior_base = row[0]
                     if row[1] is not None and float(row[1]) > 0:
                         prior_splice = float(row[1]) / 100.0
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("No prior base date found in gold.cpi_base_dates: %s", exc)
 
     if not prior_base:
         prior_base_str = Variable.get("cpi_base_date", default_var=None)
         if prior_base_str:
             try:
                 prior_base = date.fromisoformat(prior_base_str)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Failed to parse cpi_base_date Airflow variable: %s", exc)
 
     # Compute average December headline CPI across all days with data
     dec_dates = sorted(df_dec["scrape_date"].unique())

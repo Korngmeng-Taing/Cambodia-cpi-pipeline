@@ -59,7 +59,7 @@ def test_laspeyres_division_and_headline_aggregation(cpi_engine):
         })
     df_elem = pd.DataFrame(items)
 
-    df_div, headline = cpi_engine.aggregate_division_and_headline(df_elem, calc_date)
+    _df_div, headline = cpi_engine.aggregate_division_and_headline(df_elem, calc_date)
 
     # Food weight is 44.8%, Food index is 110.0, others are 100.0
     # Expected Headline CPI = 100.0 + (0.448 * 10.0) = 104.48
@@ -235,7 +235,7 @@ def test_subclass_weighted_division_aggregation(cpi_engine):
         },
     ])
 
-    df_div, headline = cpi_engine.aggregate_division_and_headline(elem_df, calc_date)
+    df_div, _headline = cpi_engine.aggregate_division_and_headline(elem_df, calc_date)
     div01 = df_div[df_div["coicop_division"] == "01"].iloc[0]
 
     # Weighted Laspeyres: (17.230 * 120.0 + 8.450 * 100.0) / (17.230 + 8.450) = 113.419
@@ -276,7 +276,7 @@ def test_chain_linking_splice_factor(cpi_engine):
     ])
 
     # Unadjusted run (splice_factor = 1.0)
-    df_div_base, headline_base = cpi_engine.aggregate_division_and_headline(elem_df, calc_date, splice_factor=1.0)
+    _df_div_base, headline_base = cpi_engine.aggregate_division_and_headline(elem_df, calc_date, splice_factor=1.0)
     assert pytest.approx(headline_base["headline_cpi"], 0.001) == 100.0
 
     # Spliced run (e.g. 2026 average December CPI was 105.50 -> splice_factor = 1.055)

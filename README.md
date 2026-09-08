@@ -3,7 +3,7 @@
 
 ![Cambodia CPI Architecture Diagram](docs/cpi_end_to_end_architecture_diagram.jpg)
 
-> **✅ Implementation Status:** The **data pipeline is 100% live and verified in production** end-to-end — scraping → Bronze ingestion → Silver cleaning / hybrid vector item matching / zero-mismatch 12-division AI-First classification → Gold star schema → Jevons/Laspeyres CPI calculation & ML nowcasting. All **909,289 price observations** across 22 historical scrape dates are 100% classified with **0 code-division mismatches** and **0 unclassified items**, with **Gemini AI powering >53% of all classifications**. Test suites: **dbt data & unit tests (`PASS=33 WARN=0 ERROR=0`)** and **451 Python tests passing**. For details on the architecture and visual workflows, see [Architecture Diagrams](docs/ARCHITECTURE_DIAGRAMS.md).
+> **✅ Implementation Status:** The **data pipeline is 100% live and verified in production** end-to-end — scraping → Bronze ingestion → Silver cleaning / hybrid vector item matching / zero-mismatch 12-division AI-First classification → Gold star schema → Jevons/Laspeyres CPI calculation & ML nowcasting. All **909,289 price observations** across 22 historical scrape dates are 100% classified with **0 code-division mismatches** and **0 unclassified items**, with **Gemini AI powering >53% of all classifications**. Test suites: **dbt data & unit tests (`PASS=33 WARN=0 ERROR=0`)** and **478 Python tests passing (100% pass rate)**. For details on the architecture and visual workflows, see [Architecture Diagrams](docs/ARCHITECTURE_DIAGRAMS.md).
 
 ---
 
@@ -56,7 +56,7 @@
 ### Silver (Clean, Standardize & Resolve Observations)
 - **Clean Store Observations**: `silver.clean_store_prices` — unified daily appended table containing cleaned, standardized prices across all stores with exchange rates applied (KHR), unit normalization, promo clamping, and zero-price filtering.
 - **Item Matching Service**: Python (`pipeline/item_matcher.py` & `pipeline/vector_item_matcher.py`) executing Barcode exact → SKU exact → Exact Text → Vectorized Matrix Cosine (S = M · v) + RapidFuzz with deterministic spec guards to reject storage/pack conflicts.
-- **12-Division COICOP Engine**: `pipeline/hybrid_embeddings_classifier.py` executing 4-tier daily ladder: human overrides → 15 pure store locks → 12-division vector space matching → Gemini Pro AI fallback cached in `silver.dim_coicop_ai_cache`.
+- **12-Division COICOP Engine**: `pipeline/hybrid_embeddings_classifier.py` executing 4-tier daily ladder: human overrides → 18 pure store locks → 12-division vector space matching → Gemini Pro AI fallback cached in `silver.dim_coicop_ai_cache`.
 - **Operational Triage Queue**: `silver.classification_queue` captures unclassified or low-confidence items for automated review or human labeling.
 - **COICOP Override System**: `silver.coicop_override` (seed-driven) + `silver.coicop_override_manual` (operator-driven) for persistent classification rules.
 

@@ -33,7 +33,7 @@ flowchart TD
     subgraph S4["Stage 4: AI-First 12-Division COICOP Classification Ladder (coicop_classify_macro.sql)"]
         G --> H{"AI-First Classification Ladder\n(First Match Wins)"}
         H -- "Tier 1" --> I["Exact Authority Overrides\n(barcode / exact product_key in coicop_override.csv)"]
-        H -- "Tier 2" --> I2["Single-Category Pure Store Locks\n(Fuel->07, Telco->08, Housing->04, Hotels->11, Pharma->06)"]
+        H -- "Tier 2" --> I2["Single-Category Pure Store Locks\n(Fuel/Motos->07, Telco->08, Housing/Utilities->04, Hotels->11, Pharma->06)"]
         H -- "Tier 3" --> M["🤖 High-Confidence Gemini AI Engine (>= 0.70)\nMulti-Attribute Context: Store, Category, Price, Title\n(silver.dim_coicop_ai_cache — 53.3% of warehouse)"]
         H -- "Tier 4" --> J["Global Substring Brand Overrides\n(Secondary trap overrides for remaining items)"]
         H -- "Tier 5" --> K["Store Category Taxonomy Maps\n(E-Commerce aisle & department breadcrumbs)"]
@@ -67,7 +67,7 @@ flowchart TD
 - Database Table: `bronze.raw_prices`
 
 ### Process:
-1. **Multi-Source Fetching**: 20 active scrapers run daily covering retail supermarkets (`aeon`, `delishop`), fashion marketplaces (`aeon3`), e-commerce (`l192`), pharmacies (`communitypharma`), electronics (`samnangshop`, `arystore`), telecoms (`cellcard`, `smart`, `cellcard_wifi`, `smart_wifi`), real estate (`khmer24`, `realestate`), intercity transit (`redbus`, `bookmebus`), restaurants (`bayonbkk`), hospitality (`sokhahotel`, `hyyathotel`), petroleum stations (`new_gasoline`), and official exchange rates (`mef_fx`).
+1. **Multi-Source Fetching**: 25 active scrapers run daily covering retail supermarkets (`aeon`, `delishop`), fashion marketplaces (`aeon3`), e-commerce (`l192`), Grab outlets (`grab_lucky`, `grab_chipmong`, `grab_ucare`), pharmacies (`communitypharma`), electronics (`samnangshop`, `arystore`), vehicles (`khmermoto`), telecoms (`cellcard`, `smart`, `metfone`), utilities (`edc` electricity, `ppwsa` water), real estate (`khmer24`, `realestate`), intercity transit (`redbus`, `bookmebus`), restaurants (`bayonbkk`), hospitality (`sokhahotel`, `hyyathotel`), petroleum stations (`new_gasoline`), and official exchange rates (`mef_fx`).
 2. **Raw Storage & Deduplication**: Observations are stored into `bronze.raw_prices` with JSONB payloads. The table enforces deduplication via:
    ```sql
    CREATE UNIQUE INDEX uq_raw_prices_observation 

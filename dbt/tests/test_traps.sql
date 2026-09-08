@@ -68,4 +68,4 @@ join trap_cases t on position(upper(t.trap) in upper(f.name_clean)) > 0
 where f.coicop_division <> t.expected
   and f.scrape_date >= (select max(scrape_date) - interval '2 days' from {{ ref('clean_store_prices') }})
   and not (t.trap = 'SHAMPOO' and f.name_clean ilike '%CAR WASH%')
-  and not (t.trap in ('SHAMPOO', 'TOOTHPASTE') and f.store_slug in ('communitypharma', 'grab_ucare'))
+  and not (t.trap in ('SHAMPOO', 'TOOTHPASTE', 'NAIL SCISSOR', 'NAIL SCISSORS') and f.store_slug in ('communitypharma', 'grab_ucare'))

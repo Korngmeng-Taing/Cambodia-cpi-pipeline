@@ -23,17 +23,29 @@ DECLARE
     v_start_date DATE;
     v_end_date DATE;
     v_sql TEXT;
+    v_exists BOOLEAN;
 BEGIN
     v_start_date := MAKE_DATE(p_year, p_month, 1);
     v_end_date := (v_start_date + INTERVAL '1 month')::DATE;
     v_part_name := FORMAT('%s_%s_%s', p_table_name, p_year, TO_CHAR(v_start_date, 'MM'));
 
-    -- Check if partition already exists in pg_class
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_class c
-        JOIN pg_namespace n ON n.oid = c.relnamespace
-        WHERE n.nspname = p_schema_name AND c.relname = v_part_name
-    ) THEN
+    -- Check if partition covering this range already exists for the parent table
+    SELECT EXISTS (
+        SELECT 1
+        FROM pg_inherits i
+        JOIN pg_class parent ON i.inhparent = parent.oid
+        JOIN pg_class child ON i.inhrelid = child.oid
+        JOIN pg_namespace n ON n.oid = parent.relnamespace
+        WHERE n.nspname = p_schema_name
+          AND parent.relname = p_table_name
+          AND (
+              child.relname = v_part_name
+              OR child.relname = FORMAT('%s_part_%s_%s', p_table_name, p_year, TO_CHAR(v_start_date, 'MM'))
+              OR pg_get_expr(child.relpartbound, child.oid) LIKE FORMAT('%%''%s%%', v_start_date)
+          )
+    ) INTO v_exists;
+
+    IF NOT v_exists THEN
         v_sql := FORMAT(
             'CREATE TABLE IF NOT EXISTS %I.%I PARTITION OF %I.%I FOR VALUES FROM (%L) TO (%L);',
             p_schema_name, v_part_name, p_schema_name, p_table_name,

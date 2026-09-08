@@ -93,6 +93,34 @@ def ensure_monthly_partitions(months_ahead: int = 3, conn: Any = None) -> dict[s
 
                     for schema_name, parent_table in partitioned_parents:
                         part_name = f"{parent_table}_{target_year:04d}_{target_month:02d}"
+                        # Guard against creating duplicate or overlapping partitions
+                        cur.execute(
+                            """
+                            SELECT 1
+                            FROM pg_inherits i
+                            JOIN pg_class parent ON i.inhparent = parent.oid
+                            JOIN pg_class child ON i.inhrelid = child.oid
+                            JOIN pg_namespace n ON n.oid = parent.relnamespace
+                            WHERE n.nspname = %s
+                              AND parent.relname = %s
+                              AND (
+                                  child.relname = %s
+                                  OR child.relname = %s
+                                  OR pg_get_expr(child.relpartbound, child.oid) LIKE %s
+                              );
+                            """,
+                            (
+                                schema_name,
+                                parent_table,
+                                part_name,
+                                f"{parent_table}_part_{target_year:04d}_{target_month:02d}",
+                                f"%'{start_date}%",
+                            ),
+                        )
+                        if cur.fetchone():
+                            created_partitions.append(f"{schema_name}.{part_name} (existing)")
+                            continue
+
                         ddl = f"""
                         CREATE TABLE IF NOT EXISTS {schema_name}.{part_name}
                         PARTITION OF {schema_name}.{parent_table}

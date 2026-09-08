@@ -16,13 +16,18 @@
 ) }}
 
 with cleaned_prices as (
-    select * from {{ ref('int_prices_cleaned') }}
-    where price_khr > 0
+    select
+        p.*,
+        lower(p.name_clean) as name_clean_lower,
+        lower(regexp_replace(trim(p.name_clean), '\s+', ' ', 'g')) as norm_name,
+        lower(trim(coalesce(p.category_native, ''))) as norm_category
+    from {{ ref('int_prices_cleaned') }} p
+    where p.price_khr > 0
     {% if is_incremental() %}
         {% if var('ds', '') and var('ds') != 'None' and var('ds') != 'null' and var('ds') != 'none' %}
-            and scrape_date = '{{ var("ds") }}'::date
+            and p.scrape_date = '{{ var("ds") }}'::date
         {% else %}
-            and scrape_date >= (select coalesce(max(scrape_date) - interval '7 days', '2020-01-01'::date) from {{ this }})
+            and p.scrape_date >= (select coalesce(max(scrape_date) - interval '7 days', '2020-01-01'::date) from {{ this }})
         {% endif %}
     {% endif %}
 ),
@@ -37,49 +42,50 @@ classified as (
     from {{ ref('int_coicop_classified') }}
     order by item_id, store_slug, coicop_confidence desc
 ),
-all_overrides as materialized (
+all_overrides as (
     select match_type, trim(match_value) as match_value, lower(trim(match_value)) as match_val_lower, store_slug, lpad(coicop_division, 2, '0') as coicop_division
     from {{ ref('coicop_override') }}
     union all
     select match_type, trim(match_value) as match_value, lower(trim(match_value)) as match_val_lower, store_slug, lpad(coicop_division, 2, '0') as coicop_division
     from {{ source('silver', 'coicop_override_manual') }}
 ),
-ov_barcode as materialized (
+ov_barcode as (
     select distinct on (match_value)
         match_value as barcode,
         coicop_division
     from all_overrides
     where match_type = 'barcode' and match_value is not null and match_value <> ''
 ),
-ov_name_store as materialized (
+ov_name_store as (
     select distinct on (store_slug, match_val_lower)
         match_val_lower, store_slug, coicop_division
     from all_overrides
     where match_type = 'name' and store_slug is not null and store_slug <> ''
 ),
-ov_name_global as materialized (
+ov_name_global as (
     select distinct on (match_val_lower)
         match_val_lower, coicop_division
     from all_overrides
     where match_type = 'name' and (store_slug is null or store_slug = '')
 ),
-ov_name_store_match as materialized (
+ov_name_store_match as (
     select distinct on (p.raw_price_id)
         p.raw_price_id,
         ov.coicop_division
     from cleaned_prices p
-    join ov_name_store ov on ov.store_slug = p.store_slug and position(ov.match_val_lower in lower(p.name_clean)) > 0
+    join ov_name_store ov on ov.store_slug = p.store_slug and position(ov.match_val_lower in p.name_clean_lower) > 0
+    where p.store_slug in (select store_slug from ov_name_store)
     order by p.raw_price_id, length(ov.match_val_lower) desc
 ),
-ov_name_global_match as materialized (
+ov_name_global_match as (
     select distinct on (p.raw_price_id)
         p.raw_price_id,
         ov.coicop_division
     from cleaned_prices p
-    join ov_name_global ov on position(ov.match_val_lower in lower(p.name_clean)) > 0
+    join ov_name_global ov on position(ov.match_val_lower in p.name_clean_lower) > 0
     order by p.raw_price_id, length(ov.match_val_lower) desc
 ),
-ai_prejoined as materialized (
+ai_prejoined as (
     select distinct on (lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')))
         lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')) as norm_name,
         coicop_code,
@@ -92,36 +98,36 @@ ai_prejoined as materialized (
     where coicop_code <> '99.9.9'
     order by lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')), classified_at desc
 ),
-ai_match as materialized (
+ai_match as (
     select distinct on (p.raw_price_id)
         p.raw_price_id,
         ai.coicop_division,
         ai.coicop_code,
         ai.confidence_score
     from cleaned_prices p
-    join ai_prejoined ai on ai.norm_name = lower(regexp_replace(trim(p.name_clean), '\s+', ' ', 'g'))
+    join ai_prejoined ai on ai.norm_name = p.norm_name
     order by p.raw_price_id, ai.confidence_score desc
 ),
-cat_map_prejoined as materialized (
+cat_map_prejoined as (
     select distinct on (store_slug, lower(trim(category_native)))
         store_slug,
         lower(trim(category_native)) as cat_key,
         lpad(coicop_division, 2, '0') as coicop_division
     from {{ source('silver', 'coicop_category_map') }}
 ),
-cat_map_match as materialized (
+cat_map_match as (
     select distinct on (p.raw_price_id)
         p.raw_price_id,
         cm.coicop_division
     from cleaned_prices p
     join cat_map_prejoined cm
         on cm.store_slug = p.store_slug and (
-            cm.cat_key = lower(trim(coalesce(p.category_native, '')))
-            or cm.cat_key = lower(trim(split_part(coalesce(p.category_native, ''), '>', 1)))
-            or cm.cat_key = lower(trim(split_part(coalesce(p.category_native, ''), '/', 1)))
+            cm.cat_key = p.norm_category
+            or cm.cat_key = trim(split_part(p.norm_category, '>', 1))
+            or cm.cat_key = trim(split_part(p.norm_category, '/', 1))
         )
     order by p.raw_price_id,
-        case when cm.cat_key = lower(trim(coalesce(p.category_native, ''))) then 1 else 2 end asc
+        case when cm.cat_key = p.norm_category then 1 else 2 end asc
 ),
 enriched_observations as (
     select

@@ -179,7 +179,7 @@ with DAG(
             trigger_dag_id=f"scrape_{store_slug}_dag",
             conf={"ds": target_date_expr},
             wait_for_completion=True,
-            deferrable=True,
+            deferrable=False,
             poke_interval=WAIT_POKE_INTERVAL,
             execution_timeout=timedelta(seconds=WAIT_TIMEOUT_SECONDS),
             reset_dag_run=True,

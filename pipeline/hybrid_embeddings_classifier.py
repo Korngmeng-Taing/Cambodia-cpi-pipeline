@@ -53,17 +53,21 @@ EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-2
 LLM_MODEL = os.getenv("GEMINI_PRO_MODEL", os.getenv("GEMINI_MODEL", "gemini-2.5-flash"))
 LOCAL_FALLBACK_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 
-# 15 Single-Category Pure Stores (Instant SQL Assignment)
+# Single-Category Pure Stores (Instant SQL / Python Assignment)
 PURE_STORE_MAP: dict[str, tuple[str, str]] = {
     "new_gasoline": ("07", "07.2.2"),
-    "cellcard": ("08", "08.2.0"),
+    "cellcard": ("08", "08.3.0"),
     "cellcard_wifi": ("08", "08.3.0"),
-    "smart": ("08", "08.2.0"),
+    "smart": ("08", "08.3.0"),
     "smart_wifi": ("08", "08.3.0"),
+    "metfone": ("08", "08.3.0"),
     "realestate": ("04", "04.1.1"),
     "khmer24": ("04", "04.1.1"),
+    "edc": ("04", "04.5.1"),
+    "ppwsa": ("04", "04.4.1"),
     "redbus": ("07", "07.3.2"),
     "bookmebus": ("07", "07.3.2"),
+    "khmermoto": ("07", "07.1.2"),
     "sokhahotel": ("11", "11.2.0"),
     "hyyathotel": ("11", "11.2.0"),
     "bayonbkk": ("11", "11.1.1"),
@@ -678,7 +682,10 @@ class HybridCOICOPClassifier:
 
         # Tier 2: Check Single-Category Pure Store Purity
         if store_slug and store_slug.lower() in PURE_STORE_MAP:
-            div, code = PURE_STORE_MAP[store_slug.lower()]
+            if store_slug.lower() == "new_gasoline" and "lpg" in clean_name.lower():
+                div, code = ("04", "04.5.2")
+            else:
+                div, code = PURE_STORE_MAP[store_slug.lower()]
             return {
                 "product_name": clean_name,
                 "coicop_division": div,

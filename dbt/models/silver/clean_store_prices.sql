@@ -239,8 +239,6 @@ enriched_observations as (
             ) then 'store_purity'
             when ov_ng.coicop_division is not null then 'override'
             when c.coicop_division is not null and c.coicop_method <> 'store_default' then c.coicop_method
-            when c.coicop_method is not null and c.coicop_method <> 'store_default' then c.coicop_method
-            when p.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk', 'bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone', 'khmermoto', 'edc', 'ppwsa') then 'store_default'
             when ai.coicop_division is not null and coalesce(ai.confidence_score, 0.90) >= 0.50 then 'gemini_ai'
             when cm.coicop_division is not null then 'category_map'
             when c.coicop_method is not null then c.coicop_method

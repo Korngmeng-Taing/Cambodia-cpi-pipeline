@@ -29,14 +29,18 @@ class TestStoreDomainPurity:
 
     @pytest.mark.parametrize("store_slug,expected_div,expected_code", [
         ("new_gasoline", "07", "07.2.2"),
-        ("cellcard", "08", "08.2.0"),
+        ("cellcard", "08", "08.3.0"),
         ("cellcard_wifi", "08", "08.3.0"),
-        ("smart", "08", "08.2.0"),
+        ("smart", "08", "08.3.0"),
         ("smart_wifi", "08", "08.3.0"),
+        ("metfone", "08", "08.3.0"),
         ("realestate", "04", "04.1.1"),
         ("khmer24", "04", "04.1.1"),
+        ("edc", "04", "04.5.1"),
+        ("ppwsa", "04", "04.4.1"),
         ("redbus", "07", "07.3.2"),
         ("bookmebus", "07", "07.3.2"),
+        ("khmermoto", "07", "07.1.2"),
         ("sokhahotel", "11", "11.2.0"),
         ("hyyathotel", "11", "11.2.0"),
         ("bayonbkk", "11", "11.1.1"),
@@ -60,6 +64,13 @@ class TestStoreDomainPurity:
         classifier = HybridCOICOPClassifier()
         result = classifier.classify_product("Rice 5kg", store_slug="cellcard")
         assert result["coicop_division"] == "08"
+
+    def test_new_gasoline_lpg_routes_to_division_04(self):
+        """LPG products from new_gasoline must route to division 04, class 04.5.2."""
+        classifier = HybridCOICOPClassifier()
+        result = classifier.classify_product("LPG Gas Cylinder 15kg", store_slug="new_gasoline")
+        assert result["coicop_division"] == "04"
+        assert result["coicop_code"] == "04.5.2"
 
     def test_unknown_store_falls_through(self):
         """Unknown store slug should NOT trigger store_purity."""
@@ -446,7 +457,7 @@ class TestPureStoreMap:
     """Verify the PURE_STORE_MAP has all expected stores."""
 
     def test_store_count(self):
-        assert len(PURE_STORE_MAP) == 14  # 14 pure stores
+        assert len(PURE_STORE_MAP) == 18  # 18 pure stores (including metfone, khmermoto, edc, ppwsa)
 
     def test_all_stores_have_valid_divisions(self):
         valid_divs = {str(i).zfill(2) for i in range(1, 13)}

@@ -61,12 +61,17 @@
             when {{ purity_division }} is not null then
                 case {{ purity_division }}
                     when '06' then '06.1.2'
-                    when '04' then '04.1.1'
+                    when '04' then case
+                        when {{ store_slug }} = 'edc' then '04.5.1'
+                        when {{ store_slug }} = 'ppwsa' then '04.4.1'
+                        else '04.1.1'
+                    end
                     when '11' then case
                         when {{ store_slug }} = 'bayonbkk' then '11.1.1' else '11.2.0'
                     end
                     when '07' then case
                         when {{ store_slug }} in ('bookmebus', 'redbus', 'redmebus') then '07.3.2'
+                        when {{ store_slug }} = 'khmermoto' then '07.1.2'
                         else '07.2.2'
                     end
                     when '08' then case
@@ -171,7 +176,8 @@
             'khmer24', 'realestate', 'communitypharma', 'sokhahotel',
             'hyyathotel', 'hyatt', 'bayonbkk',
             'bookmebus', 'redbus', 'redmebus', 'new_gasoline',
-            'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi'
+            'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone',
+            'khmermoto', 'edc', 'ppwsa'
         ) then 'store_purity'
         when {{ store_default_div }} is not null then 'store_default'
         else 'unclassified'
@@ -200,7 +206,8 @@
             'khmer24', 'realestate', 'communitypharma', 'sokhahotel',
             'hyyathotel', 'bayonbkk',
             'bookmebus', 'redbus', 'redmebus', 'new_gasoline',
-            'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi'
+            'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone',
+            'khmermoto', 'edc', 'ppwsa'
         ) then 0.850
         when {{ store_default_div }} is not null then coalesce({{ store_default_conf }}, 0.800)
         else 0.000

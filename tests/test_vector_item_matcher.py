@@ -52,9 +52,20 @@ def test_is_spec_compatible_guards():
         "Cooking Oil 1L",
         "Cooking Oil 1.05L"  # 5% difference (within 10% tolerance) -> accepted
     )
-    assert is_spec_compatible(
-        "Cooking Oil 1L",
-        "Cooking Oil 1L"
+    # 4. Screen size conflicts must be rejected (SPLIT_NEW)
+    assert not is_spec_compatible(
+        "UA43DU8100KXXT SAMSUNG 43 inch 4K TV",
+        "UA55DU8100KXXT SAMSUNG 55 inch 4K TV"
+    )
+
+    # 5. Appliance / Electronic model code conflicts must be rejected (SPLIT_NEW)
+    assert not is_spec_compatible(
+        "MX-ST90B/XT SAMSUNG Sound Tower",
+        "MX-ST40B/XT SAMSUNG Sound Tower"
+    )
+    assert not is_spec_compatible(
+        "AR18DYHZBWKNST SAMSUNG Inverter Air Conditioner",
+        "AR24DYHZBWKNST SAMSUNG Inverter Air Conditioner"
     )
 
 

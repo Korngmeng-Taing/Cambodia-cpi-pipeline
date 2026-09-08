@@ -65,6 +65,9 @@ _RE_PHONE_SERIES = re.compile(r"\b(?:IPHONE|GALAXY|FOLD|MAGIC|REDMI|XIAOMI|OPPO|
 _RE_SCREEN = re.compile(r"\b(\d{1,2}(?:\.\d{1,2})?)\s*(?:\"|INCH|INCHES)\b", re.IGNORECASE)
 _RE_CAMERA = re.compile(r"\b(\d{2,3})\s*MP\b", re.IGNORECASE)
 _RE_5G = re.compile(r"\b5G\b", re.IGNORECASE)
+_RE_BTU = re.compile(r"\b(\d{1,2}(?:,\d{3})?|\d{4,5})\s*BTU\b", re.IGNORECASE)
+# Model codes: TV/appliance prefixes with screen/capacity digits (e.g., UA43, QA65, AR18, MX-ST90B, RT42, WA16)
+_RE_MODEL_CODE = re.compile(r"\b([A-Z]{1,3}\d{2,3}[A-Z0-9\-\/]{2,15})\b", re.IGNORECASE)
 
 SYSTEM_PROMPT = """You are an expert product deduplication classifier for a Consumer Price Index (CPI) pipeline in Cambodia.
 Your job is to compare a "raw_scraped_name" against a "candidate_canonical_name" and decide whether they represent the EXACT SAME product or DIFFERENT product variants.
@@ -86,17 +89,37 @@ Return a JSON array of objects with the exact schema:
 
 
 def extract_specs(text: str) -> dict[str, set[str]]:
-    """Extracts critical hardware specs and counts from product title."""
+    """Extracts critical hardware specs, capacities, and model identifiers from product title."""
     if not text:
         return {}
     t_up = text.upper()
+
+    # Extract TV screen sizes from explicit inch text or common TV prefixes (e.g. UA43, QA65)
+    screen_sizes = {m.group(1) for m in _RE_SCREEN.finditer(t_up)}
+    tv_prefix_match = re.findall(r"\b(?:UA|QA|OLED|QN|XR|KD|TH-|LED)(\d{2})[A-Z0-9]+", t_up)
+    for sz in tv_prefix_match:
+        screen_sizes.add(sz)
+
+    # Extract BTU cooling capacity (e.g. 18000 BTU or AR18...)
+    btu_vals = {m.group(1).replace(",", "") for m in _RE_BTU.finditer(t_up)}
+    ac_prefix_match = re.findall(r"\bAR(\d{2})[A-Z0-9]+", t_up)
+    for btu_code in ac_prefix_match:
+        btu_vals.add(f"{btu_code}000")
+
+    # Extract alphanumeric model codes (clean trailing slash suffixes)
+    raw_models = {m.group(1).rstrip("/") for m in _RE_MODEL_CODE.finditer(t_up)}
+    # Exclude common measurement tokens captured as model codes
+    model_codes = {c for c in raw_models if not re.match(r"^\d+(?:ML|KG|G|L|GB|TB|MAH|W|PCS)$", c)}
+
     specs = {
         "storage": {m.group(0).replace(" ", "") for m in _RE_STORAGE.finditer(t_up)},
         "wattage": {m.group(0).replace(" ", "") for m in _RE_WATTAGE.finditer(t_up)},
         "mah": {m.group(0).replace(" ", "") for m in _RE_MAH.finditer(t_up)},
         "pcs": {m.group(0).replace(" ", "") for m in _RE_PCS.finditer(t_up)},
         "series": {m.group(1).upper() for m in _RE_PHONE_SERIES.finditer(t_up)},
-        "screen": {m.group(1) for m in _RE_SCREEN.finditer(t_up)},
+        "screen": screen_sizes,
+        "btu": btu_vals,
+        "model_code": model_codes,
         "camera": {m.group(1) for m in _RE_CAMERA.finditer(t_up)},
         "is_5g": {"5G"} if _RE_5G.search(t_up) else set(),
     }
@@ -114,8 +137,8 @@ def evaluate_rule_guard(raw_name: str, candidate_name: str) -> tuple[str, float,
     raw_specs = extract_specs(raw_name)
     cand_specs = extract_specs(candidate_name)
 
-    # Check for hard spec conflicts
-    for spec_type in ("storage", "wattage", "mah", "pcs", "series"):
+    # Check for hard spec and model conflicts
+    for spec_type in ("storage", "wattage", "mah", "pcs", "series", "screen", "btu", "model_code"):
         r_vals = raw_specs.get(spec_type, set())
         c_vals = cand_specs.get(spec_type, set())
         if r_vals and c_vals and not (r_vals & c_vals):

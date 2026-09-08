@@ -135,16 +135,30 @@ def extract_specs(text: str) -> dict[str, Any]:
     elif size_unit in ("ltr", "l"):
         size_unit = "l"
 
+    # 4. Screen size (e.g. 43", 55 inch, UA43, QA65)
+    screen_match = re.search(r"\b(\d{1,2}(?:\.\d{1,2})?)\s*(?:\"|inch|inches)\b", t)
+    screen_val = screen_match.group(1) if screen_match else None
+    if not screen_val:
+        tv_match = re.search(r"\b(?:ua|qa|oled|qn|xr|kd|th-|led)(\d{2})[a-z0-9]+", t)
+        screen_val = tv_match.group(1) if tv_match else None
+
+    # 5. Model code (e.g. MX-ST90B, UA43DU8100KXXT, AR18DYHZBWKNST)
+    model_match = re.search(r"\b([a-z]{1,3}\d{2,3}[a-z0-9\-\/]{2,15})\b", t)
+    raw_model = model_match.group(1).rstrip("/") if model_match else None
+    model_code = raw_model if raw_model and not re.match(r"^\d+(?:ml|kg|g|l|gb|tb|mah|w|pcs)$", raw_model) else None
+
     return {
         "storage": storage,
         "pack_qty": pack_qty,
         "size_val": size_val,
         "size_unit": size_unit,
+        "screen_val": screen_val,
+        "model_code": model_code,
     }
 
 
 def is_spec_compatible(cand_name: str, base_name: str) -> bool:
-    """Deterministic guard: Rejects merges if physical specs or packaging quantities conflict."""
+    """Deterministic guard: Rejects merges if physical specs, screen sizes, model codes, or packaging quantities conflict."""
     cand_spec = extract_specs(cand_name)
     base_spec = extract_specs(base_name)
 
@@ -156,14 +170,22 @@ def is_spec_compatible(cand_name: str, base_name: str) -> bool:
     if cand_spec["pack_qty"] != base_spec["pack_qty"]:
         return False
 
-    # 3. Size / Volume conflict (> 10% discrepancy within the same unit dimension)
+    # 3. Screen size conflict (e.g. 43" vs 55")
+    if cand_spec["screen_val"] and base_spec["screen_val"] and cand_spec["screen_val"] != base_spec["screen_val"]:
+        return False
+
+    # 4. Alphanumeric model code conflict (e.g. MX-ST90B vs MX-ST40B)
+    if cand_spec["model_code"] and base_spec["model_code"] and cand_spec["model_code"] != base_spec["model_code"]:
+        return False
+
+    # 5. Size / Volume conflict (> 10% discrepancy within the same unit dimension)
     # H2 FIX: Use shared is_size_compatible which cross-normalizes g↔kg and ml↔L
     cand_size = f"{cand_spec['size_val']}{cand_spec['size_unit']}" if cand_spec["size_val"] and cand_spec["size_unit"] else None
     base_size = f"{base_spec['size_val']}{base_spec['size_unit']}" if base_spec["size_val"] and base_spec["size_unit"] else None
     if not is_size_compatible(cand_size, base_size, tolerance=0.10):
         return False
 
-    # 4. Diet / Zero flavor vs Original flavor variant conflict
+    # 6. Diet / Zero flavor vs Original flavor variant conflict
     cand_lower, base_lower = cand_name.lower(), base_name.lower()
     is_cand_diet = any(k in cand_lower for k in ("zero", "diet", "light", "no sugar"))
     is_base_diet = any(k in base_lower for k in ("zero", "diet", "light", "no sugar"))

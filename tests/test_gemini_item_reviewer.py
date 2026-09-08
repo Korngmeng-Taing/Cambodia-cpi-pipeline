@@ -65,6 +65,26 @@ class TestRuleGuard:
         assert result is not None
         assert result[0] == "SPLIT_NEW"
 
+    def test_screen_size_mismatch_forces_split(self):
+        # 43 inch vs 55 inch TV should split
+        result = evaluate_rule_guard("UA43DU8100KXXT SAMSUNG", "UA55DU8100KXXT SAMSUNG")
+        assert result is not None
+        assert result[0] == "SPLIT_NEW"
+        assert "screen" in result[2] or "model_code" in result[2]
+
+    def test_btu_mismatch_forces_split(self):
+        # 18000 BTU vs 24000 BTU AC should split
+        result = evaluate_rule_guard("AR18DYHZBWKNST SAMSUNG", "AR24DYHZBWKNST SAMSUNG")
+        assert result is not None
+        assert result[0] == "SPLIT_NEW"
+        assert "btu" in result[2] or "model_code" in result[2]
+
+    def test_model_code_mismatch_forces_split(self):
+        # ST90B vs ST40B sound tower should split
+        result = evaluate_rule_guard("MX-ST90B/XT SAMSUNG", "MX-ST40B/XT SAMSUNG")
+        assert result is not None
+        assert result[0] == "SPLIT_NEW"
+
     def test_no_spec_conflict_defers_to_ai(self):
         result = evaluate_rule_guard("Coca Cola Original 330ml", "Coca Cola 330ml")
         if result is not None:

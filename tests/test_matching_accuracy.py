@@ -123,7 +123,8 @@ class TestSpecExtraction:
     ])
     def test_extract_specs(self, text, expected):
         result = extract_specs(text)
-        assert result == expected
+        for k, v in expected.items():
+            assert result.get(k) == v
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

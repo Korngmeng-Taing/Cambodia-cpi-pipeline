@@ -66,7 +66,7 @@
                         when {{ store_slug }} = 'bayonbkk' then '11.1.1' else '11.2.0'
                     end
                     when '07' then case
-                        when {{ store_slug }} in ('bookmebus', 'redbus', 'redmebus') then '07.3.1'
+                        when {{ store_slug }} in ('bookmebus', 'redbus', 'redmebus') then '07.3.2'
                         else '07.2.2'
                     end
                     when '08' then case
@@ -133,7 +133,7 @@
         case when {{ store_slug }} in ('communitypharma') then '06.1.2' end,
         case when {{ store_slug }} in ('sokhahotel', 'hyyathotel', 'hyatt') then '11.2.0' end,
         case when {{ store_slug }} in ('bayonbkk') then '11.1.1' end,
-        case when {{ store_slug }} in ('bookmebus', 'redbus', 'redmebus') then '07.3.1' end,
+        case when {{ store_slug }} in ('bookmebus', 'redbus', 'redmebus') then '07.3.2' end,
         case when {{ store_slug }} in ('new_gasoline') then '07.2.2' end,
         case when {{ store_slug }} in ('cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then '08.3.0' end,
         case when {{ store_slug }} in ('arystore', 'samnangshop') then '08.2.0' end,

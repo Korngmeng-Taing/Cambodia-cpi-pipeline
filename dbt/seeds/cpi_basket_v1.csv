@@ -18,14 +18,14 @@ coicop_class,coicop_division,class_name,sample_items,expected_source,weight_with
 "04.1.1","04","Actual rentals for housing","Phnom Penh residential rentals condo/apartment","khmer24;realestate",70.175
 "04.4.1","04","Water supply","PPWSA regulated water tariff","utility_tariffs",10.526
 "04.5.1","04","Electricity","EDC regulated electricity tariff","utility_tariffs",14.620
-"04.5.3","04","LPG & gas","LPG cylinder / cooking gas","aeon;l192",4.678
+"04.5.2","04","LPG & gas","LPG cylinder / cooking gas","aeon;l192",4.678
 "05.6.1","05","Cleaning products","Detergent / dishwashing liquid / floor cleaner","delishop;aeon",45.455
 "05.3.1","05","Major appliances","Washing machines / refrigerators / ovens","l192",30.303
 "05.4.1","05","Small appliances","Electric kettles / rice cookers / fans / blenders","l192",24.242
 "06.1.1","06","Medical products","Paracetamol / Panadol / Redoxon Vitamin C","communitypharma",75.000
 "06.1.2","06","Medical devices","Thermometers / bandages / antiseptic liniment","communitypharma",25.000
 "07.2.2","07","Fuels & lubricants","Regular Gasoline / Diesel / Petroleum","new_gasoline",73.770
-"07.3.1","07","Passenger transport","Intercity express bus / VIP vans","redbus;bookmebus",26.230
+"07.3.2","07","Passenger transport","Intercity express bus / VIP vans","redbus;bookmebus",26.230
 "08.2.0","08","Telephone equipment","Smartphones / Apple iPhone / Samsung / chargers","samnangshop;arystore",38.462
 "08.3.0","08","Telephone & internet services","Mobile prepaid bundles / Home Wi-Fi fiber","cellcard;smart;cellcard_wifi;smart_wifi",61.538
 "09.1.1","09","Audio visual tech","Bluetooth speakers / wireless earbuds / tech gear","arystore;samnangshop",42.105

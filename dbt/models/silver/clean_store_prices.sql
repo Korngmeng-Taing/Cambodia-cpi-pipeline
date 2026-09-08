@@ -163,6 +163,7 @@ enriched_observations as (
             ov_ns.coicop_division,
             case
                 when p.store_slug in ('khmer24', 'realestate', 'edc', 'ppwsa') then '04'
+                when p.store_slug = 'new_gasoline' and lower(p.name_clean) like '%lpg%' then '04'
                 when p.store_slug in ('communitypharma') then '06'
                 when p.store_slug in ('sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk') then '11'
                 when p.store_slug in ('bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'khmermoto') then '07'
@@ -198,7 +199,8 @@ enriched_observations as (
             when p.store_slug in ('communitypharma') then '06.1.2'
             when p.store_slug in ('sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt') then '11.2.0'
             when p.store_slug = 'bayonbkk' then '11.1.1'
-            when p.store_slug in ('bookmebus', 'redbus', 'redmebus') then '07.3.1'
+            when p.store_slug in ('bookmebus', 'redbus', 'redmebus') then '07.3.2'
+            when p.store_slug = 'new_gasoline' and lower(p.name_clean) like '%lpg%' then '04.5.2'
             when p.store_slug = 'new_gasoline' then '07.2.2'
             when p.store_slug = 'khmermoto' then '07.1.2'
             when p.store_slug in ('cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone') then '08.3.0'

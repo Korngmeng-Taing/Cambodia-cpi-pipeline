@@ -12,8 +12,8 @@ smart,Smart Axiata Mobile & Home Wifi,telecom,telecom_operator,USD,08,08.3.0,0.8
 smart_wifi,Smart @Home Wifi (Superseded),telecom,isp,USD,08,08.3.0,0.800,false
 khmer24,Khmer24 Real Estate,housing,classifieds,USD,04,04.1.1,0.800,true
 realestate,Realestate.com.kh,housing,real_estate_portal,USD,04,04.1.1,0.800,true
-redbus,redBus Cambodia,transport,bus_booking_portal,USD,07,07.3.1,0.800,true
-bookmebus,BookMeBus Cambodia,transport,bus_booking_portal,USD,07,07.3.1,0.800,true
+redbus,redBus Cambodia,transport,bus_booking_portal,USD,07,07.3.2,0.800,true
+bookmebus,BookMeBus Cambodia,transport,bus_booking_portal,USD,07,07.3.2,0.800,true
 sokhahotel,Sokha Hotel & Resort,hotel,hospitality,USD,11,11.2.0,0.800,true
 hyyathotel,Hyatt Regency Phnom Penh,hotel,hospitality,USD,11,11.2.0,0.800,true
 bayonbkk,Bayon Restaurant BKK,restaurant,food_service,USD,11,11.1.1,0.800,true

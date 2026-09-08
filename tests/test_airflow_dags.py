@@ -70,3 +70,21 @@ def test_dag_jinja_templates_compile():
                 assert rendered is not None
             except Exception as exc:
                 pytest.fail(f"Jinja template failed in {filename} on expression {expr!r}: {exc}")
+
+
+def test_trigger_dag_run_failed_states():
+    """Verifies that TriggerDagRunOperator failed_states only use valid DagRunState values (queued, running, success, failed)."""
+    valid_dag_run_states = {"queued", "running", "success", "failed"}
+    for filename in DAG_FILES:
+        path = os.path.join(DAGS_DIR, filename)
+        with open(path, encoding="utf-8") as f:
+            content = f.read()
+        import re
+        matches = re.findall(r"failed_states\s*=\s*\[(.*?)\]", content)
+        for match in matches:
+            states = [s.strip().strip("'\"") for s in match.split(",") if s.strip()]
+            for state in states:
+                assert state in valid_dag_run_states, (
+                    f"Invalid DagRunState {state!r} in {filename}. "
+                    f"Must be one of {valid_dag_run_states}"
+                )

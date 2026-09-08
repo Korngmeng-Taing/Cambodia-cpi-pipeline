@@ -183,7 +183,7 @@ with DAG(
             poke_interval=WAIT_POKE_INTERVAL,
             execution_timeout=timedelta(seconds=WAIT_TIMEOUT_SECONDS),
             reset_dag_run=True,
-            failed_states=["failed", "upstream_failed"],
+            failed_states=["failed"],
         )
         scraper_trigger_tasks.append(trigger_op)
 

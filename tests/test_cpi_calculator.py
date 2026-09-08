@@ -97,7 +97,7 @@ def test_seven_day_imputation(cpi_engine):
 
     assert len(elem_df) == 2
     item2_row = elem_df[elem_df["item_id"] == item2_id].iloc[0]
-    assert item2_row["is_imputed"] == True
+    assert bool(item2_row["is_imputed"]) is True
     # Advanced using ILO Class-Mean Imputation: 2100.0 * (1100.0 / 1050.0) = 2200.0
     assert pytest.approx(item2_row["current_price_khr"], 0.01) == 2200.0
     assert pytest.approx(item2_row["price_ratio"], 0.001) == 2200.0 / 2000.0
@@ -198,7 +198,7 @@ def test_seven_day_imputation_multistore_geometric_mean(cpi_engine):
     elem_df = cpi_engine.compute_daily_elementary_indices(day_2, base_df, df_history, imputation_window_days=7)
     item2_row = elem_df[elem_df["item_id"] == item2_id].iloc[0]
 
-    assert item2_row["is_imputed"] is True or item2_row["is_imputed"] == True
+    assert bool(item2_row["is_imputed"]) is True
     expected_geom_mean = np.exp((np.log(1800.0) + np.log(2000.0)) / 2)
     expected_imputed = expected_geom_mean * (1100.0 / 1000.0)
     assert pytest.approx(item2_row["current_price_khr"], 0.01) == expected_imputed
@@ -309,7 +309,7 @@ def test_compounded_imputation_with_timestamp(cpi_engine):
     df_history["scrape_date"] = pd.to_datetime(df_history["scrape_date"]).dt.date
     result = cpi_engine.compute_daily_elementary_indices(calc_date, base_df, df_history)
     item2_row = result[result["item_id"] == "item-2"].iloc[0]
-    assert item2_row["is_imputed"] == True
+    assert bool(item2_row["is_imputed"]) is True
     # 3 days gap: movement = 1.10 -> compounded = 2000.0 * (1.10 ** 3) = 2662.0
     expected = 2000.0 * (1.10 ** 3)
     assert pytest.approx(item2_row["current_price_khr"], 0.01) == expected

@@ -93,11 +93,12 @@ store_purity as materialized (
         i.item_id,
         i.store_slug,
         case
-            when i.store_slug in ('khmer24', 'realestate') then '04'
+            when i.store_slug in ('khmer24', 'realestate', 'edc', 'ppwsa') then '04'
+            when i.store_slug = 'new_gasoline' and lower(i.canonical_name) like '%lpg%' then '04'
             when i.store_slug in ('communitypharma', 'grab_ucare') then '06'
             when i.store_slug in ('sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk') then '11'
-            when i.store_slug in ('bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'gasoline') then '07'
-            when i.store_slug in ('arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then '08'
+            when i.store_slug in ('bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'gasoline', 'khmermoto') then '07'
+            when i.store_slug in ('arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone') then '08'
         end as purity_division
     from items i
 ),

@@ -1,17 +1,17 @@
 product_name,coicop_code,confidence_score,reasoning,model_version
 Fresh Whole Milk 1L,01.1.4,0.90,"Dairy - fresh milk",seed_bootstrap_v1
 Condensed Milk 397g Can,01.1.4,0.90,"Dairy - condensed milk",seed_bootstrap_v1
-Coca-Cola Can 330ml,01.1.9,0.90,"Non-alcoholic beverage - soft drink",seed_bootstrap_v1
-Sprite Can 330ml,01.1.9,0.90,"Non-alcoholic beverage - soft drink",seed_bootstrap_v1
-Drinking Water 5L Bottle,01.1.9,0.90,"Bottled water",seed_bootstrap_v1
+Coca-Cola Can 330ml,01.2.2,0.90,"Non-alcoholic beverage - soft drink",seed_bootstrap_v1
+Sprite Can 330ml,01.2.2,0.90,"Non-alcoholic beverage - soft drink",seed_bootstrap_v1
+Drinking Water 5L Bottle,01.2.2,0.90,"Bottled water",seed_bootstrap_v1
 Jasmine Rice 5kg Bag,01.1.1,0.95,"Staple cereal - rice",seed_bootstrap_v1
-White Sugar 1kg,01.1.2,0.95,"Sugar",seed_bootstrap_v1
+White Sugar 1kg,01.1.8,0.95,"Sugar",seed_bootstrap_v1
 Cooking Oil Soybean 2L,01.1.5,0.95,"Edible oil",seed_bootstrap_v1
-Fish Sauce 750ml Bottle,01.1.6,0.95,"Condiment - fish sauce",seed_bootstrap_v1
-Soy Sauce 700ml Bottle,01.1.6,0.95,"Condiment - soy sauce",seed_bootstrap_v1
-Instant Noodles Pack,01.1.9,0.90,"Instant noodles",seed_bootstrap_v1
-Chicken Eggs Tray of 10,01.1.7,0.95,"Eggs",seed_bootstrap_v1
-Instant Coffee 3-in-1 Sachet,01.2.2,0.90,"Coffee for home consumption",seed_bootstrap_v1
+Fish Sauce 750ml Bottle,01.1.9,0.95,"Condiment - fish sauce",seed_bootstrap_v1
+Soy Sauce 700ml Bottle,01.1.9,0.95,"Condiment - soy sauce",seed_bootstrap_v1
+Instant Noodles Pack,01.1.1,0.90,"Instant noodles",seed_bootstrap_v1
+Chicken Eggs Tray of 10,01.1.4,0.95,"Eggs",seed_bootstrap_v1
+Instant Coffee 3-in-1 Sachet,01.2.1,0.90,"Coffee for home consumption",seed_bootstrap_v1
 Coconut Milk 400ml Can,01.1.9,0.90,"Canned coconut milk for cooking",seed_bootstrap_v1
 Wheat Flour 1kg,01.1.1,0.90,"Baking flour",seed_bootstrap_v1
 Angkor Beer Can 330ml,02.1.1,0.95,"Domestic lager beer",seed_bootstrap_v1

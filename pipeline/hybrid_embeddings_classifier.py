@@ -602,9 +602,9 @@ class HybridCOICOPClassifier:
                 b_texts = uncached_texts[b_start : b_start + batch_size]
                 b_indices = uncached_indices[b_start : b_start + batch_size]
 
-                def _call_gemini_batch_embed(key: str) -> list[np.ndarray]:
+                def _call_gemini_batch_embed(key: str, batch_items: list[str] = b_texts) -> list[np.ndarray]:
                     genai.configure(api_key=key)
-                    res = genai.embed_content(model=EMBEDDING_MODEL, content=b_texts)
+                    res = genai.embed_content(model=EMBEDDING_MODEL, content=batch_items)
                     embeddings = res.get("embedding", [])
                     return [np.array(e, dtype=np.float32) for e in embeddings]
 
@@ -916,11 +916,11 @@ Return strict JSON only:
                 '[{"product_name": "...", "coicop_division": "01", "coicop_code": "01.1.1", "confidence_score": 0.95, "reasoning": "..."}]'
             )
 
-            def _call_gemini_batch(key: str) -> list[dict[str, Any]]:
+            def _call_gemini_batch(key: str, batch_prompt: str = prompt) -> list[dict[str, Any]]:
                 genai.configure(api_key=key)
                 model = genai.GenerativeModel(LLM_MODEL)
                 resp = model.generate_content(
-                    prompt,
+                    batch_prompt,
                     generation_config={"response_mime_type": "application/json"},
                 )
                 text_clean = resp.text.strip()

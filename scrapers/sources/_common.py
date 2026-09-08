@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import sys
+import threading
 from typing import Any
 
 import requests
@@ -52,8 +53,6 @@ def _strip_html(html_str: str | None) -> str | None:
         text = re.sub(r"\s+", " ", text).strip()
     return text or None
 
-
-import threading
 
 _THREAD_LOCAL = threading.local()
 

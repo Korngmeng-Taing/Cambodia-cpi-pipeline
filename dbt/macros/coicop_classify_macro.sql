@@ -135,12 +135,15 @@
         end,
         -- 8. Store-level defaults & single-source fallbacks
         case when {{ store_slug }} in ('khmer24', 'realestate') then '04.1.1' end,
+        case when {{ store_slug }} = 'edc' then '04.5.1' end,
+        case when {{ store_slug }} = 'ppwsa' then '04.4.1' end,
         case when {{ store_slug }} in ('communitypharma') then '06.1.2' end,
         case when {{ store_slug }} in ('sokhahotel', 'hyyathotel', 'hyatt') then '11.2.0' end,
         case when {{ store_slug }} in ('bayonbkk') then '11.1.1' end,
         case when {{ store_slug }} in ('bookmebus', 'redbus', 'redmebus') then '07.3.2' end,
         case when {{ store_slug }} in ('new_gasoline') then '07.2.2' end,
-        case when {{ store_slug }} in ('cellcard', 'cellcard_wifi', 'smart', 'smart_wifi') then '08.3.0' end,
+        case when {{ store_slug }} = 'khmermoto' then '07.1.2' end,
+        case when {{ store_slug }} in ('cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone') then '08.3.0' end,
         case when {{ store_slug }} in ('arystore', 'samnangshop') then '08.2.0' end,
         case when {{ store_slug }} in ('delishop', 'aeon', 'grab_lucky', 'grab_chipmong') then '01.1.1' end,
         case when {{ store_slug }} in ('aeon3') then '03.1.2' end,
@@ -207,7 +210,7 @@
             'hyyathotel', 'bayonbkk',
             'bookmebus', 'redbus', 'redmebus', 'new_gasoline',
             'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone',
-            'khmermoto', 'edc', 'ppwsa'
+            'khmermoto', 'edc', 'ppwsa', 'arystore', 'samnangshop'
         ) then 0.850
         when {{ store_default_div }} is not null then coalesce({{ store_default_conf }}, 0.800)
         else 0.000

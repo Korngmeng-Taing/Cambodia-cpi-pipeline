@@ -139,7 +139,7 @@ class EdcElectricityScraper(BaseScraper):
 
         seed_data = _read_utility_tariffs_seed("edc")
         if seed_data:
-            for idx, item in enumerate(seed_data):
+            for item in seed_data:
                 rate = item["rate_khr"]
                 rep_tag = " (Primary CPI Benchmark)" if item["is_representative"] else ""
                 records.append(
@@ -196,7 +196,7 @@ class PpwsaWaterScraper(BaseScraper):
 
         seed_data = _read_utility_tariffs_seed("ppwsa")
         if seed_data:
-            for idx, item in enumerate(seed_data):
+            for item in seed_data:
                 rate = item["rate_khr"]
                 rep_tag = " (Primary CPI Benchmark)" if item["is_representative"] else ""
                 records.append(

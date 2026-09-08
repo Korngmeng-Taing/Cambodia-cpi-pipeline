@@ -44,7 +44,7 @@ def test_laspeyres_division_and_headline_aggregation(cpi_engine):
     
     # Mock elementary dataframe
     items = []
-    for div, weight in DEFAULT_NIS_WEIGHTS.items():
+    for div, _weight in DEFAULT_NIS_WEIGHTS.items():
         items.append({
             "calculation_date": calc_date,
             "item_id": uuid4(),

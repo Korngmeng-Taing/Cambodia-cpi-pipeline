@@ -41,7 +41,7 @@ def test_nis_importer_sync_seed_csv():
         assert res["seed_status"] == "synced"
 
         # Verify file contents
-        with open(test_seed, "r", encoding="utf-8") as f:
+        with open(test_seed, encoding="utf-8") as f:
             lines = f.readlines()
 
         assert len(lines) == 3  # Header + 2 rows

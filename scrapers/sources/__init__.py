@@ -28,17 +28,12 @@ from __future__ import annotations
 
 from scrapers.base import BaseScraper
 from scrapers.sources._common import (
-    HAS_BS4,
-    HAS_CURL_CFFI,
     THROTTLE_DELAY,
     _cffi_get,
     _cffi_post,
-    _default_cffi_get,
-    _default_cffi_post,
     _strip_html,
     _to_float,
     build_canonical_record,
-    log,
 )
 from scrapers.sources.aeon import AeonFashionScraper, AeonSupermarketScraper
 from scrapers.sources.arystore import AryStorePhoneScraper

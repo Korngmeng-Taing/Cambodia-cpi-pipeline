@@ -14,7 +14,7 @@ SILVER_SCHEMA_PATH = os.path.join(DBT_DIR, "models", "silver", "schema.yml")
 def test_silver_schema_yaml_validity():
     """Ensure silver schema.yml parses cleanly without YAML errors."""
     assert os.path.exists(SILVER_SCHEMA_PATH), f"Schema file missing: {SILVER_SCHEMA_PATH}"
-    with open(SILVER_SCHEMA_PATH, "r", encoding="utf-8") as f:
+    with open(SILVER_SCHEMA_PATH, encoding="utf-8") as f:
         data = yaml.safe_load(f)
     assert isinstance(data, dict)
     assert "unit_tests" in data, "unit_tests section must be present in silver schema.yml"
@@ -22,7 +22,7 @@ def test_silver_schema_yaml_validity():
 
 def test_silver_unit_tests_structure():
     """Ensure each unit test defines model, given, and expect blocks with rows."""
-    with open(SILVER_SCHEMA_PATH, "r", encoding="utf-8") as f:
+    with open(SILVER_SCHEMA_PATH, encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     unit_tests = data.get("unit_tests", [])

@@ -414,7 +414,7 @@ class CPICalculationEngine:
 
                     div_items_with_sub = div_items.copy()
                     div_items_with_sub["subclass_code"] = div_items_with_sub["coicop_code"].apply(
-                        lambda c: self._get_subclass_code(c, div_code)
+                        lambda c, d=div_code: self._get_subclass_code(c, d)
                     )
 
                     for sub_code, sub_group in div_items_with_sub.groupby("subclass_code"):

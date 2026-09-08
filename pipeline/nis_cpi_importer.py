@@ -186,7 +186,7 @@ class NISBenchmarkImporter:
 
         rows_by_month: dict[str, dict[str, Any]] = {}
         if os.path.exists(self.seed_file_path):
-            with open(self.seed_file_path, "r", encoding="utf-8") as f:
+            with open(self.seed_file_path, encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for r in reader:
                     if r.get("cpi_month"):

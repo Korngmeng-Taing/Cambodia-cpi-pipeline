@@ -27,7 +27,7 @@ def clear_db_locks(dry_run: bool = False, force: bool = False):
                 return
 
             print(f"Found {len(stuck_sessions)} stuck / blocking process(es):")
-            for pid, user, addr, state, changed, query in stuck_sessions:
+            for pid, user, _addr, state, changed, query in stuck_sessions:
                 snippet = (query or "").strip().replace("\n", " ")[:60]
                 print(f"  PID {pid} | User: {user} | State: {state} | Changed: {changed} | Query: {snippet}...")
 

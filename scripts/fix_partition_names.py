@@ -35,7 +35,7 @@ def fix_partition_names():
         partitions_to_rename = cur.fetchall()
         print(f"Found {len(partitions_to_rename)} partitions to rename:")
 
-        for nspname, parent_name, old_name in partitions_to_rename:
+        for nspname, _parent_name, old_name in partitions_to_rename:
             if "_part_default" in old_name:
                 new_name = old_name.replace("_part_default", "_default")
             else:

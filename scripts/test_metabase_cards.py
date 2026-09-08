@@ -39,7 +39,7 @@ def main():
     with conn_cpi.cursor(cursor_factory=RealDictCursor) as cur_cpi:
         for c in cards:
             dash_id = c["dash_id"]
-            dash_name = c["dash_name"]
+            _dash_name = c["dash_name"]
             card_id = c["card_id"]
             card_name = c["card_name"]
             display = c["display"]

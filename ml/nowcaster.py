@@ -225,7 +225,7 @@ class CPINowcaster:
         # Cambodian Seasonal / Festival Shock Adjustment (Khmer New Year, Pchum Ben, etc.)
         # -------------------------------------------------------------------------
         festival_shock = 0.0
-        active_festival = None
+        _active_festival = None
         for hol in CAMBODIA_ANNUAL_HOLIDAYS:
             if hol["month"] == target_date.month:
                 peak_days = hol["peak_days"]
@@ -234,7 +234,7 @@ class CPINowcaster:
                 max_day = min(days_in_month, max(peak_days) + 2)
                 # Check if target date falls within the festival surge window
                 if min_day <= target_date.day <= max_day:
-                    active_festival = hol["name"]
+                    _active_festival = hol["name"]
                     # Peak festival days experience heightened demand surge in Food & Transport
                     if target_date.day in peak_days:
                         festival_shock = 0.0012  # ~0.12% daily festive premium
@@ -520,7 +520,7 @@ class CPINowcaster:
         df_daily_copy["calculation_date"] = pd.to_datetime(df_daily_copy["calculation_date"]).dt.date
 
         # Identify all distinct calendar months in df_daily
-        months = sorted(list({d.replace(day=1) for d in df_daily_copy["calculation_date"]}))
+        months = sorted({d.replace(day=1) for d in df_daily_copy["calculation_date"]})
 
         eval_records: list[dict[str, Any]] = []
 

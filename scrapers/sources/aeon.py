@@ -6,20 +6,6 @@ from typing import Any
 
 import pendulum
 
-try:
-    from curl_cffi import requests as cffi_requests
-
-    HAS_CURL_CFFI = True
-except ImportError:
-    HAS_CURL_CFFI = False
-
-try:
-    from bs4 import BeautifulSoup
-
-    HAS_BS4 = True
-except ImportError:
-    HAS_BS4 = False
-
 from scrapers.base import BaseScraper
 from scrapers.sources._common import (
     THROTTLE_DELAY,
@@ -128,7 +114,7 @@ class AeonSupermarketScraper(BaseScraper):
                     cat_map = _build_aeon_category_map(probe_body["filters"])
                     targets = _extract_aeon_category_targets(probe_body["filters"])
                 break
-            except Exception as exc:
+            except Exception:
                 time.sleep(1.5 * (attempt + 1))
 
         # Fallback to single stream if category filter tree was not discovered
@@ -286,7 +272,7 @@ class AeonFashionScraper(BaseScraper):
                     cat_map = _build_aeon_category_map(probe_body["filters"])
                     targets = _extract_aeon_category_targets(probe_body["filters"])
                 break
-            except Exception as exc:
+            except Exception:
                 time.sleep(1.5 * (attempt + 1))
 
         if not targets:

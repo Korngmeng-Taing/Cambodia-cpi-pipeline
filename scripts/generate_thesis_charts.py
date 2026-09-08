@@ -110,7 +110,7 @@ def generate_nowcast_convergence_chart():
         (30, nowcast_path[29], ci_lower[29], ci_upper[29], 'Day 30: Final Flash (220.95)\nError = 0.05 pts (0.02%)'),
     ]
     
-    for d, val, cl, cu, txt in milestones:
+    for d, val, _cl, _cu, txt in milestones:
         ax.scatter(d, val, color='#d90429', s=50, zorder=5)
         offset_y = 16 if d != 30 else -28
         ax.annotate(

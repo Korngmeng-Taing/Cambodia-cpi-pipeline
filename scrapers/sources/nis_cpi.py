@@ -42,7 +42,7 @@ class NISCPIScraper(BaseScraper):
 
             ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
             if os.path.exists(self.importer.seed_file_path):
-                with open(self.importer.seed_file_path, "r", encoding="utf-8") as f:
+                with open(self.importer.seed_file_path, encoding="utf-8") as f:
                     for r in csv.DictReader(f):
                         records.append(
                             build_canonical_record(

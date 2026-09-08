@@ -23,7 +23,7 @@ def test_dag_files_exist(filename):
 @pytest.mark.parametrize("filename", DAG_FILES)
 def test_dag_python_syntax(filename):
     path = os.path.join(DAGS_DIR, filename)
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         source = f.read()
     # Must parse without SyntaxError
     parsed = ast.parse(source, filename=filename)
@@ -32,7 +32,7 @@ def test_dag_python_syntax(filename):
 @pytest.mark.parametrize("filename", DAG_FILES)
 def test_dag_contains_dag_declaration(filename):
     path = os.path.join(DAGS_DIR, filename)
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         content = f.read()
     assert "DAG(" in content or "@dag" in content, f"File {filename} does not contain a DAG declaration"
     assert "dag_id=" in content or "@dag" in content, f"File {filename} must declare dag_id"
@@ -40,7 +40,7 @@ def test_dag_contains_dag_declaration(filename):
 def test_all_dags_have_catchup_false():
     for filename in DAG_FILES:
         path = os.path.join(DAGS_DIR, filename)
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             content = f.read()
         assert "catchup=False" in content, f"DAG in {filename} must specify catchup=False for production safety"
 
@@ -54,7 +54,7 @@ def test_dag_jinja_templates_compile():
     env = jinja2.Environment()
     for filename in DAG_FILES:
         path = os.path.join(DAGS_DIR, filename)
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             content = f.read()
         # Match Jinja {{ (dag_run... or other Jinja tags, excluding f-string {{'ds' escapes
         matches = re.findall(r"\{\{\s*\([^\}]+\)\s*\}\}", content, re.DOTALL)

@@ -57,7 +57,7 @@ def _refresh_serving_views(**context):
 
     log.info("Applying serving views from %s", sql_path)
     try:
-        with open(sql_path, "r", encoding="utf-8") as f:
+        with open(sql_path, encoding="utf-8") as f:
             views_sql = f.read()
     except FileNotFoundError:
         log.error("Views SQL file not found at %s", sql_path)

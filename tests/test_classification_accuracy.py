@@ -450,7 +450,7 @@ class TestPureStoreMap:
 
     def test_all_stores_have_valid_divisions(self):
         valid_divs = {str(i).zfill(2) for i in range(1, 13)}
-        for store, (div, code) in PURE_STORE_MAP.items():
+        for store, (div, _code) in PURE_STORE_MAP.items():
             assert div in valid_divs, f"Store '{store}' has invalid division '{div}'"
 
     def test_all_stores_have_valid_codes(self):

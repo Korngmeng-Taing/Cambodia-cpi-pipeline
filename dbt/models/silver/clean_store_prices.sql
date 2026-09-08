@@ -165,7 +165,7 @@ enriched_observations as (
                 when p.store_slug in ('khmer24', 'realestate') then '04'
                 when p.store_slug in ('communitypharma') then '06'
                 when p.store_slug in ('sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk') then '11'
-                when p.store_slug in ('bookmebus', 'redbus', 'redmebus', 'new_gasoline') then '07'
+                when p.store_slug in ('bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'khmermoto') then '07'
                 when p.store_slug in ('arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone') then '08'
             end,
             ov_ng.coicop_division,
@@ -198,6 +198,7 @@ enriched_observations as (
             when p.store_slug = 'bayonbkk' then '11.1.1'
             when p.store_slug in ('bookmebus', 'redbus', 'redmebus') then '07.3.1'
             when p.store_slug = 'new_gasoline' then '07.2.2'
+            when p.store_slug = 'khmermoto' then '07.1.2'
             when p.store_slug in ('cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone') then '08.3.0'
             when p.store_slug in ('arystore', 'samnangshop') then '08.2.0'
             when ov_ng.coicop_division is not null then
@@ -230,12 +231,12 @@ enriched_observations as (
             when ov_b.coicop_division is not null or ov_ns.coicop_division is not null then 'override'
             when p.store_slug in (
                 'khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk',
-                'bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone'
+                'bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone', 'khmermoto'
             ) then 'store_purity'
             when ov_ng.coicop_division is not null then 'override'
             when c.coicop_division is not null and c.coicop_method <> 'store_default' then c.coicop_method
             when c.coicop_method is not null and c.coicop_method <> 'store_default' then c.coicop_method
-            when p.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk', 'bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone') then 'store_default'
+            when p.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk', 'bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone', 'khmermoto') then 'store_default'
             when ai.coicop_division is not null and coalesce(ai.confidence_score, 0.90) >= 0.50 then 'gemini_ai'
             when cm.coicop_division is not null then 'category_map'
             when c.coicop_method is not null then c.coicop_method
@@ -245,7 +246,7 @@ enriched_observations as (
             c.coicop_confidence,
             case
                 when ov_b.coicop_division is not null or ov_ns.coicop_division is not null or ov_ng.coicop_division is not null then 1.000
-                when p.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'bayonbkk', 'bookmebus', 'redbus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone', 'aeon3', 'delishop', 'aeon', 'l192', 'grab_ucare', 'grab_lucky', 'grab_chipmong') then 0.850
+                when p.store_slug in ('khmer24', 'realestate', 'communitypharma', 'sokhahotel', 'hyyathotel', 'bayonbkk', 'bookmebus', 'redbus', 'new_gasoline', 'arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone', 'khmermoto', 'aeon3', 'delishop', 'aeon', 'l192', 'grab_ucare', 'grab_lucky', 'grab_chipmong') then 0.850
                 when ai.coicop_division is not null and coalesce(ai.confidence_score, 0.90) >= 0.50 then coalesce(ai.confidence_score, 0.900)
                 when cm.coicop_division is not null then 0.900
                 else 0.800

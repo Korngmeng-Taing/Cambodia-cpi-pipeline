@@ -119,6 +119,10 @@ CRITICAL retail context & trap disambiguation rules:
 - COSMETICS & SUNCARE: Sunscreen (e.g. Skin Aqua), lip balm, face cream, moisturizer, shampoo, body wash -> 12.1.3 (Personal care).
 - OTC MEDICINES & PHARMACEUTICALS: Throat lozenges, cough drops, painkillers, paracetamol, bandages, vitamins -> 06.1.2.
 - ELECTRONICS VS ACCESSORIES: Smartphones/tablets -> 08.2.0. Cables/chargers/audio -> 09.1.1 or 09.1.3. Car mount/charger -> 07.2.1.
+- TOYS, BOARD GAMES & NOVELTIES: Plush toys, dolls, action figures, board games, card games, toy cars, building blocks, puzzle sets -> 09.3.1 (Games, toys and hobbies).
+- BOOKS & LITERATURE: Khmer novels, English books, self-help books, business guides, children's storybooks, dictionaries -> 09.5.1 (Books).
+- SPORT & FITNESS: Hand grips, wrist exercisers, dumbbells, resistance bands, yoga mats, jump ropes, fitness equipment -> 09.3.2 (Equipment for sport, camping and open-air recreation).
+- TOOLS & HARDWARE: Pliers, wire cutters, screwdrivers, drill bits, hole punchers, woodworking dowel jigs, hand tools -> 05.5.2 (Small tools and miscellaneous accessories).
 
 Common UN COICOP 2018 5-digit codes:
 - 01.1.1 Bread, cereals and ready dishes (rice, flour, pasta, cereal, noodles, bread, buns, croissants, pizza, ready meals, bento, sandwiches)
@@ -149,6 +153,7 @@ Common UN COICOP 2018 5-digit codes:
 - 05.3.1 Major household appliances (refrigerator, washing machine, air conditioner)
 - 05.4.1 Small electric household appliances (kettle, blender, rice cooker, toaster, iron, microwave)
 - 05.5.1 Glassware, tableware and household utensils (plate, bowl, cup, pan, pot, wok, knife, cutlery, coffee filter, tea infuser)
+- 05.5.2 Small tools and miscellaneous accessories (pliers, wire cutters, screwdrivers, hand tools, drill bits, hardware accessories)
 - 05.6.1 Non-durable household goods (laundry detergent, dishwashing soap, bleach, floor cleaner, sponges, trash bags, air freshener)
 - 06.1.1 Medical services (doctor visit, clinic)
 - 06.1.2 Pharmaceutical products (paracetamol, ibuprofen, antibiotic, cough syrup, throat lozenge, vitamins, first aid, medical mask)
@@ -159,7 +164,10 @@ Common UN COICOP 2018 5-digit codes:
 - 08.3.0 Internet and telecom services (internet plan, wifi subscription, data plan, SIM card, airtime)
 - 09.1.1 Audio-visual equipment (TV, headphone, speaker, camera)
 - 09.1.3 Information processing equipment (laptop, PC, printer)
+- 09.3.1 Games, toys and hobbies (board game, card game, plush toy, teddy bear, action figure, doll, toy car, lego, puzzle)
+- 09.3.2 Equipment for sport, camping and open-air recreation (dumbbells, resistance band, wrist power exerciser, hand grip, yoga mat, tent)
 - 09.3.4 Pets and related products (dog food, cat food, pet treats, cat litter, pet shampoo)
+- 09.5.1 Books (printed books, fiction, non-fiction, educational books, novels, children's books)
 - 09.5.4 Stationery and drawing materials (notebook, exercise book, pen, pencil, eraser, ruler, stapler, crayon)
 - 11.1.1 Restaurants and cafes (dine-in meal bill, cafe table order, restaurant dining)
 - 11.2.0 Accommodation services (hotel room overnight stay, resort booking)
@@ -199,7 +207,12 @@ Cambodian market examples:
 - "Smart Fiber 50 Mbps Monthly" -> 08.3.0 (Internet services)
 - "Sony Wireless Headphones" -> 09.1.1 (Audio-visual equipment)
 - "Pedigree Dog Food Beef 1.5kg" -> 09.3.4 (Pets and related products)
+- "5 Second Rules Junior Board Game" -> 09.3.1 (Games, toys and hobbies)
+- "Teddy Bear Plush Toy 50cm" -> 09.3.1 (Games, toys and hobbies)
+- "40KG Arm Rod Spring Exerciser" -> 09.3.2 (Equipment for sport, camping and open-air recreation)
+- "78 Important Questions for Leaders (Khmer Book)" -> 09.5.1 (Books)
 - "EXERCISE BOOK A4" -> 09.5.4 (Stationery and drawing materials)
+- "Wire Cutters Pliers 6 Inches" -> 05.5.2 (Small tools and miscellaneous accessories)
 - "Deluxe Hotel Room 1 Night Stay" -> 11.2.0 (Accommodation services)
 - "Head & Shoulders Shampoo 450ml" -> 12.1.3 (Articles and products for personal care)
 - "HAIRCUT CLIPPER RECHARGEABLE" -> 12.1.3 (Personal care appliances)

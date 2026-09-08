@@ -32,13 +32,14 @@ Every silver fact row in `silver.clean_store_prices` carries `coicop_division` +
 
 ## 2. Store-Level Categorization: Pure vs. Multi-Category Stores
 
-### 15 Single-Category Pure Stores (Instant SQL Domain Lock: 0.001ms)
+### Single-Category Pure Stores (Instant SQL Domain Lock: 0.001ms)
 | Stores (`store_slug`) | Locked Division |
 | --------------------------------------------- | ---------------------------- |
-| new_gasoline | **07** Transport (Automotive fuel) |
-| bookmebus, redbus | **07** Transport (Transit tickets) |
-| cellcard, cellcard_wifi, smart, smart_wifi, samnangshop, arystore | **08** Communication |
-| khmer24, realestate | **04** Housing & utilities |
+| new_gasoline (fuel), khmermoto (motorcycles) | **07** Transport (Automotive fuel & vehicles) |
+| bookmebus, redbus | **07** Transport (Passenger transit tickets - Class `07.3.2`) |
+| cellcard, cellcard_wifi, smart, smart_wifi, metfone, samnangshop, arystore | **08** Communication |
+| khmer24, realestate, edc, ppwsa | **04** Housing & utilities (`04.1.1` Rents, `04.5.1` EDC Power, `04.4.1` PPWSA Water) |
+| new_gasoline (LPG cooking gas items) | **04** Housing & utilities (Class `04.5.2` Domestic Cooking Gas) |
 | sokhahotel, hyyathotel, bayonbkk | **11** Restaurants & hotels |
 
 ### 5 Multi-Category Stores (Resolved via 768-dim Vector Embeddings + Gemini AI)

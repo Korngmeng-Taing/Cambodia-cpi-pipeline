@@ -11,12 +11,12 @@
 
 | Layer | Tool | Why |
 |:---|:---|:---|
-| **Orchestration** | **Apache Airflow 2.9.3 & Astronomer Cosmos** | Schedules the daily `cpi_master_dag` (23 per-source scraper DAGs → `silver_dag` → `gold_cpi_dag` → `gold_dag`), dynamically parses dbt Core transformations into modular Airflow task nodes via Astronomer Cosmos, handles retries, and provides automated end-to-end Medallion execution. |
+| **Orchestration** | **Apache Airflow 2.9.3 & Astronomer Cosmos** | Schedules the daily `cpi_master_dag` (25 per-source scraper DAGs → `silver_dag` → `gold_cpi_dag` → `gold_dag`), dynamically parses dbt Core transformations into modular Airflow task nodes via Astronomer Cosmos, handles retries, and provides automated end-to-end Medallion execution. |
 | **Storage & Warehouse** | **PostgreSQL 16 & pgvector** (`bronze`/`staging`/`silver`/`gold`/`ops` schemas) | Pure relational data warehouse hosting declarative monthly partitioned raw listings and clean observations, pgvector HNSW embeddings, item-matching state, cleaned facts, operational control tables, and the analytical star schema. |
 | **Transformation** | **dbt-core & Astronomer Cosmos** (Silver & Gold) | Turns raw price records, entity-matching outputs, pack-size conversions, and COICOP classification into version-controlled, testable SQL models rendered as visual task groups in Airflow. |
-| **Multi-Key API Pool** | **GeminiKeyPool** (`pipeline/key_pool.py`) | Thread-safe round-robin API key pool supporting 3+ free Gemini keys (4,500 req/day, 45 RPM) with automatic 429 failover. |
+| **Multi-Key API Pool** | **GeminiKeyPool** (`pipeline/key_pool.py`) | Thread-safe round-robin API key pool supporting 4+ free Gemini keys (6,000 req/day, 60 RPM) with automatic 429 failover. |
 | **Semantic Item Matching** | **VectorItemMatcher** (`pipeline/vector_item_matcher.py`) | High-speed multilingual vector embeddings (local MiniLM / deterministic synonym vectorizer + cached `gemini-embedding-2`), deterministic spec guards (RAM/Storage, pack size, volume ≤ 10%), and batch AI review for borderline pairs. |
-| **Hybrid COICOP Engine** | **HybridCOICOPClassifier** (`pipeline/hybrid_embeddings_classifier.py`) | 4-tier ladder: human authority overrides → 15 pure store domain locks (0.001ms) → 12-division reference vector cosine matching (resolving Community Pharma 06/12 split & AEON variety) → Gemini Pro AI fallback & Postgres memoization. |
+| **Hybrid COICOP Engine** | **HybridCOICOPClassifier** (`pipeline/hybrid_embeddings_classifier.py`) | 4-tier ladder: human authority overrides → single-category store domain locks (0.001ms) → 12-division reference vector cosine matching (resolving Community Pharma 06/12 split & AEON variety) → Gemini AI fallback & Postgres memoization. |
 | **Scraper Observability** | **Metabase v0.49** | Real-time operational monitoring across 3 consolidated dashboards (Port 3001/3000): Macro CPI Analytics, Operations & Scraper Health, and Silver Data Quality. |
 | **Interactive Analytics** | **Microsoft Power BI** | Executive BI dashboards over the gold star schema: retailer and item-level price trends, promo analytics. |
 
@@ -26,7 +26,7 @@
 
 ```
 ┌─────────────────┬───────────────────┬───────────────────────────┬──────────────────────────┬───────────────────────────────┐
-│   23 SOURCES    │      BRONZE       │          SILVER           │           GOLD           │         SERVING & BI          │
+│   25 SOURCES    │      BRONZE       │          SILVER           │           GOLD           │         SERVING & BI          │
 │                 │  (Raw Ingestion)  │     (Clean & Resolve)     │  (Star Schema & Jevons)  │     (Observability & BI)      │
 ├─────────────────┼───────────────────┼───────────────────────────┼──────────────────────────┼───────────────────────────────┤
 │ AEON 1 & AEON 3 │                   │                           │                          │                               │
@@ -36,21 +36,22 @@
 │ Ucare Pharmacy  │   rates           │   (Cleaned Append / Dedup)│ gold.fct_daily_prices    │   - Inflation Trendline       │
 │ Ary & Samnang   │                   │ silver.classification_    │ gold.fct_elementary_     │   - 12-Division COICOP Table  │
 │ Community Pharma│ staging.raw_      │   queue (AI triage)       │   indices (Jevons micro) │   - Top Basket Price Movers   │
-│ Cellcard & Smart│   scrapes         │ silver.int_prices_cleaned │ gold.fct_cpi_daily       │ • 02: Pipeline & Scraper Ops  │
-│ redBus &        │                   │ Vector Item Matcher       │   (12-Division Laspeyres)│   - Live Store Volume (Ranked)│
-│  BookMeBus      │ (Typed Ingestion) │ 3-Key Gemini Pool +       │                          │   - Ingestion Matrix (14D)    │
-│ Sokha & Hyatt   │ Atomic & Typed    │ 12-Division Reference     │ Jevons Micro-Index +     │   - Official MEF FX Rate Today│
-│ MOC Fuel (Gas)  │ Rows in Postgres  │ Vector Cosine & Memo Cache│ 7-Day Imputation Engine  │   - Airflow Real-Time DAGs    │
-│ MEF FX Daily    │                   │                           │                          │ • 03: Silver Quality & Review │
-│ ... (23 total)  │                   │                           │                          │   - 12-Div Product Distr.     │
-│                 │                   │                           │                          │   - Log-Price Relative Dist.  │
-│                 │                   │                           │                          │   - Outlier & Review Queues   │
+│ Cellcard, Smart,│   scrapes         │ silver.int_prices_cleaned │ gold.fct_cpi_daily       │ • 02: Pipeline & Scraper Ops  │
+│  & Metfone      │                   │ Vector Item Matcher       │   (12-Division Laspeyres)│   - Live Store Volume (Ranked)│
+│ redBus &        │ (Typed Ingestion) │ 4-Key Gemini Pool +       │                          │   - Ingestion Matrix (14D)    │
+│  BookMeBus      │ Atomic & Typed    │ 12-Division Reference     │ Jevons Micro-Index +     │   - Official MEF FX Rate Today│
+│ KhmerMoto (Motos│ Rows in Postgres  │ Vector Cosine & Memo Cache│ 7-Day Imputation Engine  │   - Airflow Real-Time DAGs    │
+│ EDC & PPWSA     │                   │                           │                          │ • 03: Silver Quality & Review │
+│ Sokha & Hyatt   │                   │                           │                          │   - 12-Div Product Distr.     │
+│ MOC Fuel & LPG  │                   │                           │                          │   - Log-Price Relative Dist.  │
+│ MEF FX Daily    │                   │                           │                          │   - Outlier & Review Queues   │
+│ ... (25 total)  │                   │                           │                          │                               │
 └─────────────────┴───────────────────┴───────────────────────────┴──────────────────────────┴───────────────────────────────┘
 ```
 
 ### Bronze (Raw Ingestion & Staging)
 - **Tables**: `bronze.raw_prices` (atomic typed listings with barcodes, brands, sizes, and prices), `staging.exchange_rates` (MEF USD/KHR official daily rate), `staging.raw_scrapes`.
-- **Scraper Registry**: 23 production scrapers (`scrapers/sources/`) extracting native categories, automated fallbacks, and zero-product circuit breakers.
+- **Scraper Registry**: 25 production scrapers (`scrapers/sources/`) extracting native categories, automated fallbacks, and zero-product circuit breakers.
 
 ### Silver (Clean, Standardize & Resolve Observations)
 - **Clean Store Observations**: `silver.clean_store_prices` — unified daily appended table containing cleaned, standardized prices across all stores with exchange rates applied (KHR), unit normalization, promo clamping, and zero-price filtering.
@@ -106,15 +107,15 @@ CPI PIPELINE/
 ├── scrapers/              # Python scraper modules (Bronze ingestion)
 │   ├── base.py            # Abstract BaseScraper interface
 │   ├── _http.py           # Shared HTTP / rate-limiting client
-│   └── sources/           # Modular SCRAPER_REGISTRY (20 sources: 19 retail + MEF FX)
+│   └── sources/           # Modular SCRAPER_REGISTRY (25 sources: 24 retail/transit/utilities + MEF FX)
 │       ├── _common.py     # Canonical normalization & HTTP request helpers
-│       ├── aeon.py, arystore.py, cellcard.py, ...
+│       ├── aeon.py, arystore.py, cellcard.py, khmermoto.py, metfone.py, utilities.py, ...
 │       └── __init__.py    # Registry mapping source_slug -> ScraperClass
 ├── pipeline/              # Core pipeline services
 │   ├── cpi_calculator.py  # Jevons micro-index, 7-day imputation & Laspeyres CPI engine
 │   ├── partition_manager.py # Proactive declarative table partition manager (ops.maintain_monthly_partitions)
 │   ├── nis_cpi_importer.py # Official NIS monthly CPI ground-truth benchmark importer & seed synchronizer
-│   ├── key_pool.py        # 3-Key Round-Robin Gemini API Pool & Failover Manager
+│   ├── key_pool.py        # 4-Key Round-Robin Gemini API Pool & Failover Manager
 │   ├── vector_item_matcher.py # 768-dim Vector Item Matcher & Spec Guards
 │   ├── hybrid_embeddings_classifier.py # 12-Division Vector COICOP Classifier
 │   ├── item_matcher.py    # Silver item matching coordinator
@@ -149,7 +150,7 @@ CPI PIPELINE/
 ├── orchestration/         # Airflow orchestration stack & Astronomer Cosmos
 │   ├── Dockerfile         # Unified container image (Airflow 2.9.3 + Cosmos + Playwright)
 │   └── dags/              # DAG definitions
-│       ├── cpi_master_dag.py   # Master orchestrator (Partition maintenance → 20 scrapers → silver → gold)
+│       ├── cpi_master_dag.py   # Master orchestrator (Partition maintenance → 25 scrapers → silver → gold)
 │       ├── cpi_maintenance_dag.py # Weekly database maintenance, partition pre-creation & ANALYZE
 │       ├── scraper_dags.py     # Per-source scraper DAGs
 │       ├── silver_dag.py       # Silver layer transformation (Astronomer Cosmos DbtTaskGroup)
@@ -190,7 +191,7 @@ CPI PIPELINE/
 ```
 cpi_master_dag (Daily 02:00 ICT)
     │
-    ├──► [23 Scraper DAGs] ──── bronze_complete
+    ├──► [25 Scraper DAGs] ──── bronze_complete
     │         │
     │         ▼
     │    verify_bronze_quality_gate (≥3 successful sources)

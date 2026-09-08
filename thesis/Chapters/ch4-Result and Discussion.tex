@@ -11,7 +11,7 @@
 \end{enumerate}
 
 \section{Multi-Source Ingestion Performance and Market Catalog Coverage}
-\hs The ingestion subsystem automated 23 daily crawlers and data feeds across Cambodian retail platforms, quick-commerce delivery apps, transport networks, housing markets, utility regulators, and official open government feeds. Table~\ref{tab:ingestion_metrics} summarizes the daily quote yields, operational stability, and COICOP division coverage observed during the evaluation period.
+\hs The ingestion subsystem automated 25 daily crawlers and data feeds across Cambodian retail platforms, quick-commerce delivery apps, transport networks, housing markets, utility regulators, and official open government feeds. Table~\ref{tab:ingestion_metrics} summarizes the daily quote yields, operational stability, and COICOP division coverage observed during the evaluation period.
 
 \begin{table}[H]
 \centering
@@ -28,15 +28,16 @@ DeliShop Asia Cambodia & 01, 02, 12 & Dynamic Catalog Parser & 3,820 & 98.9\% \\
 Community Pharmacy Chain & 06, 12 & Online Healthcare Catalog & 1,420 & 99.7\% \\ \hline
 Khmer24 Real Estate & 04 & Property Listing Crawler & 2,100 & 98.2\% \\ \hline
 Realestate.com.kh & 04 & Rental Property Monitor & 1,350 & 97.8\% \\ \hline
-redBus \& BookMeBus & 07 & Passenger Fare Search & 890 & 99.5\% \\ \hline
-\makecell[l]{Telecom \& Tech\\(Cellcard, Smart, Ary, Samnang)} & 08 & \makecell[l]{API \& Product Catalog\\Crawlers} & 380 & 99.8\% \\ \hline
-\makecell[l]{Regulated Public Utilities\\(EDC Power, PPWSA Water)} & 04 & Curated Tariff Seeds & 10 & 100.0\% \\ \hline
-Ministry of Commerce (MOC) & 07 & Official Administrative Feed & 10 & 100.0\% \\ \hline
+redBus \& BookMeBus & 07 (07.3.2) & Passenger Fare Search & 890 & 99.5\% \\ \hline
+Khmer Moto Shop & 07 (07.1.2) & Motorcycle Catalog Parser & 185 & 99.5\% \\ \hline
+\makecell[l]{Telecom \& Tech\\(Cellcard, Smart, Metfone,\\Ary, Samnang)} & 08 (08.2, 08.3) & \makecell[l]{API, Product \& Plan\\Catalog Crawlers} & 420 & 99.8\% \\ \hline
+\makecell[l]{Regulated Public Utilities\\(EDC Power, PPWSA Water)} & 04 (04.4, 04.5) & Official Regulated Tariffs & 10 & 100.0\% \\ \hline
+\makecell[l]{Ministry of Commerce\\\& Kampuchea Tela} & 07 (07.2), 04 (04.5) & \makecell[l]{Fuel Gazette \& LPG\\Telegram Feed} & 12 & 100.0\% \\ \hline
 \makecell[l]{Ministry of Economy\\\& Finance (MEF)} & 12 / Macro & Official Foreign Exchange Feed & 5 & 100.0\% \\ \hline
 Hospitality and Catering Services & 10, 11 & Menu \& Room Tariff Monitor & 780 & 98.5\% \\ \hline
-\textbf{Total Multi-Source System} & \textbf{01--12} & \textbf{23 Automated Sources} & \textbf{35,565} & \textbf{99.2\%} \\ \hline
+\textbf{Total Multi-Source System} & \textbf{01--12} & \textbf{25 Automated Sources} & \textbf{35,792} & \textbf{99.3\%} \\ \hline
 \end{tabular}
-\caption{Daily Ingestion Statistics and Web Scraping Reliability Across 23 Sources}
+\caption{Daily Ingestion Statistics and Web Scraping Reliability Across 25 Sources}
 \label{tab:ingestion_metrics}
 \end{table}
 

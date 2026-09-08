@@ -1,7 +1,7 @@
 > **[!NOTE]**
 > **IMPLEMENTATION STATUS (LIVE IN PRODUCTION):** The Gold-layer CPI Calculation Engine is fully operational in production.
 > Live components:
-> - **Bronze Ingestion:** 23 scrapers (`scrapers/sources/`) extracting atomic prices and official MEF USD/KHR rates into `bronze.raw_prices`.
+> - **Bronze Ingestion:** 25 scrapers (`scrapers/sources/`) extracting atomic prices and official MEF USD/KHR rates into `bronze.raw_prices`.
 > - **Silver Processing:** Data cleaning (`int_prices_cleaned.sql`), hybrid vector matching (`pipeline/vector_item_matcher.py`), 12-division COICOP classification (`pipeline/hybrid_embeddings_classifier.py`), and log-linear hedonic quality adjustment (`pipeline/hedonic_regression.py`).
 > - **Gold Econometric Layer:** Kimball star schema (`gold.dim_items`, `gold.dim_stores`, `gold.fct_daily_prices`), Jevons micro-indices with 7-day imputation (`gold.fct_elementary_indices`), and Laspeyres 12-division daily aggregates (`gold.fct_cpi_daily`).
 > - **Observability & Analytics:** Metabase dashboards (Port 3000) and Power BI models.
@@ -14,12 +14,12 @@
 
 ## 1. Architectural Overview & Ingestion Standards
 
-Every night at 02:00, Airflow orchestrates daily data extraction across **22 Cambodian retail, grocery, telecom, transport, housing, hospitality, fuel, electronics, and dining sources** alongside official USD/KHR exchange rates from the Ministry of Economy & Finance (MEF).
+Every night at 02:00, Airflow orchestrates daily data extraction across **24 Cambodian retail, grocery, telecom, transport, housing, hospitality, fuel, two-wheeler, public utility, electronics, and dining sources** alongside official USD/KHR exchange rates from the Ministry of Economy & Finance (MEF).
 
 ```
                       ┌──────────────────────────────────────────────────────────┐
-                      │               23 Daily Scraper DAGs                      │
-                      │  (scrape_{source}_dag: 22 sources + MEF FX, fan-out from │
+                      │               25 Daily Scraper DAGs                      │
+                      │  (scrape_{source}_dag: 24 sources + MEF FX, fan-out from │
                       │   cpi_master_dag at 02:00 Asia/Phnom_Penh)               │
                       └────────────────────────────┬─────────────────────────────┘
                                                    │

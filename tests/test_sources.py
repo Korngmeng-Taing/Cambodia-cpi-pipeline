@@ -505,10 +505,11 @@ def test_scraper_registry_complete():
         "grab_ucare",
         "grab_lucky",
         "grab_chipmong",
+        "khmermoto",
     ]
     for src in expected_sources:
         assert src in SCRAPER_REGISTRY, f"Missing scraper source in registry: {src}"
-    assert len(SCRAPER_REGISTRY) == 21
+    assert len(SCRAPER_REGISTRY) == 22
 
 
 @pytest.mark.parametrize("source_slug,scraper_cls", SCRAPER_REGISTRY.items())
@@ -1036,4 +1037,33 @@ def test_smart_combined_records(monkeypatch):
     # Check both mobile and wifi plan names are present
     assert any("Smart Laor" in name or "Flexi" in name for name in names)
     assert any("Home Wi-Fi" in name or "Fiber" in name for name in names)
+
+
+def test_khmermoto_scraper(monkeypatch):
+    """Verifies Khmer Moto Shop scraper parses motorcycles and accessories properly."""
+    _mock_all_http(monkeypatch)
+    from scrapers.sources.khmermoto import KhmerMotoShopScraper
+
+    scraper = KhmerMotoShopScraper()
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 8))
+    assert len(records) > 0
+    assert all(r["source_slug"] == "khmermoto" for r in records)
+    assert all(r["currency"] == "USD" for r in records)
+    assert all(r["price"] > 0 for r in records)
+
+
+def test_khmermoto_fallback(monkeypatch):
+    """Verifies Khmer Moto Shop degrades to baseline catalog on API error."""
+    import requests
+    from scrapers.sources import khmermoto as kmt_mod
+
+    def _mock_err(url, **kwargs):
+        raise requests.RequestException("API Down")
+
+    monkeypatch.setattr(requests, "get", _mock_err)
+    scraper = kmt_mod.KhmerMotoShopScraper()
+    records = scraper.fetch_records(scrape_date=pendulum.date(2026, 9, 8))
+    assert len(records) >= 5
+    assert all(r["is_fallback"] is True for r in records)
+    assert any("Dream" in r["name"] for r in records)
 

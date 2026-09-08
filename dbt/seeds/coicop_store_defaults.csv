@@ -22,3 +22,4 @@ mef_fx,Ministry of Economy & Finance FX,fx,official_authority,KHR,00,00.0.0,0.80
 grab_ucare,Ucare Pharmacy Chroy Changva,pharmacy,health,KHR,06,06.1.2,0.800,true
 grab_lucky,Lucky Supermarket Chroy Changva,grocery,supermarket,KHR,01,01.1.1,0.800,true
 grab_chipmong,Chip Mong Supermarket Eden,grocery,supermarket,KHR,01,01.1.1,0.800,true
+khmermoto,Khmer Moto Shop,retail,motorcycles,USD,07,07.1.2,0.850,true

@@ -56,6 +56,7 @@ from scrapers.sources.samnangshop import SamnangShopScraper
 from scrapers.sources.smart import SmartMobileScraper, SmartScraper, SmartWifiScraper
 from scrapers.sources.sokhahotel import SokhaHotelScraper
 from scrapers.sources.nis_cpi import NISCPIScraper
+from scrapers.sources.khmermoto import KhmerMotoShopScraper
 
 SCRAPER_REGISTRY: dict[str, type[BaseScraper]] = {
     "aeon": AeonSupermarketScraper,
@@ -79,10 +80,12 @@ SCRAPER_REGISTRY: dict[str, type[BaseScraper]] = {
     "grab_ucare": GrabUcarePharmacyScraper,
     "grab_lucky": GrabLuckySupermarketScraper,
     "grab_chipmong": GrabChipMongSupermarketScraper,
+    "khmermoto": KhmerMotoShopScraper,
 }
 
 __all__ = [
     "SCRAPER_REGISTRY",
+    "KhmerMotoShopScraper",
     "AeonSupermarketScraper",
     "AeonFashionScraper",
     "DelishopScraper",

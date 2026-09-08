@@ -154,7 +154,7 @@ with DAG(
     # 3. Seed Reference Data
     task_dbt_seed = BashOperator(
         task_id="dbt_seed",
-        bash_command=f"dbt seed {_dbt_flags} --full-refresh",
+        bash_command=f"dbt seed {_dbt_flags}",
     )
 
     # 4. Hybrid Vector + Gemini COICOP Classification

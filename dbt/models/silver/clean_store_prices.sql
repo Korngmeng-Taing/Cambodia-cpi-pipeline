@@ -15,7 +15,7 @@
     ]
 ) }}
 
-{% if flags.FULL_REFRESH %}
+{% if flags.FULL_REFRESH and ('clean_store_prices' in selected_resources or 'silver.clean_store_prices' in selected_resources) %}
     {{ exceptions.raise_compiler_error("Full refresh on partitioned table silver.clean_store_prices is prohibited to protect partition tree. Use incremental refresh with --vars '{\"reclassify_all\": true}' instead.") }}
 {% endif %}
 

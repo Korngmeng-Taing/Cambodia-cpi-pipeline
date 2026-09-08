@@ -71,28 +71,40 @@ INITIAL_BACKOFF_SECONDS = float(os.getenv("GEMINI_INITIAL_BACKOFF_SECONDS", "5")
 MAX_BACKOFF_SECONDS = float(os.getenv("GEMINI_MAX_BACKOFF_SECONDS", "300"))
 MAX_CONSECUTIVE_FAILURES = int(os.getenv("GEMINI_MAX_CONSECUTIVE_FAILURES", "5"))
 
-SYSTEM_PROMPT = """You are an expert statistical classifier for the UN COICOP 2018 taxonomy (Classification of Individual Consumption According to Purpose). I will give you a list of e-commerce product names from Cambodia. You must return a JSON array mapping each product to its most specific 5-digit COICOP code. If unsure, return '99.9.9'. Include a 'confidence_score' (0.0 to 1.0) and a brief 'reasoning' string.
+SYSTEM_PROMPT = """You are an expert statistical classifier for the UN COICOP 2018 taxonomy (Classification of Individual Consumption According to Purpose).
+I will give you a list of e-commerce products from Cambodia. Each item may be provided as either:
+  1. A plain product name string, OR
+  2. A JSON object with context: {"name": "...", "store": "...", "category": "...", "price_khr": ...}
+
+Use all provided contextual signals (store name, native category hierarchy, price) to accurately disambiguate the item.
+You must return a JSON array mapping each product to its most specific 5-digit COICOP code. If unsure, return '99.9.9'.
+Include a 'confidence_score' (0.0 to 1.0) and a brief 'reasoning' string.
 
 Classification rules:
-- Use the official dotted 5-digit COICOP 2018 notation, e.g. '01.1.1' (Bread and cereals) or '07.2.2' (Fuels and lubricants).
+- Use official dotted 5-digit COICOP 2018 notation, e.g. '01.1.1' (Bread and cereals) or '07.2.2' (Fuels and lubricants).
 - Prefer the MOST SPECIFIC code the name unambiguously supports. Never invent a finer class than the name justifies.
 - If the product cannot be confidently mapped to any COICOP class, return the special code '99.9.9'.
 - Classify only what the name literally describes. Do not infer bundles, promotions or brand-only categories unless the name says so.
 - 'product_name' in the response MUST exactly match the input name so results can be joined back.
-- 'confidence_score' must be a float from 0.0 to 1.0.
-- 'reasoning' must be a short (max 15 words) English explanation.
+- 'confidence_score' must be a float from 0.0 to 1.0 (>= 0.85 for unambiguous items).
+- 'reasoning' must be a short (max 20 words) English explanation.
 
-CRITICAL retail context rules:
+CRITICAL retail context & trap disambiguation rules:
 - RETAIL SUPERMARKET FOOD IS ALWAYS DIVISION 01: Packaged, canned, fresh, or prepared retail grocery products —
   sandwiches, burgers, pizza, instant noodles, canned soup, ready meals, bento boxes,
   frozen dishes, pastries, sushi packs, salad packs — are FOOD (division 01), NEVER division 11.
 - Division 11 is RESERVED EXCLUSIVELY for actual dine-in restaurant services, cafe bills, or hotel overnight room bookings.
 - Division 04 is RESERVED for residential real estate rentals and utility bills. Hardware, cookware, and groceries are NEVER division 04.
-- Cleaning chemicals, dishwashing soap, detergent, laundry softener, trash bags, mops, cookware, and tableware are DIVISION 05 (05.5.1 / 05.6.1).
-- Personal care (shampoo, body wash, lotion, sunscreen, skincare, cosmetics, toothpaste, toilet paper, diapers) is DIVISION 12 (12.1.3).
-- OTC medicines, vitamins, bandages, painkillers, and medical masks are DIVISION 06 (06.1.2).
-- Phone/electronics accessories (chargers, cases, cables) bought at general retailers are NOT division 08:
-  car gadgets -> 07.2.1, audio/electronics -> 09.1.x. Division 08 (08.2.0) is for phones, tablets, SIM cards, and internet plans.
+- CULINARY WINE / MIRIN / SAKE: "Cooking Wine", "Shaoxing Wine for Cooking", "Mirin" are seasonings -> 01.1.9 (Food n.e.c.), NEVER 02.1.2 (Wine).
+- NON-ALCOHOLIC BEVERAGES: 0.0% alcohol-free beer/cider -> 01.2.2 (Soft drinks). Real beer/cider (e.g. Somersby, Angkor, Cambodia Beer) -> 02.2.1.
+- ACCESSORY TRAPS: "Coffee Filter", "Tea Strainer/Infuser", "Ice Tray" -> 05.5.1 (Household utensils), NEVER 01.2.1 (Coffee/Tea).
+- APPAREL TRAPS: "Slippers", "Bath Slippers", "Sandals" -> 03.2.1 (Footwear), NEVER 05.2.1 (Household linen).
+- CLEANING TRAPS: Floor cleaner, dishwashing liquid, laundry detergent, bleach, air freshener, trash bags -> 05.6.1 (Non-durable household goods).
+- PERSONAL CARE TRAPS: Hair clippers, shavers, haircut tools, electric toothbrushes, hair dryers -> 12.1.3 (Personal care appliances).
+- STATIONERY VS TRAVEL GOODS: Notebooks, exercise books, pencils, pens, crayons -> 09.5.4 (Stationery). School backpacks, travel backpacks, suitcases -> 12.2.1 (Travel goods).
+- COSMETICS & SUNCARE: Sunscreen (e.g. Skin Aqua), lip balm, face cream, moisturizer, shampoo, body wash -> 12.1.3 (Personal care).
+- OTC MEDICINES & PHARMACEUTICALS: Throat lozenges, cough drops, painkillers, paracetamol, bandages, vitamins -> 06.1.2.
+- ELECTRONICS VS ACCESSORIES: Smartphones/tablets -> 08.2.0. Cables/chargers/audio -> 09.1.1 or 09.1.3. Car mount/charger -> 07.2.1.
 
 Common UN COICOP 2018 5-digit codes:
 - 01.1.1 Bread, cereals and ready dishes (rice, flour, pasta, cereal, noodles, bread, buns, croissants, pizza, ready meals, bento, sandwiches)
@@ -103,18 +115,18 @@ Common UN COICOP 2018 5-digit codes:
 - 01.1.6 Fruit (fresh fruit, dried fruit, frozen fruit, apples, bananas, oranges, mango, grapes)
 - 01.1.7 Vegetables (fresh/frozen/canned vegetables, potatoes, onions, tomatoes, mushrooms, fresh salad, garlic, chili)
 - 01.1.8 Sugar, jam, honey, chocolate and confectionery (sugar, honey, jam, chocolate, candy, cookies, biscuits, wafers, cakes)
-- 01.1.9 Food products n.e.c. (sauces, soy sauce, fish sauce, oyster sauce, chili sauce, ketchup, mayonnaise, mustard, vinegar, salt, pepper, spices, seasoning, curry paste)
+- 01.1.9 Food products n.e.c. (cooking wine, mirin, sauces, soy sauce, fish sauce, oyster sauce, chili sauce, ketchup, mayonnaise, mustard, vinegar, salt, pepper, spices, seasoning)
 - 01.2.1 Coffee, tea and cocoa (ground coffee, coffee beans, instant coffee, tea bags, green tea, cocoa powder)
-- 01.2.2 Mineral waters, soft drinks, juices (bottled drinking water, mineral water, soda, fruit juice, energy drink, canned iced tea/coffee)
+- 01.2.2 Mineral waters, soft drinks, juices (bottled drinking water, mineral water, soda, fruit juice, energy drink, canned iced tea/coffee, 0.0% non-alcoholic beer)
 - 02.1.1 Spirits (whiskey, vodka, rum, gin, tequila, brandy, soju, baijiu)
 - 02.1.2 Wine (red wine, white wine, rose, champagne, sparkling wine)
-- 02.2.1 Beer (beer, lager, stout, pilsner, ale, craft beer, cider)
+- 02.2.1 Beer and cider (beer, lager, stout, pilsner, ale, craft beer, apple cider)
 - 02.2.0 Tobacco (cigarettes, cigars, tobacco)
 - 03.1.1 Garments for men (men shirt, men pants, men jacket, men shorts)
 - 03.1.2 Garments for women (women dress, women blouse, women skirt, women pants)
 - 03.1.3 Garments for infants (baby clothes, baby bodysuit, baby pajamas)
 - 03.1.4 Other garments (unisex clothing, apron, raincoat, underwear, socks)
-- 03.2.1 Shoes and other footwear (shoes, sneakers, boots, sandals, flip-flops, slippers)
+- 03.2.1 Shoes and other footwear (shoes, sneakers, boots, sandals, flip-flops, slippers, bath slippers)
 - 04.1.1 Actual rentals for housing (apartment rent, condo rent, house rental)
 - 04.5.1 Electricity (electric bill, power bill)
 - 04.5.2 Gas (gas cylinder, lpg refill)
@@ -122,23 +134,23 @@ Common UN COICOP 2018 5-digit codes:
 - 05.2.1 Household textiles (towel, curtains, bedsheet, pillow, blanket)
 - 05.3.1 Major household appliances (refrigerator, washing machine, air conditioner)
 - 05.4.1 Small electric household appliances (kettle, blender, rice cooker, toaster, iron, microwave)
-- 05.5.1 Glassware, tableware and household utensils (plate, bowl, cup, pan, pot, wok, knife, cutlery)
-- 05.6.1 Non-durable household goods (laundry detergent, dishwashing soap, bleach, floor cleaner, sponges, trash bags)
+- 05.5.1 Glassware, tableware and household utensils (plate, bowl, cup, pan, pot, wok, knife, cutlery, coffee filter, tea infuser)
+- 05.6.1 Non-durable household goods (laundry detergent, dishwashing soap, bleach, floor cleaner, sponges, trash bags, air freshener)
 - 06.1.1 Medical services (doctor visit, clinic)
-- 06.1.2 Pharmaceutical products (paracetamol, ibuprofen, antibiotic, cough syrup, vitamins, first aid, medical mask)
+- 06.1.2 Pharmaceutical products (paracetamol, ibuprofen, antibiotic, cough syrup, throat lozenge, vitamins, first aid, medical mask)
 - 07.1.2 Passenger transport by road (bus ticket, van ticket, taxi fare)
-- 07.2.1 Spare parts and accessories for transport equipment (tires, car battery, spark plug, motor oil filter)
+- 07.2.1 Spare parts and accessories for transport equipment (tires, car battery, spark plug, motor oil filter, car phone holder)
 - 07.2.2 Fuels and lubricants for transport equipment (gasoline, petrol, diesel, engine oil)
 - 08.2.0 Telephone and telefax equipment (smartphone, mobile phone, tablet, iPad)
 - 08.3.0 Internet and telecom services (internet plan, wifi subscription, data plan, SIM card, airtime)
 - 09.1.1 Audio-visual equipment (TV, headphone, speaker, camera)
 - 09.1.3 Information processing equipment (laptop, PC, printer)
 - 09.3.4 Pets and related products (dog food, cat food, pet treats, cat litter, pet shampoo)
-- 09.5.4 Stationery and drawing materials (notebook, pen, pencil, eraser, ruler, stapler)
+- 09.5.4 Stationery and drawing materials (notebook, exercise book, pen, pencil, eraser, ruler, stapler, crayon)
 - 11.1.1 Restaurants and cafes (dine-in meal bill, cafe table order, restaurant dining)
 - 11.2.0 Accommodation services (hotel room overnight stay, resort booking)
-- 12.1.3 Articles and products for personal care (shampoo, hair conditioner, body wash, lotion, sunscreen, skincare, face cream, makeup, perfume, toothpaste, toothbrush, toilet paper, diapers, wet wipes)
-- 12.2.1 Travel goods and personal effects (backpack, suitcase, handbag, wallet, umbrella)
+- 12.1.3 Articles and products for personal care (shampoo, hair conditioner, body wash, lotion, sunscreen, skincare, face cream, makeup, perfume, toothpaste, toothbrush, haircut clippers, shavers, toilet paper, diapers, wet wipes)
+- 12.2.1 Travel goods and personal effects (backpack, school bag, suitcase, handbag, wallet, umbrella)
 
 Cambodian market examples:
 - "Jasmine Rice 5kg" -> 01.1.1 (Bread, cereals and grain products)
@@ -151,26 +163,36 @@ Cambodian market examples:
 - "Vegetable Cooking Oil 1L" -> 01.1.5 (Oils and fats)
 - "Fresh Cavendish Banana 1kg" -> 01.1.6 (Fruit)
 - "Broccoli Fresh 500g" -> 01.1.7 (Vegetables)
+- "COOKING WINE 750ML" -> 01.1.9 (Food products n.e.c. - cooking condiment)
 - "Chili Sauce Sriracha 450g" -> 01.1.9 (Food products n.e.c. - sauces and condiments)
 - "Fish Sauce 750ml" -> 01.1.9 (Food products n.e.c. - sauces and condiments)
 - "Iced Coffee 250ml Can" -> 01.2.2 (Mineral waters, soft drinks, juices)
 - "Angkor Beer Can 330ml" -> 02.2.1 (Beer)
+- "SOMERSBY CIDER 4X330ML" -> 02.2.1 (Beer and cider)
 - "Men Cotton T-Shirt" -> 03.1.1 (Garments for men)
+- "TVHC SLIPPER UNISEX" -> 03.2.1 (Footwear - slippers)
 - "1 Bedroom Condo BKK1 Monthly Rent" -> 04.1.1 (Actual rentals for housing)
+- "TV COFFEE FILTER 40" -> 05.5.1 (Tableware and household utensils)
+- "Non-Stick Frying Pan 28cm" -> 05.5.1 (Tableware and household utensils)
 - "Sunlight Dishwashing Liquid 750ml" -> 05.6.1 (Non-durable household goods)
 - "Attack Laundry Detergent 1.4kg" -> 05.6.1 (Non-durable household goods)
-- "Non-Stick Frying Pan 28cm" -> 05.5.1 (Tableware and household utensils)
+- "LIX FLOOR CLEANER 3.8L" -> 05.6.1 (Non-durable household goods)
 - "Panadol Extra 500mg 10s" -> 06.1.2 (Pharmaceutical products)
+- "GOLDEN THROAT LOZENGE PACK" -> 06.1.2 (Pharmaceutical products)
 - "Bus Ticket Phnom Penh - Siem Reap" -> 07.1.2 (Passenger transport by road)
 - "Regular Gasoline 1L" -> 07.2.2 (Fuels and lubricants)
 - "Samsung Galaxy A15 128GB" -> 08.2.0 (Telephone equipment)
 - "Smart Fiber 50 Mbps Monthly" -> 08.3.0 (Internet services)
 - "Sony Wireless Headphones" -> 09.1.1 (Audio-visual equipment)
 - "Pedigree Dog Food Beef 1.5kg" -> 09.3.4 (Pets and related products)
+- "EXERCISE BOOK A4" -> 09.5.4 (Stationery and drawing materials)
 - "Deluxe Hotel Room 1 Night Stay" -> 11.2.0 (Accommodation services)
 - "Head & Shoulders Shampoo 450ml" -> 12.1.3 (Articles and products for personal care)
+- "HAIRCUT CLIPPER RECHARGEABLE" -> 12.1.3 (Personal care appliances)
+- "SUNPLAY SKIN AQUA SPF50" -> 12.1.3 (Articles and products for personal care)
 - "Colgate Total Toothpaste 150g" -> 12.1.3 (Articles and products for personal care)
 - "Foldable Travel Backpack 20L" -> 12.2.1 (Travel goods and personal effects)
+- "SCHOOL BACKPACK" -> 12.2.1 (Travel goods and personal effects)
 
 Response format (strict JSON array, no markdown fences, no extra text):
 [{"product_name": "<exact input name>", "coicop_code": "01.1.4", "confidence_score": 0.95, "reasoning": "Unambiguous whole milk product"}]
@@ -330,16 +352,47 @@ def _extract_retry_delay(exc: Exception) -> float:
     return RATE_LIMIT_BACKOFF_SECONDS
 
 
-def classify_batch(model, names: list[str]) -> list[dict[str, Any]]:
+def _format_item_for_prompt(item: Any) -> str:
+    """Formats an item (either string name or dict with metadata) for the Gemini prompt."""
+    if isinstance(item, dict):
+        name = item.get("canonical_name") or item.get("product_name") or ""
+        # Only format as JSON object if extra contextual signals exist
+        has_context = bool(
+            item.get("store_slug")
+            or item.get("category_native")
+            or item.get("price_khr") is not None
+        )
+        if has_context:
+            ctx: dict[str, Any] = {"name": name}
+            if item.get("store_slug"):
+                ctx["store"] = item["store_slug"]
+            if item.get("category_native"):
+                ctx["category"] = item["category_native"]
+            if item.get("price_khr") is not None:
+                ctx["price_khr"] = item["price_khr"]
+            return json.dumps(ctx, ensure_ascii=False)
+        return str(name)
+    return str(item)
+
+
+def _get_item_name(item: Any) -> str:
+    """Extracts raw product name from a string or dictionary item."""
+    if isinstance(item, dict):
+        return str(item.get("canonical_name") or item.get("product_name") or "").strip()
+    return str(item).strip()
+
+
+def classify_batch(model, names: list[Any]) -> list[dict[str, Any]]:
     """
-    Sends one batch of product names to Gemini in JSON mode and parses the
-    returned array. On a rate-limit (429/ResourceExhausted) response, backs
-    off once and retries; any other error raises so the caller can mark the
+    Sends one batch of product names (strings or context dicts) to Gemini in JSON mode
+    and parses the returned array. On a rate-limit (429/ResourceExhausted) response,
+    backs off once and retries; any other error raises so the caller can mark the
     batch as failed.
     """
     for attempt in (1, 2):
         try:
-            response = model.generate_content([SYSTEM_PROMPT] + [str(n) for n in names])
+            prompt_items = [_format_item_for_prompt(n) for n in names]
+            response = model.generate_content([SYSTEM_PROMPT] + prompt_items)
             break
         except Exception as exc:
             if attempt == 1 and _is_rate_limit_error(exc):
@@ -400,13 +453,13 @@ def classify_batch(model, names: list[str]) -> list[dict[str, Any]]:
 
 
 def classify_names(
-    names: list[str],
+    names: list[Any],
     model=None,
     cache: dict[str, dict[str, Any]] | None = None,
     batch_size: int = BATCH_SIZE,
 ) -> dict[str, Any]:
     """
-    Classifies product names using Gemini with per-name memoization.
+    Classifies product names (or context dicts) using Gemini with per-name memoization.
 
     ``cache`` maps normalized product name -> cached result dict. Names with a
     cache hit never reach the API. Returns:
@@ -419,15 +472,15 @@ def classify_names(
     seen: dict[str, dict[str, Any]] = {}
 
     # 1. Resolve every name: cache first, API second (in batches of 50).
-    names = [str(n) for n in names]
-    api_batches: list[list[str]] = []
-    batch: list[str] = []
-    for name in names:
-        key = _normalize_name(name)
+    api_batches: list[list[Any]] = []
+    batch: list[Any] = []
+    for raw_item in names:
+        item_str = _get_item_name(raw_item)
+        key = _normalize_name(item_str)
         if key in cache:
-            seen[name] = dict(cache[key])
+            seen[item_str] = dict(cache[key])
             continue
-        batch.append(name)
+        batch.append(raw_item)
         if len(batch) == batch_size:
             api_batches.append(batch)
             batch = []
@@ -450,17 +503,12 @@ def classify_names(
                     continue
                 key = _normalize_name(item_name)
                 cache[key] = item
-                # BUG-10 FIX: Match results back to input items via normalized
-                # key, not the raw AI-returned string.  If Gemini modifies
-                # whitespace or punctuation, the raw string won't match the
-                # original input; using the same normalization as the cache
-                # ensures robust re-association.
+                # Match results back to input items via normalized key
                 seen[item_name] = item
-                # Also store under the normalized key so the fallback loop
-                # below can find it even when the AI slightly altered the name.
-                for original_name in batch:
-                    if _normalize_name(original_name) == key:
-                        seen[original_name] = item
+                for orig in batch:
+                    orig_name = _get_item_name(orig)
+                    if _normalize_name(orig_name) == key:
+                        seen[orig_name] = item
             # Reset backoff on success
             consecutive_failures = 0
             current_backoff = INITIAL_BACKOFF_SECONDS
@@ -469,7 +517,8 @@ def classify_names(
             consecutive_failures += 1
             log.warning("Gemini batch %d/%d of %d name(s) failed (consecutive=%d): %s",
                         idx + 1, len(api_batches), len(batch), consecutive_failures, exc)
-            for name in batch:
+            for raw_item in batch:
+                name = _get_item_name(raw_item)
                 seen.setdefault(name, _unclassified_result(name))
 
             # Hard abort: daily/free-tier quota fully exhausted — retrying won't help today
@@ -621,12 +670,13 @@ def fetch_unclassified(
                 interval_clause = _get_24h_interval_sql(engine)
                 # Phase 6: Order by observation count DESC (most-seen products first)
                 query_sql = f"""
-                    SELECT sub.item_id, sub.canonical_name, sub.store_slug, sub.observation_count
+                    SELECT sub.item_id, sub.canonical_name, sub.store_slug, sub.category_native, sub.price_khr, sub.observation_count
                     FROM (
                         SELECT DISTINCT CAST(p.item_id AS TEXT) AS item_id, ci.canonical_name, p.store_slug,
+                               p.category_native, p.price_khr,
                                COUNT(*) OVER (PARTITION BY p.item_id) AS observation_count
                         FROM (
-                            SELECT DISTINCT item_id, store_slug, scrape_date
+                            SELECT DISTINCT item_id, store_slug, category_native, price_khr, scrape_date
                             FROM silver.int_prices_cleaned p
                             WHERE {date_filter}
                               AND p.item_id IS NOT NULL
@@ -661,6 +711,8 @@ def fetch_unclassified(
                             "canonical_item_id": str(r[0]),
                             "canonical_name": str(r[1]),
                             "store_slug": str(r[2]) if len(r) > 2 and r[2] else "",
+                            "category_native": str(r[3]) if len(r) > 3 and r[3] else "",
+                            "price_khr": float(r[4]) if len(r) > 4 and r[4] is not None else None,
                         }
                     )
             except Exception as e:
@@ -957,10 +1009,9 @@ def classify_unclassified_with_gemini(
         else:
             items_uncached.append(item)
 
-    # Only send remaining ambiguous items to Gemini
-    names = [i["canonical_name"] for i in items_uncached]
-    if names:
-        outcome = classify_names(names, model=model, cache=cache, batch_size=batch_size)
+    # Only send remaining ambiguous items to Gemini with rich context
+    if items_uncached:
+        outcome = classify_names(items_uncached, model=model, cache=cache, batch_size=batch_size)
     else:
         outcome = {"results": {}, "cache_hits": 0, "api_calls": 0, "failed": 0}
 
@@ -978,7 +1029,7 @@ def classify_unclassified_with_gemini(
         "status": "OK",
         "candidates": len(items),
         "classified_locally": len(local_results),
-        "sent_to_gemini": len(names),
+        "sent_to_gemini": len(items_uncached),
         "classified": classified,
         "cache_hits": total_cache_hits,
         "api_calls": outcome["api_calls"],

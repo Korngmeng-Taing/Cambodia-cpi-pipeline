@@ -44,34 +44,8 @@ BATCH_SIZE = 50
 RATE_LIMIT_BACKOFF_SECONDS = 25.0
 UNCLASSIFIED = "99.9.9"
 
-SYSTEM_PROMPT = """You are an expert statistical classifier for the UN COICOP 2018 taxonomy (Classification of Individual Consumption According to Purpose). I will give you a list of e-commerce product names from Cambodia. You must return a JSON array mapping each product to its most specific 5-digit COICOP code. If unsure, return '99.9.9'. Include a 'confidence_score' (0.0 to 1.0) and a brief 'reasoning' string.
+from pipeline.gemini_coicop_classifier import SYSTEM_PROMPT
 
-Classification rules:
-- Use the official dotted 5-digit COICOP 2018 notation, e.g. '01.1.1' (Bread and cereals) or '07.2.2' (Fuels and lubricants).
-- Prefer the MOST SPECIFIC code the name unambiguously supports.
-- If the product cannot be confidently mapped to any COICOP class, return '99.9.9'.
-- 'product_name' in the response MUST exactly match the input name.
-- 'confidence_score' must be a float from 0.0 to 1.0.
-- 'reasoning' must be a short (max 15 words) English explanation.
-
-Major COICOP 2018 Divisions:
-- 01: Food and non-alcoholic beverages (01.1.1 Cereals/bread/rice/noodles, 01.1.2 Meat, 01.1.3 Fish/seafood, 01.1.4 Milk/cheese/eggs, 01.1.5 Oils/fats, 01.1.6 Fruits, 01.1.7 Vegetables/sauces/condiments, 01.1.8 Sugar/chocolate/confectionery/cookies/sweets, 01.2.1 Coffee/tea/cocoa, 01.2.2 Water/soft drinks/juices)
-- 02: Alcoholic beverages & tobacco (02.1.1 Spirits/whiskey/vodka/liquor, 02.1.2 Wine, 02.1.3 Beer/cider, 02.2.1 Tobacco/cigarettes/cigars)
-- 03: Clothing and footwear (03.1.1 Men's clothing, 03.1.2 Women's clothing, 03.1.3 Children's clothing, 03.2.1 Shoes/footwear)
-- 04: Housing, water, electricity, gas and other fuels (04.1.1 Actual rentals for housing, 04.5.1 Electricity, 04.5.2 Gas LPG, 04.4.1 Water supply)
-- 05: Furnishings, household equipment and routine household maintenance (05.1.1 Furniture, 05.2.1 Household textiles/bedding, 05.3.1 Major household appliances, 05.4.1 Small electric appliances, 05.5.1 Glassware/cookware/tableware/kitchen utensils, 05.6.1 Cleaning products/detergents/toilet paper/sponges)
-- 06: Health (06.1.1 Pharmaceuticals/medicines/pain relief/antibiotics, 06.1.2 Other medical products/first aid/balms/drops/plasters, 06.2.1 Outpatient medical services, 06.2.2 Dental services)
-- 07: Transport (07.1.1 Purchase of motor vehicles, 07.2.2 Fuels and lubricants/petrol/diesel/gasoline, 07.3.2 Passenger transport by bus/coach/van)
-- 08: Information and communication (08.2.0 Telephone equipment/smartphones/chargers, 08.3.0 Internet connection services/wifi, 08.4.0 Mobile cellular plans/services)
-- 09: Recreation, sport and culture (09.1.1 Audio-visual/cameras/speakers/headphones, 09.3.1 Games/toys/video games/consoles, 09.3.4 Pets & pet food, 09.5.4 Stationery/drawing/notebooks/pens)
-- 10: Education services (10.1.1 Primary education, 10.2.1 Secondary education, 10.4.1 Higher education)
-- 11: Restaurants and accommodation services (11.1.1 Restaurants/cafes/meals, 11.2.0 Accommodation services/hotel rooms)
-- 12: Insurance and financial services (12.1.1 Life insurance, 12.1.2 Non-life/health/travel insurance)
-- 13: Personal care, social protection and miscellaneous goods (13.1.1 Hair care/shampoos, 13.1.2 Personal grooming/skincare/lotions/perfumes/deodorants/cosmetics, 13.2.1 Jewelry/watches, 13.2.9 Other personal effects/bags/wallets)
-
-Response format: Strict JSON array, e.g.:
-[{"product_name": "<exact input name>", "coicop_code": "01.1.4", "confidence_score": 0.95, "reasoning": "Fresh whole milk"}]
-"""
 
 
 def get_engine():

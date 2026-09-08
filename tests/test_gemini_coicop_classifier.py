@@ -50,12 +50,18 @@ class FakeModel:
             # Skip the SYSTEM_PROMPT preamble — it's not a product name.
             if not isinstance(name, str) or name.startswith("You are"):
                 continue
-            if name not in self.mapping:
+            lookup_name = name
+            if isinstance(name, str) and name.startswith("{"):
+                try:
+                    lookup_name = json.loads(name).get("name", name)
+                except Exception:
+                    pass
+            if lookup_name not in self.mapping:
                 continue
-            code, conf, reason = self.mapping[name]
+            code, conf, reason = self.mapping[lookup_name]
             arr.append(
                 {
-                    "product_name": name,
+                    "product_name": lookup_name,
                     "coicop_code": code,
                     "confidence_score": conf,
                     "reasoning": reason,
@@ -346,3 +352,36 @@ def test_classify_unclassified_no_candidates():
     result = gcc.classify_unclassified_with_gemini(engine=engine, model=FakeModel({}))
     assert result["status"] == "SKIPPED_NO_UNCLASSIFIED"
     assert result["candidates"] == 0
+
+
+def test_classify_names_with_rich_context():
+    """Verify that items with store_slug, category_native, and price_khr are correctly formatted and classified."""
+    model = FakeModel(
+        {
+            "COOKING WINE 750ML": ("01.1.9", 0.95, "cooking condiment"),
+            "SOMERSBY CIDER 4X330ML": ("02.2.1", 0.92, "cider and beer"),
+        }
+    )
+    items = [
+        {
+            "canonical_name": "COOKING WINE 750ML",
+            "store_slug": "aeon",
+            "category_native": "Grocery > Sauces & Seasonings",
+            "price_khr": 10500,
+        },
+        {
+            "canonical_name": "SOMERSBY CIDER 4X330ML",
+            "store_slug": "aeon",
+            "category_native": "Liquor > Cider",
+            "price_khr": 16000,
+        },
+    ]
+    cache = {}
+    res = gcc.classify_names(items, model=model, cache=cache)
+    assert res["api_calls"] == 1
+    assert "COOKING WINE 750ML" in res["results"]
+    assert res["results"]["COOKING WINE 750ML"]["coicop_code"] == "01.1.9"
+    assert res["results"]["COOKING WINE 750ML"]["confidence_score"] == 0.95
+    assert "SOMERSBY CIDER 4X330ML" in res["results"]
+    assert res["results"]["SOMERSBY CIDER 4X330ML"]["coicop_code"] == "02.2.1"
+

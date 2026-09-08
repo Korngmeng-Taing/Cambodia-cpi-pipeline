@@ -37,7 +37,7 @@ log = logging.getLogger(__name__)
 
 # Primary & Fallback Models
 EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-2")
-LLM_MODEL = os.getenv("GEMINI_PRO_MODEL", "gemini-3.5-flash")
+LLM_MODEL = os.getenv("GEMINI_PRO_MODEL", os.getenv("GEMINI_MODEL", "gemini-2.5-flash"))
 LOCAL_FALLBACK_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 
 # Known cross-lingual equivalences for Cambodian market

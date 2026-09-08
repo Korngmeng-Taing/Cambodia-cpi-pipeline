@@ -53,23 +53,47 @@ def _strip_html(html_str: str | None) -> str | None:
     return text or None
 
 
+import threading
+
+_THREAD_LOCAL = threading.local()
+
+
+def get_cffi_session():
+    """Returns a thread-local persistent Session for connection pooling & TLS reuse."""
+    session = getattr(_THREAD_LOCAL, "session", None)
+    if session is None:
+        if HAS_CURL_CFFI:
+            session = cffi_requests.Session(impersonate="chrome")
+        else:
+            session = requests.Session()
+        _THREAD_LOCAL.session = session
+    return session
+
+
 def _default_cffi_get(url: str, **kwargs: Any) -> requests.Response:
-    """GET via curl_cffi with Chrome TLS impersonation, falls back to requests."""
-    if HAS_CURL_CFFI:
-        resp = cffi_requests.get(
-            url, impersonate="chrome", timeout=kwargs.pop("timeout", 30), **kwargs
-        )
-        return resp
-    return requests.get(url, timeout=kwargs.pop("timeout", 30), **kwargs)
+    """GET via persistent curl_cffi session with Chrome TLS impersonation, falls back to requests."""
+    timeout = kwargs.pop("timeout", 30)
+    session = get_cffi_session()
+    try:
+        return session.get(url, timeout=timeout, **kwargs)
+    except Exception:
+        # Fallback to fresh one-off request if pooled session encountered an issue
+        if HAS_CURL_CFFI:
+            return cffi_requests.get(url, impersonate="chrome", timeout=timeout, **kwargs)
+        return requests.get(url, timeout=timeout, **kwargs)
 
 
 def _default_cffi_post(url: str, **kwargs: Any) -> requests.Response:
-    if HAS_CURL_CFFI:
-        resp = cffi_requests.post(
-            url, impersonate="chrome", timeout=kwargs.pop("timeout", 30), **kwargs
-        )
-        return resp
-    return requests.post(url, timeout=kwargs.pop("timeout", 30), **kwargs)
+    """POST via persistent curl_cffi session with Chrome TLS impersonation, falls back to requests."""
+    timeout = kwargs.pop("timeout", 30)
+    session = get_cffi_session()
+    try:
+        return session.post(url, timeout=timeout, **kwargs)
+    except Exception:
+        # Fallback to fresh one-off request if pooled session encountered an issue
+        if HAS_CURL_CFFI:
+            return cffi_requests.post(url, impersonate="chrome", timeout=timeout, **kwargs)
+        return requests.post(url, timeout=timeout, **kwargs)
 
 
 def _cffi_get(url: str, **kwargs: Any) -> requests.Response:

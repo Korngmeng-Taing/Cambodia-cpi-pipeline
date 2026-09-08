@@ -225,6 +225,34 @@ def _get_api_keys() -> list[str]:
     return [k.strip() for k in raw.split(",") if k.strip()]
 
 
+COICOP_RESPONSE_SCHEMA = {
+    "type": "ARRAY",
+    "items": {
+        "type": "OBJECT",
+        "properties": {
+            "product_name": {"type": "STRING"},
+            "coicop_code": {"type": "STRING"},
+            "confidence_score": {"type": "NUMBER"},
+            "reasoning": {"type": "STRING"},
+        },
+        "required": ["product_name", "coicop_code", "confidence_score"],
+    },
+}
+
+
+def _build_generation_config() -> Any:
+    """Builds a GenerationConfig with JSON schema enforcement if supported."""
+    if genai is None:
+        return None
+    try:
+        return genai.GenerationConfig(
+            response_mime_type="application/json",
+            response_schema=COICOP_RESPONSE_SCHEMA,
+        )
+    except Exception:
+        return genai.GenerationConfig(response_mime_type="application/json")
+
+
 class GeminiModelPool:
     """Manages a pool of Gemini API keys with round-robin rotation and automatic quota failover."""
 
@@ -265,21 +293,29 @@ class GeminiModelPool:
             self._current_idx += 1
             try:
                 genai.configure(api_key=key)
+                gen_config = _build_generation_config()
                 model = genai.GenerativeModel(
                     model_name=self.model_name,
-                    generation_config=genai.GenerationConfig(response_mime_type="application/json"),
+                    generation_config=gen_config,
                 )
                 return model.generate_content(contents, **kwargs)
             except Exception as exc:
                 last_exc = exc
-                if _is_rate_limit_error(exc) or _is_quota_exhausted_error(exc):
+                if _is_quota_exhausted_error(exc):
                     self.mark_exhausted(key)
                     if self.active_keys:
                         log.info(
-                            "Failing over to next Gemini API key (%d active keys left)...",
+                            "Hard quota exceeded. Failing over to next Gemini API key (%d active keys left)...",
                             len(self.active_keys),
                         )
                         continue
+                elif _is_rate_limit_error(exc):
+                    # Transient RPM rate limit: do not permanently kill key; rotate to next active key
+                    log.warning(
+                        "Transient rate limit hit on Gemini key (%s...). Rotating to next active key...",
+                        key[:12] if len(key) >= 12 else key,
+                    )
+                    continue
                 raise
         if last_exc:
             raise last_exc
@@ -478,8 +514,13 @@ def classify_names(
         item_str = _get_item_name(raw_item)
         key = _normalize_name(item_str)
         if key in cache:
-            seen[item_str] = dict(cache[key])
-            continue
+            cached_val = cache[key]
+            if (
+                cached_val.get("coicop_code") not in (None, UNCLASSIFIED)
+                and float(cached_val.get("confidence_score", 0.0)) >= 0.50
+            ):
+                seen[item_str] = dict(cached_val)
+                continue
         batch.append(raw_item)
         if len(batch) == batch_size:
             api_batches.append(batch)
@@ -694,6 +735,8 @@ def fetch_unclassified(
                           ON lower(trim(ai.product_name)) = lower(trim(ci.canonical_name))
                         WHERE (ai.coicop_code IS NULL
                                OR (ai.coicop_code = '99.9.9'
+                                   AND ai.classified_at < {interval_clause})
+                               OR (ai.confidence_score < 0.50
                                    AND ai.classified_at < {interval_clause}))
                           AND ci.canonical_name IS NOT NULL
                           AND length(trim(ci.canonical_name)) > 1
@@ -729,6 +772,8 @@ def fetch_unclassified(
                               )
                               AND (ai.coicop_code IS NULL
                                    OR (ai.coicop_code = '99.9.9'
+                                       AND ai.classified_at < {interval_clause})
+                                   OR (ai.confidence_score < 0.50
                                        AND ai.classified_at < {interval_clause}))
                               AND ci.canonical_name IS NOT NULL
                               AND length(trim(ci.canonical_name)) > 1
@@ -1017,7 +1062,10 @@ def classify_unclassified_with_gemini(
       Phase 5: Configurable limit via GEMINI_MAX_PRODUCTS_PER_RUN (default 500) for fast Airflow scheduling.
     """
     if max_products is None:
-        max_products = int(os.getenv("GEMINI_MAX_PRODUCTS_PER_RUN", "500"))
+        max_products = int(
+            os.getenv("GEMINI_MAX_PRODUCTS_PER_RUN")
+            or os.getenv("GEMINI_MAX_ITEMS_PER_RUN", "500")
+        )
 
     engine = engine or get_engine()
     items = fetch_unclassified(engine, scrape_date=scrape_date, limit=max_products)
@@ -1032,12 +1080,18 @@ def classify_unclassified_with_gemini(
     cache = load_cache(engine, item_names=names_to_lookup)
 
     # Phase 4: Filter out items already in cache before sending to Gemini API
+    # High-confidence entries (>= 0.50) are authoritative; low-confidence entries (< 0.50)
+    # are re-sent to Gemini so they can be reliably classified and resolved.
     items_uncached = []
     cached_results: dict[str, dict[str, Any]] = {}
     for item in items_for_gemini:
         norm_name = _normalize_name(item.get("canonical_name", ""))
         cached_entry = cache.get(norm_name)
-        if cached_entry and cached_entry.get("coicop_code") not in (None, UNCLASSIFIED):
+        if (
+            cached_entry
+            and cached_entry.get("coicop_code") not in (None, UNCLASSIFIED)
+            and float(cached_entry.get("confidence_score", 0.0)) >= 0.50
+        ):
             cached_results[item["canonical_name"]] = cached_entry
         else:
             items_uncached.append(item)

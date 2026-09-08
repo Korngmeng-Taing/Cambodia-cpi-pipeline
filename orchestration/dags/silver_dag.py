@@ -173,6 +173,16 @@ with DAG(
     dbt_ds_expr = '{{ (dag_run.conf.get("ds") if dag_run and dag_run.conf else None) or ds }}'
     _dbt_vars = f'{{"ds": "{dbt_ds_expr}"}}'
 
+    # 3b. Stage int_prices_cleaned first so Gemini classification queries pre-cleaned indexed records
+    task_dbt_stage_clean = BashOperator(
+        task_id="dbt_stage_int_prices_cleaned",
+        bash_command=(
+            f"dbt run {_dbt_flags} "
+            "--select int_prices_cleaned "
+            f"--vars '{_dbt_vars}'"
+        ),
+    )
+
     if HAS_COSMOS:
         log.info("Astronomer Cosmos detected: instantiating DbtTaskGroup for Silver models.")
         manifest_path = os.path.join(DBT_PROJECT_DIR, "target", "manifest.json")
@@ -210,9 +220,9 @@ with DAG(
             trigger_rule="none_failed_min_one_success",
         )
 
+        task_item_matching >> task_dbt_stage_clean >> task_gemini_coicop >> task_join_silver_prep
         task_item_matching >> task_dbt_seed >> task_join_silver_prep
         task_item_matching >> task_item_auto_review >> task_join_silver_prep
-        task_item_matching >> task_gemini_coicop >> task_join_silver_prep
         task_join_silver_prep >> tg_dbt_silver >> task_hedonic_adjustment
     else:
         log.info("Astronomer Cosmos not detected: falling back to BashOperator for Silver dbt.")
@@ -238,8 +248,8 @@ with DAG(
             ),
         )
 
+        task_item_matching >> task_dbt_stage_clean >> task_gemini_coicop >> task_join_silver_prep
         task_item_matching >> task_dbt_seed >> task_join_silver_prep
         task_item_matching >> task_item_auto_review >> task_join_silver_prep
-        task_item_matching >> task_gemini_coicop >> task_join_silver_prep
         task_join_silver_prep >> task_dbt_silver_run >> task_dbt_silver_test >> task_hedonic_adjustment
 

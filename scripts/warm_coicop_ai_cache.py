@@ -106,14 +106,17 @@ class GeminiModelPool:
             except Exception as exc:
                 last_exc = exc
                 msg = str(exc)
-                if "429" in msg or "ResourceExhausted" in msg or "quota" in msg.lower():
+                if "free_tier_requests" in msg or "limit: 500" in msg or "quota exceeded" in msg.lower():
                     self.mark_exhausted(key)
                     if self.active_keys:
                         log.info(
-                            "Failing over to next Gemini API key (%d active keys left)...",
+                            "Hard quota exceeded. Failing over to next Gemini API key (%d active keys left)...",
                             len(self.active_keys),
                         )
                         continue
+                elif "429" in msg or "ResourceExhausted" in msg or "quota" in msg.lower():
+                    log.warning("Transient rate limit on Gemini key (%s...). Rotating...", key[:12] if len(key) >= 12 else key)
+                    continue
                 raise
         if last_exc:
             raise last_exc
@@ -154,7 +157,7 @@ def fetch_uncached_products(engine, limit: int = 1000, scrape_date: str | None =
           ON ci.item_id::text = p.item_id::text
         LEFT JOIN silver.dim_coicop_ai_cache ai 
           ON lower(regexp_replace(trim(ai.product_name), '\\s+', ' ', 'g')) = lower(regexp_replace(trim(ci.canonical_name), '\\s+', ' ', 'g'))
-        WHERE (ai.coicop_code IS NULL OR ai.coicop_code = '99.9.9')
+        WHERE (ai.coicop_code IS NULL OR ai.coicop_code = '99.9.9' OR ai.confidence_score < 0.50)
           AND ci.canonical_name IS NOT NULL
           AND length(trim(ci.canonical_name)) > 1
         ORDER BY ci.canonical_name

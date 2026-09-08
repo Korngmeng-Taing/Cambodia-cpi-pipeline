@@ -116,7 +116,16 @@ class GeminiItemReviewer:
 
     def _init_gemini(self):
         self.model = None
-        api_key = GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")
+        raw_key = GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")
+        # Extract individual key in case GEMINI_API_KEY is comma-separated
+        api_key = raw_key.split(",")[0].strip() if raw_key else ""
+        if not api_key:
+            try:
+                from pipeline.key_pool import get_key_pool
+                api_key = get_key_pool().get_next_key() or ""
+            except Exception:
+                pass
+
         if api_key:
             try:
                 import google.generativeai as genai

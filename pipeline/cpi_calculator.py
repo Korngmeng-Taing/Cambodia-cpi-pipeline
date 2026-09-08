@@ -409,27 +409,27 @@ class CPICalculationEngine:
             if not div_items.empty:
                 # Group items by subclass within the division
                 if has_coicop_code and div_items["coicop_code"].notna().any():
-                    subclass_indices = []
-                    subclass_wts = []
-
                     div_items_with_sub = div_items.copy()
                     div_items_with_sub["subclass_code"] = div_items_with_sub["coicop_code"].apply(
                         lambda c, d=div_code: self._get_subclass_code(c, d)
                     )
 
-                    for sub_code, sub_group in div_items_with_sub.groupby("subclass_code"):
-                        ratios = sub_group["price_ratio"][sub_group["price_ratio"] > 0]
-                        if len(ratios) > 0:
-                            sub_index = float(np.exp(np.mean(np.log(ratios))) * 100.0)
-                            sub_wt = self.subclass_weights.get(sub_code)
-                            subclass_indices.append(sub_index)
-                            subclass_wts.append(sub_wt)
+                    valid_sub_items = div_items_with_sub[div_items_with_sub["price_ratio"] > 0]
+                    if not valid_sub_items.empty:
+                        # Vectorized Jevons geometric-mean per subclass
+                        subclass_series = valid_sub_items.groupby("subclass_code")["price_ratio"].apply(
+                            lambda s: float(np.exp(np.mean(np.log(s))) * 100.0)
+                        )
+                        subclass_indices = subclass_series.tolist()
+                        subclass_wts = [self.subclass_weights.get(sc) for sc in subclass_series.index]
 
-                    valid_wts = [w for w in subclass_wts if w is not None and w > 0]
-                    if len(valid_wts) == len(subclass_wts) and sum(valid_wts) > 0:
-                        div_index = sum(idx * wt for idx, wt in zip(subclass_indices, subclass_wts, strict=False)) / sum(subclass_wts)
+                        valid_wts = [w for w in subclass_wts if w is not None and w > 0]
+                        if len(valid_wts) == len(subclass_wts) and sum(valid_wts) > 0:
+                            div_index = sum(idx * wt for idx, wt in zip(subclass_indices, subclass_wts, strict=False)) / sum(subclass_wts)
+                        else:
+                            # Fallback if subclass weights are missing: unweighted geometric mean across all division items
+                            div_index = float(np.exp(np.mean(np.log(div_items["price_ratio"]))) * 100.0)
                     else:
-                        # Fallback if subclass weights are missing: unweighted geometric mean across all division items
                         div_index = float(np.exp(np.mean(np.log(div_items["price_ratio"]))) * 100.0)
                 else:
                     # No subclass codes provided: unweighted geometric mean across division items
@@ -624,11 +624,11 @@ class CPICalculationEngine:
                 # 1. Upsert Elementary Indices
                 elem_rows = [
                     (
-                        r["calculation_date"], str(r["item_id"]), r["coicop_division"], r["coicop_code"],
-                        r["base_price_khr"], r["current_price_khr"], r["price_ratio"], r["price_ratio_pct"],
-                        r["is_imputed"], int(r["observation_count"])
+                        r.calculation_date, str(r.item_id), r.coicop_division, r.coicop_code,
+                        r.base_price_khr, r.current_price_khr, r.price_ratio, r.price_ratio_pct,
+                        r.is_imputed, int(r.observation_count)
                     )
-                    for _, r in elementary_df.iterrows()
+                    for r in elementary_df.itertuples(index=False)
                 ]
                 execute_batch(cur, """
                     INSERT INTO gold.fct_elementary_indices (
@@ -650,12 +650,12 @@ class CPICalculationEngine:
                 # 2. Upsert Daily Division & Headline CPI
                 cpi_rows = [
                     (
-                        r["calculation_date"], r["coicop_division"], r["division_name"], r["weight"],
-                        None if pd.isna(r["division_index"]) else float(r["division_index"]),
+                        r.calculation_date, r.coicop_division, r.division_name, r.weight,
+                        None if pd.isna(r.division_index) else float(r.division_index),
                         headline["headline_cpi"], headline["core_cpi"],
-                        int(r["item_count"]), int(r["observation_count"])
+                        int(r.item_count), int(r.observation_count)
                     )
-                    for _, r in df_div.iterrows()
+                    for r in df_div.itertuples(index=False)
                 ]
                 execute_batch(cur, """
                     INSERT INTO gold.fct_cpi_daily (

@@ -41,7 +41,7 @@ except ImportError:  # pragma: no cover
 log = logging.getLogger(__name__)
 
 EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-2")
-LLM_MODEL = os.getenv("GEMINI_PRO_MODEL", "gemini-3.5-flash")
+LLM_MODEL = os.getenv("GEMINI_PRO_MODEL", os.getenv("GEMINI_MODEL", "gemini-2.5-flash"))
 LOCAL_FALLBACK_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 
 # 15 Single-Category Pure Stores (Instant SQL Assignment)
@@ -561,29 +561,102 @@ class HybridCOICOPClassifier:
         self._embed_cache[cleaned_text] = res_vec
         return res_vec
 
+    def embed_batch(self, texts: list[str], batch_size: int = 50) -> list[np.ndarray]:
+        """Generates dense semantic embedding vectors in batches via Gemini or local model."""
+        if not texts:
+            return []
+
+        results: list[np.ndarray | None] = [None] * len(texts)
+        uncached_indices: list[int] = []
+        uncached_texts: list[str] = []
+
+        for idx, t in enumerate(texts):
+            clean = (t or "").strip()
+            if not clean:
+                results[idx] = np.zeros(768, dtype=np.float32)
+            elif clean in self._embed_cache:
+                results[idx] = self._embed_cache[clean]
+            else:
+                uncached_indices.append(idx)
+                uncached_texts.append(clean)
+
+        if not uncached_texts:
+            return [r if r is not None else np.zeros(768, dtype=np.float32) for r in results]
+
+        use_local_first = os.getenv("USE_LOCAL_FALLBACK_FIRST", "true").lower() in ("true", "1", "yes")
+        if not use_local_first and HAS_GENAI and self.key_pool.get_key_count() > 0:
+            for b_start in range(0, len(uncached_texts), batch_size):
+                b_texts = uncached_texts[b_start : b_start + batch_size]
+                b_indices = uncached_indices[b_start : b_start + batch_size]
+
+                def _call_gemini_batch_embed(key: str) -> list[np.ndarray]:
+                    genai.configure(api_key=key)
+                    res = genai.embed_content(model=EMBEDDING_MODEL, content=b_texts)
+                    embeddings = res.get("embedding", [])
+                    return [np.array(e, dtype=np.float32) for e in embeddings]
+
+                try:
+                    b_vecs = self.key_pool.execute_with_retry(_call_gemini_batch_embed)
+                    for orig_idx, vec in zip(b_indices, b_vecs):
+                        clean_str = texts[orig_idx].strip()
+                        self._embed_cache[clean_str] = vec
+                        results[orig_idx] = vec
+                except Exception as exc:
+                    log.warning("Gemini batch embedding API failed; falling back to local/individual: %s", exc)
+                    for orig_idx in b_indices:
+                        results[orig_idx] = self.embed_text(texts[orig_idx])
+        else:
+            local_model = self._get_local_model()
+            if local_model is not None:
+                try:
+                    vecs = local_model.encode(uncached_texts, batch_size=batch_size)
+                    for orig_idx, clean_str, vec in zip(uncached_indices, uncached_texts, vecs):
+                        local_vec = np.array(vec, dtype=np.float32)
+                        if local_vec.shape[0] < 768:
+                            padded = np.zeros(768, dtype=np.float32)
+                            padded[: local_vec.shape[0]] = local_vec
+                            res_v = padded
+                        else:
+                            res_v = local_vec[:768]
+                        self._embed_cache[clean_str] = res_v
+                        results[orig_idx] = res_v
+                except Exception as e:
+                    log.warning("Local batch encoding failed: %s; falling back to individual", e)
+                    for orig_idx in uncached_indices:
+                        results[orig_idx] = self.embed_text(texts[orig_idx])
+            else:
+                for orig_idx in uncached_indices:
+                    results[orig_idx] = self.embed_text(texts[orig_idx])
+
+        return [r if r is not None else np.zeros(768, dtype=np.float32) for r in results]
+
     def _precompute_reference_vectors(self) -> None:
         """Embeds the 12 official UN COICOP divisions and granular 4-digit reference definitions."""
         # 1. 12 Primary Divisions
-        self._ref_embeddings = []
-        for ref in COICOP_12_REFERENCE_DEFINITIONS:
-            vec = self.embed_text(ref["description"])
-            self._ref_embeddings.append({
+        div_texts = [ref["description"] for ref in COICOP_12_REFERENCE_DEFINITIONS]
+        div_vectors = self.embed_batch(div_texts)
+        self._ref_embeddings = [
+            {
                 "division": ref["division"],
                 "code": ref["code"],
                 "name": ref["name"],
                 "vector": vec,
-            })
+            }
+            for ref, vec in zip(COICOP_12_REFERENCE_DEFINITIONS, div_vectors)
+        ]
 
         # 2. Granular 4-Digit Classes
-        self._ref_embeddings_4digit = []
-        for ref4 in COICOP_4DIGIT_REFERENCE_DEFINITIONS:
-            vec4 = self.embed_text(ref4["description"])
-            self._ref_embeddings_4digit.append({
+        d4_texts = [ref4["description"] for ref4 in COICOP_4DIGIT_REFERENCE_DEFINITIONS]
+        d4_vectors = self.embed_batch(d4_texts)
+        self._ref_embeddings_4digit = [
+            {
                 "division": ref4["division"],
                 "code": ref4["code"],
                 "name": ref4["name"],
                 "vector": vec4,
-            })
+            }
+            for ref4, vec4 in zip(COICOP_4DIGIT_REFERENCE_DEFINITIONS, d4_vectors)
+        ]
 
     def classify_product(
         self,
@@ -788,6 +861,88 @@ Return strict JSON only:
                 "classification_method": "llm_error",
                 "reasoning": f"LLM error: {e}",
             }
+
+    def classify_batch_with_llm(
+        self,
+        items: list[dict[str, str]],
+        batch_size: int = 40,
+    ) -> list[dict[str, Any]]:
+        """Batched Gemini classification for multiple ambiguous products in a single API call."""
+        if not items:
+            return []
+        if not HAS_GENAI or self.key_pool.get_key_count() == 0:
+            return [
+                {
+                    "product_name": it.get("product_name", ""),
+                    "coicop_division": "01",
+                    "coicop_code": "01.1.1",
+                    "coicop_class_name": "Bread and cereals",
+                    "confidence_score": 0.50,
+                    "classification_method": "fallback_default",
+                    "reasoning": "No API keys configured; fallback assigned.",
+                }
+                for it in items
+            ]
+
+        results = []
+        for i in range(0, len(items), batch_size):
+            chunk = items[i : i + batch_size]
+            prompt_items = [
+                {"name": it.get("product_name", ""), "store": it.get("store_slug", "")}
+                for it in chunk
+            ]
+            prompt = (
+                "You are an expert UN COICOP 2018 statistical classifier. "
+                "Classify each product in the JSON array below into its 2-digit division ('01'-'12') "
+                "and dotted 5-digit COICOP code (e.g. '01.1.1', '06.1.1', '12.1.3').\n\n"
+                f"Products:\n{json.dumps(prompt_items, ensure_ascii=False)}\n\n"
+                "Return a strict JSON array of objects:\n"
+                '[{"product_name": "...", "coicop_division": "01", "coicop_code": "01.1.1", "confidence_score": 0.95, "reasoning": "..."}]'
+            )
+
+            def _call_gemini_batch(key: str) -> list[dict[str, Any]]:
+                genai.configure(api_key=key)
+                model = genai.GenerativeModel(LLM_MODEL)
+                resp = model.generate_content(
+                    prompt,
+                    generation_config={"response_mime_type": "application/json"},
+                )
+                text_clean = resp.text.strip()
+                if text_clean.startswith("```"):
+                    text_clean = re.sub(r"^```(?:json)?\s*", "", text_clean)
+                    text_clean = re.sub(r"\s*```$", "", text_clean)
+                parsed = json.loads(text_clean)
+                chunk_results = []
+                for p in parsed:
+                    div = str(p.get("coicop_division", "01")).zfill(2)
+                    code = str(p.get("coicop_code", "01.1.1"))
+                    chunk_results.append({
+                        "product_name": p.get("product_name", ""),
+                        "coicop_division": div,
+                        "coicop_code": code,
+                        "coicop_class_name": self._get_class_name(code, div),
+                        "confidence_score": float(p.get("confidence_score", 0.90)),
+                        "classification_method": "gemini_llm_batch",
+                        "reasoning": str(p.get("reasoning", "Gemini AI batch classification")),
+                    })
+                return chunk_results
+
+            try:
+                batch_res = self.key_pool.execute_with_retry(_call_gemini_batch)
+                results.extend(batch_res)
+            except Exception as e:
+                log.warning("Batch LLM classification failed for chunk of %d items: %s. Falling back to individual defaults.", len(chunk), e)
+                for it in chunk:
+                    results.append({
+                        "product_name": it.get("product_name", ""),
+                        "coicop_division": "99",
+                        "coicop_code": "99.9.9",
+                        "coicop_class_name": "Unclassified",
+                        "confidence_score": 0.0,
+                        "classification_method": "llm_error",
+                        "reasoning": f"LLM batch error: {e}",
+                    })
+        return results
 
 
 _global_classifier: HybridCOICOPClassifier | None = None

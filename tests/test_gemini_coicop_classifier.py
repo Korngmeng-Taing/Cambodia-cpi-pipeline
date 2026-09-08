@@ -385,3 +385,36 @@ def test_classify_names_with_rich_context():
     assert "SOMERSBY CIDER 4X330ML" in res["results"]
     assert res["results"]["SOMERSBY CIDER 4X330ML"]["coicop_code"] == "02.2.1"
 
+
+def test_low_confidence_cached_item_is_reclassified():
+    """Items in cache with confidence < 0.50 are re-sent to Gemini to resolve them."""
+    engine = _sqlite_engine()
+    _seed_queue_item(engine, "R-TV", "Samsung Smart TV 55 inch")
+    _seed_cache_item(engine, "Samsung Smart TV 55 inch", "08.2.0", 0.45, "vector_cosine")
+
+    model = FakeModel(
+        {
+            "Samsung Smart TV 55 inch": ("09.1.1", 0.95, "audio-visual television"),
+        }
+    )
+
+    res = gcc.classify_unclassified_with_gemini(engine=engine, model=model)
+    assert res["status"] == "OK"
+    assert res["candidates"] == 1
+    assert res["sent_to_gemini"] == 1
+    assert res["classified"] == 1
+
+    with engine.connect() as conn:
+        q_row = conn.execute(
+            text("SELECT status, resolved_division FROM silver.classification_queue WHERE product_key = 'R-TV'")
+        ).fetchone()
+        c_row = conn.execute(
+            text("SELECT coicop_code, confidence_score FROM silver.dim_coicop_ai_cache WHERE product_name = 'Samsung Smart TV 55 inch'")
+        ).fetchone()
+
+    assert q_row[0] == "RESOLVED"
+    assert q_row[1] == "09"
+    assert c_row[0] == "09.1.1"
+    assert c_row[1] == 0.95
+
+

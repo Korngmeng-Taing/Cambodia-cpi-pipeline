@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import time
 from typing import Any
@@ -25,6 +26,8 @@ from scrapers.sources._common import (
 
 # 11. Khmer24 Real Estate (Housing)
 # ═══════════════════════════════════════════════════════════════════════════
+KHMER24_MAX_PAGES = int(os.environ.get("KHMER24_MAX_PAGES", "5"))
+
 KHMER24_CATEGORIES = [
     ("House For Rent", "https://www.khmer24.com/en/c-house-for-rent.html"),
     ("Apartment For Rent", "https://www.khmer24.com/en/c-apartment-for-rent.html"),
@@ -105,54 +108,67 @@ class Khmer24Scraper(BaseScraper):
         super().__init__(store_slug="khmer24", source_type="realestate")
 
     def _fetch_category_live(
-        self, cat_name: str, cat_url: str, ds: str
+        self, cat_name: str, cat_url: str, ds: str, max_pages: int = KHMER24_MAX_PAGES
     ) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
         if not HAS_BS4:
             return records
-        try:
-            resp = _cffi_get(cat_url, timeout=15)
-            if resp.status_code != 200:
-                return records
-            soup = BeautifulSoup(resp.text, "html.parser")
-            seen_urls = set()
-            for a in soup.find_all("a"):
-                href = a.get("href") or ""
-                if "adid-" in href and href not in seen_urls:
-                    seen_urls.add(href)
-                    txt = a.get_text(separator=" | ", strip=True)
-                    m_price = re.search(r"\$\s*([\d,]+(\.\d+)?)", txt)
-                    m_id = re.search(r"adid-(\d+)", href)
-                    if m_price and m_id:
-                        price = _to_float(m_price.group(1).replace(",", ""))
-                        if price and price > 0:
-                            item_id = m_id.group(1)
-                            parts = [p.strip() for p in txt.split("|") if p.strip()]
-                            clean_title = "Rental Property"
-                            for p in parts:
-                                if len(p) > 5 and not re.match(r"^\d+$", p) and "Verified" not in p and "$" not in p:
-                                    clean_title = p
-                                    break
-                            records.append(
-                                build_canonical_record(
-                                    source_slug="khmer24",
-                                    source_type="realestate",
-                                    store_name="Khmer24 Real Estate",
-                                    item_id=f"k24_{item_id}",
-                                    name=clean_title,
-                                    price=price,
-                                    currency="USD",
-                                    category_native=f"Residential Rental > {cat_name}",
-                                    url=(
-                                        href
-                                        if href.startswith("http")
-                                        else f"https://www.khmer24.com{href}"
-                                    ),
-                                    scrape_date=ds,
+        seen_ids: set[str] = set()
+        for page in range(1, max(1, max_pages) + 1):
+            url = cat_url if page == 1 else f"{cat_url}?page={page}"
+            try:
+                resp = _cffi_get(url, timeout=15)
+                if resp.status_code != 200:
+                    break
+                soup = BeautifulSoup(resp.text, "html.parser")
+                page_new = 0
+                for a in soup.find_all("a"):
+                    href = a.get("href") or ""
+                    if "adid-" in href:
+                        m_id = re.search(r"adid-(\d+)", href)
+                        if not m_id:
+                            continue
+                        item_id = m_id.group(1)
+                        if item_id in seen_ids:
+                            continue
+                        txt = a.get_text(separator=" | ", strip=True)
+                        m_price = re.search(r"\$\s*([\d,]+(\.\d+)?)", txt)
+                        if m_price:
+                            price = _to_float(m_price.group(1).replace(",", ""))
+                            if price and price > 0:
+                                seen_ids.add(item_id)
+                                page_new += 1
+                                parts = [p.strip() for p in txt.split("|") if p.strip()]
+                                clean_title = "Rental Property"
+                                for p in parts:
+                                    if len(p) > 5 and not re.match(r"^\d+$", p) and "Verified" not in p and "$" not in p:
+                                        clean_title = p
+                                        break
+                                records.append(
+                                    build_canonical_record(
+                                        source_slug="khmer24",
+                                        source_type="realestate",
+                                        store_name="Khmer24 Real Estate",
+                                        item_id=f"k24_{item_id}",
+                                        name=clean_title,
+                                        price=price,
+                                        currency="USD",
+                                        category_native=f"Residential Rental > {cat_name}",
+                                        url=(
+                                            href
+                                            if href.startswith("http")
+                                            else f"https://www.khmer24.com{href}"
+                                        ),
+                                        scrape_date=ds,
+                                    )
                                 )
-                            )
-        except Exception as exc:
-            log.warning("Khmer24 live scrape failed for %s: %s", cat_name, exc)
+                if page_new == 0:
+                    break
+                if page < max_pages:
+                    time.sleep(THROTTLE_DELAY)
+            except Exception as exc:
+                log.warning("Khmer24 live scrape failed for %s (page %d): %s", cat_name, page, exc)
+                break
         return records
 
     def fetch_records(

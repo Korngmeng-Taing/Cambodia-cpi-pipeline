@@ -311,6 +311,7 @@ CREATE TABLE IF NOT EXISTS gold.fct_elementary_indices (
     current_price_khr NUMERIC(14, 4),
     price_ratio NUMERIC(10, 6),
     price_ratio_pct NUMERIC(10, 4),
+    elementary_index NUMERIC(10, 4),
     is_imputed BOOLEAN DEFAULT FALSE,
     observation_count INTEGER,
     created_at TIMESTAMPTZ DEFAULT NOW(),

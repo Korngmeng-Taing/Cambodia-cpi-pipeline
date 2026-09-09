@@ -71,24 +71,24 @@ parsed as (
             else raw.original_price_curr * coalesce(er.rate, 4044.0)
         end as original_price_khr,
         coalesce(
-            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[1]::numeric,
-            (regexp_match(raw.name_raw, '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[1]::numeric,
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\y', 'i'))[1]::numeric,
+            (regexp_match(raw.name_raw, '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\y', 'i'))[1]::numeric,
             (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[1]::numeric,
             1
         ) as pack_qty,
         coalesce(
-            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[2]::numeric,
-            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[1]::numeric,
-            (regexp_match(raw.name_raw, '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[2]::numeric,
-            (regexp_match(raw.name_raw, '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[1]::numeric,
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\y', 'i'))[2]::numeric,
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\y', 'i'))[1]::numeric,
+            (regexp_match(raw.name_raw, '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\y', 'i'))[2]::numeric,
+            (regexp_match(raw.name_raw, '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\y', 'i'))[1]::numeric,
             (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[1]::numeric,
             null
         ) as size_value,
         lower(coalesce(
-            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[3],
-            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[2],
-            (regexp_match(raw.name_raw, '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[3],
-            (regexp_match(raw.name_raw, '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|oz|lb)\y', 'i'))[2],
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\y', 'i'))[3],
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\y', 'i'))[2],
+            (regexp_match(raw.name_raw, '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\y', 'i'))[3],
+            (regexp_match(raw.name_raw, '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\y', 'i'))[2],
             (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[2],
             ''
         )) as size_unit,
@@ -174,6 +174,8 @@ select
             then p.price_khr / (p.size_value * coalesce(nullif(p.pack_qty, 0), 1))
         when p.size_unit in ('ml', 'millilitre', 'milliliter', 'millilitres', 'milliliters') and p.size_value > 0 
             then p.price_khr / ((p.size_value * coalesce(nullif(p.pack_qty, 0), 1)) / 1000.0)
+        when p.size_unit in ('cl', 'centilitre', 'centiliter', 'centilitres', 'centiliters') and p.size_value > 0 
+            then p.price_khr / ((p.size_value * coalesce(nullif(p.pack_qty, 0), 1)) / 100.0)
         else null
     end as unit_price_khr,
     -- Outlier detection: flag extreme pricing anomalies or corrupt inputs

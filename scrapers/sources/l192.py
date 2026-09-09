@@ -20,7 +20,7 @@ from scrapers.sources._common import (
 # ═══════════════════════════════════════════════════════════════════════════
 L192_GQL_URL = "https://graph-fs.l192.com/graphql"
 L192_PAGE_SIZE = 50
-L192_MAX_PAGES = int(os.environ.get("L192_MAX_PAGES", "20"))
+L192_MAX_PAGES = int(os.environ.get("L192_MAX_PAGES", "30"))
 
 L192_BASELINE_PRODUCTS = [
     {

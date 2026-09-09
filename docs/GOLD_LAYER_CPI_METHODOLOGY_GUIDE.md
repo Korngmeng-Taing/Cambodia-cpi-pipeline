@@ -195,14 +195,23 @@ To understand why the pipeline computes two separate indices every day, consider
 
 ### Step 1: Metric Unit Normalization & Hedonic Price Integration
 
-Raw observations across different pack sizes ($500\text{g}$, $5\text{kg}$, $330\text{ml}$, $1.5\text{L}$) are converted to standardized metric unit prices:
+Raw observations across different pack sizes ($500\text{g}$, $5\text{kg}$, $330\text{ml}$, $1.5\text{L}$, $33\text{cl}$) are converted to standardized metric unit prices ($\text{KHR}/\text{kg}$ or $\text{KHR}/\text{L}$):
 
 $$
 \text{Unit Price}_{\text{KHR}} = \begin{cases}
 \frac{\text{Price}_{\text{KHR}}}{\text{Size Value}} & \text{for units in } (\text{kg}, \text{l}) \\
+\frac{\text{Price}_{\text{KHR}}}{\text{Size Value} / 100} & \text{for units in } (\text{cl}) \\
 \frac{\text{Price}_{\text{KHR}}}{\text{Size Value} / 1000} & \text{for units in } (\text{g}, \text{ml})
 \end{cases}
 $$
+
+#### 1. Consumable Division Scope Restriction
+To eliminate false-positive metric parsing (e.g., cellular `5G` or `4G` data on tech products being parsed as $5\text{g}$), metric unit price extraction in `dbt/models/silver/intermediate/int_prices_cleaned.sql` is strictly restricted to consumable divisions:
+- `01` Food & Non-Alcoholic Beverages
+- `02` Alcoholic Beverages & Tobacco
+- `05` Furnishings & Routine Household Maintenance (detergents, cleaners)
+- `06` Health & Pharmaceuticals
+- `12` Miscellaneous Goods & Services (personal care, shampoos)
 
 For technology products (Divisions 08 & 09), hedonic quality adjustment models in `pipeline/hedonic_regression.py` revalue prices to constant baseline specifications:
 
@@ -214,7 +223,9 @@ $$
 
 ### Step 2: Reference Base Price Anchoring ($P_{0, i}$)
 
-For every canonical item $i$, the base reference price $P_{0, i}$ is established on **August 18, 2026** ($t=0$) as the unweighted geometric mean of observed quotes across $K_0$ stores:
+For every canonical item $i$, base reference prices are established on **August 18, 2026** ($t=0$) as the unweighted geometric mean of observed quotes across $K_0$ stores. To preserve dimensional flexibility across historical queries, the engine tracks both:
+1. **Base Metric Unit Price** ($P_{0, i}^{\text{unit}}$): Geometric mean of $\text{unit\_price\_khr}$.
+2. **Base Shelf Pack Price** ($P_{0, i}^{\text{shelf}}$): Geometric mean of $\text{price\_khr}$.
 
 $$
 P_{0, i} = \exp\left(\frac{1}{K_0} \sum_{k=1}^{K_0} \ln P_{i, 0, k}\right)
@@ -222,21 +233,49 @@ $$
 
 ---
 
-### Step 3: Elementary Jevons Micro-Index Compilation
+### Step 3: Pure-Price Elementary Jevons Micro-Index Compilation
 
-For comparison date $t$, the daily observed geometric mean price for canonical product $i$ across $K_{i, t}$ stores is computed:
+Under the **ILO CPI Manual (2020)** Chapter 6, pure price comparison requires strictly homogeneous physical units of quantity ($P_{i,t} / P_{0,i}$). Comparing an item's pack price (e.g. 2,400 KHR for 200g) against a normalized metric unit price (12,000 KHR/kg) creates an artificial $5.0\times$ packaging artifact.
+
+The calculation engine (`pipeline/cpi_calculator.py`) enforces **Pure Price Dimensional Homogeneity**:
+
+#### 1. Symmetrical Dual-Period Metric Alignment
+- **Metric Unit Comparison**: If and only if **both** the base period ($t=0$) and current comparison period ($t$) possess valid, positive metric unit prices, the elementary relative uses metric unit prices:
+  $$
+  R_i = \frac{P_{i, t}^{\text{unit}}}{P_{0, i}^{\text{unit}}}
+  $$
+- **Shelf Pack Fallback**: If either period lacks a valid metric unit price (e.g., container items sold as jars, cans, packs without parseable volume/weight), the engine safely falls back to comparing shelf pack prices for both periods:
+  $$
+  R_i = \frac{P_{i, t}^{\text{shelf}}}{P_{0, i}^{\text{shelf}}}
+  $$
+
+#### 2. Wholesale Case & Pack-Multiplier Guard
+Cambodian e-commerce titles frequently retain wholesale manufacturer case strings (e.g., `"SANTAN COCONUT MILK 24 X 200ML"`) while retail stores sell individual cans for 3,600 KHR. Regex division by 24 artificially collapses the unit price by $24\times$.
+
+To neutralize this catalog anomaly, the engine executes a dual-ratio check:
+If the metric unit price relative diverges drastically:
+$$
+\left(\frac{P_{i, t}^{\text{unit}}}{P_{0, i}^{\text{unit}}} \ge 3.0 \quad \text{or} \quad \frac{P_{i, t}^{\text{unit}}}{P_{0, i}^{\text{unit}}} \le 0.33\right)
+$$
+while the shelf pack price relative is stable and unexceptional:
+$$
+0.70 \le \frac{P_{i, t}^{\text{shelf}}}{P_{0, i}^{\text{shelf}}} \le 1.40
+$$
+the engine automatically overrides the unit price relative and falls back to shelf price:
+$$
+R_i = \frac{P_{i, t}^{\text{shelf}}}{P_{0, i}^{\text{shelf}}}
+$$
+
+#### 3. Imputation Base-Price Synchronization
+When an item is missing on day $t$ and carried forward via 7-day ILO class-mean imputation, its base reference price ($P_{0, i}$) is synchronized with the exact dimension (unit vs shelf) of the trailing imputed observation to prevent hybrid-dimension inflation spikes upon price recovery.
+
+The **elementary price relative (Micro-Index)** is compiled:
 
 $$
-P_{i, t} = \exp\left(\frac{1}{K_{i, t}} \sum_{k=1}^{K_{i, t}} \ln P_{i, t, k}\right)
+I_i^{t/0} = R_i \times 100.0
 $$
 
-The **elementary price relative (Micro-Index)** is compiled against its base price:
-
-$$
-I_i^{t/0} = \left(\frac{P_{i, t}}{P_{0, i}}\right) \times 100.0
-$$
-
-_Axiomatic Guarantees:_ Satisfies the **Time Reversal Test** ($I^{t/0} \times I^{0/t} = 1$) and **Circularity Test**, preventing upward formula drift.
+_Axiomatic Guarantees:_ Satisfies the **Time Reversal Test** ($I^{t/0} \times I^{0/t} = 1$), **Dimensional Invariance Test**, and **Circularity Test**, completely eliminating packaging-induced formula drift.
 
 ---
 

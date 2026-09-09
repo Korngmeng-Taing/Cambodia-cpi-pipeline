@@ -182,7 +182,7 @@ class CPICalculationEngine:
                 s.item_id,
                 s.store_slug,
                 s.name_clean,
-                COALESCE(h.hedonic_adjusted_price_khr, s.unit_price_khr, s.price_khr) AS unit_price_khr,
+                COALESCE(h.hedonic_adjusted_price_khr, s.unit_price_khr) AS unit_price_khr,
                 s.price_khr,
                 s.coicop_division,  -- post-classification division from clean_store_prices, NOT h.coicop_division
                 s.coicop_code,
@@ -209,8 +209,17 @@ class CPICalculationEngine:
         finally:
             conn.close()
         df["scrape_date"] = pd.to_datetime(df["scrape_date"]).dt.date
+        df["price_khr"] = pd.to_numeric(df["price_khr"], errors="coerce")
         df["unit_price_khr"] = pd.to_numeric(df["unit_price_khr"], errors="coerce")
-        df = df[df["unit_price_khr"] > 0]
+        
+        # Only accept metric unit prices for grocery and consumable divisions
+        # For non-consumable divisions (03, 04, 07, 08, 09, 10, 11), sizes like "5G" or "2.4G"
+        # are electronic specs, not weight/volume.
+        consumable_divisions = {"01", "02", "05", "06", "12"}
+        is_consumable = df["coicop_division"].astype(str).str.zfill(2).isin(consumable_divisions)
+        df.loc[~is_consumable, "unit_price_khr"] = np.nan
+
+        df = df[df["price_khr"] > 0]
         return df
 
     def compute_jevons_index(self, current_prices, base_prices) -> float:
@@ -247,13 +256,14 @@ class CPICalculationEngine:
     def compute_base_prices(self, base_date: date, df_prices: pd.DataFrame | None = None) -> pd.DataFrame:
         """
         Computes the base geometric mean price per item_id on the base date.
+        Tracks both shelf price and metric unit price for strict dimensional comparison.
         """
         if df_prices is None:
             df_prices = self.load_clean_prices(base_date, base_date)
         
         if df_prices.empty:
             log.warning("No price history available to compute base prices.")
-            return pd.DataFrame(columns=["item_id", "coicop_division", "coicop_code", "base_price_khr", "base_obs_count"])
+            return pd.DataFrame(columns=["item_id", "coicop_division", "coicop_code", "base_price_khr", "base_unit_price_khr", "base_obs_count"])
 
         base_df = df_prices[df_prices["scrape_date"] == base_date]
         if base_df.empty:
@@ -262,20 +272,27 @@ class CPICalculationEngine:
             base_df = df_prices[df_prices["scrape_date"] == earliest]
 
         if base_df.empty:
-            return pd.DataFrame(columns=["item_id", "coicop_division", "coicop_code", "base_price_khr", "base_obs_count"])
+            return pd.DataFrame(columns=["item_id", "coicop_division", "coicop_code", "base_price_khr", "base_unit_price_khr", "base_obs_count"])
+
+        if "price_khr" not in base_df.columns and "unit_price_khr" in base_df.columns:
+            base_df = base_df.copy()
+            base_df["price_khr"] = base_df["unit_price_khr"]
+        elif "unit_price_khr" not in base_df.columns and "price_khr" in base_df.columns:
+            base_df = base_df.copy()
+            base_df["unit_price_khr"] = base_df["price_khr"]
 
         def _safe_geom_mean(x):
-            valid = x[x > 0]
+            valid = x[x > 0].dropna()
             if len(valid) == 0:
                 return np.nan
             return float(np.exp(np.mean(np.log(valid))))
 
-        # Geometric mean base price strictly per unique item_id
         grouped = base_df.groupby("item_id").agg(
             coicop_division=("coicop_division", "first"),
             coicop_code=("coicop_code", "first"),
-            base_price_khr=("unit_price_khr", _safe_geom_mean),
-            base_obs_count=("unit_price_khr", "count")
+            base_price_khr=("price_khr", _safe_geom_mean),
+            base_unit_price_khr=("unit_price_khr", _safe_geom_mean),
+            base_obs_count=("price_khr", "count")
         ).reset_index()
 
         return grouped[grouped["base_price_khr"] > 0]
@@ -289,19 +306,59 @@ class CPICalculationEngine:
     ) -> pd.DataFrame:
         """
         Computes elementary Jevons price indices for calc_date with ILO Class-Mean Imputation.
+        Enforces strict pure-price dimensional comparison (P_t / P_0):
+          - Compares unit_price_khr (per kg/L) if BOTH base and current have valid metric units.
+          - Falls back to shelf price_khr (per pack/can/jar) if either is unnormalized.
         When an item is missing on day t (gap <= 7 days), its price is advanced using the
         geometric average rate of change of observed items in the same COICOP division.
         """
+        base_df = base_df.copy()
+        if "base_unit_price_khr" not in base_df.columns and "base_price_khr" in base_df.columns:
+            base_df["base_unit_price_khr"] = base_df["base_price_khr"]
+        elif "base_price_khr" not in base_df.columns and "base_unit_price_khr" in base_df.columns:
+            base_df["base_price_khr"] = base_df["base_unit_price_khr"]
+
+        df_history = df_history.copy()
+        if "price_khr" not in df_history.columns and "unit_price_khr" in df_history.columns:
+            df_history["price_khr"] = df_history["unit_price_khr"]
+        elif "unit_price_khr" not in df_history.columns and "price_khr" in df_history.columns:
+            df_history["unit_price_khr"] = df_history["price_khr"]
+
+        def _safe_geom_mean(x):
+            valid = x[x > 0].dropna()
+            if len(valid) == 0:
+                return np.nan
+            return float(np.exp(np.mean(np.log(valid))))
+
         # Current day observations strictly per unique item_id
         today_obs = df_history[df_history["scrape_date"] == calc_date]
         today_agg = today_obs.groupby("item_id").agg(
-            current_price_khr=("unit_price_khr", lambda x: float(np.exp(np.mean(np.log(x[x > 0]))))),
-            observation_count=("unit_price_khr", "count")
+            today_price_khr=("price_khr", _safe_geom_mean),
+            today_unit_price_khr=("unit_price_khr", _safe_geom_mean),
+            observation_count=("price_khr", "count")
         ).reset_index()
 
         # Merge with base prices on item_id
         merged = pd.merge(base_df, today_agg, on="item_id", how="left")
         merged["is_imputed"] = False
+
+        # Pure Price Comparison (ILO CPI Manual):
+        # 1. Use metric unit prices (KHR/kg, KHR/L) if BOTH base and today have valid metric unit prices (> 0).
+        # 2. Guard against wholesale case / pack_qty parsing mismatch:
+        #    If unit_ratio diverges wildly (>= 3.0x or <= 0.33x) while shelf_ratio is stable (0.70 to 1.40),
+        #    that is a package-count parsing artifact (e.g. 24X case title priced as single unit). Fall back to shelf price.
+        # 3. If EITHER is missing metric unit price, fall back to shelf price (price_khr) for BOTH.
+        has_both_unit = (
+            merged["base_unit_price_khr"].notna() & (merged["base_unit_price_khr"] > 0) &
+            merged["today_unit_price_khr"].notna() & (merged["today_unit_price_khr"] > 0)
+        )
+        shelf_ratio = np.where(merged["base_price_khr"] > 0, merged["today_price_khr"] / merged["base_price_khr"], 1.0)
+        unit_ratio = np.where(has_both_unit, merged["today_unit_price_khr"] / merged["base_unit_price_khr"], shelf_ratio)
+        is_pack_artifact = has_both_unit & ((unit_ratio >= 3.0) | (unit_ratio <= 0.33)) & (shelf_ratio >= 0.70) & (shelf_ratio <= 1.40)
+        use_unit_price = has_both_unit & ~is_pack_artifact
+
+        merged["base_price_khr"] = np.where(use_unit_price, merged["base_unit_price_khr"], merged["base_price_khr"])
+        merged["current_price_khr"] = np.where(use_unit_price, merged["today_unit_price_khr"], merged["today_price_khr"])
 
         # Compute division movement ratios for observed items between yesterday and today
         prior_dates = sorted([d for d in df_history["scrape_date"].unique() if d < calc_date])
@@ -310,15 +367,22 @@ class CPICalculationEngine:
         division_movement_ratios: dict[str, float] = {}
         if prev_date is not None and not today_obs.empty:
             prev_obs = df_history[df_history["scrape_date"] == prev_date]
-            prev_agg = prev_obs.groupby("item_id")["unit_price_khr"].agg(
-                lambda x: float(np.exp(np.mean(np.log(x[x > 0]))))
+            prev_agg = prev_obs.groupby("item_id").agg(
+                prev_price_khr=("price_khr", _safe_geom_mean),
+                prev_unit_price_khr=("unit_price_khr", _safe_geom_mean)
             ).reset_index()
             
             # Common items between yesterday and today
-            common = pd.merge(today_agg, prev_agg, on="item_id", suffixes=("_today", "_prev"))
+            common = pd.merge(today_agg, prev_agg, on="item_id")
             if not common.empty:
-                common = pd.merge(common, base_df[["item_id", "coicop_division"]], on="item_id", how="left")
-                common["ratio"] = common["current_price_khr"] / common["unit_price_khr"]
+                common = pd.merge(common, base_df[["item_id", "coicop_division", "base_unit_price_khr"]], on="item_id", how="left")
+                comm_both_unit = (
+                    common["today_unit_price_khr"].notna() & (common["today_unit_price_khr"] > 0) &
+                    common["prev_unit_price_khr"].notna() & (common["prev_unit_price_khr"] > 0)
+                )
+                today_eval = np.where(comm_both_unit, common["today_unit_price_khr"], common["today_price_khr"])
+                prev_eval = np.where(comm_both_unit, common["prev_unit_price_khr"], common["prev_price_khr"])
+                common["ratio"] = today_eval / prev_eval
                 common = common[(common["ratio"] >= 0.5) & (common["ratio"] <= 2.0)]
                 for div, group in common.groupby("coicop_division"):
                     if len(group) > 0:
@@ -345,23 +409,43 @@ class CPICalculationEngine:
                 latest_obs = pd.merge(
                     recent_obs, latest_dates, on=["item_id", "scrape_date"], how="inner"
                 )
-                # Compute geometric mean across stores on that latest date (Jevons elementary aggregation)
-                last_prices = latest_obs.groupby("item_id")["unit_price_khr"].agg(
-                    lambda x: float(np.exp(np.mean(np.log(x[x > 0])))) if len(x[x > 0]) > 0 else np.nan
-                ).to_dict()
+                
+                base_unit_lookup = dict(zip(base_df["item_id"], base_df["base_unit_price_khr"], strict=False))
+                base_shelf_lookup = dict(zip(base_df["item_id"], base_df["base_price_khr"], strict=False))
+                latest_agg = latest_obs.groupby("item_id").agg(
+                    last_price_khr=("price_khr", _safe_geom_mean),
+                    last_unit_price_khr=("unit_price_khr", _safe_geom_mean)
+                ).reset_index()
+
+                last_prices = {}
+                matched_base_prices = {}
+                for r in latest_agg.itertuples():
+                    b_unit = base_unit_lookup.get(r.item_id)
+                    s_b = base_shelf_lookup.get(r.item_id)
+                    s_c = r.last_price_khr
+                    if pd.notna(b_unit) and b_unit > 0 and pd.notna(r.last_unit_price_khr) and r.last_unit_price_khr > 0:
+                        s_ratio = (s_c / s_b) if (s_b and s_b > 0 and s_c and s_c > 0) else 1.0
+                        u_ratio = r.last_unit_price_khr / b_unit
+                        if (u_ratio >= 3.0 or u_ratio <= 0.33) and (0.70 <= s_ratio <= 1.40):
+                            last_prices[r.item_id] = s_c
+                            matched_base_prices[r.item_id] = s_b
+                        else:
+                            last_prices[r.item_id] = r.last_unit_price_khr
+                            matched_base_prices[r.item_id] = b_unit
+                    else:
+                        last_prices[r.item_id] = r.last_price_khr
+                        matched_base_prices[r.item_id] = s_b
 
                 for idx, row in merged[missing_mask].iterrows():
                     item_id = row["item_id"]
                     val = last_prices.get(item_id)
+                    b_price = matched_base_prices.get(item_id)
                     if val is not None and not pd.isna(val) and float(val) > 0:
                         div = str(row.get("coicop_division", "01"))
                         # Apply class-mean movement ratio if available, clamped to [0.80, 1.25]
                         movement = division_movement_ratios.get(div, 1.0)
                         movement = max(0.80, min(1.25, movement))
-                        # BUG-01 FIX: Compound the 1-day movement ratio by the
-                        # actual number of gap days between the last observation
-                        # and calc_date.  Previously a single-day ratio was applied
-                        # regardless of how stale the price was.
+                        # Compound by actual gap days
                         last_obs_date = latest_dates_dict.get(item_id)
                         if last_obs_date is not None:
                             days_gap = (pd.to_datetime(calc_date) - pd.to_datetime(last_obs_date)).days
@@ -370,6 +454,8 @@ class CPICalculationEngine:
                             days_gap = 1
                         imputed_price = float(val) * (movement ** days_gap)
                         merged.at[idx, "current_price_khr"] = imputed_price
+                        if b_price is not None and pd.notna(b_price) and float(b_price) > 0:
+                            merged.at[idx, "base_price_khr"] = float(b_price)
                         merged.at[idx, "observation_count"] = 1
                         merged.at[idx, "is_imputed"] = True
 
@@ -383,6 +469,7 @@ class CPICalculationEngine:
 
         # Store price ratio as a percentage (per-item Jevons index)
         valid["price_ratio_pct"] = valid["price_ratio"] * 100.0
+        valid["elementary_index"] = valid["price_ratio_pct"]
         valid["calculation_date"] = calc_date
 
         return valid
@@ -613,12 +700,16 @@ class CPICalculationEngine:
                     );
                 """)
 
-                # Ensure price_ratio_pct column exists (table may have been created before this column was added)
+                # Ensure price_ratio_pct and elementary_index columns exist and are synced
                 cur.execute("""
                     DO $$ BEGIN
                         ALTER TABLE gold.fct_elementary_indices ADD COLUMN IF NOT EXISTS price_ratio_pct NUMERIC(10, 4);
+                        ALTER TABLE gold.fct_elementary_indices ADD COLUMN IF NOT EXISTS elementary_index NUMERIC(10, 4);
                     EXCEPTION WHEN duplicate_column THEN NULL;
                     END $$;
+                    UPDATE gold.fct_elementary_indices
+                    SET elementary_index = COALESCE(price_ratio_pct, ROUND(price_ratio * 100.0, 4))
+                    WHERE elementary_index IS NULL;
                 """)
 
                 # 1. Upsert Elementary Indices
@@ -626,6 +717,7 @@ class CPICalculationEngine:
                     (
                         r.calculation_date, str(r.item_id), r.coicop_division, r.coicop_code,
                         r.base_price_khr, r.current_price_khr, r.price_ratio, r.price_ratio_pct,
+                        r.price_ratio_pct,
                         r.is_imputed, int(r.observation_count)
                     )
                     for r in elementary_df.itertuples(index=False)
@@ -634,8 +726,9 @@ class CPICalculationEngine:
                     INSERT INTO gold.fct_elementary_indices (
                         calculation_date, item_id, coicop_division, coicop_code,
                         base_price_khr, current_price_khr, price_ratio, price_ratio_pct,
+                        elementary_index,
                         is_imputed, observation_count
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (calculation_date, item_id) DO UPDATE
                     SET coicop_division = EXCLUDED.coicop_division,
                         coicop_code = EXCLUDED.coicop_code,
@@ -643,6 +736,7 @@ class CPICalculationEngine:
                         current_price_khr = EXCLUDED.current_price_khr,
                         price_ratio = EXCLUDED.price_ratio,
                         price_ratio_pct = EXCLUDED.price_ratio_pct,
+                        elementary_index = EXCLUDED.elementary_index,
                         is_imputed = EXCLUDED.is_imputed,
                         observation_count = EXCLUDED.observation_count
                 """, elem_rows, page_size=1000)

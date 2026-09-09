@@ -3,14 +3,14 @@
 -- Enables native PostgreSQL 16 vector search on silver.canonical_items (768-dim)
 -- ============================================================================
 
-DO \$\$
+DO $$
 BEGIN
     CREATE EXTENSION IF NOT EXISTS vector;
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'pgvector extension not available in this PostgreSQL environment; skipping.';
-END \$\$;
+END $$;
 
-DO \$\$
+DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
         -- 1. Add 768-dimensional vector embedding column to canonical items
@@ -40,4 +40,4 @@ BEGIN
     EXCEPTION WHEN OTHERS THEN
         RAISE NOTICE 'Constraint update skipped or not applicable.';
     END;
-END \$\$;
+END $$;

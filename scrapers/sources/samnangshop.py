@@ -141,7 +141,7 @@ class SamnangShopScraper(BaseScraper):
             item_id=item_id,
             name=name,
             price=price,
-            currency=prices.get("currency_code") or "USD",
+            currency=curr,
             original_price=orig_price,
             brand=brand,
             category_native=cat_name,

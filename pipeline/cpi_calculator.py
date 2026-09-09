@@ -184,6 +184,9 @@ class CPICalculationEngine:
                 s.name_clean,
                 COALESCE(h.hedonic_adjusted_price_khr, s.unit_price_khr) AS unit_price_khr,
                 s.price_khr,
+                s.original_price_khr,
+                s.on_promo,
+                s.discount_pct,
                 s.coicop_division,  -- post-classification division from clean_store_prices, NOT h.coicop_division
                 s.coicop_code,
                 s.is_outlier
@@ -211,6 +214,10 @@ class CPICalculationEngine:
         df["scrape_date"] = pd.to_datetime(df["scrape_date"]).dt.date
         df["price_khr"] = pd.to_numeric(df["price_khr"], errors="coerce")
         df["unit_price_khr"] = pd.to_numeric(df["unit_price_khr"], errors="coerce")
+        if "original_price_khr" in df.columns:
+            df["original_price_khr"] = pd.to_numeric(df["original_price_khr"], errors="coerce")
+        if "discount_pct" in df.columns:
+            df["discount_pct"] = pd.to_numeric(df["discount_pct"], errors="coerce")
         
         # Only accept metric unit prices for grocery and consumable divisions
         # For non-consumable divisions (03, 04, 07, 08, 09, 10, 11), sizes like "5G" or "2.4G"
@@ -281,10 +288,46 @@ class CPICalculationEngine:
             base_df = base_df.copy()
             base_df["unit_price_khr"] = base_df["price_khr"]
 
+        # Strategy A: Base Price Promo Regularization (ILO CPI Manual §6.82)
+        # Deep clearance promotions on the base date distort base prices downward.
+        # If an observation on base date has on_promo == True and discount_pct >= 45% (or original_price_khr >= 1.45 * price_khr),
+        # use original regular MSRP shelf price to compute base prices.
+        if "on_promo" in base_df.columns and "original_price_khr" in base_df.columns:
+            orig = pd.to_numeric(base_df["original_price_khr"], errors="coerce")
+            disc = pd.to_numeric(base_df.get("discount_pct", pd.Series(0, index=base_df.index)), errors="coerce").fillna(0)
+            is_promo = base_df["on_promo"].fillna(False).astype(bool)
+            is_deep_promo = (
+                is_promo &
+                ((disc >= 45.0) | (orig >= base_df["price_khr"] * 1.45)) &
+                (orig > base_df["price_khr"])
+            )
+            if is_deep_promo.any():
+                base_df = base_df.copy()
+                promo_factor = np.where(
+                    is_deep_promo,
+                    orig / base_df["price_khr"],
+                    1.0
+                )
+                base_df["price_khr"] = np.where(is_deep_promo, orig, base_df["price_khr"])
+                if "unit_price_khr" in base_df.columns:
+                    base_df["unit_price_khr"] = np.where(
+                        is_deep_promo & base_df["unit_price_khr"].notna(),
+                        base_df["unit_price_khr"] * promo_factor,
+                        base_df["unit_price_khr"]
+                    )
+
         def _safe_geom_mean(x):
             valid = x[x > 0].dropna()
             if len(valid) == 0:
                 return np.nan
+            if len(valid) > 1:
+                vals = valid.to_numpy()
+                min_v = np.min(vals)
+                if np.max(vals) / min_v >= 2.5:
+                    vals = vals[vals < min_v * 2.5]
+                    if len(vals) == 0:
+                        return float(min_v)
+                    return float(np.exp(np.mean(np.log(vals))))
             return float(np.exp(np.mean(np.log(valid))))
 
         grouped = base_df.groupby("item_id").agg(
@@ -328,6 +371,14 @@ class CPICalculationEngine:
             valid = x[x > 0].dropna()
             if len(valid) == 0:
                 return np.nan
+            if len(valid) > 1:
+                vals = valid.to_numpy()
+                min_v = np.min(vals)
+                if np.max(vals) / min_v >= 2.5:
+                    vals = vals[vals < min_v * 2.5]
+                    if len(vals) == 0:
+                        return float(min_v)
+                    return float(np.exp(np.mean(np.log(vals))))
             return float(np.exp(np.mean(np.log(valid))))
 
         # Current day observations strictly per unique item_id
@@ -465,7 +516,7 @@ class CPICalculationEngine:
         valid["price_ratio"] = valid["current_price_khr"] / valid["base_price_khr"]
         
         # ILO Outlier Filter: Guard against extreme price scaling or raw scraper glitches
-        valid = valid[(valid["price_ratio"] >= 0.20) & (valid["price_ratio"] <= 5.00)].copy()
+        valid = valid[(valid["price_ratio"] >= 0.33) & (valid["price_ratio"] <= 3.00)].copy()
 
         # Store price ratio as a percentage (per-item Jevons index)
         valid["price_ratio_pct"] = valid["price_ratio"] * 100.0
@@ -713,6 +764,13 @@ class CPICalculationEngine:
                 """)
 
                 # 1. Upsert Elementary Indices
+                if not elementary_df.empty:
+                    calc_dt = elementary_df["calculation_date"].iloc[0]
+                    cur.execute(
+                        "DELETE FROM gold.fct_elementary_indices WHERE calculation_date = %s AND (elementary_index > 300.0 OR elementary_index < 33.0);",
+                        (calc_dt,)
+                    )
+
                 elem_rows = [
                     (
                         r.calculation_date, str(r.item_id), r.coicop_division, r.coicop_code,

@@ -231,6 +231,12 @@ $$
 P_{0, i} = \exp\left(\frac{1}{K_0} \sum_{k=1}^{K_0} \ln P_{i, 0, k}\right)
 $$
 
+#### 1. Base Period Promotional Price Regularization (ILO CPI Manual §6.82)
+Temporary promotional flash sales on the base date artificially depress $P_{0, i}$, which causes extreme positive index spikes when prices return to normal shelf levels. In accordance with ILO recommendations, when an observation on the base date is on promotion with a discount $\ge 45\%$ (or $\text{original\_price} \ge 1.45 \times \text{sale\_price}$), the engine replaces the promotional sale price with the regular shelf price ($\text{original\_price\_khr}$) for computing $P_{0, i}$.
+
+#### 2. Intra-Day Wholesale Cluster Filtering
+When multiple quotes exist for an item on a given day (e.g. single bottle vs. 24-can case mapped to the same ID), quotes where $P \ge 2.5 \times \min(P)$ are filtered out. This ensures single retail piece prices are never averaged with wholesale crate prices.
+
 ---
 
 ### Step 3: Pure-Price Elementary Jevons Micro-Index Compilation
@@ -298,13 +304,13 @@ Rows with imputed prices are tagged with `is_imputed = TRUE` in `gold.fct_elemen
 
 ### Step 5: Axiomatic Outlier Price Ratio Bounding
 
-To protect against raw scraper errors or decimal shifts:
+To protect against raw scraper errors, package size changes, or decimal shifts:
 
 $$
-0.20 \le \frac{P_{i, t}}{P_{0, i}} \le 5.00
+0.33 \le \frac{P_{i, t}}{P_{0, i}} \le 3.00
 $$
 
-Observations outside $[-80\%, +400\%]$ price movement bounds are quarantined.
+Observations outside $[-67\%, +200\%]$ price movement bounds ($33.00 \le I_i^{t/0} \le 300.00$) are quarantined from elementary index compilation to prevent extreme skew.
 
 ---
 

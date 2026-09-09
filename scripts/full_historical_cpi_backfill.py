@@ -46,53 +46,29 @@ def run_full_backfill():
 
     try:
         t0 = time.time()
-        # Update silver.clean_store_prices
-        cur.execute(r"""
+        # Update silver.clean_store_prices from silver.canonical_items
+        cur.execute("""
             UPDATE silver.clean_store_prices s
-            SET coicop_division = CASE
-                    WHEN split_part(ai.coicop_code, '.', 1) IN ('12', '13') THEN '12'
-                    ELSE LPAD(split_part(ai.coicop_code, '.', 1), 2, '0')
-                END,
-                coicop_code = ai.coicop_code,
-                coicop_method = 'gemini_ai_backfill',
-                coicop_confidence = ai.confidence_score
-            FROM (
-                SELECT DISTINCT ON (lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')))
-                    lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')) AS norm_name,
-                    coicop_code,
-                    confidence_score
-                FROM silver.dim_coicop_ai_cache
-                WHERE confidence_score >= 0.70
-                  AND coicop_code <> '99.9.9'
-                ORDER BY lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')), confidence_score DESC, classified_at DESC
-            ) ai
-            WHERE lower(regexp_replace(trim(s.name_clean), '\s+', ' ', 'g')) = ai.norm_name
-              AND s.coicop_code <> ai.coicop_code;
+            SET coicop_division = ci.coicop_division,
+                coicop_code = ci.coicop_code,
+                coicop_method = 'canonical_sync',
+                coicop_confidence = 0.950
+            FROM silver.canonical_items ci
+            WHERE s.item_id::text = ci.item_id::text
+              AND (s.coicop_code != ci.coicop_code OR s.coicop_division != ci.coicop_division);
         """)
         silver_updated = cur.rowcount
         print(f"   Updated {silver_updated:,} rows in silver.clean_store_prices in {time.time() - t0:.2f}s.")
 
         t0 = time.time()
-        # Update gold.dim_items
-        cur.execute(r"""
+        # Update gold.dim_items from silver.canonical_items
+        cur.execute("""
             UPDATE gold.dim_items d
-            SET coicop_division = CASE
-                    WHEN split_part(ai.coicop_code, '.', 1) IN ('12', '13') THEN '12'
-                    ELSE LPAD(split_part(ai.coicop_code, '.', 1), 2, '0')
-                END,
-                coicop_code = ai.coicop_code
-            FROM (
-                SELECT DISTINCT ON (lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')))
-                    lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')) AS norm_name,
-                    coicop_code,
-                    confidence_score
-                FROM silver.dim_coicop_ai_cache
-                WHERE confidence_score >= 0.70
-                  AND coicop_code <> '99.9.9'
-                ORDER BY lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')), confidence_score DESC, classified_at DESC
-            ) ai
-            WHERE lower(regexp_replace(trim(d.canonical_name), '\s+', ' ', 'g')) = ai.norm_name
-              AND d.coicop_code <> ai.coicop_code;
+            SET coicop_division = ci.coicop_division,
+                coicop_code = ci.coicop_code
+            FROM silver.canonical_items ci
+            WHERE d.item_id::text = ci.item_id::text
+              AND (d.coicop_code != ci.coicop_code OR d.coicop_division != ci.coicop_division);
         """)
         gold_dim_updated = cur.rowcount
         print(f"   Updated {gold_dim_updated:,} canonical items in gold.dim_items in {time.time() - t0:.2f}s.")

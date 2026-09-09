@@ -136,6 +136,9 @@ DEFAULT_COICOP_CLASS_MAPPING = {
     "09.3.3": "09.3.1",  # Gardens/plants -> Games, toys and hobbies
     "09.3.4": "09.3.1",  # Pet products -> Games, toys and hobbies
     "09.5.4": "09.5.1",  # Stationery and drawing materials -> Books and stationery
+    # Division 10
+    "10.1.1": "10.1.0",  # Educational stationery & textbooks -> Education
+    "10.2.0": "10.1.0",  # Education materials -> Education
     # Division 12
     "12.1.2": "12.1.3",  # Electrical personal care appliances -> Other personal care
     "12.2.0": "12.3.2",  # Personal effects / services -> Other personal effects
@@ -232,10 +235,12 @@ class CPICalculationEngine:
                 s.original_price_khr,
                 s.on_promo,
                 s.discount_pct,
-                s.coicop_division,  -- post-classification division from clean_store_prices, NOT h.coicop_division
-                s.coicop_code,
+                COALESCE(ci.coicop_division, s.coicop_division) AS coicop_division,
+                COALESCE(ci.coicop_code, s.coicop_code) AS coicop_code,
                 s.is_outlier
             FROM silver.clean_store_prices s
+            LEFT JOIN silver.canonical_items ci
+              ON ci.item_id::text = s.item_id::text
             LEFT JOIN silver.hedonic_adjusted_prices h 
               ON h.scrape_date = s.scrape_date 
              AND h.item_id = s.item_id::text 
@@ -305,26 +310,38 @@ class CPICalculationEngine:
         ratios = cur / base
         return float(np.exp(np.mean(np.log(ratios))) * 100.0)
 
-    def compute_base_prices(self, base_date: date, df_prices: pd.DataFrame | None = None) -> pd.DataFrame:
+    def compute_base_prices(
+        self, 
+        base_date: date, 
+        df_prices: pd.DataFrame | None = None,
+        base_window_days: int = 7
+    ) -> pd.DataFrame:
         """
-        Computes the base geometric mean price per item_id on the base date.
-        Tracks both shelf price and metric unit price for strict dimensional comparison.
+        Computes the base geometric mean price per item_id on the base date or launch window.
+        Follows ILO CPI Manual §6.30 (Multi-Day Baseline Window & Expanding Universe):
+        1. Items observed on base_date establish their base price directly.
+        2. Items from newly launched stores or newer items (e.g. BookMeBus, RedBus, Grab UCare)
+           establish their reference base price on their first appearance.
+        3. Tracks both shelf price and metric unit price for strict dimensional comparison.
         """
         if df_prices is None:
-            df_prices = self.load_clean_prices(base_date, base_date)
+            df_prices = self.load_clean_prices(base_date, base_date + timedelta(days=base_window_days))
         
         if df_prices.empty:
             log.warning("No price history available to compute base prices.")
-            return pd.DataFrame(columns=["item_id", "coicop_division", "coicop_code", "base_price_khr", "base_unit_price_khr", "base_obs_count"])
+            return pd.DataFrame(columns=["item_id", "coicop_division", "coicop_code", "base_price_khr", "base_unit_price_khr", "base_obs_count", "first_seen_date"])
 
-        base_df = df_prices[df_prices["scrape_date"] == base_date]
-        if base_df.empty:
-            log.warning(f"No observations found on base date {base_date}. Using earliest available.")
-            earliest = df_prices["scrape_date"].min()
-            base_df = df_prices[df_prices["scrape_date"] == earliest]
+        # Determine reference date per item: earliest observed scrape_date >= base_date
+        valid_prices = df_prices[df_prices["scrape_date"] >= base_date].copy()
+        if valid_prices.empty:
+            valid_prices = df_prices.copy()
+
+        earliest_dates = valid_prices.groupby("item_id")["scrape_date"].min().reset_index()
+        base_df = pd.merge(valid_prices, earliest_dates, on=["item_id", "scrape_date"], how="inner")
+        base_df["first_seen_date"] = base_df["scrape_date"]
 
         if base_df.empty:
-            return pd.DataFrame(columns=["item_id", "coicop_division", "coicop_code", "base_price_khr", "base_unit_price_khr", "base_obs_count"])
+            return pd.DataFrame(columns=["item_id", "coicop_division", "coicop_code", "base_price_khr", "base_unit_price_khr", "base_obs_count", "first_seen_date"])
 
         if "price_khr" not in base_df.columns and "unit_price_khr" in base_df.columns:
             base_df = base_df.copy()
@@ -380,7 +397,8 @@ class CPICalculationEngine:
             coicop_code=("coicop_code", "first"),
             base_price_khr=("price_khr", _safe_geom_mean),
             base_unit_price_khr=("unit_price_khr", _safe_geom_mean),
-            base_obs_count=("price_khr", "count")
+            base_obs_count=("price_khr", "count"),
+            first_seen_date=("first_seen_date", "first")
         ).reset_index()
 
         return grouped[grouped["base_price_khr"] > 0]
@@ -401,6 +419,9 @@ class CPICalculationEngine:
         geometric average rate of change of observed items in the same COICOP division.
         """
         base_df = base_df.copy()
+        if "first_seen_date" in base_df.columns:
+            base_df = base_df[base_df["first_seen_date"] <= calc_date].copy()
+
         if "base_unit_price_khr" not in base_df.columns and "base_price_khr" in base_df.columns:
             base_df["base_unit_price_khr"] = base_df["base_price_khr"]
         elif "base_price_khr" not in base_df.columns and "base_unit_price_khr" in base_df.columns:
@@ -433,6 +454,18 @@ class CPICalculationEngine:
             today_unit_price_khr=("unit_price_khr", _safe_geom_mean),
             observation_count=("price_khr", "count")
         ).reset_index()
+
+        # Dynamic expansion: If an item in today_agg is NOT in base_df, enroll it dynamically
+        missing_mask = ~today_agg["item_id"].isin(base_df["item_id"])
+        if missing_mask.any():
+            missing_today = today_agg[missing_mask]
+            cols = ["item_id", "coicop_division", "coicop_code"]
+            lookup = today_obs[cols].drop_duplicates("item_id")
+            new_items = pd.merge(missing_today, lookup, on="item_id", how="left")
+            new_items["base_price_khr"] = new_items["today_price_khr"]
+            new_items["base_unit_price_khr"] = new_items["today_unit_price_khr"]
+            new_items["base_obs_count"] = new_items["observation_count"]
+            base_df = pd.concat([base_df, new_items], ignore_index=True)
 
         # Merge with base prices on item_id
         merged = pd.merge(base_df, today_agg, on="item_id", how="left")
@@ -540,13 +573,16 @@ class CPICalculationEngine:
                         last_prices[r.item_id] = r.last_price_khr
                         matched_base_prices[r.item_id] = s_b
 
-                for idx, row in merged[missing_mask].iterrows():
-                    item_id = row["item_id"]
+                imputed_curr = {}
+                imputed_base = {}
+                imputable_mask = missing_mask & merged["item_id"].isin(last_prices.keys())
+                for r in merged[imputable_mask].itertuples():
+                    item_id = r.item_id
                     val = last_prices.get(item_id)
                     b_price = matched_base_prices.get(item_id)
                     if val is not None and not pd.isna(val) and float(val) > 0:
-                        div = str(row.get("coicop_division", "01"))
-                        sc = str(row.get("coicop_code", "")).strip() if pd.notna(row.get("coicop_code")) else ""
+                        div = str(getattr(r, "coicop_division", "01"))
+                        sc = str(getattr(r, "coicop_code", "")).strip() if pd.notna(getattr(r, "coicop_code", None)) else ""
                         # Two-tier ILO Class-Mean Imputation:
                         # Tier 1: Subclass-level geometric movement if available
                         # Tier 2: Division-level geometric movement fallback
@@ -562,12 +598,19 @@ class CPICalculationEngine:
                             days_gap = max(1, min(days_gap, 7))
                         else:
                             days_gap = 1
-                        imputed_price = float(val) * (movement ** days_gap)
-                        merged.at[idx, "current_price_khr"] = imputed_price
+                        imputed_curr[item_id] = float(val) * (movement ** days_gap)
                         if b_price is not None and pd.notna(b_price) and float(b_price) > 0:
-                            merged.at[idx, "base_price_khr"] = float(b_price)
-                        merged.at[idx, "observation_count"] = 1
-                        merged.at[idx, "is_imputed"] = True
+                            imputed_base[item_id] = float(b_price)
+
+                if imputed_curr:
+                    s_curr = merged["item_id"].map(imputed_curr)
+                    has_imp = s_curr.notna()
+                    merged.loc[has_imp, "current_price_khr"] = s_curr[has_imp]
+                    merged.loc[has_imp, "observation_count"] = 1
+                    merged.loc[has_imp, "is_imputed"] = True
+                    s_base = merged["item_id"].map(imputed_base)
+                    has_base_imp = s_base.notna()
+                    merged.loc[has_base_imp, "base_price_khr"] = s_base[has_base_imp]
 
         # Drop items that are still missing (missing > 7 days)
         valid = merged.dropna(subset=["current_price_khr", "base_price_khr"]).copy()

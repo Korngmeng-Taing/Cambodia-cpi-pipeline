@@ -8,7 +8,7 @@
     on_schema_change='append_new_columns',
     post_hook=[
         "create unique index if not exists uq_dim_items_item_id on {{ this }} (item_id)",
-        "UPDATE silver.canonical_items ci SET coicop_division = di.coicop_division, coicop_code = di.coicop_code FROM {{ this }} di WHERE ci.item_id::text = di.item_id::text AND (ci.coicop_division IS NULL OR ci.coicop_division IN ('UNCLASSIFIED', '99')) AND di.coicop_division NOT IN ('UNCLASSIFIED', '99')"
+        "UPDATE silver.canonical_items ci SET coicop_division = di.coicop_division, coicop_code = di.coicop_code FROM {{ this }} di WHERE ci.item_id::text = di.item_id::text AND (ci.coicop_division != di.coicop_division OR ci.coicop_code != di.coicop_code OR ci.coicop_division IS NULL) AND di.coicop_division NOT IN ('UNCLASSIFIED', '99')"
     ]
 ) }}
 

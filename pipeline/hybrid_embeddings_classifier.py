@@ -750,12 +750,33 @@ class HybridCOICOPClassifier:
             final_code = winning_match["code"]
             final_name = winning_match["name"]
             
-            # Store Context Override: Retail grocers do not sell restaurant/hotel services (Division 11).
-            # If a grocery store item maps to 11, remap to Food & Non-Alcoholic Beverages (01).
-            if final_div == "11" and store_slug and store_slug.lower() in MULTI_CATEGORY_STORES:
-                final_div = "01"
-                final_code = "01.1.1"
-                final_name = "Food and non-alcoholic beverages"
+            # Store Context Override: Retail grocers do not sell hotel services (11.2) or municipal utilities (04.1/04.4).
+            if store_slug and store_slug.lower() in MULTI_CATEGORY_STORES:
+                if final_div == "11":
+                    name_low = clean_name.lower()
+                    if any(w in name_low for w in ["chicken", "pork", "beef", "meat", "duck", "sausage"]):
+                        final_div, final_code, final_name = "01", "01.1.2", "Meat"
+                    elif any(w in name_low for w in ["fish", "salmon", "tuna", "seafood", "shrimp"]):
+                        final_div, final_code, final_name = "01", "01.1.3", "Fish and seafood"
+                    elif any(w in name_low for w in ["bread", "bakery", "croissant", "baguette", "noodle", "pasta"]):
+                        final_div, final_code, final_name = "01", "01.1.1", "Bread and cereals"
+                    elif any(w in name_low for w in ["coffee", "tea", "cacao", "cocoa"]):
+                        final_div, final_code, final_name = "01", "01.2.1", "Coffee, tea and cocoa"
+                    elif any(w in name_low for w in ["juice", "water", "soda", "drink"]):
+                        final_div, final_code, final_name = "01", "01.2.2", "Mineral waters, soft drinks, fruit and vegetable juices"
+                    else:
+                        final_div, final_code, final_name = "01", "01.1.9", "Food products n.e.c."
+                elif final_div == "04" and final_code in ("04.1.1", "04.4.1"):
+                    # Disqualify supermarket items from rentals or municipal tap water
+                    name_low = clean_name.lower()
+                    if "water gun" in name_low:
+                        final_div, final_code, final_name = "09", "09.3.1", "Games, toys and hobbies"
+                    elif "water color" in name_low or "pencils" in name_low:
+                        final_div, final_code, final_name = "09", "09.5.4", "Stationery and drawing materials"
+                    elif any(w in name_low for w in ["water", "juice", "drink"]):
+                        final_div, final_code, final_name = "01", "01.2.2", "Mineral waters, soft drinks, fruit and vegetable juices"
+                    else:
+                        final_div, final_code, final_name = "01", "01.1.9", "Food products n.e.c."
 
             return {
                 "product_name": clean_name,

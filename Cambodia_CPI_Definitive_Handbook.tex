@@ -143,7 +143,7 @@ While this traditional method is thorough, it has three big problems:
 \end{enumerate}
 
 \subsection{Our Daily Solution: Automated Web Intelligence}
-Our automated system solves this problem. Every single morning at 2:00 AM, while the city is asleep, our software automatically visits 23 online store catalogs, fuel company websites, utility pages, and phone providers. It collects over 35,500 real prices every day, cleans them, and calculates today's true inflation rate. Government leaders and researchers can see price changes right now, rather than waiting a whole month.
+Our automated system solves this problem. Every single morning at 2:00 AM, while the city is asleep, our software automatically visits 25 online store catalogs, fuel company websites, utility regulators, phone providers, vehicle retailers, and bus portals. It collects over 35,500 real prices every day, cleans them, and calculates today's true inflation rate. Government leaders and researchers can see price changes right now, rather than waiting a whole month.
 
 \newpage
 
@@ -241,11 +241,15 @@ Community Pharmacy & \texttt{communitypharma} & Health (06), Personal Care (12) 
 Ucare Pharmacy & \texttt{grab\_ucare} & Health (06), Personal Care (12) & Painkillers, cold/flu medicines, throat lozenges, vitamins, infant milk formulas, baby care products via GrabMart. \\
 Khmer Samnang Phone & \texttt{samnangshop} & Communication (08), Computing (09) & Smartphones (iPhone, Samsung Galaxy, Oppo), iPads, tablets, smartwatches, power banks, fast chargers. \\
 Ary Store Phone Shop & \texttt{arystore} & Communication (08), Audio Tech (09) & Budget and mid-tier smartphones (Xiaomi, Realme, Vivo), wireless bluetooth earbuds, phone accessories. \\
-Smart Axiata Mobile & \texttt{smart} & Communication (08) & Smart ThomMorng prepaid internet plans, monthly mobile data packages, traveler SIMs, roaming packages. \\
-Smart Home Internet & \texttt{smart\_wifi} & Communication (08) & Smart @Home wireless broadband routers, Fiber+ standard and ultra high-speed plans (40--120 Mbps). \\
-Cellcard Mobile & \texttt{cellcard} & Communication (08) & Prepaid mobile 4G/5G data plans, voice call minutes, tourist SIM cards. \\
-Cellcard Home Internet & \texttt{cellcard\_wifi} & Communication (08) & Monthly fixed broadband fiber subscriptions and wireless home gateway plans. \\
-Ministry of Commerce & \texttt{new\_gasoline} & Transport Fuel (07.2.2) & Official daily retail pump prices for Gasoline Regular (EA92), Gasoline Super (EA95), and Diesel across all 25 provinces. \\
+Smart Axiata Mobile & \texttt{smart} & Communication (08.3.0) & Smart ThomMorng prepaid internet plans, monthly mobile data packages, traveler SIMs, roaming packages. \\
+Smart Home Internet & \texttt{smart\_wifi} & Communication (08.3.0) & Smart @Home wireless broadband routers, Fiber+ standard and ultra high-speed plans (40--120 Mbps). \\
+Cellcard Mobile & \texttt{cellcard} & Communication (08.3.0) & Prepaid mobile 4G/5G data plans, voice call minutes, tourist SIM cards. \\
+Cellcard Home Internet & \texttt{cellcard\_wifi} & Communication (08.3.0) & Monthly fixed broadband fiber subscriptions and wireless home gateway plans. \\
+Metfone Cambodia & \texttt{metfone} & Communication (08.3.0) & Metfone 4G/5G mobile prepaid bundles, unlimited data packages, and home fiber internet plans. \\
+Khmer Moto Shop & \texttt{khmermoto} & Motorcycles (07.1.2) & Retail catalog of new and pre-owned motorcycles, motorbikes, scooters (Honda Scoopy, Wave, Click, Dream). \\
+Electricit\'e du Cambodge & \texttt{edc} & Electricity Grid (04.5.1) & Official progressive residential lifeline electricity tariffs across domestic consumption tiers (380 to 730 KHR/kWh). \\
+Phnom Penh Water Supply & \texttt{ppwsa} & Municipal Water (04.4.1) & Official progressive domestic piped tap water tariffs across household consumption tiers (400 to 2,200 KHR/m$^3$). \\
+MOC / Kampuchea Tela & \texttt{new\_gasoline} & Fuels (07.2.2), LPG (04.5.2) & Official retail pump prices for Regular Gasoline, Super 95, Diesel, and domestic LPG cooking gas cylinder refills. \\
 Khmer24 Real Estate & \texttt{khmer24} & Housing Rents (04.1.1) & Monthly residential rentals: 1-bedroom apartments, 2-bedroom condos, studio rooms, and shophouses in Phnom Penh. \\
 Realestate.com.kh & \texttt{realestate} & Housing Rents (04.1.1) & Urban residential rents, serviced apartments, and condominium rentals across BKK1, Chamkarmon, and Tuol Kork. \\
 BookMeBus Cambodia & \texttt{bookmebus} & Passenger Transport (07.3.2) & Intercity passenger bus, van, and ferry tickets connecting Phnom Penh, Siem Reap, Sihanoukville, Kampot, and Battambang. \\
@@ -278,7 +282,11 @@ Khmer Samnang Phone & \texttt{samnangshop} & WordPress WooCommerce REST API & JS
 Ary Store Phone Shop & \texttt{arystore} & WordPress WooCommerce REST API & JSON payload. Traverses paginated WooCommerce product catalog with stock checks. \\
 Smart Axiata & \texttt{smart} & Web Plan Catalog \& REST Parser & JSON/HTML. Extracts prepaid mobile, data plans, and fiber tariffs from official plan pages. \\
 Cellcard Cambodia & \texttt{cellcard} & Web Plan Catalog \& REST Parser & JSON/HTML. Pulls 4G/5G bundles, monthly fiber packages, and tourist SIM tariffs. \\
-Ministry of Commerce & \texttt{new\_gasoline} & Official MOC Fuel GraphQL API & GraphQL query. Queries official government fuel table for Regular, Super, and Diesel. \\
+Metfone Cambodia & \texttt{metfone} & Web Catalog Parser with Mobile Emulation & HTML/JSON. Extracts Metfone prepaid data packages and home fiber subscriptions. \\
+Khmer Moto Shop & \texttt{khmermoto} & WordPress WooCommerce REST API & JSON payload. Pulls retail motorcycle models, specs, and price quotes. \\
+Electricit\'e du Cambodge & \texttt{edc} & Official Tariff Schedule Ingestion & Clean structured gazette tariffs across lifeline domestic electricity tiers. \\
+Phnom Penh Water Supply & \texttt{ppwsa} & Official Tariff Schedule Ingestion & Clean structured gazette tariffs across household municipal water consumption tiers. \\
+Ministry of Commerce & \texttt{new\_gasoline} & Tela Telegram Mirror \& Gazette Parser & HTML/Text. Extracts official 10-day pump prices for Regular, Super, Diesel, and LPG gas. \\
 Khmer24 Real Estate & \texttt{khmer24} & HTML DOM Scraping with Rate Limits & HTML parsing. Extracts monthly rental listings with randomized pauses to prevent IP blocks. \\
 Realestate.com.kh & \texttt{realestate} & Next.js JSON API \& DOM Traversal & JSON/HTML. Parses urban apartment and condo rental listings with location filters. \\
 BookMeBus Cambodia & \texttt{bookmebus} & BookMeBus Booking REST API & JSON payload. Queries route-specific intercity ticket endpoints across Cambodia. \\

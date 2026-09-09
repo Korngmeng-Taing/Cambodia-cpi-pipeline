@@ -328,5 +328,50 @@ def test_base_price_fallback_earliest_date(cpi_engine):
     assert pytest.approx(base_res.iloc[0]["base_price_khr"], 0.01) == 1000.0
 
 
+def test_subclass_first_imputation(cpi_engine):
+    """Verifies that missing items use their 4-digit subclass movement before falling back to division."""
+    calc_date = date(2026, 9, 10)
+    # Division 01 has Rice (01.1.1) and Chocolate (01.1.8)
+    base_df = pd.DataFrame([
+        {"item_id": "rice-1", "coicop_division": "01", "coicop_code": "01.1.1", "base_price_khr": 1000.0},
+        {"item_id": "rice-2", "coicop_division": "01", "coicop_code": "01.1.1", "base_price_khr": 1000.0},
+        {"item_id": "choc-1", "coicop_division": "01", "coicop_code": "01.1.8", "base_price_khr": 2000.0},
+        {"item_id": "choc-2", "coicop_division": "01", "coicop_code": "01.1.8", "base_price_khr": 2000.0},
+        {"item_id": "choc-missing", "coicop_division": "01", "coicop_code": "01.1.8", "base_price_khr": 2000.0},
+    ])
+    df_history = pd.DataFrame([
+        # Yesterday: all observed at base prices
+        {"scrape_date": date(2026, 9, 9), "item_id": "rice-1", "unit_price_khr": 1000.0},
+        {"scrape_date": date(2026, 9, 9), "item_id": "rice-2", "unit_price_khr": 1000.0},
+        {"scrape_date": date(2026, 9, 9), "item_id": "choc-1", "unit_price_khr": 2000.0},
+        {"scrape_date": date(2026, 9, 9), "item_id": "choc-2", "unit_price_khr": 2000.0},
+        {"scrape_date": date(2026, 9, 9), "item_id": "choc-missing", "unit_price_khr": 2000.0},
+        # Today: Rice jumps 50% (1000 -> 1500), but Chocolate only increases 5% (2000 -> 2100)
+        {"scrape_date": date(2026, 9, 10), "item_id": "rice-1", "unit_price_khr": 1500.0},
+        {"scrape_date": date(2026, 9, 10), "item_id": "rice-2", "unit_price_khr": 1500.0},
+        {"scrape_date": date(2026, 9, 10), "item_id": "choc-1", "unit_price_khr": 2100.0},
+        {"scrape_date": date(2026, 9, 10), "item_id": "choc-2", "unit_price_khr": 2100.0},
+        # choc-missing is missing today!
+    ])
+    result = cpi_engine.compute_daily_elementary_indices(calc_date, base_df, df_history)
+    missing_row = result[result["item_id"] == "choc-missing"].iloc[0]
+    assert bool(missing_row["is_imputed"]) is True
+    # If using division movement, rice's 50% jump would distort chocolate.
+    # With subclass-first imputation, chocolate movement is exactly 2100 / 2000 = 1.05!
+    expected_imputed = 2000.0 * 1.05
+    assert pytest.approx(missing_row["current_price_khr"], 0.01) == expected_imputed
+
+
+def test_unclassified_subclass_resolution(cpi_engine):
+    """Verifies that unclassified codes do not fall back to 01.1.1."""
+    assert cpi_engine._get_subclass_code("01.1.1", "01") == "01.1.1"
+    assert cpi_engine._get_subclass_code("01.1.8", "01") == "01.1.8"
+    assert cpi_engine._get_subclass_code("01.unclassified", "01") == "01.unclassified"
+    assert cpi_engine._get_subclass_code("05.unclassified", "05") == "05.unclassified"
+    assert cpi_engine._get_subclass_code("unknown_code", "01") == "01.unclassified"
+    assert cpi_engine._get_subclass_code(None, "01") == "01.unclassified"
+
+
+
 
 

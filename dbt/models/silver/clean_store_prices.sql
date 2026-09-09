@@ -226,10 +226,10 @@ enriched_observations as (
             when c.coicop_code is not null and c.coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$'
                  and lpad(split_part(c.coicop_code, '.', 1), 2, '0') = c.coicop_division then c.coicop_code
             when p.store_slug in ('grab_ucare') then '06.1.2'
-            when p.store_slug in ('delishop', 'aeon', 'grab_lucky', 'grab_chipmong') then '01.1.1'
-            when p.store_slug in ('aeon3') then '03.1.2'
-            when p.store_slug in ('l192') then '05.1.1'
-            else '01.1.1'
+            when p.store_slug in ('delishop', 'aeon', 'grab_lucky', 'grab_chipmong') then '01.unclassified'
+            when p.store_slug in ('aeon3') then '03.unclassified'
+            when p.store_slug in ('l192') then '05.unclassified'
+            else 'UNCLASSIFIED'
         end as coicop_code,
         case
             when ov_b.coicop_division is not null or ov_ns.coicop_division is not null then 'override'
@@ -307,6 +307,9 @@ select
     -- If an override or fallback changed division, derive the proper subcode.
     case
         when coicop_code is not null and coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$'
+             and lpad(split_part(coicop_code, '.', 1), 2, '0') = coicop_division
+        then coicop_code
+        when coicop_code is not null and coicop_code ~ '^\d{2}\.unclassified$'
              and lpad(split_part(coicop_code, '.', 1), 2, '0') = coicop_division
         then coicop_code
         else {{ coicop_code_from_division("coicop_division") }}

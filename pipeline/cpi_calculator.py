@@ -106,6 +106,44 @@ DEFAULT_SUBCLASS_WEIGHTS = {
     "12.3.2": 0.320,   # Other personal effects
 }
 
+# Sibling and child COICOP codes mapped hierarchically to official 2006 NIS Cambodia leaf classes
+DEFAULT_COICOP_CLASS_MAPPING = {
+    # Division 02
+    "02.2.1": "02.2.0",  # Cigarettes/tobacco -> Tobacco
+    # Division 03
+    "03.1.1": "03.1.3",  # Clothing materials -> Other articles of clothing
+    "03.1.4": "03.1.3",  # Cleaning/repair of clothing -> Other articles of clothing
+    # Division 05
+    "05.3.1": "05.1.1",  # Major appliances -> Furniture and furnishings
+    "05.4.0": "05.5.1",  # Glassware/tableware -> Glassware, tableware, utensils
+    "05.4.1": "05.5.1",  # Glassware/tableware -> Glassware, tableware, utensils
+    "05.5.2": "05.5.1",  # Small tools -> Glassware, tableware, utensils
+    "05.6.2": "05.6.1",  # Domestic services -> Non-durable household goods
+    # Division 06
+    "06.1.3": "06.1.2",  # Other medical products -> Other medical products
+    "06.1.4": "06.1.2",  # Diagnostic products -> Other medical products
+    "06.2.2": "06.2.1",  # Outpatient dental -> Medical services
+    "06.3.1": "06.2.1",  # Hospital services -> Medical services
+    # Division 07
+    "07.1.1": "07.1.2",  # Motor cars -> Motorcycles (purchase of vehicles)
+    "07.2.1": "07.2.3",  # Spare parts -> Maintenance and repair
+    "07.3.1": "07.3.2",  # Passenger railway -> Passenger transport by bus/coach
+    # Division 08
+    "08.1.1": "08.3.0",  # Postal services -> Telephone and internet services
+    # Division 09
+    "09.2.1": "09.1.1",  # Major durables -> Audio/visual equipment
+    "09.3.2": "09.3.1",  # Sport/camping equipment -> Games, toys and hobbies
+    "09.3.3": "09.3.1",  # Gardens/plants -> Games, toys and hobbies
+    "09.3.4": "09.3.1",  # Pet products -> Games, toys and hobbies
+    "09.5.4": "09.5.1",  # Stationery and drawing materials -> Books and stationery
+    # Division 12
+    "12.1.2": "12.1.3",  # Electrical personal care appliances -> Other personal care
+    "12.2.0": "12.3.2",  # Personal effects / services -> Other personal effects
+    "12.2.1": "12.3.2",  # Personal effects -> Other personal effects
+    "12.2.9": "12.3.2",  # Personal effects -> Other personal effects
+    "12.4.0": "12.3.2",  # Social protection -> Other personal effects
+}
+
 class CPICalculationEngine:
     """
     Computes Jevons micro-indices, 7-day missing price imputation,
@@ -125,6 +163,9 @@ class CPICalculationEngine:
             try:
                 df = pd.read_csv(csv_path, dtype=str)
                 df["weight_pct"] = pd.to_numeric(df["weight_pct"], errors="coerce")
+                # Strictly filter for Class-level breakdown rows only to prevent Group/Division double-counting
+                if "coicop_level" in df.columns:
+                    df = df[df["coicop_level"].astype(str).str.strip().str.lower() == "class"]
                 for _, row in df.iterrows():
                     code = str(row.get("coicop_code", "")).strip()
                     wt = row.get("weight_pct")
@@ -141,13 +182,17 @@ class CPICalculationEngine:
         code = str(raw_code).strip()
         if not code:
             return f"{div_code}.unclassified"
+        # 1. Exact match with official class weights
         if code in self.subclass_weights:
             return code
+        # 2. Hierarchical mapping from unweighted siblings to official classes
+        if code in DEFAULT_COICOP_CLASS_MAPPING:
+            return DEFAULT_COICOP_CLASS_MAPPING[code]
+        # 3. 6-digit prefix match
         if len(code) >= 6 and code[:6] in self.subclass_weights:
             return code[:6]
-        if len(code) >= 4 and code[:4] in self.subclass_weights:
-            return code[:4]
-        return code
+        # 4. Fallback: unclassified division bucket to prevent 01.1.1 sinkhole
+        return f"{div_code}.unclassified"
 
     def get_connection(self):
         conn_str = self.db_url.replace("postgresql+psycopg2://", "postgresql://", 1)
@@ -416,6 +461,7 @@ class CPICalculationEngine:
         prev_date = prior_dates[-1] if prior_dates else None
         
         division_movement_ratios: dict[str, float] = {}
+        subclass_movement_ratios: dict[str, float] = {}
         if prev_date is not None and not today_obs.empty:
             prev_obs = df_history[df_history["scrape_date"] == prev_date]
             prev_agg = prev_obs.groupby("item_id").agg(
@@ -426,7 +472,10 @@ class CPICalculationEngine:
             # Common items between yesterday and today
             common = pd.merge(today_agg, prev_agg, on="item_id")
             if not common.empty:
-                common = pd.merge(common, base_df[["item_id", "coicop_division", "base_unit_price_khr"]], on="item_id", how="left")
+                cols_to_merge = ["item_id", "coicop_division", "base_unit_price_khr"]
+                if "coicop_code" in base_df.columns:
+                    cols_to_merge.append("coicop_code")
+                common = pd.merge(common, base_df[cols_to_merge], on="item_id", how="left")
                 comm_both_unit = (
                     common["today_unit_price_khr"].notna() & (common["today_unit_price_khr"] > 0) &
                     common["prev_unit_price_khr"].notna() & (common["prev_unit_price_khr"] > 0)
@@ -438,6 +487,10 @@ class CPICalculationEngine:
                 for div, group in common.groupby("coicop_division"):
                     if len(group) > 0:
                         division_movement_ratios[str(div)] = float(np.exp(np.mean(np.log(group["ratio"]))))
+                if "coicop_code" in common.columns:
+                    for sc, group in common.groupby("coicop_code"):
+                        if len(group) >= 2 and pd.notna(sc) and str(sc).strip():
+                            subclass_movement_ratios[str(sc).strip()] = float(np.exp(np.mean(np.log(group["ratio"]))))
 
         # Apply ILO Class-Mean Imputation for missing items (gap <= 7 days)
         missing_mask = merged["current_price_khr"].isna()
@@ -493,8 +546,14 @@ class CPICalculationEngine:
                     b_price = matched_base_prices.get(item_id)
                     if val is not None and not pd.isna(val) and float(val) > 0:
                         div = str(row.get("coicop_division", "01"))
-                        # Apply class-mean movement ratio if available, clamped to [0.80, 1.25]
-                        movement = division_movement_ratios.get(div, 1.0)
+                        sc = str(row.get("coicop_code", "")).strip() if pd.notna(row.get("coicop_code")) else ""
+                        # Two-tier ILO Class-Mean Imputation:
+                        # Tier 1: Subclass-level geometric movement if available
+                        # Tier 2: Division-level geometric movement fallback
+                        if sc and sc in subclass_movement_ratios:
+                            movement = subclass_movement_ratios[sc]
+                        else:
+                            movement = division_movement_ratios.get(div, 1.0)
                         movement = max(0.80, min(1.25, movement))
                         # Compound by actual gap days
                         last_obs_date = latest_dates_dict.get(item_id)
@@ -560,12 +619,16 @@ class CPICalculationEngine:
                         )
                         subclass_indices = subclass_series.tolist()
                         subclass_wts = [self.subclass_weights.get(sc) for sc in subclass_series.index]
-
-                        valid_wts = [w for w in subclass_wts if w is not None and w > 0]
-                        if len(valid_wts) == len(subclass_wts) and sum(valid_wts) > 0:
-                            div_index = sum(idx * wt for idx, wt in zip(subclass_indices, subclass_wts, strict=False)) / sum(subclass_wts)
+                        # Resilient Laspeyres weighting across subclasses
+                        valid_pairs = [
+                            (idx, wt) for idx, wt in zip(subclass_indices, subclass_wts, strict=False)
+                            if wt is not None and wt > 0
+                        ]
+                        if valid_pairs:
+                            sum_valid_wts = sum(wt for _, wt in valid_pairs)
+                            div_index = sum(idx * wt for idx, wt in valid_pairs) / sum_valid_wts
                         else:
-                            # Fallback if subclass weights are missing: unweighted geometric mean across all division items
+                            # Fallback only if no valid subclass weights exist: unweighted geometric mean
                             div_index = float(np.exp(np.mean(np.log(div_items["price_ratio"]))) * 100.0)
                     else:
                         div_index = float(np.exp(np.mean(np.log(div_items["price_ratio"]))) * 100.0)

@@ -322,6 +322,27 @@ $$
 I_c^{t/0} = \exp\left(\frac{1}{N_c} \sum_{i \in \text{Subclass } c} \ln\left(\frac{P_{i, t}}{P_{i, 0}}\right)\right) \times 100.0
 $$
 
+#### Hierarchical Subclass Code Resolution
+To prevent fragmentation and ensure 100% assignment to official leaf expenditure classes:
+1. **Class-Only Seed Loading**: The engine filters `cambodia_cpi_coicop_weights_breakdown.csv` strictly for `coicop_level = 'Class'`, preventing accidental contamination or double-counting from Group and Division aggregate rows.
+2. **Explicit Sibling Mapping (`DEFAULT_COICOP_CLASS_MAPPING`)**: Scraped items classified under sibling or unweighted codes are mapped hierarchically to the nearest official 2006 NIS Cambodia leaf class:
+   - `02.2.1` $\to$ `02.2.0` (Tobacco)
+   - `03.1.1`, `03.1.4` $\to$ `03.1.3` (Other clothing and accessories)
+   - `05.3.1` $\to$ `05.1.1` (Furniture and furnishings)
+   - `05.4.0`, `05.4.1`, `05.5.2` $\to$ `05.5.1` (Glassware, tableware and household utensils)
+   - `05.6.2` $\to$ `05.6.1` (Non-durable household goods)
+   - `06.1.3`, `06.1.4` $\to$ `06.1.2` (Other medical products)
+   - `06.2.2`, `06.3.1` $\to$ `06.2.1` (Medical services)
+   - `07.1.1` $\to$ `07.1.2` (Purchase of vehicles)
+   - `07.2.1` $\to$ `07.2.3` (Maintenance and repair)
+   - `07.3.1` $\to$ `07.3.2` (Passenger transport)
+   - `08.1.1` $\to$ `08.3.0` (Telephone and internet services)
+   - `09.2.1` $\to$ `09.1.1` (Audio-visual reception & equipment)
+   - `09.3.2`, `09.3.3`, `09.3.4` $\to$ `09.3.1` (Games, toys, hobbies and pets)
+   - `09.5.4` $\to$ `09.5.1` (Books and stationery)
+   - `12.1.2` $\to$ `12.1.3` (Other appliances & products for personal care)
+   - `12.2.0`, `12.2.1`, `12.2.9`, `12.4.0` $\to$ `12.3.2` (Other personal effects)
+
 ---
 
 ### Step 7: 2-Digit COICOP Division Laspeyres Roll-Up ($I_d^{t/0}$)
@@ -332,7 +353,8 @@ $$
 I_d^{t/0} = \frac{\sum_{c \in \text{Division } d} w_c \cdot I_c^{t/0}}{\sum_{c \in \text{Division } d} w_c}
 $$
 
-If items in a division lack subclass classifications or weights, the engine falls back to an unweighted geometric mean across all items in that division.
+#### Resilient Subclass Weighting
+Rather than an all-or-nothing fallback, the engine dynamically normalizes across all valid observed subclass weights $\sum_{c \in \text{Valid}} w_c$. Even in the event of novel unmapped categories, known subclass expenditure weights are preserved and utilized without degradation. If no valid subclass weights exist for a division, the engine falls back to the unweighted geometric mean of all items in that division.
 
 ---
 

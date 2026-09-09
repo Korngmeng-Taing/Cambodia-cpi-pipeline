@@ -74,9 +74,9 @@ def ensure_monthly_partitions(months_ahead: int = 3, conn: Any = None) -> dict[s
                     SELECT n.nspname, c.relname
                     FROM pg_class c
                     JOIN pg_namespace n ON n.oid = c.relnamespace
-                    WHERE n.nspname IN ('bronze', 'silver')
+                    WHERE n.nspname IN ('bronze', 'silver', 'gold')
                       AND c.relkind = 'p'
-                      AND c.relname IN ('raw_prices', 'raw_prices_part', 'clean_store_prices', 'clean_store_prices_part');
+                      AND c.relname IN ('raw_prices', 'raw_prices_part', 'clean_store_prices', 'clean_store_prices_part', 'fct_elementary_indices');
                     """
                 )
                 partitioned_parents = cur.fetchall()

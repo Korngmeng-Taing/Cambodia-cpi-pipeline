@@ -1,8 +1,8 @@
 # Agent Rules & Execution Guidelines
 
-## ⚠️ MANDATORY: Tool & Skill First Policy
+## ⚠️ MANDATORY: Skill & MCP First Policy
 
-You MUST proactively prioritize Model Context Protocol (MCP) servers and existing skills over shell commands (`run_command`).
+You MUST proactively consult existing skills to guide your workflow and prioritize Model Context Protocol (MCP) servers over raw shell commands (`run_command`).
 
 ---
 
@@ -53,6 +53,6 @@ Use `call_mcp_tool` with these server names:
 ### 4. Mandatory Decision Hierarchy
 
 For ANY user task, execute in this exact sequence:
-1. **Is there an MCP tool?** -> Use `call_mcp_tool`.
-2. **Is there a Skill?** -> Call `view_file` on `SKILL.md` and follow its steps.
-3. **Only if NEITHER an MCP tool nor a Skill applies** -> You may use native tools (`run_command`, `replace_file_content`, etc.).
+1. **Is there a relevant Skill?** -> Call `view_file` on `SKILL.md` first and follow its domain workflow, architecture, and instructions.
+2. **Within that workflow or execution step, is there an MCP tool?** -> Use `call_mcp_tool` (e.g. `docker`, `postgres`, `playwright`, `github`).
+3. **Only if NEITHER an MCP tool nor a Skill instruction specifies an alternative** -> You may use native tools (`run_command`, `replace_file_content`, etc.).

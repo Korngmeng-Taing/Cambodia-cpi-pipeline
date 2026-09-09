@@ -23,8 +23,21 @@ from __future__ import annotations
 
 import calendar
 import logging
+import sys
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Any
+
+# Ensure UTF-8 output on Windows if supported by stdout/stderr
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
+# Ensure project root is on sys.path
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 import numpy as np
 import pandas as pd

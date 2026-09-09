@@ -209,4 +209,4 @@ unit_tests:
         rows: []
     expect:
       rows:
-        - {item_id: 'f0eebc99-9c0b-4ef8-bb6d-6bb9bd380a19', store_slug: 'aeon', coicop_division: '01', coicop_code: '01.unclassified', coicop_method: 'store_default'}
+        - {item_id: 'f0eebc99-9c0b-4ef8-bb6d-6bb9bd380a19', store_slug: 'aeon', coicop_division: 'UNCLASSIFIED', coicop_code: '01.unclassified', coicop_method: 'unclassified'}

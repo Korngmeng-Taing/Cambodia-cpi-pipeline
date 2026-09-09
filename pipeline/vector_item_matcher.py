@@ -17,7 +17,11 @@ import numpy as np
 from rapidfuzz import fuzz
 
 from pipeline.key_pool import get_key_pool
-from pipeline.text_clean import is_size_compatible
+from pipeline.text_clean import (
+    KHMER_ENGLISH_SYNONYMS,
+    extract_specs,
+    is_size_compatible,
+)
 
 try:
     from google import genai
@@ -48,114 +52,6 @@ log = logging.getLogger(__name__)
 EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-2")
 LLM_MODEL = os.getenv("GEMINI_PRO_MODEL", os.getenv("GEMINI_MODEL", "gemini-2.5-flash"))
 LOCAL_FALLBACK_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
-
-# Known cross-lingual equivalences for Cambodian market
-KHMER_ENGLISH_SYNONYMS = {
-    # Beer & Beverages
-    "ស្រាបៀរអង្គរ": "angkor beer",
-    "ស្រាបៀរ": "beer",
-    "កំប៉ុង": "can",
-    "ដប": "bottle",
-    "កញ្ចប់": "pack",
-    "ប្រអប់": "box",
-    "កូកាកូឡា": "coca cola",
-    "ទឹកក្រូច": "soft drink",
-    "ទឹកបរិសុទ្ធ": "water",
-    "កាហ្វេ": "coffee",
-    "តែ": "tea",
-
-    # Groceries & Meat
-    "ត្រីសាម៉ុង": "salmon",
-    "ត្រីសាម៉ុងស្រស់": "fresh salmon",
-    "ត្រី": "fish",
-    "សាច់គោ": "beef",
-    "សាច់ជ្រូក": "pork",
-    "សាច់មាន់": "chicken",
-    "ទឹកដោះគោ": "milk",
-    "អង្ករ": "rice",
-    "នំប៉័ង": "bread",
-    "មី": "noodles",
-    "ប្រេងឆា": "cooking oil",
-    "ស្ករស": "sugar",
-    "អំបិល": "salt",
-
-    # Energy & Fuel
-    "សាំង": "gasoline",
-    "ប្រេងសាំង": "gasoline",
-    "ម៉ាស៊ូត": "diesel",
-
-    # Health & Personal Care
-    "ថ្នាំពេទ្យ": "medicine",
-    "ថ្នាំ": "medicine",
-    "ប៉ារ៉ាសេតាម៉ុល": "paracetamol",
-    "សាប៊ូកក់សក់": "shampoo",
-    "សាប៊ូដុសខ្លួន": "body wash",
-    "ថ្នាំដុសធ្មេញ": "toothpaste",
-    "ឡេការពារកម្តៅថ្ងៃ": "sunscreen",
-
-    # Tech & Transport
-    "ទូរស័ព្ទ": "phone",
-    "ទូរស័ព្ទដៃ": "phone",
-    "កុំព្យូទ័រ": "computer",
-    "ទូរទស្សន៍": "tv",
-    "សំបុត្រឡានក្រុង": "bus ticket",
-}
-
-
-def extract_specs(text: str) -> dict[str, Any]:
-    """Extracts storage (GB/TB), volume (ml/L), mass (g/kg), and pack quantities to prevent false merges."""
-    if not text:
-        return {"storage": None, "pack_qty": 1, "size_val": None, "size_unit": None}
-
-    t = text.lower()
-
-    # 1. Electronics Storage (128GB, 256GB, 1TB)
-    storage_match = re.search(r"\b(\d+)\s*(gb|tb)\b", t)
-    storage = storage_match.group(0).replace(" ", "") if storage_match else None
-
-    # 2. Pack size / Multiplier (e.g. 24x330ml, 6 x 500ml, pack of 12, case of 24, 24 cans, 6 bottles, 6pk)
-    pack_match = re.search(
-        r"(?:(\d+)\s*(?:x|\*)\s*\d+(?:\.\d+)?\s*(?:ml|l|g|kg|gm|ltr)\b)"
-        r"|(?:(?:pack of|case of|pack|pk|box of)\s*(\d+)\b)"
-        r"|(?:\b(\d+)\s*(?:cans?|bottles?|packs?|pcs?|pieces?|pk)\b)"
-        r"|(?:(?:x|\*)\s*(\d+)\b)",
-        t,
-    )
-    if pack_match:
-        matched_groups = [g for g in pack_match.groups() if g is not None]
-        pack_qty = int(matched_groups[0]) if matched_groups else 1
-    else:
-        pack_qty = 1
-
-    # 3. Volume / Mass (330ml, 1.5L, 500g, 1kg)
-    size_match = re.search(r"(\d+(?:\.\d+)?)\s*(kg|g|gm|l|ltr|ml)\b", t)
-    size_val, size_unit = (float(size_match.group(1)), size_match.group(2)) if size_match else (None, None)
-    if size_unit in ("gm", "g"):
-        size_unit = "g"
-    elif size_unit in ("ltr", "l"):
-        size_unit = "l"
-
-    # 4. Screen size (e.g. 43", 55 inch, UA43, QA65)
-    screen_match = re.search(r"\b(\d{1,2}(?:\.\d{1,2})?)\s*(?:\"|inch|inches)\b", t)
-    screen_val = screen_match.group(1) if screen_match else None
-    if not screen_val:
-        tv_match = re.search(r"\b(?:ua|qa|oled|qn|xr|kd|th-|led)(\d{2})[a-z0-9]+", t)
-        screen_val = tv_match.group(1) if tv_match else None
-
-    # 5. Model code (e.g. MX-ST90B, UA43DU8100KXXT, AR18DYHZBWKNST)
-    model_match = re.search(r"\b([a-z]{1,3}\d{2,3}[a-z0-9\-\/]{2,15})\b", t)
-    raw_model = model_match.group(1).rstrip("/") if model_match else None
-    model_code = raw_model if raw_model and not re.match(r"^\d+(?:ml|kg|g|l|gb|tb|mah|w|pcs)$", raw_model) else None
-
-    return {
-        "storage": storage,
-        "pack_qty": pack_qty,
-        "size_val": size_val,
-        "size_unit": size_unit,
-        "screen_val": screen_val,
-        "model_code": model_code,
-    }
-
 
 def is_spec_compatible(cand_name: str, base_name: str) -> bool:
     """Deterministic guard: Rejects merges if physical specs, screen sizes, model codes, or packaging quantities conflict."""

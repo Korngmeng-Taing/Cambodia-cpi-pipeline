@@ -660,17 +660,20 @@ def _unclassified_result(name: str) -> dict[str, Any]:
 
 def triage_with_local_model(
     items: list[dict[str, Any]],
-    confidence_threshold: float = 0.60,
+    confidence_threshold: float = 0.70,
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
-    """Triage unclassified items locally using pure store rules.
+    """Triage unclassified items locally using pure store rules and vector cosine matching.
 
-    Items from verified pure single-category stores are classified locally in O(1) time.
-    Remaining multi-category store items are returned for Gemini API processing.
+    1. Items from verified pure single-category stores are classified locally in O(1) time.
+    2. Remaining multi-category store items are evaluated with HybridCOICOPClassifier.
+       High-confidence matches (>= confidence_threshold) are resolved locally.
+    3. Borderline/ambiguous items (< confidence_threshold) are returned for Gemini API processing.
     """
-    from pipeline.hybrid_embeddings_classifier import PURE_STORE_MAP
+    from pipeline.hybrid_embeddings_classifier import PURE_STORE_MAP, HybridCOICOPClassifier
 
     needs_gemini: list[dict[str, Any]] = []
     local_results: dict[str, dict[str, Any]] = {}
+    pending_vector_items: list[dict[str, Any]] = []
 
     for item in items:
         name = item.get("canonical_name", "")
@@ -688,9 +691,36 @@ def triage_with_local_model(
                 "reasoning": f"Local triage: pure store {store_slug}",
                 "classification_method": "local_store_purity",
             }
+        # Items without store_slug originate from silver.classification_queue
+        # (escalated items specifically requiring human or Gemini LLM arbitration).
+        if not store_slug:
+            needs_gemini.append(item)
             continue
 
-        needs_gemini.append(item)
+        pending_vector_items.append(item)
+
+    if pending_vector_items:
+        try:
+            classifier = HybridCOICOPClassifier()
+            for item in pending_vector_items:
+                name = item.get("canonical_name", "")
+                store_slug = item.get("store_slug", "")
+                res = classifier.classify_product(name, store_slug=store_slug, threshold=confidence_threshold)
+                conf = float(res.get("confidence_score", 0.0))
+                method = res.get("classification_method", "")
+                if conf >= confidence_threshold and method == "vector_embedding":
+                    local_results[name] = {
+                        "product_name": name,
+                        "coicop_code": res.get("coicop_code"),
+                        "confidence_score": conf,
+                        "reasoning": res.get("reasoning", "High-confidence local vector match"),
+                        "classification_method": "vector_embedding",
+                    }
+                else:
+                    needs_gemini.append(item)
+        except Exception as exc:
+            log.warning("Local vector triage error (%s); falling back to Gemini API", exc)
+            needs_gemini.extend(pending_vector_items)
 
     log.info(
         "Local triage: %d classified locally (>=%.0f%%), %d need Gemini API",

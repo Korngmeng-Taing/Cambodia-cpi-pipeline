@@ -88,8 +88,13 @@ SCRAPER_REGISTRY: dict[str, type[BaseScraper]] = {
     "ppwsa": PpwsaWaterScraper,
 }
 
+BENCHMARK_REGISTRY: dict[str, type[BaseScraper]] = {
+    "nis_official_cpi": NISCPIScraper,
+}
+
 __all__ = [
     "SCRAPER_REGISTRY",
+    "BENCHMARK_REGISTRY",
     "EdcElectricityScraper",
     "PpwsaWaterScraper",
     "MetfoneScraper",

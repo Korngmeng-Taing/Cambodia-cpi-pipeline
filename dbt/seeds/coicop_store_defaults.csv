@@ -26,3 +26,4 @@ khmermoto,Khmer Moto Shop,retail,motorcycles,USD,07,07.1.2,0.850,true
 metfone,Metfone Cambodia Mobile & Home Internet,telecom,telecom_operator,USD,08,08.3.0,0.950,true
 edc,Electricite du Cambodge,utility,utility_grid,KHR,04,04.5.1,0.990,true
 ppwsa,Phnom Penh Water Supply Authority,utility,municipal_water,KHR,04,04.4.1,0.990,true
+nis_official_cpi,National Institute of Statistics,official_benchmark,official_authority,KHR,00,00.0.0,1.000,true

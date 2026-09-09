@@ -10,8 +10,11 @@ Mirrors the cleaning steps used in dbt Silver models (int_prices_cleaned.sql):
   6. Khmer-aware normalization (Khmer numerals, common abbreviations)
 """
 
+from __future__ import annotations
+
 import html
 import re
+from typing import Any
 
 # ── Compiled regex patterns ──────────────────────────────────────────────────
 
@@ -253,7 +256,19 @@ _KHMER_TERMS = {
     "កាបូប": "BAG",
     "នាឡិកា": "WATCH",
     "គ្រឿងអលង្ការ": "JEWELRY",
+
+    # Packaging / Multipliers / Containers
+    "កំប៉ុង": "CAN",
+    "ដប": "BOTTLE",
+    "កញ្ចប់": "PACK",
+    "ប្រអប់": "BOX",
 }
+
+# Known cross-lingual equivalences for Cambodian market (lowercased)
+KHMER_ENGLISH_SYNONYMS: dict[str, str] = {k: v.lower() for k, v in _KHMER_TERMS.items()}
+
+# Khmer compound phrases sorted longest-first for greedy morpheme/token extraction
+KHMER_COMPOUNDS: list[str] = sorted(list(_KHMER_TERMS.keys()), key=len, reverse=True)
 
 
 def is_khmer_text(text: str) -> bool:
@@ -597,3 +612,200 @@ def is_size_compatible(
                 return diff <= tolerance
 
     return False
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Specification & Hardware Feature Extraction
+# ──────────────────────────────────────────────────────────────────────────────
+
+_RE_STORAGE = re.compile(r"\b(\d+)\s*(gb|tb)\b", re.IGNORECASE)
+_RE_PACK_QTY = re.compile(
+    r"(?:(\d+)\s*(?:x|\*)\s*\d+(?:\.\d+)?\s*(?:ml|l|g|kg|gm|ltr)\b)"
+    r"|(?:(?:pack of|case of|pack|pk|box of)\s*(\d+)\b)"
+    r"|(?:\b(\d+)\s*(?:cans?|bottles?|packs?|pcs?|pieces?|pk)\b)"
+    r"|(?:(?:x|\*)\s*(\d+)\b)",
+    re.IGNORECASE,
+)
+_RE_SIZE_VAL_UNIT = re.compile(r"(\d+(?:\.\d+)?)\s*(kg|g|gm|l|ltr|ml)\b", re.IGNORECASE)
+_RE_SCREEN_INCH = re.compile(r'(\d{1,2}(?:\.\d{1,2})?)\s*(?:"|\b(?:inch|inches)\b)', re.IGNORECASE)
+_RE_TV_PREFIX = re.compile(r"\b(?:ua|qa|oled|qn|xr|kd|th-|led)(\d{2})[a-z0-9]+", re.IGNORECASE)
+_RE_MODEL_CODE = re.compile(r"\b([a-z]{1,3}\d{2,3}[a-z0-9\-\/]{2,15})\b", re.IGNORECASE)
+
+_COMPOUND_SPEC_RE = re.compile(r"\b(\d{1,2})\s*(?:GB)?\s*[\/+]\s*(\d{2,4})\s*GB\b", re.IGNORECASE)
+_RAM_RE = re.compile(r"\b(\d{1,2})\s*GB\s*(?:RAM|\+)?\b", re.IGNORECASE)
+_STORAGE_EXPLICIT_RE = re.compile(r"(\d{1,4})\s*GB\s*(?:storage|rom|ssd)", re.IGNORECASE)
+_STORAGE_STANDALONE_RE = re.compile(r"\b(\d{1,4})\s*GB\b", re.IGNORECASE)
+_CAMERA_RE = re.compile(r"\b(\d{2,3})\s*MP\b", re.IGNORECASE)
+_5G_RE = re.compile(r"\b5G\b", re.IGNORECASE)
+
+_RE_WATTAGE = re.compile(r"\b(\d{2,4})\s*W\b", re.IGNORECASE)
+_RE_MAH = re.compile(r"\b(\d{3,5})\s*MAH\b", re.IGNORECASE)
+_RE_PCS = re.compile(r"\b(\d+)\s*(?:PCS|PIECES|PK|PACK)\b", re.IGNORECASE)
+_RE_PHONE_SERIES = re.compile(r"\b(PRO\s*MAX|PRO|PLUS|ULTRA|MINI|LITE|NOTE|FE|MAX|PRIME|PRM|PM)\b", re.IGNORECASE)
+_RE_BTU = re.compile(r"\b(\d{1,2}(?:,\d{3})?|\d{4,5})\s*BTU\b", re.IGNORECASE)
+_RE_AC_PREFIX = re.compile(r"\bAR(\d{2})[A-Z0-9]+", re.IGNORECASE)
+
+
+def extract_specs(text: str | None) -> dict[str, Any]:
+    """
+    Extracts storage (GB/TB), packaging quantity, volume/mass, screen size,
+    and model code from product descriptions.
+
+    Guarantees deterministic structure for matching and false-merge guards:
+        {"storage": str | None, "pack_qty": int, "size_val": float | None,
+         "size_unit": str | None, "screen_val": str | None, "model_code": str | None}
+    """
+    if not text or not str(text).strip():
+        return {
+            "storage": None,
+            "pack_qty": 1,
+            "size_val": None,
+            "size_unit": None,
+            "screen_val": None,
+            "model_code": None,
+        }
+
+    t = str(text).lower()
+
+    # 1. Electronics Storage (128GB, 256GB, 1TB)
+    storage_match = _RE_STORAGE.search(t)
+    storage = storage_match.group(0).replace(" ", "") if storage_match else None
+
+    # 2. Pack size / Multiplier
+    pack_match = _RE_PACK_QTY.search(t)
+    if pack_match:
+        matched_groups = [g for g in pack_match.groups() if g is not None]
+        pack_qty = int(matched_groups[0]) if matched_groups else 1
+    else:
+        pack_qty = 1
+
+    # 3. Volume / Mass
+    size_match = _RE_SIZE_VAL_UNIT.search(t)
+    size_val, size_unit = (
+        float(size_match.group(1)),
+        size_match.group(2),
+    ) if size_match else (None, None)
+    if size_unit in ("gm", "g"):
+        size_unit = "g"
+    elif size_unit in ("ltr", "l"):
+        size_unit = "l"
+
+    # 4. Screen size
+    screen_match = _RE_SCREEN_INCH.search(t)
+    screen_val = screen_match.group(1) if screen_match else None
+    if not screen_val:
+        tv_match = _RE_TV_PREFIX.search(t)
+        screen_val = tv_match.group(1) if tv_match else None
+
+    # 5. Model code
+    model_match = _RE_MODEL_CODE.search(t)
+    raw_model = model_match.group(1).rstrip("/") if model_match else None
+    model_code = (
+        raw_model
+        if raw_model and not re.match(r"^\d+(?:ml|kg|g|l|gb|tb|mah|w|pcs)$", raw_model)
+        else None
+    )
+
+    return {
+        "storage": storage,
+        "pack_qty": pack_qty,
+        "size_val": size_val,
+        "size_unit": size_unit,
+        "screen_val": screen_val,
+        "model_code": model_code,
+    }
+
+
+def extract_spec_sets(text: str | None) -> dict[str, set[str]]:
+    """Extracts critical hardware specs, capacities, and model identifiers as sets of tokens."""
+    if not text or not str(text).strip():
+        return {}
+    t_up = str(text).upper()
+
+    screen_sizes = {m.group(1) for m in _RE_SCREEN_INCH.finditer(t_up)}
+    for sz in _RE_TV_PREFIX.findall(t_up):
+        screen_sizes.add(sz)
+
+    btu_vals = {m.group(1).replace(",", "") for m in _RE_BTU.finditer(t_up)}
+    for btu_code in _RE_AC_PREFIX.findall(t_up):
+        btu_vals.add(f"{btu_code}000")
+
+    raw_models = {m.group(1).rstrip("/") for m in _RE_MODEL_CODE.finditer(t_up)}
+    model_codes = {
+        c for c in raw_models if not re.match(r"^\d+(?:ML|KG|G|L|GB|TB|MAH|W|PCS)$", c)
+    }
+
+    specs = {
+        "storage": {m.group(0).replace(" ", "") for m in _RE_STORAGE.finditer(t_up)},
+        "wattage": {m.group(0).replace(" ", "") for m in _RE_WATTAGE.finditer(t_up)},
+        "mah": {m.group(0).replace(" ", "") for m in _RE_MAH.finditer(t_up)},
+        "pcs": {m.group(0).replace(" ", "") for m in _RE_PCS.finditer(t_up)},
+        "series": {m.group(1).upper() for m in _RE_PHONE_SERIES.finditer(t_up)},
+        "screen": screen_sizes,
+        "btu": btu_vals,
+        "model_code": model_codes,
+        "camera": {m.group(1) for m in _CAMERA_RE.finditer(t_up)},
+        "is_5g": {"5G"} if _5G_RE.search(t_up) else set(),
+    }
+    return {k: v for k, v in specs.items() if v}
+
+
+def extract_hedonic_specs(name: str | None) -> dict[str, float | int]:
+    """
+    Extracts (RAM_GB, Storage_GB, Screen_Inches, Camera_MP, Is_5G) from product name.
+    Returns 0 when a characteristic is not present (0 = base level).
+    """
+    name_str = str(name or "")
+    ram_val = 0
+    storage_val = 0
+    screen_val = 0.0
+    camera_val = 0
+    is_5g_val = 1 if _5G_RE.search(name_str) else 0
+
+    compound = _COMPOUND_SPEC_RE.search(name_str)
+    if compound:
+        ram_val = int(compound.group(1))
+        storage_val = int(compound.group(2))
+    else:
+        ram = _RAM_RE.search(name_str)
+        if ram:
+            ram_val = int(ram.group(1))
+
+        storage_explicit = _STORAGE_EXPLICIT_RE.search(name_str)
+        if storage_explicit:
+            storage_val = int(storage_explicit.group(1))
+        else:
+            for m in _STORAGE_STANDALONE_RE.finditer(name_str):
+                val = int(m.group(1))
+                if val != ram_val and val in (16, 32, 64, 128, 256, 512, 1024):
+                    storage_val = val
+                    break
+
+    screen = _RE_SCREEN_INCH.search(name_str)
+    if screen:
+        try:
+            val_str = screen.group(1)
+            if val_str:
+                s_num = float(val_str)
+                if 4.0 <= s_num <= 85.0:
+                    screen_val = s_num
+        except ValueError:
+            pass
+
+    cam = _CAMERA_RE.search(name_str)
+    if cam:
+        try:
+            c_num = int(cam.group(1))
+            if 8 <= c_num <= 250:
+                camera_val = c_num
+        except ValueError:
+            pass
+
+    return {
+        "RAM_GB": ram_val,
+        "Storage_GB": storage_val,
+        "Screen_Inches": screen_val,
+        "Camera_MP": camera_val,
+        "Is_5G": is_5g_val,
+    }
+

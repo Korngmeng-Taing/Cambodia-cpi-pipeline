@@ -22,7 +22,7 @@ import numpy as np
 from typing import Any
 
 from pipeline.key_pool import get_key_pool
-from pipeline.text_clean import is_khmer_text, extract_khmer_tokens
+from pipeline.text_clean import is_khmer_text, extract_khmer_tokens, KHMER_COMPOUNDS
 
 try:
     from google import genai
@@ -439,16 +439,8 @@ def _build_semantic_fallback_vector(text: str) -> np.ndarray:
         kh_tokens = extract_khmer_tokens(text)
         tokens.update(kh_tokens)
 
-    # Khmer compound expansion
-    khmer_compounds = [
-        "ត្រីសាម៉ុងស្រស់", "ត្រីសាម៉ុង", "ត្រីស្រស់", "ត្រី", "សាច់គោស្រស់", "សាច់គោ",
-        "សាច់ជ្រូកស្រស់", "សាច់ជ្រូក", "សាច់មាន់ស្រស់", "សាច់មាន់", "អង្ករផ្កាម្លិះ",
-        "អង្ករ", "សាំង", "ប្រេងសាំង", "ម៉ាស៊ូត", "ស្រាបៀរអង្គរ", "ស្រាបៀរ", "កូកាកូឡា",
-        "ទឹកដោះគោស្រស់", "ទឹកដោះគោ", "សាប៊ូកក់សក់", "សាប៊ូដុសខ្លួន", "ថ្នាំដុសធ្មេញ",
-        "ថ្នាំពេទ្យ", "ប៉ារ៉ាសេតាម៉ុល", "ឡេការពារកម្តៅថ្ងៃ", "ទូរស័ព្ទដៃ", "ទូរស័ព្ទ",
-        "កុំព្យូទ័រយួរដៃ", "កុំព្យូទ័រ", "ទូរទស្សន៍", "សំបុត្រឡានក្រុង", "ផ្ទះជួល",
-    ]
-    for compound in khmer_compounds:
+    # Khmer compound expansion from consolidated text_clean module
+    for compound in KHMER_COMPOUNDS:
         if compound in t_lower:
             tokens.add(compound)
             if "សាម៉ុង" in compound:

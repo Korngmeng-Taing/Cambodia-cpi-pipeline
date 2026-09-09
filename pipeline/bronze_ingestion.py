@@ -169,6 +169,27 @@ def ingest_source_bronze(source_slug: str, scrape_date: str) -> dict[str, Any]:
             dq["errors"][:5],
         )
 
+    # Circuit Breaker Quality Gate: Evaluates volume drop and price velocity against rolling baseline
+    try:
+        from pipeline.circuit_breaker import IngestionCircuitBreaker, CircuitBreakerStatus
+        cb = IngestionCircuitBreaker()
+        eval_res = cb.evaluate_scrape(
+            store_slug=source_slug,
+            incoming_records=records,
+            scrape_date=parsed_date,
+        )
+        if eval_res.status != CircuitBreakerStatus.PASSED:
+            cb.record_event(eval_res, action_taken="warning_flagged")
+            logger.warning(
+                "Circuit breaker TRIPPED for %s on %s: %s — %s",
+                source_slug,
+                date_str,
+                eval_res.status.value,
+                eval_res.message,
+            )
+    except Exception as exc:
+        logger.warning("Circuit breaker evaluation skipped for %s on %s: %s", source_slug, date_str, exc)
+
     conn = _get_db_connection()
     try:
         batch_id = uuid.uuid4()

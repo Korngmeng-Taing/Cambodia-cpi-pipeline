@@ -137,8 +137,8 @@
         case when {{ store_slug }} in ('khmer24', 'realestate') then '04.1.1' end,
         case when {{ store_slug }} = 'edc' then '04.5.1' end,
         case when {{ store_slug }} = 'ppwsa' then '04.4.1' end,
-        case when {{ store_slug }} in ('communitypharma') then '06.1.2' end,
-        case when {{ store_slug }} in ('sokhahotel', 'hyyathotel', 'hyatt') then '11.2.0' end,
+        case when {{ store_slug }} in ('communitypharma', 'grab_ucare') then '06.1.2' end,
+        case when {{ store_slug }} in ('sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt') then '11.2.0' end,
         case when {{ store_slug }} in ('bayonbkk') then '11.1.1' end,
         case when {{ store_slug }} in ('bookmebus', 'redbus', 'redmebus') then '07.3.2' end,
         case when {{ store_slug }} in ('new_gasoline') then '07.2.2' end,
@@ -152,7 +152,7 @@
             when {{ store_default_code }} is not null
                  and {{ store_default_code }} ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then {{ store_default_code }}
             when {{ store_default_div }} is not null
-                then {{ coicop_code_from_division(store_default_div) }}
+                 then {{ coicop_code_from_division(store_default_div) }}
         end,
         'UNCLASSIFIED'
     )
@@ -176,11 +176,11 @@
         when {{ ai_div }} is not null
              and coalesce({{ ai_conf }}, 0.90) <  0.50 then 'review'
         when {{ store_slug }} in (
-            'khmer24', 'realestate', 'communitypharma', 'sokhahotel',
-            'hyyathotel', 'hyatt', 'bayonbkk',
+            'khmer24', 'realestate', 'sokhahotel',
+            'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk',
             'bookmebus', 'redbus', 'redmebus', 'new_gasoline',
             'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone',
-            'khmermoto', 'edc', 'ppwsa'
+            'khmermoto', 'edc', 'ppwsa', 'arystore', 'samnangshop'
         ) then 'store_purity'
         when {{ store_default_div }} is not null then 'store_default'
         else 'unclassified'
@@ -206,8 +206,8 @@
         when {{ ai_div }} is not null
              and coalesce({{ ai_conf }}, 0.90) <  0.50 then 0.400
         when {{ store_slug }} in (
-            'khmer24', 'realestate', 'communitypharma', 'sokhahotel',
-            'hyyathotel', 'bayonbkk',
+            'khmer24', 'realestate', 'sokhahotel',
+            'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk',
             'bookmebus', 'redbus', 'redmebus', 'new_gasoline',
             'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone',
             'khmermoto', 'edc', 'ppwsa', 'arystore', 'samnangshop'

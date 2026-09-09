@@ -33,6 +33,8 @@ import numpy as np
 import pandas as pd
 from sqlalchemy import create_engine, text
 
+from pipeline.text_clean import extract_hedonic_specs
+
 try:
     import statsmodels.api as sm
 except ImportError:  # pragma: no cover
@@ -53,16 +55,6 @@ DEFAULT_BENCHMARK_SPECS: dict[str, float] = {
     "Is_5G": 1.0,
 }
 
-# Regexes for hedonic characteristics embedded in product names, e.g.
-# "Samsung Galaxy S24 8GB/256GB 6.2" 50MP 5G", "iPhone 15 Pro 128GB".
-_COMPOUND_SPEC_RE = re.compile(
-    r"\b(\d{1,2})\s*(?:GB)?\s*/\s*(\d{2,4})\s*GB\b", re.IGNORECASE
-)
-_RAM_RE = re.compile(r"(\d{1,3})\s*GB\s*(?:RAM|memory)", re.IGNORECASE)
-_STORAGE_RE = re.compile(r"(\d{1,4})\s*GB\s*(?:storage|rom|ssd)?", re.IGNORECASE)
-_SCREEN_RE = re.compile(r"(\d{1,2}(?:\.\d{1,2})?)\s*(?:\"|INCH(?:ES)?)\b|\b(\d{1,2}(?:\.\d{1,2})?)\"", re.IGNORECASE)
-_CAMERA_RE = re.compile(r"\b(\d{2,3})\s*MP\b", re.IGNORECASE)
-_5G_RE = re.compile(r"\b5G\b", re.IGNORECASE)
 
 
 _engine_cache = None
@@ -90,72 +82,8 @@ def get_engine():
             return eng
 
 
-def extract_specs(name: str) -> dict[str, float | int]:
-    """
-    Extracts (RAM_GB, Storage_GB, Screen_Inches, Camera_MP, Is_5G) from a raw product name using regex.
-    Returns 0 when a characteristic is not present (0 = base level).
-    """
-    name = str(name)
-    ram_val = 0
-    storage_val = 0
-    screen_val = 0.0
-    camera_val = 0
-    is_5g_val = 1 if _5G_RE.search(name) else 0
-
-    # 1. Check compound pattern e.g. "8GB/256GB" or "8/128GB"
-    compound = _COMPOUND_SPEC_RE.search(name)
-    if compound:
-        ram_val = int(compound.group(1))
-        storage_val = int(compound.group(2))
-    else:
-        # 2. Check explicit RAM
-        ram = _RAM_RE.search(name)
-        if ram:
-            ram_val = int(ram.group(1))
-
-        # 3. Check Storage / ROM / SSD
-        storage_explicit = re.search(
-            r"(\d{1,4})\s*GB\s*(?:storage|rom|ssd)", name, re.IGNORECASE
-        )
-        if storage_explicit:
-            storage_val = int(storage_explicit.group(1))
-        else:
-            # Find standalone storage tiers not matching ram_val
-            for m in re.finditer(r"\b(\d{1,4})\s*GB\b", name, re.IGNORECASE):
-                val = int(m.group(1))
-                if val != ram_val and val in (16, 32, 64, 128, 256, 512, 1024):
-                    storage_val = val
-                    break
-
-    # 4. Check Screen size
-    screen = _SCREEN_RE.search(name)
-    if screen:
-        try:
-            val_str = screen.group(1) or screen.group(2)
-            if val_str:
-                s_num = float(val_str)
-                if 4.0 <= s_num <= 85.0:  # covers phones, tablets, monitors, and TVs
-                    screen_val = s_num
-        except ValueError:
-            pass
-
-    # 5. Check Camera MP
-    cam = _CAMERA_RE.search(name)
-    if cam:
-        try:
-            c_num = int(cam.group(1))
-            if 8 <= c_num <= 250:
-                camera_val = c_num
-        except ValueError:
-            pass
-
-    return {
-        "RAM_GB": ram_val,
-        "Storage_GB": storage_val,
-        "Screen_Inches": screen_val,
-        "Camera_MP": camera_val,
-        "Is_5G": is_5g_val,
-    }
+# Extract hedonic characteristics from product name via consolidated text_clean module
+extract_specs = extract_hedonic_specs
 
 
 HEDONIC_FEATURES = ["RAM_GB", "Storage_GB", "Screen_Inches", "Camera_MP", "Is_5G"]

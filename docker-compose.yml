@@ -80,9 +80,9 @@ x-airflow-common: &airflow-common
     - cpi-net
 
 services:
-  # ── PostgreSQL 16 (Core Warehouse with Bronze, Silver, Gold Schemas) ───────
+  # ── PostgreSQL 16 with pgvector (Core Warehouse with Bronze, Silver, Gold Schemas) ─
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: postgres
     restart: unless-stopped
     <<: *logging-common
@@ -97,7 +97,6 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d
       - ./sql:/sql
-      - ./sql/migrations:/migrations
     deploy:
       resources:
         limits:

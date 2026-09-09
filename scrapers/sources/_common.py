@@ -161,3 +161,26 @@ def build_canonical_record(
             "attrs": attrs,
         }
     )
+
+
+def parse_woocommerce_prices(
+    prices: dict[str, Any] | None,
+) -> tuple[float | None, float | None, str]:
+    """
+    Parses WooCommerce REST API prices object handling currency_minor_unit scaling.
+    Returns: (price, regular_price, currency_code)
+    """
+    if not prices:
+        return None, None, "USD"
+    minor_unit = int(prices.get("currency_minor_unit", 0) or 0)
+    scale = 10**minor_unit if minor_unit > 0 else 1
+
+    raw_price = _to_float(prices.get("price"))
+    price = raw_price / scale if raw_price is not None else None
+
+    raw_reg = _to_float(prices.get("regular_price"))
+    reg_price = raw_reg / scale if raw_reg is not None else None
+
+    currency = str(prices.get("currency_code") or "USD").upper()
+    return price, reg_price, currency
+

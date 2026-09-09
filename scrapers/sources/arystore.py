@@ -15,6 +15,7 @@ from scrapers.sources._common import (
     _to_float,
     build_canonical_record,
     log,
+    parse_woocommerce_prices,
 )
 
 
@@ -37,16 +38,9 @@ class AryStorePhoneScraper(BaseScraper):
         )
 
     def _to_canonical(self, product: dict, scrape_date: str) -> dict[str, Any] | None:
-        prices = product.get("prices") or {}
-        minor_unit = int(prices.get("currency_minor_unit", 0) or 0)
-        price = _to_float(prices.get("price"))
-        if price is not None and minor_unit > 0:
-            price = price / (10**minor_unit)
+        price, regular, currency = parse_woocommerce_prices(product.get("prices"))
         if price is None or price <= 0:
             return None
-        regular = _to_float(prices.get("regular_price"))
-        if regular is not None and minor_unit > 0:
-            regular = regular / (10**minor_unit)
         on_sale = bool(product.get("on_sale"))
         brands = product.get("brands") or []
         categories = product.get("categories") or []
@@ -66,7 +60,7 @@ class AryStorePhoneScraper(BaseScraper):
             item_id=str(product.get("id") or ""),
             name=product.get("name") or "",
             price=price,
-            currency=prices.get("currency_code") or "USD",
+            currency=currency,
             original_price=max(_to_float(regular) or price, price),
             brand=brands[0].get("name") if brands else None,
             category_native=" / ".join(

@@ -13,6 +13,7 @@ from scrapers.sources._common import (
     _to_float,
     build_canonical_record,
     log,
+    parse_woocommerce_prices,
 )
 
 
@@ -89,21 +90,12 @@ class SamnangShopScraper(BaseScraper):
         name = item.get("name")
         if not name:
             return None
-        prices = item.get("prices") or {}
-        price_str = prices.get("price") or prices.get("regular_price")
-        minor_unit = int(prices.get("currency_minor_unit", 0) or 0)
-        price = _to_float(price_str)
-        if price is not None and minor_unit > 0:
-            price = price / (10**minor_unit)
+        price, reg_price, curr = parse_woocommerce_prices(item.get("prices"))
+        if price is None or price <= 0:
+            price = reg_price
         if price is None or price <= 0:
             return None
-
-        regular_price_str = prices.get("regular_price")
-        orig_price = _to_float(regular_price_str)
-        if orig_price is not None and minor_unit > 0:
-            orig_price = orig_price / (10**minor_unit)
-        if orig_price is None or orig_price < price:
-            orig_price = price
+        orig_price = max(reg_price or price, price)
 
         raw_desc = item.get("description") or item.get("short_description") or ""
         clean_desc = _strip_html(raw_desc)

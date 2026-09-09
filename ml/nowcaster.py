@@ -92,10 +92,13 @@ class CPINowcaster:
                 cols_fx = [desc[0] for desc in cur.description]
                 df_fx = pd.DataFrame(cur.fetchall(), columns=cols_fx)
 
-                # 3. Monthly historical aggregations
+                # 3. Monthly historical aggregations (deduplicated by month)
                 cur.execute(
                     """
-                    SELECT cpi_month, monthly_headline_cpi, monthly_core_cpi, mom_inflation_pct
+                    SELECT DISTINCT ON (cpi_month)
+                        cpi_month, monthly_headline_cpi, monthly_core_cpi,
+                        COALESCE(headline_mom_inflation_pct, mom_inflation_pct) AS headline_mom_inflation_pct,
+                        COALESCE(headline_yoy_inflation_pct, yoy_inflation_pct) AS headline_yoy_inflation_pct
                     FROM gold.fct_cpi_monthly
                     WHERE cpi_month <= %s
                     ORDER BY cpi_month ASC;
@@ -130,7 +133,7 @@ class CPINowcaster:
                 if not df_fx.empty and "rate" in df_fx.columns:
                     df_fx["rate"] = pd.to_numeric(df_fx["rate"], errors="coerce")
                 if not df_monthly.empty:
-                    for col in ["monthly_headline_cpi", "monthly_core_cpi", "mom_inflation_pct"]:
+                    for col in ["monthly_headline_cpi", "monthly_core_cpi", "headline_mom_inflation_pct", "headline_yoy_inflation_pct"]:
                         if col in df_monthly.columns:
                             df_monthly[col] = pd.to_numeric(df_monthly[col], errors="coerce")
                 if df_nis is not None and not df_nis.empty:
@@ -549,7 +552,9 @@ class CPINowcaster:
                 match = df_monthly[m_series == m]
                 if not match.empty:
                     actual_headline = float(match.iloc[0]["monthly_headline_cpi"])
-                    if "mom_inflation_pct" in match.columns:
+                    if "headline_mom_inflation_pct" in match.columns and pd.notna(match.iloc[0]["headline_mom_inflation_pct"]):
+                        actual_mom = float(match.iloc[0]["headline_mom_inflation_pct"])
+                    elif "mom_inflation_pct" in match.columns and pd.notna(match.iloc[0]["mom_inflation_pct"]):
                         actual_mom = float(match.iloc[0]["mom_inflation_pct"])
 
             # If ground truth monthly row isn't in df_monthly, check if full month exists in df_daily

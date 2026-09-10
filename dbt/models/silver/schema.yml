@@ -50,6 +50,7 @@ models:
                   - "store_default"
                   - "gemini_ai"
                   - "gemini_ai_low_conf"
+                  - "critical_trap"
                   - "category_map"
                   - "text_rules"
                   - "unclassified"

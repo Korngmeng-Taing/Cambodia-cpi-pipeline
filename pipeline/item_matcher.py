@@ -11,7 +11,7 @@ import numpy as np
 from pipeline.config import get_database_url
 from pipeline.text_clean import clean_name_for_matching, is_size_compatible
 from pipeline.vector_item_matcher import VectorItemMatcher, is_spec_compatible
-from pipeline.hybrid_embeddings_classifier import get_hybrid_classifier
+from pipeline.hierarchical_classifier import HierarchicalCOICOPClassifier
 
 log = logging.getLogger(__name__)
 
@@ -258,7 +258,7 @@ class ItemMatcher:
         # Auto-classify new canonical item into UN COICOP
         coicop_div, coicop_code = None, None
         try:
-            classifier = get_hybrid_classifier()
+            classifier = HierarchicalCOICOPClassifier("coicop_hierarchy.json")
             res = classifier.classify_product(name, store_slug=store_slug)
             coicop_div = res.get("coicop_division")
             coicop_code = res.get("coicop_code")
@@ -499,7 +499,7 @@ class ItemMatcher:
         catalog = [{"item_id": iid, "canonical_name": cn} for iid, cn, _ in self.items_cache if cn]
         classifier = None
         try:
-            classifier = get_hybrid_classifier()
+            classifier = HierarchicalCOICOPClassifier("coicop_hierarchy.json")
         except Exception:
             classifier = None
 
@@ -579,7 +579,7 @@ class ItemMatcher:
             coicop_div, coicop_code = None, None
             try:
                 if classifier is None:
-                    classifier = get_hybrid_classifier()
+                    classifier = HierarchicalCOICOPClassifier("coicop_hierarchy.json")
                 res = classifier.classify_product(name_clean, store_slug=store_id)
                 coicop_div = res.get("coicop_division")
                 coicop_code = res.get("coicop_code")

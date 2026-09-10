@@ -179,22 +179,33 @@ class CPICalculationEngine:
         return weights
 
     def _get_subclass_code(self, raw_code: str | None, div_code: str) -> str:
-        """Resolves raw COICOP code into an official subclass / class code matching weights."""
+        """Resolves raw COICOP code into an official subclass / class code matching weights.
+        Implements automatic hierarchical roll-up: if a 5-digit code isn't in the weights,
+        it tries the 4-digit and 3-digit parents.
+        """
         if raw_code is None or pd.isna(raw_code):
             return f"{div_code}.unclassified"
         code = str(raw_code).strip()
         if not code:
             return f"{div_code}.unclassified"
-        # 1. Exact match with official class weights
+
+        # 1. Exact match (checks 5-digit, then 4-digit, etc. based on weights table)
         if code in self.subclass_weights:
             return code
-        # 2. Hierarchical mapping from unweighted siblings to official classes
+
+        # 2. Hierarchical Roll-up (Strip lowest digit until a weight match is found)
+        # Example: 01.1.1.1 -> 01.1.1 -> 01.1 -> 01
+        parts = code.split('.')
+        for i in range(len(parts)-1, 0, -1):
+            parent_code = '.'.join(parts[:i])
+            if parent_code in self.subclass_weights:
+                return parent_code
+
+        # 3. Manual mapping for known anomalies
         if code in DEFAULT_COICOP_CLASS_MAPPING:
             return DEFAULT_COICOP_CLASS_MAPPING[code]
-        # 3. 6-digit prefix match
-        if len(code) >= 6 and code[:6] in self.subclass_weights:
-            return code[:6]
-        # 4. Fallback: unclassified division bucket to prevent 01.1.1 sinkhole
+
+        # 4. Fallback: unclassified division bucket
         return f"{div_code}.unclassified"
 
     def get_connection(self):

@@ -1,18 +1,13 @@
 -- int_coicop_classified
--- Streamlined AI-First COICOP classification ladder.
+-- Hybrid Ladder COICOP classification resolution.
 -- One row per (item_id, store_slug) from int_prices_cleaned.
 --
 -- Resolution order (first match wins):
---   1. override_exact -> coicop_override seed + silver.coicop_override_manual
---                        (exact barcode, product_key, or store-tagged rule)
---   2. store_purity   -> dbt seeds/store_purity.csv (Single-division stores)
---   3. critical_traps -> dbt seeds/coicop_critical_traps.csv (Critical domain rules)
---   4. gemini_ai_hi   -> silver.dim_coicop_ai_cache (conf >= 0.70)
---   5. override_global-> global name regex rules (boundaries) from coicop_override
---   6. gemini_ai_mid  -> silver.dim_coicop_ai_cache (conf >= 0.50)
---   7. text_rules     -> coicop_text_rules seed
---   8. category_map   -> silver.coicop_category_map (store native category taxonomy fallback)
---   9. store_default  -> coicop_store_defaults seed + UNCLASSIFIED fallback
+--   1. classification_cache -> silver.classification_cache (Final Hybrid Ladder Result)
+--   2. deterministic_rules   -> Exact overrides, Store Purity, and Critical Traps
+--   3. gemini_ai             -> silver.dim_coicop_ai_cache (AI-driven classification)
+--   4. fallbacks             -> Global overrides, Text Rules, Category Map, and Store Defaults
+--   5. UNCLASSIFIED          -> Default fallback
 {{ config(
     materialized='incremental',
     incremental_strategy='delete+insert',

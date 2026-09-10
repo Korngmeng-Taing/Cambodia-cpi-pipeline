@@ -16,7 +16,7 @@
 | **Transformation** | **dbt-core & Astronomer Cosmos** (Silver & Gold) | Turns raw price records, entity-matching outputs, pack-size conversions, and COICOP classification into version-controlled, testable SQL models rendered as visual task groups in Airflow. |
 | **Multi-Key API Pool** | **GeminiKeyPool** (`pipeline/key_pool.py`) | Thread-safe round-robin API key pool supporting 4+ free Gemini keys (6,000 req/day, 60 RPM) with automatic 429 failover. |
 | **Semantic Item Matching** | **VectorItemMatcher** (`pipeline/vector_item_matcher.py`) | High-speed multilingual vector embeddings (local MiniLM / deterministic synonym vectorizer + cached `gemini-embedding-2`), deterministic spec guards (RAM/Storage, pack size, volume ≤ 10%), and batch AI review for borderline pairs. |
-| **Hybrid COICOP Engine** | **HybridCOICOPClassifier** (`pipeline/hybrid_embeddings_classifier.py`) | 4-tier ladder: human authority overrides → single-category store domain locks (0.001ms) → 12-division reference vector cosine matching (resolving Community Pharma 06/12 split & AEON variety) → Gemini AI fallback & Postgres memoization. |
+| **Hybrid COICOP Engine** | **HierarchicalClassifier** (`pipeline/hierarchical_classifier.py`) | 4-tier ladder: human authority overrides → single-category store domain locks (0.001ms) → 12-division reference vector cosine matching (resolving Community Pharma 06/12 split & AEON variety) → Gemini AI fallback & Postgres memoization. |
 | **Scraper Observability** | **Metabase v0.49** | Real-time operational monitoring across 3 consolidated dashboards (Port 3001/3000): Macro CPI Analytics, Operations & Scraper Health, and Silver Data Quality. |
 | **Interactive Analytics** | **Microsoft Power BI** | Executive BI dashboards over the gold star schema: retailer and item-level price trends, promo analytics. |
 
@@ -518,6 +518,12 @@ The complete system architecture, daily scraping methodologies, AI vector embedd
 
 ---
 
-## 11. License
+## 11. Maintenance & Technical Notes
+
+For technical "gotchas", operational guides, and specific environment requirements (e.g., PostgreSQL regex syntax), see the **[Maintenance Guide](MAINTENANCE.md)**.
+
+---
+
+## 12. License
 
 Internal project — Cambodia CPI Pipeline Team.

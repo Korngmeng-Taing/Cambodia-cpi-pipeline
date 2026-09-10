@@ -30,12 +30,12 @@ flowchart TD
         D -- "4. No Match (< 0.75)" --> G["Create Canonical Item (Auto)\n(silver.canonical_items)"]
     end
 
-    subgraph S4["Stage 4: Local-First AI COICOP Classification Ladder (pipeline/hybrid_embeddings_classifier.py)"]
+    subgraph S4["Stage 4: Hybrid Ladder AI COICOP Classification (pipeline/hierarchical_classifier.py)"]
         G --> H{"Classification Ladder\n(First Match Wins)"}
-        H -- "Tier 1" --> I["Store Purity Locks\n(Fuel, Telco, Housing, Hotels, Pharma)"]
-        H -- "Tier 2" --> I2["Semantic Reference Space\n(Vector Cosine Similarity >= 0.85)"]
-        H -- "Tier 3" --> M["🤖 Hierarchical Local AI (Ollama)\nClassifier Proposal $\to$ Judge Audit\n(Trained on COICOP Handbook)"]
-        H -- "Tier 4" --> M1["🤖 Cloud Arbitration (Gemini Pro)\nResolution for conflicts/low-conf"]
+        H -- "Tier 1" --> I["Classification Cache\n(Verified results from previous runs)"]
+        H -- "Tier 2" --> I2["Deterministic Rules\n(Exact Overrides $\to$ Store Purity $\to$ Critical Traps)"]
+        H -- "Tier 3" --> M["🤖 Hierarchical AI Drill-Down (Llama 3.1)\nDivision $\to$ Group $\to$ Class $\to$ Sub-class\n(With Gemini 1.5 Flash Judge Audit)"]
+        H -- "Tier 4" --> M1["Fallbacks\n(Global Overrides $\to$ Text Rules $\to$ Cat Map $\to$ Defaults)"]
         H -- "Tier 5" --> N["Human Review Triage\n(Silver.needs_review queue)"]
     end
 
@@ -121,10 +121,10 @@ Candidate Scraped Title
 
 ---
 
-## 5. Stage 4: Local-First AI COICOP Semantic Classification
+## 5. Stage 4: Hybrid Ladder AI COICOP Classification
 
 ### Implementation Files:
-- [`pipeline/hybrid_embeddings_classifier.py`](file:///D:/CPI%20PIPELINE/pipeline/hybrid_embeddings_classifier.py)
+- [`pipeline/hierarchical_classifier.py`](file:///D:/CPI%20PIPELINE/pipeline/hierarchical_classifier.py)
 - [`pipeline/ollama_client.py`](file:///D:/CPI%20PIPELINE/pipeline/ollama_client.py)
 - [`pipeline/key_pool.py`](file:///D:/CPI%20PIPELINE/pipeline/key_pool.py)
 
@@ -132,22 +132,21 @@ Candidate Scraped Title
 New Canonical Item
          │
          ▼
-[ Tier 1: Store Purity Locks ]
-  • Immediate lock for domain-pure stores (e.g. Telco -> 08, Pharma -> 06)
-         │ Multi-Category Store (aeon, delishop, grab_*, l192)
+[ Tier 1: Classification Cache ]
+  • Direct lookup of previously verified results in silver.classification_cache
+         │ Cache Miss
          ▼
-[ Tier 2: Semantic Reference Space ]
-  • Vector similarity against COICOP handbook definitions (Cosine >= 0.85)
-         │ Low similarity
+[ Tier 2: Deterministic Rules ]
+  • Exact Overrides $\to$ Store Purity Locks $\to$ Critical Traps
+         │ No Match
          ▼
-[ Tier 3: Hierarchical Local AI (Ollama) ]
-  • Classifier: Proposes code and justification based on product name and context.
-  • Judge: Audits the proposal against COICOP rules.
-  • Result: Auto-classify if Judge approves with high confidence (>= 0.8).
-         │ Conflict or Low Confidence
+[ Tier 3: Hierarchical AI Drill-Down (Llama 3.1) ]
+  • Sequence: Division $\to$ Group $\to$ Class $\to$ Sub-class (5-digit)
+  • Adversarial Audit: Gemini 1.5 Flash Judge verifies each final proposal
+         │ Rejected or Low Confidence
          ▼
-[ Tier 4: Cloud Arbitration (Gemini Pro) ]
-  • Acts as the final tie-breaker to resolve ambiguities between Local AI and data.
+[ Tier 4: Fallbacks ]
+  • Global Overrides $\to$ Text Rules $\to$ Category Map $\to$ Store Defaults
          │ Unresolved
          ▼
 [ Tier 5: Human Review Triage ]

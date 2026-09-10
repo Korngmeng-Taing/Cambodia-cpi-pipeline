@@ -32,7 +32,6 @@ try:
 except ImportError:
     HAS_COSMOS = False
 
-from pipeline.gemini_coicop_classifier import classify_unclassified_with_gemini
 from pipeline.gemini_item_reviewer import auto_review_pending_items
 from pipeline.hedonic_regression import run_hedonic_regression
 from pipeline.item_matcher import ItemMatcher
@@ -89,30 +88,6 @@ def _safe_run_item_auto_review(**context) -> dict:
         raise AirflowSkipException(f"Item auto-review skipped: {e}") from e
 
 
-def _run_coicop_ai_classification(**context) -> dict:
-    dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
-    ds = dag_run_conf.get("ds") or context["ds"]
-    log.info("Executing Hybrid Vector & Gemini AI COICOP Classification for %s", ds)
-    res = classify_unclassified_with_gemini(scrape_date=ds)
-    log.info("COICOP AI Classification stats: %s", res)
-    return res
-
-
-def _safe_run_gemini(**context) -> dict:
-    """Graceful-degradation wrapper around the Gemini COICOP classifier."""
-    pool = get_key_pool()
-    if pool.get_key_count() == 0 and not os.getenv("GEMINI_API_KEY"):
-        log.warning(
-            "No Gemini API keys detected — running vector/rule ladder only without external Gemini AI."
-        )
-        raise AirflowSkipException("No Gemini API keys configured.")
-    try:
-        return _run_coicop_ai_classification(**context)
-    except Exception as e:  # AI must never block the Silver layer
-        log.warning("Gemini classification failed (non-blocking): %s", e)
-        raise AirflowSkipException(f"Gemini classification skipped: {e}") from e
-
-
 def _run_hedonic_adjustment(**context) -> dict:
     dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
     ds = dag_run_conf.get("ds") or context["ds"]
@@ -157,10 +132,10 @@ with DAG(
         bash_command=f"dbt seed {_dbt_flags}",
     )
 
-    # 4. Hybrid Vector + Gemini COICOP Classification
-    task_gemini_coicop = PythonOperator(
+    # 4. Hybrid Hierarchical AI COICOP Classification (Llama 3.1 + Gemini Judge)
+    task_gemini_coicop = BashOperator(
         task_id="gemini_coicop_classification",
-        python_callable=_safe_run_gemini,
+        bash_command=f"export PYTHONPATH=. && python scripts/run_hierarchical_classification.py",
     )
 
     # 5. Hedonic Quality Adjustment

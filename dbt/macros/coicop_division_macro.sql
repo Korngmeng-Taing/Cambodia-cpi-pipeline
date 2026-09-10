@@ -10,7 +10,7 @@
 
 {% macro coicop_code_from_division(div_expr) %}
     case
-        when {{ div_expr }} ~ '^\d{2}\.\d{1,2}\.\d{1,2}$' then {{ div_expr }}
+        when {{ div_expr }} ~ '^\d{2}(\.\d{1,2}){1,3}$' then {{ div_expr }}
         when {{ div_expr }} ~ '^\d{2}\.unclassified$' then {{ div_expr }}
         when {{ div_expr }} ~ '^\d{2}$' then {{ div_expr }} || '.unclassified'
         when {{ div_expr }} ~ '^\d{1}$' then '0' || {{ div_expr }} || '.unclassified'

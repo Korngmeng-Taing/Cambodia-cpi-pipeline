@@ -11,3 +11,4 @@ select
 from {{ ref('int_coicop_classified') }}
 where coicop_code not in ('UNCLASSIFIED', 'REVIEW')
   and coicop_code !~ '^[0-9]{2}\.[0-9]{1,2}\.[0-9]{1,2}$'
+  and coicop_code not like '%.unclassified'

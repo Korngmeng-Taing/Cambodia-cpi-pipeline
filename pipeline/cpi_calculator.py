@@ -465,6 +465,7 @@ class CPICalculationEngine:
             new_items["base_price_khr"] = new_items["today_price_khr"]
             new_items["base_unit_price_khr"] = new_items["today_unit_price_khr"]
             new_items["base_obs_count"] = new_items["observation_count"]
+            new_items = new_items.drop(columns=["today_price_khr", "today_unit_price_khr", "observation_count"], errors="ignore")
             base_df = pd.concat([base_df, new_items], ignore_index=True)
 
         # Merge with base prices on item_id

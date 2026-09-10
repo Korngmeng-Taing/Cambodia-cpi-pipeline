@@ -9,7 +9,8 @@ sources:
       pipeline/migrations/006_coicop_classification.sql).
     tables:
       - name: canonical_items
-        description: Canonical product identity (ItemMatcher path).
+        description: Canonical product identity (ItemMatcher path). View excludes USER-DEFINED embedding column.
+        relation_type: view
       - name: item_match_log
         description: Full audit trail of raw-price -> canonical item matches.
       - name: dim_canonical_products

@@ -60,7 +60,20 @@ NEW_MAPPINGS = [
     ("arystore", "Accessories / AirPods/Buds Case", "08"),
     ("arystore", "Watch / Huawei / Huawei Watches / Smartwatches", "08"),
     ("arystore", "Mobile", "08"),
-    ("arystore", "Accessories", "08"),
+    # Baby Food & Nutrition
+    ("delishop", "Baby's World > Baby Food", "01"),
+    ("delishop", "Baby's World > Milk", "01"),
+    ("delishop", "Baby Food", "01"),
+    ("aeon", "Baby > Baby Feeding", "01"),
+    ("aeon3", "Baby > Baby Feeding", "01"),
+    ("grab_chipmong", "Baby > Baby Feeding", "01"),
+    ("grab_lucky", "Baby > Baby Feeding", "01"),
+    # Delishop Pantry & Homewares
+    ("delishop", "Homewares & Accessories > Candles", "05"),
+    ("delishop", "Baking > Bagels", "01"),
+    ("delishop", "Pantry > Vinegars", "01"),
+    ("delishop", "Pantry > Nuts, Chips & Crackers", "01"),
+    ("delishop", "Sweet Corner > Candies, Chewing Gum & Dragees", "01"),
 ]
 
 def enrich_categories():
@@ -76,7 +89,7 @@ def enrich_categories():
                 cur.execute("""
                     INSERT INTO silver.coicop_category_map (store_slug, category_native, coicop_division)
                     VALUES (%s, %s, %s)
-                    ON CONFLICT DO NOTHING;
+                    ON CONFLICT (store_slug, category_native) DO UPDATE SET coicop_division = EXCLUDED.coicop_division;
                 """, (store, cat, div))
                 inserted += cur.rowcount
 

@@ -1,0 +1,1 @@
+python scripts/classify_new_items_gemini.py --execute --workers 4 --batch-size 50

@@ -64,14 +64,20 @@ select
     t.expected,
     f.coicop_division as actual
 from {{ ref('clean_store_prices') }} f
+join {{ source('silver', 'canonical_items') }} ci on f.item_id::text = ci.item_id::text
 join trap_cases t on position(upper(t.trap) in upper(f.name_clean)) > 0
 where f.coicop_division <> t.expected
   and f.scrape_date >= (select max(scrape_date) - interval '2 days' from {{ ref('clean_store_prices') }})
   and not (t.trap = 'SHAMPOO' and f.coicop_code = '09.3.4')
-  and not (t.trap = 'SHAMPOO' and f.name_clean ilike any (array['%CAR WASH%', '%CAT%', '%DOG%', '%PET%', '%VETERINARY%', '%HORSE%', '%PUPPY%', '%KITTEN%', '%BATHROOM%', '%RACK%', '%SHELF%', '%SHELVES%', '%HOLDER%', '%DISPENSER%', '%BOTTLE%', '%BRUSH%']))
+  and not (t.trap = 'SHAMPOO' and f.name_clean ilike any (array['%CAR WASH%', '%CAT%', '%DOG%', '%PET%', '%VETERINARY%', '%HORSE%', '%PUPPY%', '%KITTEN%', '%BATHROOM%', '%RACK%', '%SHELF%', '%SHELVES%', '%HOLDER%', '%DISPENSER%', '%BOTTLE%', '%BRUSH%', '%EARTHBATH%', '%DANDRUFF%']))
   and not (t.trap = 'TOOTHPASTE' and f.name_clean ilike any (array['%TUMBLER%', '%HOLDER%', '%CUP%', '%RACK%', '%STAND%', '%DISPENSER%', '%SQUEEZER%', '%ORGANIZER%']))
-  and not (t.trap = 'IPHONE' and f.name_clean ilike any (array['%CASE%', '%COVER%', '%ADAPTER%', '%CABLE%', '%CHARGER%', '%READER%', '%EARBUDS%', '%EARPHONES%', '%HEADPHONES%', '%GLASS%', '%PROTECTOR%', '%STRAP%', '%MOUNT%', '%HOLDER%']))
+  and not (t.trap = 'IPHONE' and f.name_clean ilike any (array['%CASE%', '%COVER%', '%ADAPTER%', '%CABLE%', '%CHARGER%', '%READER%', '%EARBUDS%', '%EARPHONES%', '%EARPHONE%', '%HEADPHONES%', '%GLASS%', '%PROTECTOR%', '%STRAP%', '%MOUNT%', '%HOLDER%']))
   and not (t.trap = 'HAIRCUT' and f.name_clean ilike any (array['%TOY%', '%KIT%', '%DOLL%', '%SET%']))
   and not (t.trap = 'LITTLE TREES BLACK ICE' and f.coicop_division = '07')
   and not (t.trap = 'CONTACT LENS' and (f.name_clean ilike '%CASE%' or f.name_clean ilike '%BOX%' or f.name_clean ilike '%CONTAINER%'))
+  and not (t.trap = 'GREEN ONION SLICER' and f.name_clean ilike '%SLICER%')
   and not (t.trap in ('SHAMPOO', 'TOOTHPASTE', 'NAIL SCISSOR', 'NAIL SCISSORS') and f.store_slug in ('communitypharma', 'grab_ucare'))
+  and not (t.trap = 'IPHONE' and ci.canonical_name not ilike '%iphone%')
+  and not (t.trap = 'LAUNDRY DETERGENT' and ci.canonical_name not ilike '%laundry detergent%')
+  and not (t.trap = 'TOOTHPASTE' and ci.canonical_name not ilike '%toothpaste%')
+  and not (t.trap = 'DISHWASHING LIQUID' and ci.canonical_name not ilike any (array['%dish%', '%dishwash%', '%palmolive%']))

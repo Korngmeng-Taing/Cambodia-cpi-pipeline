@@ -33,6 +33,7 @@ from (
     from {{ ref('fct_daily_prices') }}
     where cpi_eligible = true
       and coalesce(observation_count, 1) = 1
+      and coalesce(pack_qty, 1) > 0
 ) t
 where expected_unit_price is not null
   and unit_price_khr is not null

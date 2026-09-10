@@ -1,0 +1,23 @@
+pattern,negative_pattern,coicop_division,coicop_code,priority,method_label
+\b(iphone)\b,,08,08.2.0,1,iphone_rule
+\b(laundry detergent|dishwashing liquid|dish washing liquid)\b,,05,05.6.1,2,laundry_detergent_rule
+\btoothpaste\b,,12,12.1.3,3,toothpaste_rule
+\b(cleaning vinegar|household vinegar|vinaigre m[ée]nager|streak free.*vinegar|apta.*vinegar|briochin.*vinegar)\b,,05,05.6.1,4,cleaning_vinegar_rule
+\b(apple cider vinegar|cider vinegar|wine vinegar|red wine vinegar|white wine vinegar|rice wine vinegar|rice vinegar|balsamic|balsamico|distilled white vinegar|distilled vinegar|malt vinegar|grape vinegar|vinaigre|vinegar)\b,,01,01.1.9,5,culinary_vinegar_rule
+\bbourbon\s*(petit|alfort|roanne|blanc|chocochip|cracker|biscuit|cookie|wafer|rice cracker|okoge|agemaru|vanilla|soy sauce)\b|\bbourbon petit\b,,01,01.1.8,6,bourbon_snack_rule
+\bcamel\b.*\b(nut|nuts|peanut|peanuts|cashew|cashews|almond|almonds|cracker|crackers|mixed nuts|crunchy|anchovies|revive|bounce|sugar)\b|\b(peanut cracker|cashew roasted|power revive|power bounce|peanut sugar|peanut & anchovies).*\bcamel\b,,01,01.1.8,7,camel_nuts_rule
+\b(candle holder|candleholder|candelabra|candle stand|candle tray)\b,,05,05.5.1,8,candle_holder_rule
+\b(scented candle|votive candle|tea light candle|aromatherapy candle|birthday candle|essential oils candle|candle|candles|votive candles)\b,,05,05.6.1,9,candle_rule
+\b(infant formula|baby formula|follow[- ]up formula|growing up formula|milk powder|dumex|dulac|dugro|bubs goat|bubs organic|wakodo lebens|meiji hohoemi|meiji step|similac gain|similac mum|pediasure|enfagrow|nan pro|s-26|illuma|alula)\b,,01,01.1.4,10,baby_formula_rule
+\b(baby cereal|infant cereal|milna baby biscuit|milna biscuit|baby biscuit|baby rusks|rice rusks|baby bites|promina baby cereal|promina|cerelac|bledina|baby porridge|milna rice puff|milna puffs|puffs organic.*months)\b,,01,01.1.1,11,baby_cereal_rule
+\b(baby puree|milna fruit puree|puree.*squeeze|fruit puree.*months|fruit puree.*baby|rafferty's garden|baby food jar|strained baby food)\b,,01,01.1.9,12,baby_puree_rule
+\b(hot pot|hotpot)\b.*\b(base|soup|broth|seasoning|sauce|dipping|paste|instant|spices|broth|bouillon)\b|\b(soup base|dipping sauce|broth).*\b(hot pot|hotpot)\b|\b(instant hot pot|clear oil hot pot|spicy hot pot|beef hot pot|sichuan hot pot|haidilao hot pot)\b,"(cooker|pan|pot cooker|pot pan|grill|stove|induction|ladle|spoon|tableware|cookware)",01,01.1.9,13,hot_pot_food_rule
+\b(pot pie|chicken pot pie|beef pot pie|turkey pot pie)\b,,01,01.1.1,14,pot_pie_rule
+\b(bowl noodle|noodle bowl|instant bowl noodle|bowl noodle soup|ramen bowl|udon bowl)\b,,01,01.1.1,15,bowl_noodle_rule
+\b(bagel|bagels)\b,,01,01.1.1,16,bagel_rule
+\b(sanitary pad|sanitary pads|sanitary napkin|sanitary napkins|pantyliner|panty liner|pantyliners|panty liners|tampon|tampons|cindi overnight|cindi panty|kotex|laurier|sofym|libresse)\b,,12,12.1.3,17,sanitary_rule
+\b(condom|condoms|durex|okamoto)\b,,12,12.1.3,18,condom_rule
+\b(diaper|diapers|pampers|mamy poko|huggies|baby wipes|nappy|nappies)\b,,12,12.1.3,19,diaper_rule
+\b(baby lotion|baby wash|baby shampoo|baby bath|baby oil|baby powder|talcum powder)\b,,12,12.1.3,20,baby_toiletries_rule
+\b(pop up tissue|facial tissue|toilet paper|toilet roll|kitchen towel|paper napkin|tissues|laundry detergent|washing powder|liquid detergent|dishwashing|dishwash|floor cleaner|toilet cleaner|bathroom cleaner|bleach|disinfectant|fabric softener|fabric conditioner|downy|comfort|sunlight|attack|magiclean|lix|trash bag|garbage bag|scouring pad|sponge|mop|broom|air freshener|little trees|insect spray|mosquito coil|baygon|raid|battery|batteries|alkaline battery|maxell|glass cleaner|toilet brush|scouring sponge|citric acid electrolyzed water cleaner)\b,,05,05.6.1,21,household_clean_rule
+\b(refrigerator|fridge|washing machine|microwave|blender|rice cooker|air fryer|toaster|electric kettle|vacuum cleaner|steam iron|clothes iron|dry iron|flat iron|electric fan|stand fan|floor fan|desk fan|cooling mini fan)\b,"(pastry|pastries|pop tart|cereal|supplement|vitamin|kitkat|milo|cleaner|cleaning|tablet|powder|descaler|fresh-keeping|cling film|storage box|organizer|tray|drawer|toy|puzzle|piggy bank|iron starch|starch|wrought iron|iron box)",05,05.3.1,22,appliance_rule

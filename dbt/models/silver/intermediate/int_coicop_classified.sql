@@ -5,12 +5,14 @@
 -- Resolution order (first match wins):
 --   1. override_exact -> coicop_override seed + silver.coicop_override_manual
 --                        (exact barcode, product_key, or store-tagged rule)
---   2. store_purity   -> single-division stores (pharmacies=06, real estate=04,
---                        hotels=11, transit/fuel=07, telecom=08). Instant O(1)
---   3. override_global-> global name substring rules from coicop_override
---   4. gemini_ai      -> silver.dim_coicop_ai_cache (pre-warmed / persistent Gemini AI cache)
---   5. category_map   -> silver.coicop_category_map (store native category taxonomy fallback)
---   6. store_default  -> coicop_store_defaults seed + UNCLASSIFIED fallback
+--   2. store_purity   -> dbt seeds/store_purity.csv (Single-division stores)
+--   3. critical_traps -> dbt seeds/coicop_critical_traps.csv (Critical domain rules)
+--   4. gemini_ai_hi   -> silver.dim_coicop_ai_cache (conf >= 0.70)
+--   5. override_global-> global name regex rules (boundaries) from coicop_override
+--   6. gemini_ai_mid  -> silver.dim_coicop_ai_cache (conf >= 0.50)
+--   7. text_rules     -> coicop_text_rules seed
+--   8. category_map   -> silver.coicop_category_map (store native category taxonomy fallback)
+--   9. store_default  -> coicop_store_defaults seed + UNCLASSIFIED fallback
 {{ config(
     materialized='incremental',
     incremental_strategy='delete+insert',
@@ -56,10 +58,10 @@ with items as materialized (
     {% endif %}
 ),
 all_overrides as materialized (
-    select match_type, trim(match_value) as match_value, lower(trim(match_value)) as match_val_lower, store_slug, lpad(coicop_division, 2, '0') as coicop_division
+    select match_type, trim(match_value) as match_value, lower(trim(match_value)) as match_val_lower, store_slug, lpad(coicop_division::text, 2, '0') as coicop_division
     from {{ ref('coicop_override') }}
     union all
-    select match_type, trim(match_value) as match_value, lower(trim(match_value)) as match_val_lower, store_slug, lpad(coicop_division, 2, '0') as coicop_division
+    select match_type, trim(match_value) as match_value, lower(trim(match_value)) as match_val_lower, store_slug, lpad(coicop_division::text, 2, '0') as coicop_division
     from {{ source('silver', 'coicop_override_manual') }}
 ),
 ov_barcode as materialized (
@@ -90,19 +92,34 @@ ov_name_global as materialized (
 ),
 store_purity as materialized (
     select
+        store_slug,
+        lpad(coicop_division::text, 2, '0') as purity_division,
+        coicop_code as purity_code
+    from {{ ref('store_purity') }}
+),
+critical_traps as materialized (
+    select
+        pattern,
+        negative_pattern,
+        lpad(coicop_division::text, 2, '0') as trap_division,
+        coicop_code as trap_code,
+        priority,
+        method_label
+    from {{ ref('coicop_critical_traps') }}
+),
+trap_match as materialized (
+    select distinct on (i.item_id, i.store_slug)
         i.item_id,
         i.store_slug,
-        case
-            when i.store_slug in ('khmer24', 'realestate', 'edc', 'ppwsa') then '04'
-            when i.store_slug = 'new_gasoline' and lower(i.canonical_name) like '%lpg%' then '04'
-            when i.store_slug in ('communitypharma', 'grab_ucare') then '06'
-            when i.store_slug in ('sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk') then '11'
-            when i.store_slug in ('bookmebus', 'redbus', 'redmebus', 'new_gasoline', 'gasoline', 'khmermoto') then '07'
-            when i.store_slug in ('arystore', 'samnangshop', 'cellcard', 'cellcard_wifi', 'smart', 'smart_wifi', 'metfone') then '08'
-        end as purity_division
+        t.trap_division,
+        t.trap_code,
+        t.priority
     from items i
+    join critical_traps t
+      on i.norm_name ~* t.pattern
+     and (t.negative_pattern is null or i.norm_name !~* t.negative_pattern)
+    order by i.item_id, i.store_slug, t.priority asc
 ),
-
 ai_prejoined as materialized (
     select distinct on (lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')))
         lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')) as norm_name,
@@ -120,7 +137,7 @@ cat_map_prejoined as materialized (
     select distinct on (store_slug, lower(trim(category_native)))
         store_slug,
         lower(trim(category_native)) as cat_key,
-        lpad(coicop_division, 2, '0') as coicop_division
+        lpad(coicop_division::text, 2, '0') as coicop_division
     from {{ source('silver', 'coicop_category_map') }}
 ),
 cat_map_match as materialized (
@@ -140,7 +157,7 @@ cat_map_match as materialized (
 text_rules_prejoined as materialized (
     select
         rule_id,
-        lpad(coicop_division, 2, '0') as coicop_division,
+        lpad(coicop_division::text, 2, '0') as coicop_division,
         pattern,
         negative_pattern,
         priority,
@@ -189,6 +206,9 @@ items_evaluated as materialized (
         i.norm_category,
         coalesce(ov_b.coicop_division, ov_pk.coicop_division, ov_ns.coicop_division) as ov_exact_div,
         ps.purity_division,
+        ps.purity_code,
+        tm.trap_division,
+        tm.trap_code,
         ov_ng.coicop_division as ov_global_div,
         case
             when split_part(ai.coicop_code, '.', 1) = '11' and i.store_slug not in ('sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk') then null
@@ -196,12 +216,12 @@ items_evaluated as materialized (
             when split_part(ai.coicop_code, '.', 1) = '07' and i.store_slug in ('communitypharma', 'grab_ucare', 'delishop', 'arystore', 'samnangshop', 'khmer24', 'realestate', 'sokhahotel', 'hyyathotel', 'hyatthotel', 'hyatt', 'bayonbkk') then null
             else ai.coicop_division
         end as ai_div,
-        ai.confidence_score as ai_conf,
+        ai.confidence_score::numeric as ai_conf,
         ai.coicop_code as ai_code,
         cm.coicop_division as cat_map_div,
         -- P3 #125: cat_map_code is the only known override is '09' -> '09.5.4';
         -- absent a per-row 5-digit code from coicop_category_map, the macro uses
-        -- the 2-digit → 5-digit default table.
+        -- the 2-digit -> 5-digit default table.
         null::varchar as cat_map_code,
         tr.text_rule_div,
         tr.text_rule_code,
@@ -210,12 +230,13 @@ items_evaluated as materialized (
         sd.coicop_code as store_default_code,
         sd.confidence_score as store_default_conf
     from items i
-    left join store_purity ps on ps.item_id = i.item_id and ps.store_slug = i.store_slug
+    left join store_purity ps on ps.store_slug = i.store_slug
+    left join trap_match tm on tm.item_id = i.item_id and tm.store_slug = i.store_slug
     left join ai_prejoined ai on ai.norm_name = i.norm_name
     left join ov_barcode ov_b on i.barcode is not null and trim(i.barcode) <> '' and ov_b.barcode = trim(i.barcode)
     left join ov_product_key ov_pk on i.product_key is not null and trim(i.product_key) <> '' and ov_pk.product_key = trim(i.product_key)
-    left join ov_name_store ov_ns on ov_ns.store_slug = i.store_slug and position(ov_ns.match_val_lower in i.norm_name) > 0
-    left join ov_name_global ov_ng on position(ov_ng.match_val_lower in i.norm_name) > 0
+    left join ov_name_store ov_ns on ov_ns.store_slug = i.store_slug and i.norm_name ~* ('\\b' || ov_ns.match_val_lower || '\\b')
+    left join ov_name_global ov_ng on i.norm_name ~* ('\\b' || ov_ng.match_val_lower || '\\b')
     left join cat_map_match cm on cm.item_id = i.item_id and cm.store_slug = i.store_slug
     left join text_rule_match tr on tr.item_id = i.item_id and tr.store_slug = i.store_slug
     left join store_defaults_prejoined sd on sd.store_slug = i.store_slug
@@ -228,24 +249,26 @@ select
     f.product_key,
     f.price_khr,
     {{ resolve_coicop_division(
-        'f.ov_exact_div', 'f.purity_division', 'f.ov_global_div',
+        'f.ov_exact_div', 'f.purity_division', 'f.trap_division',
         'f.ai_div', 'f.ai_conf',
+        'f.ov_global_div',
         'f.cat_map_div', 'f.text_rule_div',
         'f.store_default_div', 'f.store_slug') }} as coicop_division,
     {{ resolve_coicop_code(
         'f.ai_div', 'f.ai_code', 'f.ai_conf',
-        'f.purity_division', 'f.store_slug',
+        'f.purity_division', 'f.purity_code',
+        'f.trap_division', 'f.trap_code',
         'f.ov_exact_div', 'f.ov_global_div',
         'f.cat_map_div', 'f.cat_map_code',
         'f.text_rule_div', 'f.text_rule_code',
-        'f.store_default_div', 'f.store_default_code') }} as coicop_code,
+        'f.store_default_div', 'f.store_default_code', 'f.store_slug') }} as coicop_code,
     {{ resolve_coicop_method(
-        'f.ov_exact_div', 'f.purity_division', 'f.ov_global_div',
+        'f.ov_exact_div', 'f.purity_division', 'f.trap_division', 'f.ov_global_div',
         'f.ai_div', 'f.ai_conf',
         'f.cat_map_div', 'f.text_rule_div',
         'f.store_slug', 'f.store_default_div') }} as coicop_method,
     {{ resolve_coicop_confidence(
-        'f.ov_exact_div', 'f.purity_division', 'f.ov_global_div',
+        'f.ov_exact_div', 'f.purity_division', 'f.trap_division', 'f.ov_global_div',
         'f.ai_div', 'f.ai_conf',
         'f.cat_map_div', 'f.text_rule_div', 'f.text_rule_conf',
         'f.store_slug', 'f.store_default_div', 'f.store_default_conf') }} as coicop_confidence

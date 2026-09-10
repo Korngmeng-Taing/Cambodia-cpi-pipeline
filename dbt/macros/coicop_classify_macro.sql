@@ -1,27 +1,14 @@
-{#
-  coicop_classify_macro.sql
-  ─────────────────────────
-  Resolves the 12-division COICOP ladder across models.
-  Ladder resolution order:
-    1. Exact overrides (barcode, product_key, store-tagged name)
-    2. Single-division store purity locks (pharmacy=06, transit=07, etc.)
-    3. Gemini AI high-confidence classification (silver.dim_coicop_ai_cache with conf >= 0.70)
-    4. Global name substring overrides (coicop_override)
-    5. Gemini AI medium-confidence classification (silver.dim_coicop_ai_cache with conf >= 0.50)
-    6. Text regex rules (coicop_text_rules seed)
-    7. Native category map (silver.coicop_category_map)
-    8. Store-level defaults (coicop_store_defaults)
-#}
-
 {% macro resolve_coicop_division(
-    ov_exact_div, purity_division, ov_global_div,
+    ov_exact_div, purity_division, trap_div,
     ai_div, ai_conf,
+    ov_global_div,
     cat_map_div, text_rule_div,
     store_default_div, store_slug) %}
     coalesce(
         {{ ov_exact_div }},
         {{ purity_division }},
-        -- High-confidence Gemini AI (>= 0.70) is authoritative on multi-category retail items
+        {{ trap_div }},
+        -- High-confidence Gemini AI (>= 0.70)
         case
             when {{ ai_div }} is not null
                  and coalesce({{ ai_conf }}, 0.90) >= 0.70 then {{ ai_div }}
@@ -45,42 +32,23 @@
 
 {% macro resolve_coicop_code(
     ai_div, ai_code, ai_conf,
-    purity_division, store_slug,
+    purity_division, purity_code,
+    trap_div, trap_code,
     ov_exact_div, ov_global_div,
     cat_map_div, cat_map_code,
     text_rule_div, text_rule_code,
-    store_default_div, store_default_code) %}
+    store_default_div, store_default_code, store_slug) %}
     coalesce(
-        -- 1. Exact overrides (barcode, product_key, store-tagged name)
+        -- 1. Exact overrides
         case
             when {{ ov_exact_div }} is not null
                 then {{ coicop_code_from_division(ov_exact_div) }}
         end,
-        -- 2. Single-division store purity locks
-        case
-            when {{ purity_division }} is not null then
-                case {{ purity_division }}
-                    when '06' then '06.1.2'
-                    when '04' then case
-                        when {{ store_slug }} = 'edc' then '04.5.1'
-                        when {{ store_slug }} = 'ppwsa' then '04.4.1'
-                        else '04.1.1'
-                    end
-                    when '11' then case
-                        when {{ store_slug }} = 'bayonbkk' then '11.1.1' else '11.2.0'
-                    end
-                    when '07' then case
-                        when {{ store_slug }} in ('bookmebus', 'redbus', 'redmebus') then '07.3.2'
-                        when {{ store_slug }} = 'khmermoto' then '07.1.2'
-                        else '07.2.2'
-                    end
-                    when '08' then case
-                        when {{ store_slug }} in ('arystore', 'samnangshop') then '08.2.0'
-                        else '08.3.0'
-                    end
-                end
-        end,
-        -- 3. Gemini AI high-confidence classification (>= 0.70)
+        -- 2. Store purity locks
+        {{ purity_code }},
+        -- 3. Critical Traps
+        {{ trap_code }},
+        -- 4. Gemini AI high-confidence classification (>= 0.70)
         case
             when {{ ai_div }} is not null
                  and coalesce({{ ai_conf }}, 0.90) >= 0.70 then
@@ -92,12 +60,12 @@
                     else {{ coicop_code_from_division(ai_div) }}
                 end
         end,
-        -- 4. Global name substring overrides
+        -- 5. Global name substring overrides
         case
             when {{ ov_global_div }} is not null
                 then {{ coicop_code_from_division(ov_global_div) }}
         end,
-        -- 5. Gemini AI medium-confidence classification (>= 0.50)
+        -- 6. Gemini AI medium-confidence classification (>= 0.50)
         case
             when {{ ai_div }} is not null
                  and coalesce({{ ai_conf }}, 0.90) >= 0.50 then
@@ -109,7 +77,7 @@
                     else {{ coicop_code_from_division(ai_div) }}
                 end
         end,
-        -- 6. Text regex rules
+        -- 7. Text regex rules
         case
             when {{ text_rule_code }} is not null
                  and {{ text_rule_code }} ~ '^\d{2}\.\d{1,2}\.\d{1,2}$'
@@ -118,7 +86,7 @@
             when {{ text_rule_div }} is not null
                 then {{ coicop_code_from_division(text_rule_div) }}
         end,
-        -- 7. Category map
+        -- 8. Category map
         case
             when {{ cat_map_code }} is not null
                  and {{ cat_map_code }} ~ '^\d{2}\.\d{1,2}\.\d{1,2}$'
@@ -128,12 +96,12 @@
             when {{ cat_map_div }} is not null
                 then {{ coicop_code_from_division(cat_map_div) }}
         end,
-        -- 7b. Low-confidence AI check (aligned with resolve_coicop_division 'REVIEW')
+        -- 8b. Low-confidence AI check
         case
             when {{ ai_div }} is not null
                  and coalesce({{ ai_conf }}, 0.90) < 0.50 then 'REVIEW'
         end,
-        -- 8. Store-level defaults & single-source fallbacks
+        -- 9. Store-level defaults & single-source fallbacks
         case when {{ store_slug }} in ('khmer24', 'realestate') then '04.1.1' end,
         case when {{ store_slug }} = 'edc' then '04.5.1' end,
         case when {{ store_slug }} = 'ppwsa' then '04.4.1' end,
@@ -160,12 +128,13 @@
 
 
 {% macro resolve_coicop_method(
-    ov_exact_div, purity_division, ov_global_div,
+    ov_exact_div, purity_division, trap_div, ov_global_div,
     ai_div, ai_conf,
     cat_map_div, text_rule_div, store_slug, store_default_div) %}
     case
         when {{ ov_exact_div }} is not null then 'override'
         when {{ purity_division }} is not null then 'store_purity'
+        when {{ trap_div }} is not null then 'critical_trap'
         when {{ ai_div }} is not null
              and coalesce({{ ai_conf }}, 0.90) >= 0.70 then 'gemini_ai'
         when {{ ov_global_div }} is not null then 'override'
@@ -189,13 +158,14 @@
 
 
 {% macro resolve_coicop_confidence(
-    ov_exact_div, purity_division, ov_global_div,
+    ov_exact_div, purity_division, trap_div, ov_global_div,
     ai_div, ai_conf,
     cat_map_div, text_rule_div, text_rule_conf,
     store_slug, store_default_div, store_default_conf) %}
     case
         when {{ ov_exact_div }} is not null then 1.000
         when {{ purity_division }} is not null then 0.850
+        when {{ trap_div }} is not null then 0.950
         when {{ ai_div }} is not null
              and coalesce({{ ai_conf }}, 0.90) >= 0.70 then coalesce({{ ai_conf }}, 0.900)
         when {{ ov_global_div }} is not null then 1.000

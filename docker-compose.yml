@@ -136,6 +136,8 @@ services:
     command: webserver
     ports:
       - "8085:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     deploy:
       resources:
         limits:
@@ -159,6 +161,8 @@ services:
     container_name: airflow-scheduler
     restart: unless-stopped
     command: scheduler
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     deploy:
       resources:
         limits:

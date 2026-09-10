@@ -242,9 +242,9 @@ Ucare Pharmacy & \texttt{grab\_ucare} & Health (06), Personal Care (12) & Painki
 Khmer Samnang Phone & \texttt{samnangshop} & Communication (08), Computing (09) & Smartphones (iPhone, Samsung Galaxy, Oppo), iPads, tablets, smartwatches, power banks, fast chargers. \\
 Ary Store Phone Shop & \texttt{arystore} & Communication (08), Audio Tech (09) & Budget and mid-tier smartphones (Xiaomi, Realme, Vivo), wireless bluetooth earbuds, phone accessories. \\
 Smart Axiata Mobile & \texttt{smart} & Communication (08.3.0) & Smart ThomMorng prepaid internet plans, monthly mobile data packages, traveler SIMs, roaming packages. \\
-Smart Home Internet & \texttt{smart\_wifi} & Communication (08.3.0) & Smart @Home wireless broadband routers, Fiber+ standard and ultra high-speed plans (40--120 Mbps). \\
+Smart Home Internet & \texttt{smart} & Communication (08.3.0) & Smart @Home wireless broadband routers, Fiber+ standard and ultra high-speed plans (40--120 Mbps). \\
 Cellcard Mobile & \texttt{cellcard} & Communication (08.3.0) & Prepaid mobile 4G/5G data plans, voice call minutes, tourist SIM cards. \\
-Cellcard Home Internet & \texttt{cellcard\_wifi} & Communication (08.3.0) & Monthly fixed broadband fiber subscriptions and wireless home gateway plans. \\
+Cellcard Home Internet & \texttt{cellcard} & Communication (08.3.0) & Monthly fixed broadband fiber subscriptions and wireless home gateway plans. \\
 Metfone Cambodia & \texttt{metfone} & Communication (08.3.0) & Metfone 4G/5G mobile prepaid bundles, unlimited data packages, and home fiber internet plans. \\
 Khmer Moto Shop & \texttt{khmermoto} & Motorcycles (07.1.2) & Retail catalog of new and pre-owned motorcycles, motorbikes, scooters (Honda Scoopy, Wave, Click, Dream). \\
 Electricit\'e du Cambodge & \texttt{edc} & Electricity Grid (04.5.1) & Official progressive residential lifeline electricity tariffs across domestic consumption tiers (380 to 730 KHR/kWh). \\
@@ -259,7 +259,7 @@ Sokha Hotels & \texttt{sokhahotel} & Hotels (11.2.0), Dining (11.1.1) & Hotel ac
 Hyatt Regency Hotel & \texttt{hyyathotel} & Hotels (11.2.0), Dining (11.1.1) & Luxury hotel room accommodation per night in Phnom Penh, dining services, Sunday brunch. \\
 L192 Marketplace & \texttt{l192} & Clothing (03), Footwear (03), Home (05) & Casual men's and women's apparel, t-shirts, dresses, everyday footwear, fashion bags, lifestyle home goods. \\
 MEF / NBC Exchange & \texttt{mef\_fx} & Macroeconomic FX Rate & Official daily USD/KHR market exchange rate used for pipeline-wide dual-currency standardization. \\
-NIS Official CPI & \texttt{nis\_cpi} & Macro Benchmark & Official monthly benchmark CPI numbers from the National Institute of Statistics used to validate daily nowcasts. \\
+NIS Official CPI & \texttt{nis\_official\_cpi} & Macro Benchmark & Official monthly benchmark CPI numbers from the National Institute of Statistics used to validate daily nowcasts. \\
 \bottomrule
 \end{longtable}
 
@@ -360,7 +360,7 @@ Think of a physical supermarket where similar items live in the same aisle:
 \end{itemize}
 
 \subsection{Part 1: Semantic Product Matching (Connecting Scraped Names to Catalog)}
-Every morning, scrapers collect thousands of product listings. To track an item's price over time, we must match today's scraped name against our master catalog of known products (\texttt{silver.dim\_canonical\_items}).
+Every morning, scrapers collect thousands of product listings. To track an item's price over time, we must match today's scraped name against our master catalog of over 40,000 known canonical products (\texttt{silver.dim\_canonical\_items}), ensuring that we track the same physical good across different stores and dates.
 
 \subsubsection{The Mathematical Cosine Similarity}
 To compare the scraped item vector $\vec{u}$ and a catalog item vector $\vec{v}$, we calculate their \textbf{cosine similarity}:
@@ -405,28 +405,30 @@ To stop this, \texttt{vector\_item\_matcher.py} enforces 4 deterministic guardra
 
 \subsection{Part 2: AI-First Product Classification into UN COICOP Baskets}
 Every product must be assigned to one of the official United Nations COICOP categories (e.g., Bread, Meat, Fish, Medicine, Gasoline). To classify tens of thousands of items quickly, deterministically, and cost-effectively, our pipeline executes an official \textbf{AI-First Classification Ladder} codified in \texttt{dbt/macros/coicop\_classify\_macro.sql} and mirrored in Python:
-
 \begin{enumerate}
-    \item \textbf{Tier 1: Exact Explicit Overrides (Supreme Human Authority):} Matches exact barcodes, unique product keys, or curated store-product combinations recorded in \texttt{silver.coicop\_override} and \texttt{silver.coicop\_override\_manual}. If a manual audit locks an item, this takes supreme precedence.
-    \item \textbf{Tier 2: Single-Division Store Purity Locks (Instant Store Integrity):} Stores with pure domain integrity are locked directly to their respective division with zero lookup delay:
+    \item \textbf{Tier 1: Exact Explicit Overrides (Supreme Human Authority):} Matches exact barcodes, unique product keys, or curated store-product combinations recorded in \texttt{silver.coicop\_override}. If a manual audit locks an item, this takes supreme precedence.
+    \item \textbf{Tier 2: Single-Division Store Purity Locks (Instant Store Integrity):} Stores with pure domain integrity are locked directly to their respective division:
     \begin{itemize}[noitemsep]
         \item \texttt{communitypharma}, \texttt{grab\_ucare} $\rightarrow$ Division 06 (Health \& Pharmacy).
-        \item \texttt{bookmebus}, \texttt{redbus}, \texttt{new\_gasoline} $\rightarrow$ Division 07 (Transport, Passenger Fares \& Automotive Fuel).
-        \item \texttt{arystore}, \texttt{samnangshop}, \texttt{cellcard}, \texttt{smart} $\rightarrow$ Division 08 (Information \& Communication Equipment / Telco).
-        \item \texttt{khmer24}, \texttt{realestate} $\rightarrow$ Division 04 (Housing, Rentals \& Utilities).
-        \item \texttt{sokhahotel}, \texttt{hyyathotel}, \texttt{bayonbkk} $\rightarrow$ Division 11 (Restaurants \& Accommodation Services).
+        \item \texttt{bookmebus}, \texttt{redbus}, \texttt{new\_gasoline} $\rightarrow$ Division 07 (Transport).
+        \item \texttt{arystore}, \texttt{samnangshop}, \texttt{cellcard}, \texttt{smart}, \texttt{metfone} $\rightarrow$ Division 08 (Communication).
+        \item \texttt{khmer24}, \texttt{realestate} $\rightarrow$ Division 04 (Housing).
+        \item \texttt{sokhahotel}, \texttt{hyyathotel}, \texttt{bayonbkk} $\rightarrow$ Division 11 (Restaurants \& Hotels).
     \end{itemize}
-    \item \textbf{Tier 3: High-Confidence Gemini AI Engine ($\text{Confidence} \ge 0.70$):}
-    For mixed-retail stores (e.g. AEON, DeliShop, GrabMart, L192), high-confidence Gemini AI classifications are elevated directly above rigid regexes and global text substrings.
+    \item \textbf{Tier 3: Critical Traps (Vetted Edge Cases):} Handles tricky items (e.g., Chivas, Marlboro, Panasonic hair dryers) that might confuse an AI but are logically fixed to specific baskets.
+    \item \textbf{Tier 4: High-Confidence Gemini AI Engine ($\text{Confidence} \ge 0.70$):}
+    For mixed-retail stores, high-confidence Gemini AI classifications are elevated directly.
     \begin{itemize}[noitemsep]
-        \item \textit{Multi-Attribute Rich Context:} Unlike simple name-only models, our Gemini AI classifier receives a full multi-dimensional payload: product title, merchant slug, merchant aisle/category breadcrumbs, and price in KHR. This prevents classic retail domain traps (e.g. distinguishing cooking mirin from drinking wine, or coffee filter paper from drinking coffee).
-        \item \textit{Persistent Memoized Database Cache:} All Gemini classifications are permanently cached in \texttt{silver.dim\_coicop\_ai\_cache}. Any product with confidence $\ge 0.70$ is subsequently resolved in $< 1\text{ms}$ at \$0.00 cloud cost.
-        \item \textit{Primary Method Across the Warehouse:} Gemini AI is the \textbf{\#1 classification method}, powering \textbf{53.33\% (484,892 observations)} of the entire 909,289-row warehouse.
+        \item \textit{Multi-Attribute Context:} Gemini receives a full payload: product title, merchant slug, category breadcrumbs, and price in KHR.
+        \item \textit{Persistent Cache:} Classifications are cached in \texttt{silver.dim\_coicop\_ai\_cache} for $< 1\text{ms}$ resolution.
+        \item \textit{Dominant Method:} Gemini AI is the \textbf{\#1 classification method}, powering over 50\% of the warehouse.
     \end{itemize}
-    \item \textbf{Tier 4: Global Substring Brand Overrides (Secondary Deterministic Fallbacks):} Cross-store high-confidence brand substrings that resolve known edge cases when AI confidence is below $0.70$ (e.g. \texttt{CHIVAS}, \texttt{MARLBORO} $\rightarrow$ Division 02).
-    \item \textbf{Tier 5: Native Category Taxonomy Maps (Merchant Breadcrumb Fallback):} Maps native merchant category hierarchies from \texttt{silver.coicop\_category\_map} when raw scrapers capture verified store breadcrumbs (accounting for 16.65\% of warehouse classifications).
-    \item \textbf{Tier 6: Text Regular Expression Rules (Vetted Heuristics):} Matches vetted regex patterns and negative exclusion rules from \texttt{silver.coicop\_text\_rules}, handling standard product descriptions with linguistic variances (accounting for 11.98\% of warehouse classifications).
-    \item \textbf{Tier 7: Store Default Fallbacks \& AI Review Triage (Safeguard Final Tier):} Unmatched items fall back to broad store-level defaults from \texttt{silver.coicop\_store\_defaults}. In the live production database, \textbf{zero rows} remain in unclassified or review status (100.00\% classification rate).
+    \item \textbf{Tier 5: Global Substring Brand Overrides:} Cross-store high-confidence brand substrings that resolve known edge cases when AI confidence is below $0.70$.
+    \item \textbf{Tier 6: Medium-Confidence Gemini AI ($\text{Confidence} \ge 0.50$):} A secondary AI pass that provides a reasonable classification when high-confidence match is not found.
+    \item \textbf{Tier 7: Text Regular Expression Rules (Vetted Heuristics):} Matches vetted regex patterns and negative exclusion rules from \texttt{silver.coicop\_text\_rules}.
+    \item \textbf{Tier 8: Native Category Taxonomy Maps:} Maps native merchant category hierarchies from \texttt{silver.coicop\_category\_map}.
+    \item \textbf{Tier 9: AI Review Triage (Confidence $< 0.50$):} Items with very low AI confidence are flagged as \texttt{REVIEW} for manual analyst audit.
+    \item \textbf{Tier 10: Store Default Fallbacks (The Final Safety Net):} Unmatched items fall back to broad store-level defaults from \texttt{silver.coicop\_store\_defaults}, ensuring 100\% classification.
 \end{enumerate}
 
 \begin{tcolorbox}[colback=white,colframe=Teal,title=\textbf{Step-by-Step Example: Multi-Attribute Gemini AI Classifying Instant Noodle Bowls}]
@@ -1032,7 +1034,7 @@ Every day $t$ (for example, Day 15 of September where $T = 30$ days):
     \item We have already collected and verified $N_{\text{obs}} = 15$ days of hard store receipts.
     \item There are $N_{\text{rem}} = 15$ days remaining whose prices haven't occurred yet ($N_{\text{rem}} = T - N_{\text{obs}}$).
 \end{itemize}
-Our nowcasting engine in \texttt{ml/nowcaster.py} runs a complete system of \textbf{10 mathematical equations} every morning to project the month's final outcome.
+Our nowcasting engine in \texttt{ml/nowcaster.py} runs a complete system of \textbf{10 mathematical equations} every morning to project the month's final outcome. To ensure historical consistency, the system periodically performs a full retrospective backfill of all historical nowcasts, re-calculating past indices based on the most recent canonical item master to eliminate classification drift.
 
 \subsection{The 10 Nowcasting Equations in Production}
 
@@ -1533,15 +1535,15 @@ This chapter provides clear, simple answers to the 10 most common questions aske
 \textbf{The Simple Answer:}
 \begin{enumerate}[noitemsep]
     \item \textbf{Too expensive and too slow:} Calling cloud AI on every raw record on every single scrape would cost hundreds of dollars a month and introduce unnecessary network latency.
-    \item \textbf{Our 7-Tier AI-First Classification Ladder solves this with multi-attribute precision and persistent memoization:}
+    \item \textbf{Our Multi-Tier AI-First Classification Ladder solves this with precision and persistent memoization:}
     \begin{itemize}
-        \item \textit{Tier 1 (Explicit Overrides):} High-priority human audit locks and seed overrides in \texttt{silver.coicop\_override} take supreme precedence.
-        \item \textit{Tier 2 (Store Purity Locks):} Single-division stores (pharmacies, bus tickets, fuel stations, telcos, hotels) resolve instantly with 0.001ms lookup time at \$0.00 cost.
-        \item \textit{Tier 3 (High-Confidence Gemini AI Engine with Multi-Attribute Context):} For mixed-retail stores (AEON, DeliShop, GrabMart, L192), Gemini AI receives a rich multi-attribute payload (item title, store slug, merchant category breadcrumbs, price in KHR). High-confidence classifications ($\ge 0.70$) are cached permanently in \texttt{silver.dim\_coicop\_ai\_cache}. Subsequent daily scrapes resolve in $<1\text{ms}$ at \$0.00 cost. This powers \textbf{53.33\% (484,892 observations)} of the entire warehouse.
-        \item \textit{Tiers 4--6 (Secondary Brand Overrides, Category Maps \& Vetted Heuristics):} Deterministic safety nets resolve edge cases, accounting for the remaining classifications.
-        \item \textit{Tier 7 (Store Defaults \& Triage):} Fallbacks guarantee that \textbf{0 rows} remain unclassified (100.00\% completion across 909,289 observations).
-        \item This architecture slashes recurring AI API costs by over 99.4\% while achieving zero code-division mismatches.
+        \item \textit{Tiers 1--3 (High-Priority Locks):} Exact overrides, store purity locks, and critical traps resolve instantly at \$0.00 cost.
+        \item \textit{Tiers 4 \& 6 (Gemini AI Engine):} For mixed-retail stores, Gemini AI provides high-confidence ($\ge 0.70$) and medium-confidence ($\ge 0.50$) classifications using rich multi-attribute context (title, store, category, price).
+        \item \textit{Persistent Cache:} All AI classifications are cached in \texttt{silver.dim\_coicop\_ai\_cache}. Subsequent scrapes resolve in $<1\text{ms}$ at \$0.00 cost, powering over 50\% of the entire warehouse.
+        \item \textit{Tiers 5, 7, 8, 10 (Deterministic Safety Nets):} Brand overrides, regex rules, and store defaults guarantee that \textbf{0 rows} remain unclassified.
+        \item \textit{Tier 9 (AI Review Triage):} Low-confidence items are flagged for human audit, maintaining a verified 100\% classification standard.
     \end{itemize}
+    \item This architecture slashes recurring AI API costs by over 99\% while achieving zero code-division mismatches.
 \end{enumerate}
 \end{tcolorbox}
 

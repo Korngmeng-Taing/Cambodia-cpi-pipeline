@@ -128,30 +128,35 @@ To achieve maximum accuracy, speed, and cost efficiency in the Cambodia CPI Meda
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
 │                             CAMBODIA CPI PIPELINE ML STACK                               │
 ├─────────────────────────────────────────┬────────────────────────────────────────────────┤
-│ 1. Silver Layer (Classification)        │ 3-Tier Ladder: Store Lock -> Vector -> LLM     │
+│ 1. Silver Layer (Classification)        │ 5-Tier Ladder: Purity -> Semantic -> Local AI -> Cloud AI -> Human │
 │ 2. Silver Layer (Entity Matching)       │ Regex Spec Guards + Cosine Similarity          │
 │ 3. Gold / BI Layer (Nowcasting)         │ Intra-Month MTD Expanding Nowcaster            │
 │ 4. Serving / BI Layer (Forecasting)     │ LightGBM Multi-Horizon Inflation Regressors    │
 └─────────────────────────────────────────┴────────────────────────────────────────────────┘
-```
+`
 
-### Module 1: 3-Tier Classification Ladder (pipeline/hybrid_embeddings_classifier.py)
+### Module 1: Local-First Hierarchical Classification Ladder (pipeline/hybrid_embeddings_classifier.py)
 - **Tier 1 (Store Domain Lock - 0ms, 100% precision)**:
   - Fuel stations (petronas, totalenergies, caltex) -> **Division 07 (Transport/Fuels)**.
   - Pharmacies (pharmacy_u-care, pharmacie-de-la-gare) -> **Division 06 (Health)**.
   - Telcos (cellcard, smart) -> **Division 08 (Communication)**.
 - **Tier 2 (Vector Embedding Cosine Search - 5ms)**:
-  - Generate 768-dimensional text embeddings for grocery and supermarket items (aeon, chip_mong, makro).
+  - Generate 768-dimensional text embeddings for grocery and supermarket items.
   - Calculate cosine similarity against the 12 reference COICOP division centroids. If >= 0.85, auto-assign.
-- **Tier 3 (Google Gemini AI Fallback - Only for ambiguous items)**:
-  - Prompt Gemini with: *"Classify this Cambodian retail item into UN COICOP (01-12)"*.
-  - Cache result into silver.dim_coicop_ai_cache in PostgreSQL for instant O(1) future retrieval.
+- **Tier 3 (Hierarchical Local AI - Ollama)**:
+  - **Classifier Agent**: Proposes a COICOP code and justification based on product name and context.
+  - **Judge Agent**: Audits the proposal against the COICOP handbook.
+  - **Outcome**: Auto-classify if Judge approves with confidence >= 0.8.
+- **Tier 4 (Cloud Arbitration - Gemini Pro)**:
+  - Only invoked for conflicts or low-confidence local results. Resolves ambiguity using full multi-attribute context.
+- **Tier 5 (Human Review Triage)**:
+  - Items that fail all tiers enter the `silver.needs_review` queue for analyst override.
 
 ### Module 2: Spec-Guarded Entity Resolution (pipeline/item_matcher.py & pipeline/hedonic_regression.py)
 - **Deterministic Regex Spec Guards**: Extract volume, weight, and hardware memory specifications (e.g. 128GB, 256GB, 500ml, 1kg). If two items share a similar title but have conflicting specs (128GB vs 256GB), **strictly reject matching** to eliminate artificial price index spikes.
 - **Log-Linear Hedonic Quality Adjustment (`pipeline/hedonic_regression.py`)**:
   For heterogeneous consumer durables (laptops, smartphones), quality changes are decoupled from pure price movements via hedonic regression:
-  $$\ln(P_{i,t}) = \alpha_t + \sum_{k} \beta_k X_{i,k} + \epsilon_{i,t}$$
+  $$\ln(P_{i,t}) = \alpha_t + \sum_{k} \beta_k X_{i,k} + \varepsilon_{i,t}$$
   Constant-utility prices are computed by removing characteristic premia relative to market mean specs:
   $$\widetilde{P}_{i,t} = P_{i,t} \cdot \exp\left(-\sum_k \widehat{\beta}_k (X_{i,k} - \bar{X}_k)\right)$$
   When sample size is inadequate ($n < 5$), features lack variance, or the design matrix is collinear, `run_hedonic_regression()` gracefully catches the condition, logs `SKIPPED_RANK_DEFICIENT`, and passes the observed price forward untouched.
@@ -167,6 +172,11 @@ To achieve maximum accuracy, speed, and cost efficiency in the Cambodia CPI Meda
 - Derives Month-over-Month (MoM %) estimated inflation and chain-links to official National Institute of Statistics (NIS) Phnom Penh benchmark levels in `gold.fct_cpi_nowcast`.
 - Computes dynamic 95% confidence intervals based on daily price dispersion and uncertainty decay ($U_t = \sqrt{(T-t)/T}$).
 - Exposes out-of-sample tracking via `gold.v_nowcast_evaluation` on Metabase Dashboard 01.
+
+### Module 4: Self-Learning Rule Generation Loop (scripts/automated_rule_suggester.py)
+- **Human-in-the-Loop (HITL) Feedback**: Analyst corrections from the `analyst_quick_fix` tool are recorded in `silver.manual_item_corrections`.
+- **Pattern Discovery**: A local LLM analyzes manual fixes to identify recurring linguistic patterns (e.g., "All items with brand 'SAMSUNG' were corrected to Division 08").
+- **Deterministic Translation**: The AI proposes a Regular Expression (Regex) rule that can be added to the `coicop_text_rules` seed, effectively converting human expertise into permanent, high-speed deterministic code.
 
 ---
 

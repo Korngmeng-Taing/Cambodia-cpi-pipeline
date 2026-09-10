@@ -75,6 +75,11 @@ enriched_observations as (
         coalesce(c.coicop_code, 'UNCLASSIFIED') as coicop_code,
         coalesce(c.coicop_method, 'unclassified') as coicop_method,
         coalesce(c.coicop_confidence, 0.000) as coicop_confidence,
+        case
+            when c.coicop_division = '04' and p.price_khr < 10000 then 'ANOMALY_PRICE_TOO_LOW'
+            when c.coicop_division = '01' and p.price_khr > 1000000 then 'ANOMALY_PRICE_TOO_HIGH'
+            else null
+        end as coicop_anomaly,
         p.is_outlier,
         p.cpi_eligible,
         p.is_fallback,
@@ -114,19 +119,10 @@ select
     pack_qty,
     unit_price_khr,
     coicop_division,
-    -- BUG FIX: Guarantee coicop_code prefix strictly matches coicop_division.
-    -- If an override or fallback changed division, derive the proper subcode.
-    case
-        when coicop_code is not null and coicop_code ~ '^\d{2}\.\d{1,2}\.\d{1,2}$'
-             and lpad(split_part(coicop_code, '.', 1), 2, '0') = coicop_division
-        then coicop_code
-        when coicop_code is not null and coicop_code ~ '^\d{2}\.unclassified$'
-             and lpad(split_part(coicop_code, '.', 1), 2, '0') = coicop_division
-        then coicop_code
-        else {{ coicop_code_from_division("coicop_division") }}
-    end as coicop_code,
+    coicop_code,
     coicop_method,
     coicop_confidence,
+    coicop_anomaly,
     is_outlier,
     cpi_eligible,
     is_fallback,

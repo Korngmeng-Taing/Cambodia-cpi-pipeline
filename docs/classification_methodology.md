@@ -15,13 +15,13 @@ Before entering the ladder, items are mapped to a **Canonical Name**. This ensur
 ### 1. The Cache Shortcut
 **Method:** Direct Lookup  
 **Logic:** The system checks the `silver.classification_cache` table for the `item_id`.  
-**Outcome:** If a high-confidence classification already exists, it is returned immediately. This is the fastest path and prevents redundant processing.
+**Outcome:** If a valid, non-unclassified classification already exists (excluding `UNCLASSIFIED`, `99`, or `REVIEW`), it is returned immediately. This is the fastest path and prevents redundant processing. If an unclassified or review flag exists in cache, the system automatically lets the product cascade down into the deterministic rule ladder.
 
 ### 2. Deterministic Rules
 **Method:** Rule-based Matching  
 **Logic:**
-- **Store Purity:** If a product comes from a store known to sell only one category of items (e.g., a specialized pharmacy), the system assigns the division code for that store.
-- **Critical Traps:** A library of keyword-based "traps" is checked. For example, if the product name contains "Gift Voucher", it is automatically assigned to the corresponding COICOP code without AI intervention.
+- **Store Purity:** If a product comes from a store known to sell exclusively one category of items (e.g., `realestate` / `khmer24` $\to$ `04`, `ppwsa` $\to$ `04`, `redbus` $\to$ `07`, `communitypharma` $\to$ `06`), the system assigns the verified division code for that store.
+- **Critical Traps:** A library of keyword-based "traps" is checked using PostgreSQL regex with word boundaries (`\ypattern\y`). For example, "Panasonic Hair Dryer" is deterministically assigned to `12.1.1` (Personal Care) rather than generic appliances (`05`). Items matching traps are dynamically re-evaluated even during incremental runs.
 
 ### 3. Vector Fast-Lane (Semantic Search)
 **Method:** Vector Embeddings (`pgvector` + `all-MiniLM-L6-v2`)  

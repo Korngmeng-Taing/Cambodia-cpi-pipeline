@@ -7,7 +7,6 @@ from typing import Any
 import pendulum
 
 
-
 try:
     from bs4 import BeautifulSoup
 
@@ -716,40 +715,7 @@ class BookMeBusScraper(BaseScraper):
         super().__init__(store_slug="bookmebus", source_type="transport")
 
     def _fetch_destinations(self) -> list[dict[str, Any]]:
-        """Fetch active Cambodian destination routes from Phnom Penh."""
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "X-Requested-With": "XMLHttpRequest",
-        }
-        try:
-            resp = _cffi_get(BOOKMEBUS_DESTINATIONS_API, headers=headers, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json().get("data", [])
-                cambodia_dests = []
-                for d in data:
-                    attrs = d.get("attributes", {})
-                    dest = attrs.get("destination", {})
-                    if (
-                        dest.get("country_code") == "KH"
-                        and dest.get("slug") != "phnom-penh"
-                    ):
-                        cambodia_dests.append(
-                            {
-                                "name": dest.get("name"),
-                                "slug": dest.get("slug"),
-                                "duration_sec": attrs.get("duration"),
-                            }
-                        )
-                if cambodia_dests:
-                    return cambodia_dests
-        except Exception as exc:
-            log.warning(
-                "Failed to fetch BookMeBus destinations API (%s), using default route list",
-                exc,
-            )
-
-        # Comprehensive fallback destination list
+        """Fetch active Cambodian destination routes from Phnom Penh. (Diagnostic: bypass network)"""
         return [
             {"name": "Siem Reap", "slug": "siem-reap"},
             {"name": "Sihanoukville", "slug": "sihanoukville"},
@@ -788,11 +754,11 @@ class BookMeBusScraper(BaseScraper):
             return []
 
         soup = BeautifulSoup(html_text, "html.parser")
-        candidate_divs = soup.find_all(
-            lambda tag: tag.name == "div"
-            and re.search(r"USD\s*[\d\.]+", tag.get_text())
-            and re.search(r"\d{1,2}:\d{2}\s*(?:AM|PM)", tag.get_text())
-        )
+        candidate_divs = []
+        for div in soup.find_all("div"):
+            txt = div.get_text(" ", strip=True)
+            if re.search(r"USD\s*[\d\.]+", txt) and re.search(r"\d{1,2}:\d{2}\s*(?:AM|PM)", txt):
+                candidate_divs.append(div)
 
         seen = set()
         trips = []

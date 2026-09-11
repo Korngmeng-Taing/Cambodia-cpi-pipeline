@@ -419,15 +419,19 @@ Vector embeddings can be tricked by numbers. \textit{"iPhone 15 128GB"} and \tex
 Every product must be assigned to one of the official UN COICOP categories. To do this accurately and cheaply, we use a \textbf{Local-First Intelligence Architecture} (the Classification Ladder):
 
 \begin{enumerate}
-    \item \textbf{Tier 1: Store Purity Locks (Instant \& Free):} Pharmacy $\to$ Health (06), Fuel stations $\to$ Transport (07).
-    \item \textbf{Tier 2: Semantic Vector Search (Fast \& Local):} Compare product vector against official COICOP definition centroids. If similarity $\ge 0.85$, auto-classify.
-    \item \textbf{Tier 3: Hierarchical Local AI (Llama 3.1 via Ollama):}
+    \item \textbf{Tier 1: Verified Cache Lookup:} Direct check of \texttt{silver.classification\_cache}. Stale entries marked \texttt{UNCLASSIFIED}, \texttt{99}, or \texttt{REVIEW} are actively bypassed to allow deterministic rules to evaluate.
+    \item \textbf{Tier 2: Deterministic Rules \& Store Purity Locks:}
     \begin{itemize}
-        \item \textbf{The Classifier:} Proposes a COICOP code.
-        \item \textbf{The Judge:} Audits the proposal. Approved if confidence $\ge 80\%$.
+        \item \textbf{Store Purity Locks:} Realestate/Khmer24 $\to$ Housing (04), PPWSA/EDC $\to$ Utilities (04), Bus portals $\to$ Transport (07), Community Pharma $\to$ Health (06).
+        \item \textbf{Critical Traps:} Evaluated with PostgreSQL-compliant word boundary regex (\texttt{\textbackslash ypattern\textbackslash y}). For example, Panasonic hair dryers are deterministically mapped to Personal Care (12.1.1) rather than generic appliances (05). Incremental runs dynamically re-evaluate items matching updated traps.
     \end{itemize}
-    \item \textbf{Tier 4: Cloud Arbitration (Gemini Pro):} Final arbitrator for difficult cases where local AI is confused.
-    \item \textbf{Tier 5: Human Expert Review:} The final safety net. Human decisions are saved as ``Supreme Overrides'' to train the system.
+    \item \textbf{Tier 3: Hierarchical AI Drill-Down (Llama 3.1 \& Gemini Judge):}
+    \begin{itemize}
+        \item \textbf{The Classifier:} Sequentially navigates Division $\to$ Group $\to$ Class $\to$ Subclass.
+        \item \textbf{The Judge:} Audits the proposal against COICOP standards. Approved if confidence $\ge 80\%$.
+    \end{itemize}
+    \item \textbf{Tier 4: Deterministic Fallbacks:} Global overrides, category maps, and store defaults.
+    \item \textbf{Tier 5: Human Expert Review:} The final safety net for unclassified or borderline items.
 \end{enumerate}
 
 \begin{tcolorbox}[colback=white,colframe=Teal,title=\textbf{Step-by-Step Example: Gemini AI Classifying Instant Noodles}]
@@ -451,8 +455,13 @@ To avoid the \textbf{Carli Bias} (where simple averages create fake inflation), 
 \subsubsection{Out-of-Stock (Class-Mean Imputation)}
 If a product is missing today, we don't use \$0.00. Instead, we look at the average movement of its category (e.g., if other oils rose 1\%, we assume the missing oil rose 1\%). If an item is missing for \textbf{7 consecutive days}, it is officially retired from the basket.
 
-\subsubsection{Product Upgrades (Hedonics)}
-When a new phone model is released at a higher price, we separate the cost of \textit{better features} (more RAM, better camera) from \textit{pure inflation} using \textbf{Hedonic Quality Adjustment}. This ensures technological progress doesn't artificially inflate the CPI.
+\subsubsection{Product Upgrades (Hedonic Regression Dual-Engine)}
+When a new electronics model is released at a higher price, we separate the cost of \textit{better features} (RAM, storage, camera) from \textit{pure inflation} using \textbf{Log-Linear Hedonic Quality Adjustment} (\texttt{pipeline/hedonic\_regression.py}).
+\begin{itemize}[noitemsep]
+    \item \textbf{Primary Solver:} Uses statsmodels OLS when installed.
+    \item \textbf{Analytical NumPy Fallback:} Automatically falls back to Ordinary Least Squares via \texttt{numpy.linalg.lstsq} with identical formulation, ensuring quality adjustments succeed even in lightweight worker environments.
+    \item \textbf{Non-Blocking Execution:} In Airflow, unexpected model skips raise an \texttt{AirflowSkipException}, allowing the pipeline to succeed without blocking downstream CPI calculations.
+\end{itemize}
 
 \subsection{The 12 Shopping Baskets (UN COICOP)}
 Cambodia's basket follows the UN standard across 12 divisions, with Food (01) being the largest at \textbf{44.8\%} of total spending.

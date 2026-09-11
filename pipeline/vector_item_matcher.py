@@ -26,18 +26,11 @@ from pipeline.text_clean import (
 try:
     from google import genai
     from google.genai import types as genai_types
-    HAS_NEW_GENAI = True
     HAS_GENAI = True
 except ImportError:
     genai = None
     genai_types = None
-    HAS_NEW_GENAI = False
-    try:
-        import google.generativeai as genai
-        HAS_GENAI = True
-    except ImportError:  # pragma: no cover
-        genai = None
-        HAS_GENAI = False
+    HAS_GENAI = False
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -143,9 +136,12 @@ class VectorItemMatcher:
         use_local_first = os.getenv("USE_LOCAL_FALLBACK_FIRST", "true").lower() in ("true", "1", "yes")
         if not use_local_first and HAS_GENAI and self.key_pool.get_key_count() > 0:
             def _call_gemini_embed(key: str) -> np.ndarray:
-                genai.configure(api_key=key)
-                res = genai.embed_content(model=EMBEDDING_MODEL, content=cleaned_text)
-                return np.array(res["embedding"], dtype=np.float32)
+                client = genai.Client(api_key=key)
+                res = client.models.embed_content(
+                    model=EMBEDDING_MODEL,
+                    contents=cleaned_text,
+                )
+                return np.array(res.embeddings[0].values, dtype=np.float32)
 
             try:
                 vec = self.key_pool.execute_with_retry(_call_gemini_embed)
@@ -475,11 +471,13 @@ Return strict JSON only:
 }}"""
 
         def _call_llm(key: str) -> dict[str, Any]:
-            genai.configure(api_key=key)
-            model = genai.GenerativeModel(LLM_MODEL)
-            resp = model.generate_content(
-                prompt,
-                generation_config={"response_mime_type": "application/json"},
+            client = genai.Client(api_key=key)
+            resp = client.models.generate_content(
+                model=LLM_MODEL,
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                ),
             )
             data = json.loads(resp.text)
             decision = data.get("decision", "SPLIT_NEW").strip().upper()
@@ -504,3 +502,65 @@ Return strict JSON only:
                 "method": "llm_error_fallback",
                 "reason": f"LLM error fallback ({e})",
             }
+
+    def find_closest_match(self, product_name: str, similarity_threshold: float = 0.75) -> tuple[str, float] | None:
+        """Finds the closest matching product in the Gold Standard table using vector similarity.
+        
+        Args:
+            product_name: The product name to search for.
+            similarity_threshold: Minimum similarity score to consider a match.
+            
+        Returns:
+            Tuple of (coicop_code, similarity_score) if match found, None otherwise.
+        """
+        if not product_name or not product_name.strip():
+            return None
+
+        # Try to get connection from pipeline config
+        try:
+            from pipeline.config import get_database_url
+            import psycopg2
+            
+            conn_str = get_database_url().replace("postgresql+psycopg2://", "postgresql://", 1)
+            conn = psycopg2.connect(conn_str)
+        except Exception as e:
+            log.debug("Could not connect to database for vector fastlane: %s", e)
+            return None
+
+        try:
+            cand_vec = self.embed_text(product_name)
+            cand_norm = np.linalg.norm(cand_vec)
+            if cand_norm > 0:
+                cand_unit = (cand_vec / cand_norm).tolist()
+            else:
+                return None
+
+            vec_str = "[" + ",".join(str(round(float(x), 6)) for x in cand_unit) + "]"
+
+            with conn.cursor() as cur:
+                # Query gold标准 table for closest match using pgvector
+                cur.execute("""
+                    SELECT canonical_name, coicop_code,
+                           1 - (embedding <=> %s::vector) AS cos_sim
+                    FROM silver.gold_standard_items
+                    WHERE embedding IS NOT NULL
+                    ORDER BY embedding <=> %s::vector
+                    LIMIT 1;
+                """, (vec_str, vec_str))
+                row = cur.fetchone()
+                
+                if row:
+                    canonical_name, coicop_code, cos_sim = row
+                    sim_score = float(cos_sim) if cos_sim is not None else 0.0
+                    
+                    if sim_score >= similarity_threshold and coicop_code:
+                        log.info("Vector fastlane match: '%s' -> '%s' (COICOP: %s, sim: %.3f)", 
+                                product_name, canonical_name, coicop_code, sim_score)
+                        return (coicop_code, sim_score)
+            
+            return None
+        except Exception as e:
+            log.debug("Vector fastlane query failed: %s", e)
+            return None
+        finally:
+            conn.close()

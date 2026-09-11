@@ -107,7 +107,7 @@ with DAG(
     start_date=pendulum.datetime(2024, 1, 1, tz=local_tz),
     schedule=None,  # Orchestrated by cpi_master_dag
     catchup=False,
-    max_active_runs=1,
+    max_active_runs=16,
     default_args=DEFAULT_ARGS,
     tags=["cpi", "silver", "dbt", "matching", "classification", "vectors"],
 ) as dag:
@@ -135,7 +135,10 @@ with DAG(
     # 4. Hybrid Hierarchical AI COICOP Classification (Llama 3.1 + Gemini Judge)
     task_gemini_coicop = BashOperator(
         task_id="gemini_coicop_classification",
-        bash_command=f"export PYTHONPATH=. && python scripts/run_hierarchical_classification.py",
+        bash_command="python /opt/airflow/scripts/run_hierarchical_classification.py",
+        cwd="/opt/airflow",
+        append_env=True,
+        env={"PYTHONPATH": "/opt/airflow"},
     )
 
     # 5. Hedonic Quality Adjustment
@@ -219,7 +222,8 @@ with DAG(
             task_id="dbt_silver_test",
             bash_command=(
                 f"dbt test {_dbt_flags} "
-                "--select silver"
+                "--select silver "
+                f"--vars '{_dbt_vars}'"
             ),
         )
 

@@ -40,6 +40,32 @@ try:
 except ImportError:  # pragma: no cover
     sm = None
 
+
+class _AnalyticalOLSResults:
+    """Lightweight analytical OLS results compatible with statsmodels interface."""
+
+    def __init__(self, params: dict[str, float], rsquared: float, nobs: int, fittedvalues: pd.Series, feature_cols: list[str]):
+        self.params = params
+        self.rsquared = rsquared
+        self.nobs = nobs
+        self.fittedvalues = fittedvalues
+        self._feature_cols = feature_cols
+
+    def predict(self, exog: pd.DataFrame | np.ndarray) -> np.ndarray:
+        if isinstance(exog, pd.DataFrame):
+            pred = np.full(len(exog), self.params.get("const", 0.0), dtype=float)
+            for col in self._feature_cols:
+                if col in exog.columns:
+                    pred += exog[col].astype(float).values * self.params.get(col, 0.0)
+            return pred
+        exog_arr = np.asarray(exog, dtype=float)
+        # Assume const is first column if exog has 1 + len(feature_cols) cols
+        if exog_arr.shape[1] == len(self._feature_cols) + 1:
+            coeffs = [self.params.get("const", 0.0)] + [self.params.get(c, 0.0) for c in self._feature_cols]
+            return np.dot(exog_arr, coeffs)
+        coeffs = [self.params.get(c, 0.0) for c in self._feature_cols]
+        return np.dot(exog_arr, coeffs)
+
 log = logging.getLogger(__name__)
 
 COICOP_ELECTRONICS_PREFIX = "09"
@@ -154,14 +180,10 @@ def fetch_hedonic_items(
 
 def fit_ols(df: pd.DataFrame) -> dict[str, Any]:
     """
-    Fits log-linear model ``ln(raw_price) ~ RAM_GB + Storage_GB + Screen_Inches + Camera_MP + Is_5G`` via statsmodels OLS.
+    Fits log-linear model ``ln(raw_price) ~ RAM_GB + Storage_GB + Screen_Inches + Camera_MP + Is_5G`` via OLS.
+    Uses statsmodels if available, falling back cleanly to NumPy lstsq.
     Dynamically prunes non-varying features to avoid collinearity and rank-deficiency.
     """
-    if sm is None:
-        raise ImportError(
-            "statsmodels is required for hedonic regression (pip install statsmodels)"
-        )
-
     train = df.dropna(subset=["raw_price"]).copy()
     train = train[train["raw_price"] > 0]
     if len(train) < MIN_SAMPLE_SIZE:
@@ -170,8 +192,6 @@ def fit_ols(df: pd.DataFrame) -> dict[str, Any]:
         )
 
     # Include features that have non-zero variance (at least 2 distinct values).
-    # Previously, RAM_GB and Storage_GB were forcefully appended without this
-    # check, causing rank-deficient OLS matrices when all items had the same spec.
     active_features = []
     for feat in HEDONIC_FEATURES:
         if feat in train.columns and train[feat].nunique() > 1:
@@ -192,12 +212,13 @@ def fit_ols(df: pd.DataFrame) -> dict[str, Any]:
         }
 
     X_raw = train[active_features].astype(float)
-    X = sm.add_constant(X_raw, has_constant="add")
+    if sm is not None:
+        X = sm.add_constant(X_raw, has_constant="add")
+    else:
+        X = np.column_stack([np.ones(len(X_raw)), X_raw.values])
     
     # Rank-deficiency guard: fall back to core features if expanded set is rank-deficient
     if np.linalg.matrix_rank(X) < X.shape[1]:
-        # BUG-11 FIX: Only include core features that actually have variance.
-        # If none do, abort gracefully instead of raising ValueError.
         active_features = [f for f in ["RAM_GB", "Storage_GB"]
                            if f in train.columns and train[f].nunique() > 1]
         if not active_features:
@@ -208,29 +229,51 @@ def fit_ols(df: pd.DataFrame) -> dict[str, Any]:
             return {"model": None, "features": [], "params": {}, "r2": 0.0, "n": 0,
                     "fitted": pd.Series(dtype=float), "specs": pd.DataFrame()}
         X_raw = train[active_features].astype(float)
-        X = sm.add_constant(X_raw, has_constant="add")
+        if sm is not None:
+            X = sm.add_constant(X_raw, has_constant="add")
+        else:
+            X = np.column_stack([np.ones(len(X_raw)), X_raw.values])
         if np.linalg.matrix_rank(X) < X.shape[1]:
             log.warning("Hedonic feature matrix X is rank-deficient even with core features. Aborting.")
             return {"model": None, "features": [], "params": {}, "r2": 0.0, "n": 0,
                     "fitted": pd.Series(dtype=float), "specs": pd.DataFrame()}
 
     y_log = np.log(train["raw_price"].astype(float))
-    model = sm.OLS(y_log, X).fit()
+
+    if sm is not None:
+        model = sm.OLS(y_log, X).fit()
+        params_dict = model.params.to_dict()
+        r_squared = float(model.rsquared)
+        n_obs = int(model.nobs)
+        fitted_vals = model.fittedvalues
+    else:
+        # Analytical Ordinary Least Squares fallback: (X^T X)^-1 X^T y via lstsq
+        coeffs, _, _, _ = np.linalg.lstsq(X, y_log.values, rcond=None)
+        params_dict = {"const": float(coeffs[0])}
+        for i, feat in enumerate(active_features):
+            params_dict[feat] = float(coeffs[i + 1])
+        y_pred = np.dot(X, coeffs)
+        ss_res = np.sum((y_log.values - y_pred) ** 2)
+        ss_tot = np.sum((y_log.values - np.mean(y_log.values)) ** 2)
+        r_squared = float(1.0 - (ss_res / ss_tot)) if ss_tot > 0 else 0.0
+        n_obs = len(y_log)
+        fitted_vals = pd.Series(y_pred, index=train.index)
+        model = _AnalyticalOLSResults(params_dict, r_squared, n_obs, fitted_vals, active_features)
 
     log.info(
         "Hedonic Log-Linear OLS fit: n=%d R2=%.4f features=%s const=%.4f",
-        int(model.nobs),
-        model.rsquared,
+        n_obs,
+        r_squared,
         active_features,
-        model.params.get("const", 0),
+        params_dict.get("const", 0.0),
     )
     return {
         "model": model,
         "features": active_features,
-        "params": model.params.to_dict(),
-        "r2": float(model.rsquared),
-        "n": int(model.nobs),
-        "fitted": model.fittedvalues,
+        "params": params_dict,
+        "r2": r_squared,
+        "n": n_obs,
+        "fitted": fitted_vals,
         "specs": train[active_features],
     }
 
@@ -271,13 +314,18 @@ def compute_hedonic_adjusted(
     """
     model = fit["model"]
     features = fit.get("features", ["RAM_GB", "Storage_GB"])
-    X = sm.add_constant(df[features].astype(float), has_constant="add")
+    if sm is not None:
+        X = sm.add_constant(df[features].astype(float), has_constant="add")
+        base_frame = pd.DataFrame([{f: base.get(f, 0.0) for f in features}] * len(df), columns=features)
+        base_X = sm.add_constant(base_frame, has_constant="add")
+    else:
+        X = df[features].astype(float)
+        base_frame = pd.DataFrame([{f: base.get(f, 0.0) for f in features}] * len(df), columns=features)
+        base_X = base_frame
+
     log_pred_item = np.asarray(model.predict(X), dtype=float)
-    base_frame = pd.DataFrame([{f: base.get(f, 0.0) for f in features}] * len(df), columns=features)
-    log_pred_base = np.asarray(
-        model.predict(sm.add_constant(base_frame, has_constant="add")),
-        dtype=float,
-    )
+    log_pred_base = np.asarray(model.predict(base_X), dtype=float)
+
     # Quality ratio = exp(ln_base - ln_item)
     ratio = np.exp(np.clip(log_pred_base - log_pred_item, -3.0, 3.0))
     adjusted = np.asarray(df["raw_price"].astype(float)) * ratio

@@ -32,21 +32,11 @@ from pipeline.text_clean import clean_name_for_matching, extract_spec_sets
 try:
     from google import genai
     from google.genai import types as genai_types
-    HAS_NEW_GENAI = True
+    HAS_GENAI = True
 except ImportError:
     genai = None
     genai_types = None
-    HAS_NEW_GENAI = False
-
-if not HAS_NEW_GENAI:
-    try:
-        import google.generativeai as legacy_genai
-        HAS_LEGACY_GENAI = True
-    except ImportError:
-        legacy_genai = None
-        HAS_LEGACY_GENAI = False
-else:
-    HAS_LEGACY_GENAI = False
+    HAS_GENAI = False
 
 log = logging.getLogger(__name__)
 
@@ -112,7 +102,6 @@ class GeminiItemReviewer:
         self._init_gemini()
 
     def _init_gemini(self):
-        self.model = None
         self.client = None
         raw_key = GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")
         # Extract individual key in case GEMINI_API_KEY is comma-separated
@@ -124,24 +113,12 @@ class GeminiItemReviewer:
             except Exception:
                 pass
 
-        if api_key:
-            if HAS_NEW_GENAI:
-                try:
-                    self.client = genai.Client(api_key=api_key)
-                    log.info("Gemini AI Reviewer initialized with google-genai Client (model: %s)", self.model_name)
-                except Exception as e:
-                    log.warning("Could not initialize google-genai Client: %s", e)
-            elif HAS_LEGACY_GENAI:
-                try:
-                    legacy_genai.configure(api_key=api_key)
-                    self.model = legacy_genai.GenerativeModel(
-                        model_name=self.model_name,
-                        system_instruction=SYSTEM_PROMPT,
-                        generation_config={"response_mime_type": "application/json", "temperature": 0.1},
-                    )
-                    log.info("Gemini AI Reviewer initialized with legacy google.generativeai (model: %s)", self.model_name)
-                except Exception as e:
-                    log.warning("Could not initialize google.generativeai: %s", e)
+        if api_key and HAS_GENAI:
+            try:
+                self.client = genai.Client(api_key=api_key)
+                log.info("Gemini AI Reviewer initialized with google-genai Client (model: %s)", self.model_name)
+            except Exception as e:
+                log.warning("Could not initialize google-genai Client: %s", e)
 
     def _get_connection(self):
         from pipeline.config import alternate_host_url
@@ -183,8 +160,7 @@ class GeminiItemReviewer:
         Retries up to 3 times with exponential backoff on transient errors.
         """
         client = getattr(self, "client", None)
-        model = getattr(self, "model", None)
-        if not pairs or (not client and not model):
+        if not pairs or not client:
             return {}
 
         prompt_data = [
@@ -203,19 +179,16 @@ class GeminiItemReviewer:
         # H5 fix: exponential backoff — 2s, 4s, 8s between attempts
         for attempt in range(3):
             try:
-                if client:
-                    config = genai_types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        system_instruction=SYSTEM_PROMPT,
-                        temperature=0.1,
-                    )
-                    response = client.models.generate_content(
-                        model=self.model_name,
-                        contents=prompt_str,
-                        config=config,
-                    )
-                else:
-                    response = model.generate_content(prompt_str)
+                config = genai_types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    system_instruction=SYSTEM_PROMPT,
+                    temperature=0.1,
+                )
+                response = client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt_str,
+                    config=config,
+                )
                 resp_text = response.text.strip()
                 # M3 FIX: Strip markdown code fences before JSON parse
                 if resp_text.startswith("```"):
@@ -316,7 +289,7 @@ class GeminiItemReviewer:
                 pair_id_counter += 1
 
             # Step 2: Resolve ambiguous pairs with Gemini AI or Rule Heuristics
-            if unresolved_pairs and self.model and not use_rules_only:
+            if unresolved_pairs and self.client and not use_rules_only:
                 log.info("Sending %d ambiguous pairs to Gemini in chunks of %d (%d API requests)...", len(unresolved_pairs), BATCH_SIZE, (len(unresolved_pairs) + BATCH_SIZE - 1) // BATCH_SIZE)
                 for i in range(0, len(unresolved_pairs), BATCH_SIZE):
                     chunk = unresolved_pairs[i : i + BATCH_SIZE]

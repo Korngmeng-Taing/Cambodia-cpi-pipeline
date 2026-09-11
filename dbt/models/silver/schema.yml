@@ -23,38 +23,37 @@ models:
         tests:
           - not_null
           - accepted_values:
-              arguments:
-                values:
-                  - "01"
-                  - "02"
-                  - "03"
-                  - "04"
-                  - "05"
-                  - "06"
-                  - "07"
-                  - "08"
-                  - "09"
-                  - "10"
-                  - "11"
-                  - "12"
-                  - "UNCLASSIFIED"
-                  - "REVIEW"
+              values:
+                - "01"
+                - "02"
+                - "03"
+                - "04"
+                - "05"
+                - "06"
+                - "07"
+                - "08"
+                - "09"
+                - "10"
+                - "11"
+                - "12"
+                - "UNCLASSIFIED"
+                - "REVIEW"
       - name: coicop_method
         tests:
           - not_null
           - accepted_values:
-              arguments:
-                values:
-                  - "override"
-                  - "store_purity"
-                  - "store_default"
-                  - "gemini_ai"
-                  - "gemini_ai_low_conf"
-                  - "critical_trap"
-                  - "category_map"
-                  - "text_rules"
-                  - "unclassified"
-                  - "review"
+              values:
+                - "override"
+                - "cache"
+                - "store_purity"
+                - "store_default"
+                - "gemini_ai"
+                - "gemini_ai_low_conf"
+                - "critical_trap"
+                - "category_map"
+                - "text_rules"
+                - "unclassified"
+                - "review"
 
   - name: clean_store_prices
     description: Unified Silver store prices observation table — clean, standardized daily appended rows from all stores.
@@ -74,8 +73,7 @@ models:
         tests:
           - not_null
           - dbt_utils.expression_is_true:
-              arguments:
-                expression: "> 0"
+              expression: "> 0"
 
 unit_tests:
   - name: test_int_prices_cleaned_usd_khr_conversion

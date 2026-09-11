@@ -134,10 +134,13 @@ New Canonical Item
          ▼
 [ Tier 1: Classification Cache ]
   • Direct lookup of previously verified results in silver.classification_cache
-         │ Cache Miss
+  • Bypasses entries marked 'UNCLASSIFIED', '99', or 'REVIEW' to allow deterministic rules to evaluate
+         │ Cache Miss or Unclassified
          ▼
 [ Tier 2: Deterministic Rules ]
   • Exact Overrides $\to$ Store Purity Locks $\to$ Critical Traps
+  • Word boundaries evaluate with PostgreSQL \y regex
+  • Incremental scans re-evaluate items matching updated critical traps
          │ No Match
          ▼
 [ Tier 3: Hierarchical AI Drill-Down (Llama 3.1) ]
@@ -172,7 +175,7 @@ New Canonical Item
   Mitigates temporary retail stockouts by updating the last observed price using the compounded daily class movement over elapsed gap days $\Delta t$:
   $$\widehat{P}_{i, t} = P_{i, t - \Delta t} \times \left(R_{c, t}\right)^{\Delta t} \quad \text{for } 1 \le \Delta t \le 7$$
   where $R_{c, t}$ is the daily geometric mean price relative of observed items in the same COICOP class. Beyond 7 consecutive missing days, items are treated as structural exits.
-- **Hedonic Quality Adjustment Bridge**:
-  Directly applies constant-utility adjusted prices from `silver.hedonic_adjusted_prices` for consumer electronics. When regression specifications lack variance or display severe multicollinearity, the engine gracefully skips adjustment with `SKIPPED_RANK_DEFICIENT` and falls back to observed prices.
+- **Hedonic Quality Adjustment Bridge (`pipeline/hedonic_regression.py`)**:
+  Directly applies constant-utility adjusted prices from `silver.hedonic_adjusted_prices` for consumer electronics. Features an automatic dual engine: uses `statsmodels` OLS when available, with an automatic fallback to an analytical Ordinary Least Squares solver (`numpy.linalg.lstsq`). When regression specifications lack variance or display severe multicollinearity, the engine gracefully logs `SKIPPED_RANK_DEFICIENT` and falls back to observed prices without blocking the pipeline.
 - **Laspeyres 12-Division Macro Aggregation (`gold.fct_cpi_daily`)**:
   Combines division indices with official NIS Cambodia expenditure weights into national Headline and Core CPI.

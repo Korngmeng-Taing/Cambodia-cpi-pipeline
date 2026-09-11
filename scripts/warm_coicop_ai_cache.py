@@ -28,9 +28,13 @@ from typing import Any
 from sqlalchemy import create_engine, text
 
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types as genai_types
+    HAS_GENAI = True
 except ImportError:
     genai = None
+    genai_types = None
+    HAS_GENAI = False
 
 logging.basicConfig(
     level=logging.INFO,
@@ -83,8 +87,8 @@ class GeminiModelPool:
         )
 
     def generate_content(self, contents, **kwargs):
-        if genai is None:
-            raise RuntimeError("google-generativeai is required (pip install google-generativeai)")
+        if not HAS_GENAI or genai is None:
+            raise RuntimeError("google-genai is required (pip install google-genai)")
         active = self.active_keys
         if not active:
             raise RuntimeError("All Gemini API keys in the pool have been exhausted.")
@@ -97,12 +101,14 @@ class GeminiModelPool:
             key = active[self._current_idx % len(active)]
             self._current_idx += 1
             try:
-                genai.configure(api_key=key)
-                model = genai.GenerativeModel(
-                    model_name=self.model_name,
-                    generation_config=genai.GenerationConfig(response_mime_type="application/json"),
+                client = genai.Client(api_key=key)
+                return client.models.generate_content(
+                    model=self.model_name,
+                    contents=contents,
+                    config=genai_types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                    ),
                 )
-                return model.generate_content(contents, **kwargs)
             except Exception as exc:
                 last_exc = exc
                 msg = str(exc)

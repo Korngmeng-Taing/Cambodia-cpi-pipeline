@@ -69,7 +69,11 @@ join {{ source('silver', 'canonical_items') }} ci on f.item_id::text = ci.item_i
 join trap_cases t on position(upper(t.trap) in upper(f.name_clean)) > 0
 where f.coicop_division <> t.expected
   and (sp.store_slug is null or f.coicop_division <> lpad(sp.coicop_division::text, 2, '0'))
-  and f.scrape_date >= (select max(scrape_date) - interval '2 days' from {{ ref('clean_store_prices') }})
+  {% if var('ds', '') and var('ds') != 'None' and var('ds') != 'null' and var('ds') != 'none' %}
+  and f.scrape_date = '{{ var("ds") }}'::date
+  {% else %}
+  and f.scrape_date = (select max(scrape_date) from {{ ref('clean_store_prices') }})
+  {% endif %}
   and not (t.trap = 'SHAMPOO' and f.coicop_code = '09.3.4')
   and not (t.trap = 'SHAMPOO' and f.name_clean ilike any (array['%CAR WASH%', '%CAT%', '%DOG%', '%PET%', '%VETERINARY%', '%HORSE%', '%PUPPY%', '%KITTEN%', '%BATHROOM%', '%RACK%', '%SHELF%', '%SHELVES%', '%HOLDER%', '%DISPENSER%', '%BOTTLE%', '%BRUSH%', '%EARTHBATH%', '%DANDRUFF%']))
   and not (t.trap = 'TOOTHPASTE' and f.name_clean ilike any (array['%TUMBLER%', '%HOLDER%', '%CUP%', '%RACK%', '%STAND%', '%DISPENSER%', '%SQUEEZER%', '%ORGANIZER%']))

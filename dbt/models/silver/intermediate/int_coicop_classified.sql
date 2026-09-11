@@ -49,6 +49,15 @@ with items as materialized (
         where t.item_id = p.item_id::text
           and t.store_slug = p.store_slug
           and t.coicop_method not in ('unclassified', 'gemini_ai_low_conf')
+          -- If an existing record was classified by AI or lower priority methods,
+          -- allow it to be re-evaluated so new deterministic traps or overrides take effect
+          and (
+            t.coicop_method in ('override', 'critical_trap', 'store_purity')
+            or not exists (
+                select 1 from {{ ref('coicop_critical_traps') }} ct
+                where lower(ci.canonical_name) ~* ct.pattern
+            )
+          )
     )
     {% endif %}
 ),
@@ -230,8 +239,8 @@ items_evaluated as materialized (
     left join ai_prejoined ai on ai.norm_name = i.norm_name
     left join ov_barcode ov_b on i.barcode is not null and trim(i.barcode) <> '' and ov_b.barcode = trim(i.barcode)
     left join ov_product_key ov_pk on i.product_key is not null and trim(i.product_key) <> '' and ov_pk.product_key = trim(i.product_key)
-    left join ov_name_store ov_ns on ov_ns.store_slug = i.store_slug and i.norm_name ~* ('\\b' || ov_ns.match_val_lower || '\\b')
-    left join ov_name_global ov_ng on i.norm_name ~* ('\\b' || ov_ng.match_val_lower || '\\b')
+    left join ov_name_store ov_ns on ov_ns.store_slug = i.store_slug and i.norm_name ~* ('\y' || ov_ns.match_val_lower || '\y')
+    left join ov_name_global ov_ng on i.norm_name ~* ('\y' || ov_ng.match_val_lower || '\y')
     left join cat_map_match cm on cm.item_id = i.item_id and cm.store_slug = i.store_slug
     left join text_rule_match tr on tr.item_id = i.item_id and tr.store_slug = i.store_slug
     left join store_defaults_prejoined sd on sd.store_slug = i.store_slug

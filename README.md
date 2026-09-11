@@ -227,6 +227,23 @@ cpi_pipeline_success
 
 ## 5. Key Code Changes & Fixes (Recent)
 
+### Silver Pipeline Stabilization, Classification Ladder & Hedonic Fallback (2026-09-11)
+- **Files**: `dbt/macros/coicop_classify_macro.sql`, `dbt/models/silver/intermediate/int_coicop_classified.sql`, `dbt/models/silver/intermediate/int_prices_cleaned.sql`, `dbt/models/silver/schema.yml`, `dbt/seeds/coicop_critical_traps.csv`, `pipeline/hedonic_regression.py`, `orchestration/dags/silver_dag.py`, `docker-compose.yml`
+- **Classification Cache Non-Blocking Precedence**:
+  - In `coicop_classify_macro.sql`, gated `silver.classification_cache` queries so that stale `UNCLASSIFIED`, `99`, or `REVIEW` cache rows do not mask deterministic `store_purity` locks (e.g. `khmer24` and `realestate` strictly mapped to `04`) or `critical_traps`.
+- **PostgreSQL Word Boundaries in Seeds & dbt Regex**:
+  - Replaced standard `\b` regex anchors with PostgreSQL-compliant `\y` boundaries across `coicop_critical_traps.csv` and `int_coicop_classified.sql`.
+  - Added incremental re-evaluation logic so previously AI-classified rows matching new critical traps (e.g. `\ypanasonic hair dryer\y` -> `12.1.1`) are refreshed.
+- **PostgreSQL Parallel Worker Shared Memory Fix**:
+  - Increased PostgreSQL container `shm_size: 1g` in `docker-compose.yml`.
+  - Added `pre_hook: ["SET max_parallel_workers_per_gather = 0"]` in `int_prices_cleaned.sql` to eliminate worker shared-memory segment errors during heavy multi-table joins.
+- **Resilient Hedonic Quality Adjustment Dual-Engine**:
+  - In `pipeline/hedonic_regression.py`, built a seamless fallback to an analytical Ordinary Least Squares solver (`numpy.linalg.lstsq`) with an internal `_AnalyticalOLSResults` wrapper when `statsmodels` is not present, ensuring electronics quality adjustment persists even in lightweight worker containers.
+  - Handled `AirflowSkipException` in `silver_dag.py` so unexpected hedonic math skips do not block the pipeline.
+- **Airflow Backlog & Stale Task Resolution**:
+  - Passed `--vars '{"ds": "<ds>"}'` to `dbt_silver_run` and `dbt_silver_test`.
+  - Raised `max_active_runs=16` in `silver_dag.py` to prevent executor starvation from historical queued runs.
+
 ### Declarative Monthly Partitioning for Bronze & Silver (2026-09-07)
 - **Files**: `sql/schema.sql`, `pipeline/migrations/0003_partition_bronze_and_silver_tables.sql`, `scripts/execute_partition_migration.py`, `pipeline/partition_manager.py`, `orchestration/dags/cpi_maintenance_dag.py`
 - **Declarative Range Partitioning by Month**:

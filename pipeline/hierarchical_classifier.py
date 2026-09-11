@@ -1,4 +1,6 @@
 import json
+import os
+from pathlib import Path
 import re
 from pipeline.ollama_client import OllamaClient
 import logging
@@ -7,11 +9,20 @@ from pipeline.config import get_db_connection
 from pipeline.key_pool import GeminiKeyPool
 from pipeline.vector_item_matcher import VectorItemMatcher
 
+try:
+    from google import genai
+    from google.genai import types as genai_types
+    HAS_GENAI = True
+except ImportError:
+    genai = None
+    genai_types = None
+    HAS_GENAI = False
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class HierarchicalCOICOPClassifier:
-    def __init__(self, hierarchy_path: str, ollama_url: str = "http://localhost:11434",
+    def __init__(self, hierarchy_path: str = "coicop_hierarchy.json", ollama_url: str = "http://localhost:11434",
                  llama_model: str = "llama3.1:latest", gemini_model: str = "gemini-3.1-flash-lite"):
         self.hierarchy = self._load_hierarchy(hierarchy_path)
         self.ollama_client = OllamaClient(model=llama_model, base_url=ollama_url)
@@ -20,7 +31,21 @@ class HierarchicalCOICOPClassifier:
         self.vector_matcher = VectorItemMatcher()
 
     def _load_hierarchy(self, path: str) -> Dict:
-        with open(path, 'r') as f:
+        target_path = Path(path)
+        if not target_path.is_file():
+            # Search candidate search locations (repo root, pipeline parent, /opt/airflow)
+            candidates = [
+                Path(__file__).resolve().parent.parent / path,
+                Path(__file__).resolve().parent / path,
+                Path("/opt/airflow") / path,
+                Path("/opt/airflow/pipeline") / path,
+            ]
+            for candidate in candidates:
+                if candidate.is_file():
+                    target_path = candidate
+                    break
+
+        with open(target_path, 'r', encoding='utf-8') as f:
             return json.load(f)
 
     def _call_llm(self, prompt: str, model_type: str = "llama") -> str:
@@ -43,14 +68,23 @@ class HierarchicalCOICOPClassifier:
 
     def _call_gemini_fallback(self, prompt: str) -> str:
         """Fallback to Gemini if local LLM fails or is requested."""
+        if not HAS_GENAI or genai is None:
+            logger.error("google-genai is not installed")
+            return "ERR"
         try:
             key = self.gemini_pool.get_next_key()
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent?key={key}"
-            payload = {"contents": [{"parts": [{"text": prompt}]}]}
-            response = requests.post(url, json=payload, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            text = data['candidates'][0]['content']['parts'][0]['text'].strip()
+            if not key:
+                logger.error("No Gemini API key available")
+                return "ERR"
+            client = genai.Client(api_key=key)
+            response = client.models.generate_content(
+                model=self.gemini_model,
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    temperature=0.1,
+                ),
+            )
+            text = response.text.strip()
             match = re.search(r'\d{2}(\.\d{1,2}){0,3}', text)
             return match.group(0) if match else "ERR"
         except Exception as e:
@@ -211,22 +245,31 @@ Answer ONLY 'Yes' or 'No'. No explanation."""
     def classify_product(self, product_name: str, item_id: str = "NEW", store_slug: str = "") -> Dict[str, Any]:
         """Compatibility wrapper for creating new items without an existing ID."""
         res, _ = self.classify_debug(item_id, product_name, store_slug)
+        code = res['code']
+        method = res['method']
+        confidence = res['confidence']
+        
+        # Cache the result for future lookups
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO silver.classification_cache (item_id, coicop_code, coicop_division, coicop_method, confidence)
+                    VALUES (%s, %s, split_part(%s, '.', 1), %s, %s)
+                    ON CONFLICT (item_id) DO UPDATE SET
+                        coicop_code = EXCLUDED.coicop_code,
+                        coicop_division = EXCLUDED.coicop_division,
+                        coicop_method = EXCLUDED.coicop_method,
+                        confidence = EXCLUDED.confidence,
+                        classified_at = CURRENT_TIMESTAMP
+                """, (item_id, code, code, method, confidence))
+                conn.commit()
+        except Exception as e:
+            logger.error(f"Failed to cache classification for {item_id}: {e}")
+        
         return {
-            "coicop_code": res['code'],
-            "coicop_division": res['code'].split('.')[0].zfill(2) if '.' in res['code'] else res['code'],
-            "coicop_method": res['method'],
-            "confidence": res['confidence']
+            "coicop_code": code,
+            "coicop_division": code.split('.')[0].zfill(2) if '.' in code else code,
+            "coicop_method": method,
+            "confidence": confidence
         }
-        conn = get_db_connection()
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO silver.classification_cache (item_id, coicop_code, coicop_division, coicop_method, confidence)
-                VALUES (%s, %s, split_part(%s, '.', 1), %s, %s)
-                ON CONFLICT (item_id) DO UPDATE SET
-                    coicop_code = EXCLUDED.coicop_code,
-                    coicop_division = EXCLUDED.coicop_division,
-                    coicop_method = EXCLUDED.coicop_method,
-                    confidence = EXCLUDED.confidence,
-                    classified_at = CURRENT_TIMESTAMP
-            """, (item_id, code, code, method, confidence))
-            conn.commit()

@@ -16,7 +16,7 @@
 | **Transformation** | **dbt-core & Astronomer Cosmos** (Silver & Gold) | Turns raw price records, entity-matching outputs, pack-size conversions, and COICOP classification into version-controlled, testable SQL models rendered as visual task groups in Airflow. |
 | **Multi-Key API Pool** | **GeminiKeyPool** (`pipeline/key_pool.py`) | Thread-safe round-robin API key pool supporting 4+ free Gemini keys (6,000 req/day, 60 RPM) with automatic 429 failover. |
 | **Semantic Item Matching** | **VectorItemMatcher** (`pipeline/vector_item_matcher.py`) | High-speed multilingual vector embeddings (local MiniLM / deterministic synonym vectorizer + cached `gemini-embedding-2`), deterministic spec guards (RAM/Storage, pack size, volume ≤ 10%), and batch AI review for borderline pairs. |
-| **Hybrid COICOP Engine** | **HierarchicalClassifier** (`pipeline/hierarchical_classifier.py`) | 4-tier ladder: human authority overrides → single-category store domain locks (0.001ms) → 12-division reference vector cosine matching (resolving Community Pharma 06/12 split & AEON variety) → Gemini AI fallback & Postgres memoization. |
+| **Direct COICOP Engine** | **GeminiCOICOPClassifier** (`pipeline/gemini_coicop_classifier.py`) | Direct, high-precision UN COICOP 2018 5-digit classification powered by Google Gemini Flash via `GeminiKeyPool` round-robin rotation, supporting bilingual Khmer & English context, domain guardrails, and persistent database caching. |
 | **Scraper Observability** | **Metabase v0.49** | Real-time operational monitoring across 3 consolidated dashboards (Port 3001/3000): Macro CPI Analytics, Operations & Scraper Health, and Silver Data Quality. |
 | **Interactive Analytics** | **Microsoft Power BI** | Executive BI dashboards over the gold star schema: retailer and item-level price trends, promo analytics. |
 
@@ -56,7 +56,7 @@
 ### Silver (Clean, Standardize & Resolve Observations)
 - **Clean Store Observations**: `silver.clean_store_prices` — unified daily appended table containing cleaned, standardized prices across all stores with exchange rates applied (KHR), unit normalization, promo clamping, and zero-price filtering.
 - **Item Matching Service**: Python (`pipeline/item_matcher.py` & `pipeline/vector_item_matcher.py`) executing Barcode exact → SKU exact → Exact Text → Vectorized Matrix Cosine (S = M · v) + RapidFuzz with deterministic spec guards to reject storage/pack conflicts.
-- **12-Division COICOP Engine**: `pipeline/hybrid_embeddings_classifier.py` executing 4-tier daily ladder: human overrides → 18 pure store locks → 12-division vector space matching → Gemini Pro AI fallback cached in `silver.dim_coicop_ai_cache`.
+- **12-Division & 5-Digit COICOP Engine**: `pipeline/gemini_coicop_classifier.py` executing AI-first UN COICOP 2018 classification: human overrides → deterministic text rules → Gemini Flash batch classification with domain guardrails and automated memoization in PostgreSQL (`silver.canonical_items` and `silver.clean_store_prices`).
 - **Operational Triage Queue**: `silver.classification_queue` captures unclassified or low-confidence items for automated review or human labeling.
 - **COICOP Override System**: `silver.coicop_override` (seed-driven) + `silver.coicop_override_manual` (operator-driven) for persistent classification rules.
 
@@ -117,10 +117,9 @@ CPI PIPELINE/
 │   ├── nis_cpi_importer.py # Official NIS monthly CPI ground-truth benchmark importer & seed synchronizer
 │   ├── key_pool.py        # 4-Key Round-Robin Gemini API Pool & Failover Manager
 │   ├── vector_item_matcher.py # 768-dim Vector Item Matcher & Spec Guards
-│   ├── hybrid_embeddings_classifier.py # 12-Division Vector COICOP Classifier
+│   ├── gemini_coicop_classifier.py # High-precision UN COICOP 2018 Gemini Flash Classifier
 │   ├── item_matcher.py    # Silver item matching coordinator
 │   ├── gemini_item_reviewer.py # AI & Rule-based auto-reviewer for borderline pairs
-│   ├── gemini_coicop_classifier.py # Gemini-based COICOP classifier
 │   ├── text_clean.py      # Text normalization for item matching
 │   ├── hedonic_regression.py # Log-linear hedonic quality adjustment
 │   ├── bronze_ingestion.py # Bronze layer entry point
@@ -133,10 +132,11 @@ CPI PIPELINE/
 │   └── nowcaster.py       # High-frequency daily inflation nowcasting & NIS chain-linking engine
 ├── scripts/               # Maintenance & operational CLI utilities
 │   ├── run_cpi_backtest.py # Runs historical CPI backtest across all dates
-│   ├── evaluate_accuracy_benchmark.py # End-to-end accuracy benchmark utility
+│   ├── run_hierarchical_classification.py # High-speed batch COICOP classifier CLI
+│   ├── deduplicate_canonical_items.py # Canonical item deduplication and alias consolidation
+│   ├── automated_rule_suggester.py # Gemini-powered regex rule discovery from manual corrections
 │   ├── generate_literature_review_excel.py # Generates 4-tab systematic literature review Excel
 │   ├── backfill_silver_pipeline.py # Historical Silver layer backfill runner
-│   ├── bootstrap_vector_embeddings.py # Vector catalog pre-warming utility
 │   ├── auto_review_items.py # CLI for running AI item match review queue
 │   └── setup_metabase_dashboards.py # Provisions Metabase analytics dashboards
 ├── dbt/                   # dbt-core transformation project (dbt 1.8+ with native unit tests)

@@ -159,7 +159,7 @@ Think of data like metal dug out of the ground. When it first comes out, it is r
 \small
 \textbf{Step 1: BRONZE (Raw Store Prices)}
 \begin{itemize}[noitemsep]
-    \item We collect raw text and price tags from 23 store websites every morning at 2:00 AM.
+    \item We collect raw text and price tags from 25 data sources and stores every morning at 2:00 AM.
     \item Exactly as the stores wrote them, typos and all. Nothing is thrown away.
     \item Stored in our raw database table: \texttt{bronze.raw\_prices}.
 \end{itemize}
@@ -196,7 +196,7 @@ To ensure the system is a perfect digital twin of the code, we follow these exac
 The goal of the Bronze layer is to capture the reality of the market without any filtering.
 \begin{enumerate}
     \item \textbf{Trigger:} Apache Airflow wakes up the \texttt{cpi\_master\_dag} at 2:00 AM.
-    \item \textbf{Scrape:} 23 independent scrapers visit store APIs and web pages using \texttt{curl\_cffi} to bypass security.
+    \item \textbf{Scrape:} 25 independent scrapers visit store APIs and web pages using \texttt{curl\_cffi} to bypass security.
     \item \textbf{Ingest:} Raw text, raw prices, and timestamps are upserted into \texttt{bronze.raw\_prices}.
     \item \textbf{Telemetry:} The system records the number of rows collected per store in \texttt{staging.bronze\_ingestion\_stats} to detect if a store website is down.
 \end{enumerate}
@@ -212,13 +212,12 @@ The Silver layer turns messy text into a standardized product catalog.
         \item Search the catalog for the closest match using Cosine Similarity.
         \item Apply \textbf{Spec Guardrails} (Storage, Pack size, Volume) to prevent false merges.
     \end{itemize}
-    \item \textbf{Taxonomy Assignment (The AI Ladder):}
+    \item \textbf{Taxonomy Assignment (AI-First Classification):}
     \begin{itemize}
-        \item \textbf{Tier 1:} Store Purity (e.g., Pharmacy $\to$ Health).
-        \item \textbf{Tier 2:} Semantic Vector Search ($\text{Similarity} \ge 0.85$).
-        \item \textbf{Tier 3:} Local AI (Llama 3.1 Classifier $\to$ Judge).
-        \item \textbf{Tier 4:} Cloud Arbitration (Gemini Pro).
-        \item \textbf{Tier 5:} Human Expert Override.
+        \item \textbf{Tier 1:} Store Domain Purity (e.g., Telcos $\to$ Communication, Petrol $\to$ Fuel).
+        \item \textbf{Tier 2:} Deterministic Text Rules \& Seeds (Regex keyword traps \& manual overrides).
+        \item \textbf{Tier 3:} Direct AI Engine (Google Gemini Flash via \texttt{GeminiKeyPool} multi-key pool, resolving 5-digit UN COICOP 2018 codes with native Khmer/English comprehension and domain guardrails).
+        \item \textbf{Tier 4:} Automated Database Memoization (\texttt{silver.canonical\_items} \& \texttt{silver.clean\_store\_prices}).
     \end{itemize}
     \item \textbf{Final Store:} Standardized records are saved to \texttt{silver.clean\_store\_prices}.
 \end{enumerate}
@@ -237,7 +236,7 @@ The Gold layer transforms individual price tags into national economic indicator
 \subsection{How Airflow and Cosmos Keep Everything Running on Time}
 To make sure this entire process happens smoothly without humans needing to press buttons at 2:00 AM, we use an automatic manager called \textbf{Apache Airflow} and a tool called \textbf{Astronomer Cosmos}:
 \begin{itemize}
-    \item \textbf{The Master Alarm Clock (\texttt{cpi\_master\_dag}):} Rings every day at 2:00 AM. It starts all 23 store scrapers at the same time. Once they finish and at least 3 sources report good data, it wakes up the next step.
+    \item \textbf{The Master Alarm Clock (\texttt{cpi\_master\_dag}):} Rings every day at 2:00 AM. It starts all 25 store scrapers at the same time. Once they finish and at least 3 sources report good data, it wakes up the next step.
     \item \textbf{The Cleaning Step (\texttt{silver\_dag}):} Runs our data cleaning models. Thanks to Cosmos, each cleaning task is its own step. If one step has an issue, we can see exactly which one it is, while the rest keep going.
     \item \textbf{The Final Calculation Step (\texttt{gold\_cpi\_dag}):} Calculates today's official daily inflation rate and updates our dashboards before breakfast.
     \item \textbf{The Weekly Housekeeping Step (\texttt{cpi\_maintenance\_dag}):} Runs every Sunday at 1:00 AM to organize database folders for the coming months and keep the system fast.
@@ -255,7 +254,7 @@ Instead, we use \textbf{Declarative Range Partitioning}. Think of this as puttin
 % =============================================================================
 
 \subsection{The Stores and Services We Actually Scrape}
-To calculate an honest and comprehensive Consumer Price Index, our automated system checks over 35,500 prices every morning across 23 real digital data channels in Cambodia.
+To calculate an honest and comprehensive Consumer Price Index, our automated system checks over 35,500 prices every morning across 25 real digital data channels in Cambodia.
 
 \subsubsection*{Deep-Dive: What We Extract From AEON Cambodia}
 AEON is the largest modern hypermarket and department store operator in Cambodia. Rather than treating it as just a grocery store, our pipeline monitors two distinct flagship portals (\texttt{aeon} and \texttt{aeon3}), extracting thousands of products across 7 different official consumption categories:
@@ -415,23 +414,24 @@ Vector embeddings can be tricked by numbers. \textit{"iPhone 15 128GB"} and \tex
     \item \textbf{Flavor Variant Guard:} Rejects matching Diet / Zero Sugar drinks with regular sugary drinks.
 \end{enumerate}
 
-\subsection{The Local-First AI Classification Architecture}
-Every product must be assigned to one of the official UN COICOP categories. To do this accurately and cheaply, we use a \textbf{Local-First Intelligence Architecture} (the Classification Ladder):
+\subsection{The AI-First Classification Architecture}
+Every product must be assigned to one of the official UN COICOP categories. To do this accurately, cost-effectively, and reliably, we deploy our \textbf{AI-First Classification Ladder}:
 
 \begin{enumerate}
-    \item \textbf{Tier 1: Verified Cache Lookup:} Direct check of \texttt{silver.classification\_cache}. Stale entries marked \texttt{UNCLASSIFIED}, \texttt{99}, or \texttt{REVIEW} are actively bypassed to allow deterministic rules to evaluate.
+    \item \textbf{Tier 1: Verified Cache Lookup \& Seed Overrides:} Direct check of \texttt{silver.canonical\_items} and manual authority overrides (\texttt{silver.coicop\_override}). Validated items are returned instantly with zero latency or API cost.
     \item \textbf{Tier 2: Deterministic Rules \& Store Purity Locks:}
     \begin{itemize}
-        \item \textbf{Store Purity Locks:} Realestate/Khmer24 $\to$ Housing (04), PPWSA/EDC $\to$ Utilities (04), Bus portals $\to$ Transport (07), Community Pharma $\to$ Health (06).
-        \item \textbf{Critical Traps:} Evaluated with PostgreSQL-compliant word boundary regex (\texttt{\textbackslash ypattern\textbackslash y}). For example, Panasonic hair dryers are deterministically mapped to Personal Care (12.1.1) rather than generic appliances (05). Incremental runs dynamically re-evaluate items matching updated traps.
+        \item \textbf{Store Purity Locks:} Specialized stores are locked to their domain: Realestate/Khmer24 $\to$ Housing (04), PPWSA/EDC $\to$ Utilities (04), Bus portals $\to$ Transport (07), Pharmacies $\to$ Health (06), Telcos $\to$ Communication (08).
+        \item \textbf{Critical Traps:} Evaluated with word boundary regular expressions (\texttt{\textbackslash ypattern\textbackslash y}). For example, hair dryers are mapped to Personal Care (12.1.1) rather than generic kitchen/household appliances (05).
     \end{itemize}
-    \item \textbf{Tier 3: Hierarchical AI Drill-Down (Llama 3.1 \& Gemini Judge):}
+    \item \textbf{Tier 3: Direct 5-Digit AI Engine (Google Gemini Flash):}
     \begin{itemize}
-        \item \textbf{The Classifier:} Sequentially navigates Division $\to$ Group $\to$ Class $\to$ Subclass.
-        \item \textbf{The Judge:} Audits the proposal against COICOP standards. Approved if confidence $\ge 80\%$.
+        \item \textbf{High-Speed Batch Ingestion:} Products are classified in batches of 40 items per API call using Google Gemini Flash via \texttt{GeminiKeyPool} multi-key rotation.
+        \item \textbf{Bilingual Khmer \& English Context:} Directly processes native Khmer retail strings and transliterated descriptions without separate translation hops.
+        \item \textbf{Direct 5-Digit Taxonomy Mapping:} Resolves complete UN COICOP 2018 5-digit sub-classes with structured JSON output and domain guardrails (protecting pet food, alcoholic vs non-alcoholic beverages, medicines vs personal care cosmetics).
     \end{itemize}
-    \item \textbf{Tier 4: Deterministic Fallbacks:} Global overrides, category maps, and store defaults.
-    \item \textbf{Tier 5: Human Expert Review:} The final safety net for unclassified or borderline items.
+    \item \textbf{Tier 4: Automated Database Memoization:} Every newly resolved canonical classification is permanently written to PostgreSQL, guaranteeing that subsequent appearances of the item resolve with zero cost.
+    \item \textbf{Tier 5: Human Expert Review:} The final safety net for borderline items in \texttt{silver.needs\_review}, with human corrections feeding back into automated regex rule discovery.
 \end{enumerate}
 
 \begin{tcolorbox}[colback=white,colframe=Teal,title=\textbf{Step-by-Step Example: Gemini AI Classifying Instant Noodles}]
@@ -626,7 +626,7 @@ With 13 million records a year, we use \textbf{Declarative Monthly Partitioning}
 We provide three enterprise dashboards for full transparency:
 \begin{enumerate}
     \item \textbf{Macro Analytics Dashboard:} Tracks Headline and Core CPI and compares nowcasts against official NIS benchmarks.
-    \item \textbf{Pipeline Telemetry Dashboard:} Monitors the 23 scraper sources and the daily ingestion matrix.
+    \item \textbf{Pipeline Telemetry Dashboard:} Monitors the 25 scraper sources and the daily ingestion matrix.
     \item \textbf{Silver Data Quality Screener:} Audits COICOP distribution and verifies that prices adhere to ILO outlier boundaries.
 \end{enumerate}
 

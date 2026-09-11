@@ -72,7 +72,6 @@ x-airflow-common: &airflow-common
     - ./scripts:/opt/airflow/scripts
     - ./dbt:/opt/airflow/dbt
     - ./ml:/opt/airflow/ml
-    - ./data:/opt/airflow/data
   depends_on:
     postgres:
       condition: service_healthy
@@ -122,7 +121,8 @@ services:
     command: >
       -c "
         airflow db migrate &&
-        airflow users create --username '${AIRFLOW_ADMIN_USER:?Set AIRFLOW_ADMIN_USER in .env}' --password '${AIRFLOW_ADMIN_PASSWORD:?Set a strong AIRFLOW_ADMIN_PASSWORD in .env}' --firstname Admin --lastname User --role Admin --email admin@cpi.local || true
+        airflow users create --username '${AIRFLOW_ADMIN_USER:?Set AIRFLOW_ADMIN_USER in .env}' --password '${AIRFLOW_ADMIN_PASSWORD:?Set a strong AIRFLOW_ADMIN_PASSWORD in .env}' --firstname Admin --lastname User --role Admin --email admin@cpi.local || true &&
+        dbt seed --project-dir /opt/airflow/dbt --profiles-dir /opt/airflow/dbt || true
       "
     restart: "no"
 
@@ -185,6 +185,7 @@ services:
       context: ./orchestration
       dockerfile: Dockerfile
     container_name: cpi-dbt
+    profiles: ["cli"]
     working_dir: /opt/airflow/dbt
     entrypoint: ["dbt"]
     restart: "no"

@@ -83,3 +83,7 @@ thesis/*.synctex.gz
 thesis/*.toc
 thesis/*.xdv
 
+# ── Local dev & build scripts ────────────────────────────────────────────────
+mcp_config.json
+build-fast.bat
+orchestration/Dockerfile.optimized

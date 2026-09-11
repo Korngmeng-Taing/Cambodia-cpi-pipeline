@@ -11,7 +11,7 @@ import numpy as np
 from pipeline.config import get_database_url
 from pipeline.text_clean import clean_name_for_matching, is_size_compatible
 from pipeline.vector_item_matcher import VectorItemMatcher, is_spec_compatible
-from pipeline.hierarchical_classifier import HierarchicalCOICOPClassifier
+from pipeline.gemini_coicop_classifier import GeminiCOICOPClassifier
 
 log = logging.getLogger(__name__)
 
@@ -255,15 +255,15 @@ class ItemMatcher:
     ) -> uuid.UUID:
         item_id = uuid.uuid4()
         
-        # Auto-classify new canonical item into UN COICOP
+        # Auto-classify new canonical item into UN COICOP using Direct Gemini Flash
         coicop_div, coicop_code = None, None
         try:
-            classifier = HierarchicalCOICOPClassifier("coicop_hierarchy.json")
-            res = classifier.classify_product(name, store_slug=store_slug)
+            classifier = GeminiCOICOPClassifier()
+            res = classifier.classify_single(name, brand=brand)
             coicop_div = res.get("coicop_division")
             coicop_code = res.get("coicop_code")
         except Exception as e:
-            log.warning("COICOP classification on create_canonical_item failed: %s", e)
+            log.warning("Gemini COICOP classification on create_canonical_item failed: %s", e)
 
         valid_bc = barcode if is_valid_barcode(barcode) else None
         vec_str = self._format_vector(name) if self._has_embedding_column else None
@@ -499,8 +499,9 @@ class ItemMatcher:
         catalog = [{"item_id": iid, "canonical_name": cn} for iid, cn, _ in self.items_cache if cn]
         classifier = None
         try:
-            classifier = HierarchicalCOICOPClassifier("coicop_hierarchy.json")
-        except Exception:
+            classifier = GeminiCOICOPClassifier()
+        except Exception as e:
+            log.warning("Gemini COICOP classifier init in ItemMatcher failed: %s", e)
             classifier = None
 
         for row in rows:
@@ -579,12 +580,12 @@ class ItemMatcher:
             coicop_div, coicop_code = None, None
             try:
                 if classifier is None:
-                    classifier = HierarchicalCOICOPClassifier("coicop_hierarchy.json")
-                res = classifier.classify_product(name_clean, store_slug=store_id)
+                    classifier = GeminiCOICOPClassifier()
+                res = classifier.classify_single(name_clean, brand=brand)
                 coicop_div = res.get("coicop_division")
                 coicop_code = res.get("coicop_code")
             except Exception as e:
-                log.warning("COICOP classification on batch new item failed: %s", e)
+                log.warning("Gemini COICOP classification on batch new item failed: %s", e)
 
             vec_str = self._format_vector(name_clean) if self._has_embedding_column else None
             valid_bc = barcode if is_valid_barcode(barcode) else None

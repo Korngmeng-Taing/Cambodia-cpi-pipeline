@@ -28,22 +28,12 @@ Before entering the ladder, items are mapped to a **Canonical Name**. This ensur
 **Logic:** The product name is converted into a high-dimensional vector. The system then performs a cosine similarity search against the **Gold Standard Table** (a library of human-verified product-to-code mappings).  
 **Outcome:** If a semantic match is found with a high similarity score, the system adopts the verified code from the Gold Standard.
 
-### 4. Hierarchical AI Drill-Down
-**Method:** Multi-step LLM Reasoning (Llama 3.1 via Ollama)  
-**Logic:** To avoid the "guessing" behavior of LLMs when asked for a 5-digit code, the system forces the AI to follow the COICOP 2018 structural hierarchy:
-1. **Division (2 digits):** "Which broad category does this belong to?"
-2. **Group (3 digits):** "Within that division, which group is most accurate?"
-3. **Class (4 digits):** "Within that group, which class fits best?"
-4. **Sub-class (5 digits):** "What is the final detailed code?"
-
-This step-by-step approach drastically reduces hallucinations by providing the AI with a constrained list of valid options at each level.
-
-### 5. The Gemini Judge (Final Audit)
-**Method:** Adversarial Verification (Gemini 1.5 Flash)  
-**Logic:** Once a 5-digit code is proposed by the Hierarchical AI, it is sent to a separate "Judge" model. The Judge is provided with the product name and the proposed code and asked a single question: *"Is this classification accurate according to COICOP 2018 standards? Answer ONLY 'Yes' or 'No'."*  
-**Outcome:** 
-- **Yes:** The classification is accepted.
-- **No:** The system logs a "self-correction," rejects the code, and may attempt a fallback or mark the item for human review.
+### 3. AI-First Direct Classification (Gemini Flash)
+**Method:** One-shot Structured Reasoning with Domain Guardrails (Gemini Flash via `GeminiKeyPool`)  
+**Logic:** Rather than relying on slow multi-step local LLM chains, the production pipeline utilizes Google Gemini Flash equipped with complete UN COICOP 2018 hierarchical classification taxonomy and domain guardrails (e.g., pet foods, personal care, supermarket meals, alcohol, and medicines).
+- **Direct 5-Digit Resolution:** Concurrently predicts 2-digit division, 4-digit class, and 5-digit sub-class code along with official name and rationale in structured JSON format.
+- **Bilingual Comprehension:** Natively handles mixed and pure Khmer retail titles and descriptions without separate translation layers.
+- **Batch Processing:** Processes 40 products per API payload with automatic multi-key rotation and 429 failover.
 
 ---
 
@@ -53,9 +43,7 @@ This step-by-step approach drastically reduces hallucinations by providing the A
 | :--- | :--- | :--- | :--- | :--- |
 | **Cache** | PostgreSQL | Lookup | Instant | $\text{100\%}$ (Verified) |
 | **Rules** | Regex/SQL | Deterministic | Instant | $\text{100\%}$ (Rule-based) |
-| **Vector** | pgvector | Semantic | Fast | Very High |
-| **AI Drill-Down** | Llama 3.1 | Generative | Slow | High |
-| **Judge** | Gemini 1.5 | Audit | Medium | Highest |
+| **AI Engine** | Gemini Flash | Generative / Structured | High-speed batch | Highest |
 
 ## Final Output
 The resulting classification (Code, Method, Confidence) is written to `silver.classification_cache`. This table then feeds into the `gold` layer, where it is used to aggregate daily prices and calculate the final CPI indices.

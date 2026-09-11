@@ -28,6 +28,7 @@ from psycopg2.extras import execute_batch, register_uuid
 
 from pipeline.config import get_database_url
 from pipeline.text_clean import clean_name_for_matching, extract_spec_sets
+from pipeline.gemini_coicop_classifier import GeminiCOICOPClassifier
 
 try:
     from google import genai
@@ -427,12 +428,24 @@ class GeminiItemReviewer:
                 # Create one unique canonical item per unique raw title
                 new_item_id = uuid.uuid4()
                 clean_title = clean_name_for_matching(first_row["item_description_raw"])
+                item_brand = next((r.get("brand") for r in rows if r.get("brand")), None)
+                coicop_div, coicop_code = None, None
+                try:
+                    classifier = GeminiCOICOPClassifier()
+                    res = classifier.classify_single(clean_title, brand=item_brand)
+                    coicop_div = res.get("coicop_division")
+                    coicop_code = res.get("coicop_code")
+                except Exception as e:
+                    log.warning("Gemini classification failed during auto-review split: %s", e)
+
                 new_canonical_items.append((
                     new_item_id,
                     clean_title,
-                    next((r.get("brand") for r in rows if r.get("brand")), None),
+                    item_brand,
                     clean_barcode,
                     first_row.get("size_norm"),
+                    coicop_div,
+                    coicop_code,
                 ))
                 for r in rows:
                     split_matches.append((
@@ -453,8 +466,8 @@ class GeminiItemReviewer:
                 execute_batch(
                     cur,
                     """
-                    INSERT INTO silver.canonical_items (item_id, canonical_name, brand, barcode, size_norm)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO silver.canonical_items (item_id, canonical_name, brand, barcode, size_norm, coicop_division, coicop_code)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (item_id) DO NOTHING;
                     """,
                     new_canonical_items,

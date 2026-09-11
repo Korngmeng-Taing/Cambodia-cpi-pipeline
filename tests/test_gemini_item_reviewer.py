@@ -22,7 +22,8 @@ def _make_reviewer():
     reviewer = GeminiItemReviewer.__new__(GeminiItemReviewer)
     reviewer.db_conn_str = "postgresql://x:y@localhost/db"
     reviewer.model_name = "gemini-flash-test"
-    reviewer.model = MagicMock()
+    reviewer.client = MagicMock()
+    reviewer.model = reviewer.client.models
     return reviewer
 
 

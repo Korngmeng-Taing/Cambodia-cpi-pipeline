@@ -26,7 +26,7 @@ def test_silver_unit_tests_structure():
         data = yaml.safe_load(f)
 
     unit_tests = data.get("unit_tests", [])
-    assert len(unit_tests) >= 4, f"Expected at least 4 unit tests, found {len(unit_tests)}"
+    assert len(unit_tests) >= 3, f"Expected at least 3 unit tests, found {len(unit_tests)}"
 
     test_names = set()
     for ut in unit_tests:

@@ -19,13 +19,24 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import psycopg2
 from pipeline.config import get_db_connection
-from pipeline.ollama_client import OllamaClient
+from pipeline.key_pool import GeminiKeyPool
+
+try:
+    from google import genai
+    from google.genai import types as genai_types
+    HAS_GENAI = True
+except ImportError:
+    genai = None
+    genai_types = None
+    HAS_GENAI = False
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 log = logging.getLogger("rule_suggester")
+
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 def analyze_manual_fixes(conn):
     """Fetch recently manually corrected items."""
@@ -38,9 +49,14 @@ def analyze_manual_fixes(conn):
     """)
     return cur.fetchall()
 
-def propose_rules(ollama: OllamaClient, fixes: list[tuple[str, str, str]]):
-    """Use LLM to find patterns in manual fixes and suggest regex rules."""
+def propose_rules(fixes: list[tuple[str, str, str]]):
+    """Use Gemini Flash to find patterns in manual fixes and suggest regex rules."""
     if not fixes:
+        return []
+
+    pool = GeminiKeyPool()
+    if not pool.has_keys or not HAS_GENAI:
+        log.warning("No Gemini API keys or google-genai library available.")
         return []
 
     fixes_text = "\n".join([f"Name: {n} -> Div: {d}, Code: {c}" for n, d, c in fixes])
@@ -54,21 +70,34 @@ def propose_rules(ollama: OllamaClient, fixes: list[tuple[str, str, str]]):
 
     prompt = f"Manual Fixes:\n{fixes_text}\n\nPropose deterministic regex rules:"
 
-    result = ollama.generate(prompt, system_prompt=sys_prompt)
-    if isinstance(result, list):
-        return result
-    if isinstance(result, dict) and "rules" in result:
-        return result["rules"]
-    if isinstance(result, dict):
-        # Handle cases where the model might just return the list as the root object
-        # but wrapped in a dict with a different key.
-        return result
-
-    return []
+    key_handle = pool.get_client()
+    try:
+        client = key_handle.client
+        config = genai_types.GenerateContentConfig(
+            system_instruction=sys_prompt,
+            response_mime_type="application/json",
+            temperature=0.1,
+        )
+        response = client.models.generate_content(
+            model=DEFAULT_MODEL,
+            contents=prompt,
+            config=config,
+        )
+        text = response.text.strip()
+        result = json.loads(text)
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict) and "rules" in result:
+            return result["rules"]
+        if isinstance(result, dict):
+            return result
+        return []
+    except Exception as e:
+        log.error("Error generating rule suggestions via Gemini: %s", e)
+        return []
 
 def run():
     conn = get_db_connection()
-    ollama = OllamaClient()
 
     try:
         fixes = analyze_manual_fixes(conn)
@@ -77,7 +106,7 @@ def run():
             return
 
         log.info("Analyzing %d manual fixes for patterns...", len(fixes))
-        suggestions = propose_rules(ollama, fixes)
+        suggestions = propose_rules(fixes)
 
         if not suggestions:
             log.info("No clear patterns found to suggest rules.")

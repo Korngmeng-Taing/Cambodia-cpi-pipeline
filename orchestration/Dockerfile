@@ -2,12 +2,13 @@ FROM apache/airflow:2.9.3-python3.11
 
 USER root
 
-# Install system dependencies for Playwright Chromium, Git, and Python compilation
+# Install system dependencies for Playwright Chromium, Git, Python compilation, and psycopg2
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     git \
     procps \
+    libpq-dev \
     libnss3 \
     libatk1.0-0 \
     libatk-bridge2.0-0 \
@@ -26,38 +27,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 USER airflow
+ENV PATH="/home/airflow/.local/bin:${PATH}"
 
-# Install Python packages for Scraping, Data Processing, dbt, Testing, and Quality
-RUN pip install --no-cache-dir \
-    -i https://pypi.org/simple \
-    --prefer-binary \
-    --default-timeout=300 \
-    --retries=5 \
-    psycopg2-binary>=2.9.9 \
-    sqlalchemy>=2.0.0 \
-    pandas>=2.2.0 \
-    pyarrow>=15.0.0 \
-    numpy>=1.26.0 \
-    scipy>=1.12.0 \
-    statsmodels>=0.14.0 \
-    scikit-learn>=1.4.0 \
-    lightgbm>=4.3.0 \
-    rapidfuzz>=3.6.0 \
-    curl_cffi>=0.6.0 \
-    beautifulsoup4>=4.12.0 \
-    playwright>=1.42.0 \
-    requests>=2.31.0 \
-    pytest>=8.0.0 \
-    pytest-asyncio>=0.23.0 \
-    httpx>=0.27.0 \
-    google-generativeai>=0.4.0 \
-    dbt-core>=1.8.0 \
-    dbt-postgres>=1.8.0 \
-    astronomer-cosmos>=1.5.0 \
-    black>=24.0.0 \
-    ruff>=0.4.0 \
-    "shandy-sqlfmt[jinjafmt]>=0.21.0" \
-    pre-commit>=3.7.0
+COPY requirements.txt /opt/airflow/requirements.txt
+
+# Install Python packages via requirements.txt for stable dependency resolution
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r /opt/airflow/requirements.txt
 
 # Install Playwright browser dependencies as root
 USER root
@@ -66,4 +42,5 @@ RUN playwright install-deps chromium && apt-get clean && rm -rf /var/lib/apt/lis
 # Install Playwright Chromium browser binaries as airflow user
 USER airflow
 ENV PLAYWRIGHT_BROWSERS_PATH=/home/airflow/.cache/ms-playwright
-RUN playwright install chromium
+ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright/
+RUN playwright install --no-shell chromium

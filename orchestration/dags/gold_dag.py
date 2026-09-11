@@ -90,7 +90,8 @@ with DAG(
 
     dbt_ds_expr = '{{ (dag_run.conf.get("ds") if dag_run and dag_run.conf else None) or ds }}'
     _dbt_vars = f'{{"ds": "{dbt_ds_expr}"}}'
-    _dbt_flags = f"--project-dir {DBT_PROJECT_DIR} --target-path /tmp/dbt/target --log-path /tmp/dbt/logs"
+    _dbt_prefix = "dbt"
+    _dbt_flags = f"--project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROJECT_DIR} --target-path /tmp/dbt/target --log-path /tmp/dbt/logs"
 
     t_refresh_views = PythonOperator(
         task_id="refresh_serving_views",
@@ -134,13 +135,13 @@ with DAG(
         log.info("Astronomer Cosmos not detected: falling back to BashOperator for Gold dbt.")
         t_dbt_gold_run = BashOperator(
             task_id="dbt_gold_run",
-            bash_command=f"dbt run --select gold --threads 4 {_dbt_flags} --vars '{_dbt_vars}'",
+            bash_command=f"{_dbt_prefix} run --select gold --threads 4 {_dbt_flags} --vars '{_dbt_vars}'",
             execution_timeout=timedelta(minutes=30),
         )
 
         t_dbt_gold_test = BashOperator(
             task_id="dbt_gold_test",
-            bash_command=f"dbt test --select gold --threads 4 {_dbt_flags}",
+            bash_command=f"{_dbt_prefix} test --select gold --threads 4 {_dbt_flags}",
             execution_timeout=timedelta(minutes=15),
         )
 

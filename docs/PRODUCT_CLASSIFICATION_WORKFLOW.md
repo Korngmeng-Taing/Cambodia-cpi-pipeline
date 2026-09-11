@@ -30,18 +30,17 @@ flowchart TD
         D -- "4. No Match (< 0.75)" --> G["Create Canonical Item (Auto)\n(silver.canonical_items)"]
     end
 
-    subgraph S4["Stage 4: Hybrid Ladder AI COICOP Classification (pipeline/hierarchical_classifier.py)"]
-        G --> H{"Classification Ladder\n(First Match Wins)"}
-        H -- "Tier 1" --> I["Classification Cache\n(Verified results from previous runs)"]
-        H -- "Tier 2" --> I2["Deterministic Rules\n(Exact Overrides $\to$ Store Purity $\to$ Critical Traps)"]
-        H -- "Tier 3" --> M["🤖 Hierarchical AI Drill-Down (Llama 3.1)\nDivision $\to$ Group $\to$ Class $\to$ Sub-class\n(With Gemini 1.5 Flash Judge Audit)"]
-        H -- "Tier 4" --> M1["Fallbacks\n(Global Overrides $\to$ Text Rules $\to$ Cat Map $\to$ Defaults)"]
-        H -- "Tier 5" --> N["Human Review Triage\n(Silver.needs_review queue)"]
+    subgraph S4["Stage 4: AI-First COICOP Classification (pipeline/gemini_coicop_classifier.py)"]
+        G --> H{"Classification Pipeline\n(First Match Wins)"}
+        H -- "Tier 1" --> I["Exact Overrides & Manual Review\n(silver.coicop_override & seed rules)"]
+        H -- "Tier 2" --> I2["Deterministic Text Rules\n(Regex pattern rules & store purity)"]
+        H -- "Tier 3" --> M["🤖 Gemini Flash AI Engine (UN COICOP 2018)\nDirect 5-digit sub-class resolution\n(Bilingual Khmer & English with domain guardrails)"]
+        H -- "Tier 4" --> N["Memoization Cache\n(silver.canonical_items & silver.clean_store_prices)"]
     end
 
 
     subgraph S7["Stage 5: Gold Layer Star Schema"]
-        E & F & F1 & I & I2 & M & J & K & L & N --> T[("silver.clean_store_prices")]
+        E & F & F1 & I & I2 & M & N --> T[("silver.clean_store_prices")]
         T --> U[("gold.dim_items & gold.dim_stores")]
         T --> V[("gold.fct_daily_prices")]
     end
@@ -121,12 +120,11 @@ Candidate Scraped Title
 
 ---
 
-## 5. Stage 4: Hybrid Ladder AI COICOP Classification
-
-### Implementation Files:
-- [`pipeline/hierarchical_classifier.py`](file:///D:/CPI%20PIPELINE/pipeline/hierarchical_classifier.py)
-- [`pipeline/ollama_client.py`](file:///D:/CPI%20PIPELINE/pipeline/ollama_client.py)
-- [`pipeline/key_pool.py`](file:///D:/CPI%20PIPELINE/pipeline/key_pool.py)
+## 5. Stage 4: AI-First COICOP Classification
+ 
+ ### Implementation Files:
+ - [`pipeline/gemini_coicop_classifier.py`](file:///D:/CPI%20PIPELINE/pipeline/gemini_coicop_classifier.py)
+ - [`pipeline/key_pool.py`](file:///D:/CPI%20PIPELINE/pipeline/key_pool.py)
 
 ```
 New Canonical Item

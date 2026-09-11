@@ -3,7 +3,7 @@
 CAMBODIA CPI PIPELINE — CONSOLIDATED 3 METABASE DASHBOARDS PROVISIONER
 Provisions:
   1. 01 - Macro CPI & Inflation Analytics
-  2. 02 - Operations & 23-Source Telemetry
+  2. 02 - Operations & 25-Source Telemetry
   3. 03 - Silver Data Quality Screener
 =============================================================================
 """
@@ -372,21 +372,21 @@ def provision_all():
     # ═══════════════════════════════════════════════════════════════════════════
     # 2. 🚀 DASHBOARD 2: OPERATIONS & 23-SOURCE TELEMETRY
     # ═══════════════════════════════════════════════════════════════════════════
-    col_name_2 = "02 - Operations & 23-Source Telemetry"
-    dash_name_2 = "02 - Operations & 23-Source Telemetry"
+    col_name_2 = "02 - Operations & 25-Source Telemetry"
+    dash_name_2 = "02 - Operations & 25-Source Telemetry"
 
-    print("[2/3] Setting up Collection 02: Operations & 23-Source Telemetry...")
+    print("[2/3] Setting up Collection 02: Operations & 25-Source Telemetry...")
     c_ops = get_or_create_collection(
         cur,
         col_name_2,
-        "Live pipeline orchestration, DAG monitor, 23 digital store scrapers, SLA lag, volume trends, and extraction completeness.",
+        "Live pipeline orchestration, DAG monitor, 25 digital store scrapers, SLA lag, volume trends, and extraction completeness.",
         "#2E5BFF"
     )
 
     d_ops_id = create_or_update_dashboard(
         cur,
         dash_name_2,
-        "Live real-time monitoring of Airflow DAG runs, all 23 store scrapers ingestion progress, failure alerts, and warehouse SLAs.",
+        "Live real-time monitoring of Airflow DAG runs, all 25 store scrapers ingestion progress, failure alerts, and warehouse SLAs.",
         c_ops
     )
 
@@ -405,13 +405,19 @@ def provision_all():
         },
         {
             "name": "Scraper Ingestion Success Rate (%)",
-            "desc": "Percentage of 21 scrapers that successfully delivered data today.",
+            "desc": "Percentage of active production scrapers that successfully delivered data today.",
             "display": "scalar",
             "sql": """
+                WITH target_stores AS (
+                    SELECT COUNT(DISTINCT store_slug) AS total_active
+                    FROM gold.dim_stores
+                    WHERE is_active = TRUE
+                )
                 SELECT 
-                    ROUND((COUNT(DISTINCT store_slug) * 100.0 / 21.0)::numeric, 1) AS "Scraper Success Rate (%)"
-                FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
+                    ROUND((COUNT(DISTINCT c.store_slug) * 100.0 / NULLIF(MAX(t.total_active), 0))::numeric, 1) AS "Scraper Success Rate (%)"
+                FROM silver.clean_store_prices c
+                CROSS JOIN target_stores t
+                WHERE c.scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
             """,
             "viz": {},
             "grid": (6, 0, 6, 3)
@@ -444,7 +450,7 @@ def provision_all():
         },
         {
             "name": "Daily Store Scraper Ingestion Progress",
-            "desc": "Real-time checklist of all 23 retail store scrapers running today.",
+            "desc": "Real-time checklist of all 25 active data sources and stores running today.",
             "display": "table",
             "sql": """
                 WITH latest_scrape AS (
@@ -567,18 +573,21 @@ def provision_all():
                     SELECT MAX(scrape_date) AS max_d FROM silver.clean_store_prices
                 )
                 SELECT 
-                    store_slug AS "Store Slug",
-                    COUNT(*) FILTER (WHERE scrape_date = max_d) AS "Latest",
-                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '1 day') AS "D-1",
-                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '2 days') AS "D-2",
-                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '3 days') AS "D-3",
-                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '4 days') AS "D-4",
-                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '5 days') AS "D-5",
-                    COUNT(*) FILTER (WHERE scrape_date = max_d - INTERVAL '6 days') AS "D-6",
+                    COALESCE(st.store_name, c.store_slug) AS "Store Name",
+                    c.store_slug AS "Store Slug",
+                    COUNT(*) FILTER (WHERE c.scrape_date = max_d) AS "Latest",
+                    COUNT(*) FILTER (WHERE c.scrape_date = max_d - INTERVAL '1 day') AS "D-1",
+                    COUNT(*) FILTER (WHERE c.scrape_date = max_d - INTERVAL '2 days') AS "D-2",
+                    COUNT(*) FILTER (WHERE c.scrape_date = max_d - INTERVAL '3 days') AS "D-3",
+                    COUNT(*) FILTER (WHERE c.scrape_date = max_d - INTERVAL '4 days') AS "D-4",
+                    COUNT(*) FILTER (WHERE c.scrape_date = max_d - INTERVAL '5 days') AS "D-5",
+                    COUNT(*) FILTER (WHERE c.scrape_date = max_d - INTERVAL '6 days') AS "D-6",
                     COUNT(*) AS "Total 14D Records"
-                FROM silver.clean_store_prices, date_bounds
-                WHERE scrape_date >= max_d - INTERVAL '14 days'
-                GROUP BY store_slug
+                FROM silver.clean_store_prices c
+                CROSS JOIN date_bounds
+                LEFT JOIN gold.dim_stores st ON st.store_slug = c.store_slug
+                WHERE c.scrape_date >= max_d - INTERVAL '14 days'
+                GROUP BY st.store_name, c.store_slug
                 ORDER BY "Latest" DESC;
             """,
             "viz": {"table.pivot_column": None},
@@ -590,16 +599,18 @@ def provision_all():
             "display": "table",
             "sql": """
                 SELECT 
-                    store_slug AS "Store",
+                    COALESCE(st.store_name, c.store_slug) AS "Store Name",
+                    c.store_slug AS "Store Slug",
                     COUNT(*) AS "Total Items",
-                    ROUND((COUNT(barcode) FILTER (WHERE barcode IS NOT NULL AND TRIM(barcode) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Barcode (%)",
-                    ROUND((COUNT(brand) FILTER (WHERE brand IS NOT NULL AND TRIM(brand) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Brand (%)",
-                    ROUND((COUNT(category_native) FILTER (WHERE category_native IS NOT NULL AND TRIM(category_native) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Category Native (%)",
-                    ROUND((COUNT(size_unit) FILTER (WHERE size_unit IS NOT NULL AND TRIM(size_unit) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Unit Size (%)",
-                    ROUND((COUNT(*) FILTER (WHERE discount_pct IS NOT NULL AND discount_pct > 0) * 100.0 / COUNT(*))::numeric, 1) AS "Promo Rate (%)"
-                FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
-                GROUP BY store_slug
+                    ROUND((COUNT(c.barcode) FILTER (WHERE c.barcode IS NOT NULL AND TRIM(c.barcode) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Barcode (%)",
+                    ROUND((COUNT(c.brand) FILTER (WHERE c.brand IS NOT NULL AND TRIM(c.brand) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Brand (%)",
+                    ROUND((COUNT(c.category_native) FILTER (WHERE c.category_native IS NOT NULL AND TRIM(c.category_native) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Category Native (%)",
+                    ROUND((COUNT(c.size_unit) FILTER (WHERE c.size_unit IS NOT NULL AND TRIM(c.size_unit) <> '') * 100.0 / COUNT(*))::numeric, 1) AS "Unit Size (%)",
+                    ROUND((COUNT(*) FILTER (WHERE c.discount_pct IS NOT NULL AND c.discount_pct > 0) * 100.0 / COUNT(*))::numeric, 1) AS "Promo Rate (%)"
+                FROM silver.clean_store_prices c
+                LEFT JOIN gold.dim_stores st ON st.store_slug = c.store_slug
+                WHERE c.scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                GROUP BY st.store_name, c.store_slug
                 ORDER BY "Total Items" DESC;
             """,
             "viz": {"table.pivot_column": None},
@@ -791,18 +802,20 @@ def provision_all():
             "display": "table",
             "sql": """
                 SELECT 
-                    scrape_date AS "Date",
-                    store_slug AS "Store",
-                    name_clean AS "Product Name",
-                    price_khr AS "Price (KHR)",
-                    unit_price_khr AS "Unit Price (KHR)",
-                    coicop_division AS "Div",
-                    is_outlier AS "Outlier",
-                    fallback_reason AS "Audit Reason"
-                FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
-                  AND (is_outlier = TRUE OR is_fallback = TRUE)
-                ORDER BY is_outlier DESC, price_khr DESC
+                    c.scrape_date AS "Date",
+                    COALESCE(st.store_name, c.store_slug) AS "Store Name",
+                    c.store_slug AS "Store Slug",
+                    c.name_clean AS "Product Name",
+                    c.price_khr AS "Price (KHR)",
+                    c.unit_price_khr AS "Unit Price (KHR)",
+                    c.coicop_division AS "Div",
+                    c.is_outlier AS "Outlier",
+                    c.fallback_reason AS "Audit Reason"
+                FROM silver.clean_store_prices c
+                LEFT JOIN gold.dim_stores st ON st.store_slug = c.store_slug
+                WHERE c.scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                  AND (c.is_outlier = TRUE OR c.is_fallback = TRUE)
+                ORDER BY c.is_outlier DESC, c.price_khr DESC
                 LIMIT 30;
             """,
             "viz": {"table.pivot_column": None},

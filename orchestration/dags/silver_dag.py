@@ -124,21 +124,31 @@ with DAG(
         python_callable=_safe_run_item_auto_review,
     )
 
-    _dbt_flags = f"--project-dir {DBT_PROJECT_DIR} --target-path /tmp/dbt/target --log-path /tmp/dbt/logs"
+    _dbt_prefix = "dbt"
+    _dbt_flags = f"--project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROJECT_DIR} --target-path /tmp/dbt/target --log-path /tmp/dbt/logs"
+    dbt_ds_expr = '{{ (dag_run.conf.get("ds") if dag_run and dag_run.conf else None) or ds }}'
+    _dbt_vars = f'{{"ds": "{dbt_ds_expr}"}}'
 
-    # 3. Seed Reference Data
-    task_dbt_seed = BashOperator(
-        task_id="dbt_seed",
-        bash_command=f"dbt seed {_dbt_flags}",
-    )
-
-    # 4. Hybrid Hierarchical AI COICOP Classification (Llama 3.1 + Gemini Judge)
+    # 3. Hybrid Hierarchical AI COICOP Classification (Direct Gemini Flash)
     task_gemini_coicop = BashOperator(
         task_id="gemini_coicop_classification",
-        bash_command="python /opt/airflow/scripts/run_hierarchical_classification.py",
+        bash_command=(
+            "python /opt/airflow/scripts/run_hierarchical_classification.py "
+            f"--ds '{dbt_ds_expr}'"
+        ),
         cwd="/opt/airflow",
         append_env=True,
         env={"PYTHONPATH": "/opt/airflow"},
+    )
+
+    # 4. Stage int_prices_cleaned first so Gemini classification queries pre-cleaned indexed records
+    task_dbt_stage_clean = BashOperator(
+        task_id="dbt_stage_int_prices_cleaned",
+        bash_command=(
+            f"{_dbt_prefix} run {_dbt_flags} "
+            "--select int_prices_cleaned "
+            f"--vars '{_dbt_vars}'"
+        ),
     )
 
     # 5. Hedonic Quality Adjustment
@@ -148,18 +158,6 @@ with DAG(
     )
 
     # 6. dbt Execution (Cosmos DbtTaskGroup if available, else BashOperator)
-    dbt_ds_expr = '{{ (dag_run.conf.get("ds") if dag_run and dag_run.conf else None) or ds }}'
-    _dbt_vars = f'{{"ds": "{dbt_ds_expr}"}}'
-
-    # 3b. Stage int_prices_cleaned first so Gemini classification queries pre-cleaned indexed records
-    task_dbt_stage_clean = BashOperator(
-        task_id="dbt_stage_int_prices_cleaned",
-        bash_command=(
-            f"dbt run {_dbt_flags} "
-            "--select int_prices_cleaned "
-            f"--vars '{_dbt_vars}'"
-        ),
-    )
 
     if HAS_COSMOS:
         log.info("Astronomer Cosmos detected: instantiating DbtTaskGroup for Silver models.")
@@ -199,7 +197,6 @@ with DAG(
         )
 
         task_item_matching >> task_dbt_stage_clean >> task_gemini_coicop >> task_join_silver_prep
-        task_item_matching >> task_dbt_seed >> task_join_silver_prep
         task_item_matching >> task_item_auto_review >> task_join_silver_prep
         task_join_silver_prep >> tg_dbt_silver >> task_hedonic_adjustment
     else:
@@ -212,7 +209,7 @@ with DAG(
         task_dbt_silver_run = BashOperator(
             task_id="dbt_silver_run",
             bash_command=(
-                f"dbt run {_dbt_flags} "
+                f"{_dbt_prefix} run {_dbt_flags} "
                 "--select silver "
                 f"--vars '{_dbt_vars}'"
             ),
@@ -221,14 +218,13 @@ with DAG(
         task_dbt_silver_test = BashOperator(
             task_id="dbt_silver_test",
             bash_command=(
-                f"dbt test {_dbt_flags} "
+                f"{_dbt_prefix} test {_dbt_flags} "
                 "--select silver "
                 f"--vars '{_dbt_vars}'"
             ),
         )
 
         task_item_matching >> task_dbt_stage_clean >> task_gemini_coicop >> task_join_silver_prep
-        task_item_matching >> task_dbt_seed >> task_join_silver_prep
         task_item_matching >> task_item_auto_review >> task_join_silver_prep
         task_join_silver_prep >> task_dbt_silver_run >> task_dbt_silver_test >> task_hedonic_adjustment
 

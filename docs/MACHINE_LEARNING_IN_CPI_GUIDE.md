@@ -135,22 +135,16 @@ To achieve maximum accuracy, speed, and cost efficiency in the Cambodia CPI Meda
 └─────────────────────────────────────────┴────────────────────────────────────────────────┘
 `
 
-### Module 1: Local-First Hierarchical Classification Ladder (pipeline/hybrid_embeddings_classifier.py)
-- **Tier 1 (Store Domain Lock - 0ms, 100% precision)**:
-  - Fuel stations (petronas, totalenergies, caltex) -> **Division 07 (Transport/Fuels)**.
-  - Pharmacies (pharmacy_u-care, pharmacie-de-la-gare) -> **Division 06 (Health)**.
-  - Telcos (cellcard, smart) -> **Division 08 (Communication)**.
-- **Tier 2 (Vector Embedding Cosine Search - 5ms)**:
-  - Generate 768-dimensional text embeddings for grocery and supermarket items.
-  - Calculate cosine similarity against the 12 reference COICOP division centroids. If >= 0.85, auto-assign.
-- **Tier 3 (Hierarchical Local AI - Ollama)**:
-  - **Classifier Agent**: Proposes a COICOP code and justification based on product name and context.
-  - **Judge Agent**: Audits the proposal against the COICOP handbook.
-  - **Outcome**: Auto-classify if Judge approves with confidence >= 0.8.
-- **Tier 4 (Cloud Arbitration - Gemini Pro)**:
-  - Only invoked for conflicts or low-confidence local results. Resolves ambiguity using full multi-attribute context.
-- **Tier 5 (Human Review Triage)**:
-  - Items that fail all tiers enter the `silver.needs_review` queue for analyst override.
+### Module 1: AI-First Direct Classification Engine (pipeline/gemini_coicop_classifier.py)
+- **Deterministic Text Rules & Seed Overrides**:
+  - Immediate assignment via verified seeds (`coicop_classification_seed.csv`, `coicop_text_rules.csv`) and store purity locks (e.g. telcos -> `08`, fuels -> `07`, pharmacies -> `06`).
+- **Direct 5-Digit AI Classification (Google Gemini Flash)**:
+  - Batch classification (40 items per call) mapping retail listings directly to UN COICOP 2018 5-digit sub-class codes.
+  - Native bilingual Khmer and English comprehension.
+  - Domain guardrails preventing common cross-division confusions (pet food, skincare vs medicine, alcohol vs non-alcoholic drinks).
+  - Multi-key rotation via `GeminiKeyPool` for high throughput and automated 429 backoff.
+- **Database Memoization**:
+  - Validated predictions are stored permanently in `silver.canonical_items` and `silver.clean_store_prices`.
 
 ### Module 2: Spec-Guarded Entity Resolution (pipeline/item_matcher.py & pipeline/hedonic_regression.py)
 - **Deterministic Regex Spec Guards**: Extract volume, weight, and hardware memory specifications (e.g. 128GB, 256GB, 500ml, 1kg). If two items share a similar title but have conflicting specs (128GB vs 256GB), **strictly reject matching** to eliminate artificial price index spikes.

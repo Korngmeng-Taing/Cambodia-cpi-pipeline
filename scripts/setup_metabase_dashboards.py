@@ -359,6 +359,48 @@ def provision_all():
             """,
             "viz": {},
             "grid": (16, 27, 8, 3)
+        },
+        {
+            "name": "Official NIS vs. Pipeline MoM Inflation Tracking (%)",
+            "desc": "Tracking comparison between high-frequency scraped CPI MoM inflation rate and official NIS monthly releases.",
+            "display": "line",
+            "sql": """
+                SELECT 
+                    cpi_month AS "Month",
+                    pipeline_mom_pct AS "Pipeline MoM (%)",
+                    nis_mom_pct AS "Official NIS MoM (%)",
+                    mom_diff_pct_points AS "Tracking Error (pp)"
+                FROM gold.fct_cpi_nis_comparison
+                WHERE pipeline_mom_pct IS NOT NULL AND nis_mom_pct IS NOT NULL
+                ORDER BY cpi_month ASC;
+            """,
+            "viz": {
+                "graph.dimensions": ["Month"],
+                "graph.metrics": ["Pipeline MoM (%)", "Official NIS MoM (%)"]
+            },
+            "grid": (0, 30, 12, 8)
+        },
+        {
+            "name": "Official NIS 12-Division Benchmark Comparison Table",
+            "desc": "Conformed benchmark evaluation table showing rebased headline index, tracking error, and official NIS releases.",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    cpi_month AS "Month",
+                    pipeline_headline_cpi AS "Pipeline CPI (2026=100)",
+                    nis_headline_cpi AS "Official NIS (2006=100)",
+                    pipeline_headline_cpi_rebased_to_nis AS "Pipeline Rebased",
+                    headline_rebased_error AS "Rebased Error",
+                    pipeline_mom_pct AS "Pipeline MoM (%)",
+                    nis_mom_pct AS "NIS MoM (%)",
+                    mom_diff_pct_points AS "MoM Diff (pp)",
+                    directional_concordance AS "Direction Concordant?",
+                    nis_release_date AS "Release Date"
+                FROM gold.fct_cpi_nis_comparison
+                ORDER BY cpi_month DESC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (12, 30, 12, 8)
         }
     ]
 

@@ -37,6 +37,43 @@ sources:
         description: Daily 12-division Laspeyres and Headline/Core CPI facts.
       - name: fct_cpi_monthly
         description: Monthly conformed 12-division and national headline/core CPI facts calculated by pipeline/cpi_calculator.py.
+      - name: dim_nis_official_cpi
+        description: Official National Institute of Statistics (NIS) monthly benchmark CPI releases including headline, core, and all 12 COICOP divisions.
+        columns:
+          - name: cpi_month
+            description: Calendar month of the official NIS CPI release.
+          - name: headline_cpi
+            description: Official NIS Headline CPI index (Base Oct-Dec 2006 = 100).
+          - name: core_cpi
+            description: Official NIS Core CPI index (excluding food, housing utilities, and transport fuels).
+          - name: mom_inflation_pct
+            description: Official Month-over-Month inflation percentage.
+          - name: yoy_inflation_pct
+            description: Official Year-over-Year inflation percentage.
+          - name: cpi_division_01
+            description: Division 01 Food & Non-Alcoholic Beverages index.
+          - name: cpi_division_02
+            description: Division 02 Alcoholic Beverages & Tobacco index.
+          - name: cpi_division_03
+            description: Division 03 Clothing & Footwear index.
+          - name: cpi_division_04
+            description: Division 04 Housing, Water, Electricity, Gas & Fuels index.
+          - name: cpi_division_05
+            description: Division 05 Furnishings & Routine Household Maintenance index.
+          - name: cpi_division_06
+            description: Division 06 Health index.
+          - name: cpi_division_07
+            description: Division 07 Transport index.
+          - name: cpi_division_08
+            description: Division 08 Communication index.
+          - name: cpi_division_09
+            description: Division 09 Recreation & Culture index.
+          - name: cpi_division_10
+            description: Division 10 Education index.
+          - name: cpi_division_11
+            description: Division 11 Restaurants & Hotels index.
+          - name: cpi_division_12
+            description: Division 12 Miscellaneous Goods & Services index.
 
 
 

@@ -232,7 +232,10 @@ items_evaluated as materialized (
         tr.text_rule_conf,
         sd.coicop_division as store_default_div,
         sd.coicop_code as store_default_code,
-        sd.confidence_score as store_default_conf
+        sd.confidence_score as store_default_conf,
+        cc.coicop_division as cache_div,
+        cc.coicop_code as cache_code,
+        cc.confidence as cache_conf
     from items i
     left join store_purity ps on ps.store_slug = i.store_slug
     left join trap_match tm on tm.item_id = i.item_id and tm.store_slug = i.store_slug
@@ -244,6 +247,10 @@ items_evaluated as materialized (
     left join cat_map_match cm on cm.item_id = i.item_id and cm.store_slug = i.store_slug
     left join text_rule_match tr on tr.item_id = i.item_id and tr.store_slug = i.store_slug
     left join store_defaults_prejoined sd on sd.store_slug = i.store_slug
+    left join {{ source('silver', 'classification_cache') }} cc
+      on cc.item_id::text = i.item_id
+     and cc.coicop_division is not null
+     and cc.coicop_division not in ('UNCLASSIFIED', '99', 'REVIEW')
 )
 select
     f.item_id,
@@ -253,12 +260,14 @@ select
     f.product_key,
     f.price_khr,
     {{ resolve_coicop_division(
+        'f.cache_div',
         'f.ov_exact_div', 'f.purity_division', 'f.trap_division',
         'f.ai_div', 'f.ai_conf',
         'f.ov_global_div',
         'f.cat_map_div', 'f.text_rule_div',
         'f.store_default_div', 'f.store_slug') }} as coicop_division,
     {{ resolve_coicop_code(
+        'f.cache_code',
         'f.ai_div', 'f.ai_code', 'f.ai_conf',
         'f.purity_division', 'f.purity_code',
         'f.trap_division', 'f.trap_code',
@@ -267,11 +276,13 @@ select
         'f.text_rule_div', 'f.text_rule_code',
         'f.store_default_div', 'f.store_default_code', 'f.store_slug') }} as coicop_code,
     {{ resolve_coicop_method(
+        'f.cache_div',
         'f.ov_exact_div', 'f.purity_division', 'f.trap_division', 'f.ov_global_div',
         'f.ai_div', 'f.ai_conf',
         'f.cat_map_div', 'f.text_rule_div',
         'f.store_slug', 'f.store_default_div') }} as coicop_method,
     {{ resolve_coicop_confidence(
+        'f.cache_conf',
         'f.ov_exact_div', 'f.purity_division', 'f.trap_division', 'f.ov_global_div',
         'f.ai_div', 'f.ai_conf',
         'f.cat_map_div', 'f.text_rule_div', 'f.text_rule_conf',

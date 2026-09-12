@@ -129,7 +129,10 @@ def test_persist_hedonic_adjusted_record_construction():
             self.executed = []
 
         def execute(self, stmt, params):
-            self.executed.append(params)
+            if isinstance(params, list):
+                self.executed.extend(params)
+            else:
+                self.executed.append(params)
 
     class MockEngine:
         def begin(self):

@@ -68,10 +68,11 @@ models:
         tests:
           - not_null
 
-
-
-
-
-
-
+  - name: fct_cpi_nis_comparison
+    description: Tracking error evaluation mart comparing daily/monthly high-frequency scraped CPI against official NIS Cambodia benchmark releases.
+    columns:
+      - name: cpi_month
+        tests:
+          - not_null
+          - unique
 

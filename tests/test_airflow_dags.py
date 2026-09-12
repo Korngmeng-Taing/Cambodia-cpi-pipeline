@@ -12,7 +12,8 @@ DAG_FILES = [
     "scraper_dags.py",
     "silver_dag.py",
     "gold_dag.py",
-    "gold_cpi_dag.py"
+    "gold_cpi_dag.py",
+    "nis_cpi_dag.py"
 ]
 
 @pytest.mark.parametrize("filename", DAG_FILES)

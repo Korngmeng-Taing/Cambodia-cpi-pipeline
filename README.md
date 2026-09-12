@@ -68,7 +68,8 @@
   - `gold.fct_daily_prices`: Conformed daily price fact table at grain `(scrape_date, store_slug, item_id)` with KHR prices, unit prices, promo/outlier/fallback flags, and COICOP attribution.
   - `gold.fct_coicop_class_daily`: Intermediate 4-digit COICOP class-level aggregate mart (e.g. `01.1.1` Bread & Cereals) for sub-division policy drilldown.
   - `gold.fct_cpi_monthly`: Monthly conformed 12-division and national headline/core CPI aggregate mart with Month-over-Month (MoM %) and Year-over-Year (YoY %) inflation rates. Authoritatively managed by `pipeline/cpi_calculator.py` (`CPICalculationEngine.save_monthly_cpi`) as the single writer.
-  - `gold.dim_nis_official_cpi`: Historical official NIS Cambodia monthly CPI releases (Oct–Dec 2006 = 100) used as ground-truth evaluation anchors.
+  - `gold.dim_nis_official_cpi`: Official NIS Cambodia monthly CPI releases (Oct–Dec 2006 = 100) and full 12 COICOP division index benchmarks scraped directly from NIS monthly Excel workbooks.
+  - `gold.fct_cpi_nis_comparison`: Tracking error and benchmark evaluation mart comparing high-frequency pipeline CPI against official NIS monthly headline and division releases (MAE, percentage errors, directional concordance).
   - `gold.fct_cpi_nowcast`: Daily generated current-month inflation nowcasts with dynamic 95% confidence intervals, uncertainty decay ratios, and official NIS chain-linking.
 - **Economic Index Calculation Engine (`pipeline/cpi_calculator.py`)**:
   - **Two-Tier Elementary & Subclass Aggregation (ILO/IMF CPI Manual)**:
@@ -440,7 +441,19 @@ python scripts/backfill_silver_pipeline.py --start-date 2026-08-18
 python -m pytest tests/ -v
 ```
 
-### 6. Trigger Airflow Master DAG (Daily Fan-Out & Gold CPI)
+### 6. Docker Stack Lifecycle Management
+```bash
+# Start core pipeline stack (Postgres + Airflow):
+docker compose up -d
+
+# Start full stack including Metabase analytics UI:
+docker compose --profile bi up -d
+
+# Clean teardown (all containers + networks, removing any orphan containers):
+docker compose down --remove-orphans
+```
+
+### 7. Trigger Airflow Master DAG (Daily Fan-Out & Gold CPI)
 ```bash
 docker compose exec airflow-scheduler airflow dags trigger cpi_master_dag
 ```

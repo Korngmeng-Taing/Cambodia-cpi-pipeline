@@ -28,14 +28,14 @@ DEFAULT_NIS_WEIGHTS = {
     "02": 0.01625,  # Alcoholic Beverages & Tobacco (1.625%)
     "03": 0.03036,  # Clothing & Footwear (3.036%)
     "04": 0.17084,  # Housing, Water, Electricity, Gas & Fuels (17.084%)
-    "05": 0.03250,  # Furnishings & Household Maintenance (3.250%)
-    "06": 0.05560,  # Health & Pharmaceuticals (5.560%)
-    "07": 0.12180,  # Transport & Automotive Fuels (12.180%)
-    "08": 0.03920,  # Communication & Telecom (3.920%)
-    "09": 0.01910,  # Recreation & Culture (1.910%)
-    "10": 0.01510,  # Education (1.510%)
-    "11": 0.03085,  # Restaurants & Hotels (3.085%)
-    "12": 0.02065,  # Miscellaneous Goods & Services (2.065%)
+    "05": 0.02743,  # Furnishings & Household Maintenance (2.743%)
+    "06": 0.05141,  # Health & Pharmaceuticals (5.141%)
+    "07": 0.12228,  # Transport & Automotive Fuels (12.228%)
+    "08": 0.01136,  # Communication & Telecom (1.136%)
+    "09": 0.02912,  # Recreation & Culture (2.912%)
+    "10": 0.01174,  # Education (1.174%)
+    "11": 0.05861,  # Restaurants & Hotels (5.861%)
+    "12": 0.02285,  # Miscellaneous Goods & Services (2.285%)
 }
 
 DIVISION_NAMES = {
@@ -604,12 +604,14 @@ class CPICalculationEngine:
                         # Two-tier ILO Class-Mean Imputation:
                         # Tier 1: Subclass-level geometric movement if available
                         # Tier 2: Division-level geometric movement fallback
+                        # Under ILO CPI Manual §6.58, advance the item's previous price
+                        # using the class price movement relative to previous period.
                         if sc and sc in subclass_movement_ratios:
                             movement = subclass_movement_ratios[sc]
                         else:
                             movement = division_movement_ratios.get(div, 1.0)
                         movement = max(0.80, min(1.25, movement))
-                        # Compound by actual gap days
+
                         last_obs_date = latest_dates_dict.get(item_id)
                         if last_obs_date is not None:
                             days_gap = (pd.to_datetime(calc_date) - pd.to_datetime(last_obs_date)).days
@@ -873,6 +875,8 @@ class CPICalculationEngine:
                         created_at TIMESTAMPTZ DEFAULT NOW(),
                         PRIMARY KEY (calculation_date, coicop_division)
                     );
+                    CREATE INDEX IF NOT EXISTS idx_fct_cpi_daily_calc_date ON gold.fct_cpi_daily (calculation_date);
+                    CREATE INDEX IF NOT EXISTS idx_fct_elem_indices_calc_date ON gold.fct_elementary_indices (calculation_date);
                 """)
 
                 # Ensure price_ratio_pct and elementary_index columns exist and are synced
@@ -1069,6 +1073,7 @@ class CPICalculationEngine:
                     );
                     ALTER TABLE gold.fct_cpi_monthly ADD COLUMN IF NOT EXISTS headline_mom_inflation_pct NUMERIC(8, 4);
                     ALTER TABLE gold.fct_cpi_monthly ADD COLUMN IF NOT EXISTS headline_yoy_inflation_pct NUMERIC(8, 4);
+                    CREATE INDEX IF NOT EXISTS idx_fct_cpi_monthly_month ON gold.fct_cpi_monthly (cpi_month);
                 """)
                 rows = [
                     (

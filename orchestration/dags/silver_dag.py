@@ -181,6 +181,7 @@ with DAG(
         )
         cosmos_render_config = RenderConfig(
             select=["silver"],
+            exclude=["int_prices_cleaned"],
             load_method=LoadMode.DBT_MANIFEST if has_manifest else LoadMode.AUTOMATIC,
             test_behavior=TestBehavior.AFTER_EACH,
         )
@@ -214,7 +215,7 @@ with DAG(
             task_id="dbt_silver_run",
             bash_command=(
                 f"{_dbt_prefix} run {_dbt_flags} "
-                "--select silver "
+                "--select silver --exclude int_prices_cleaned "
                 f"--vars '{_dbt_vars}'"
             ),
         )
@@ -223,7 +224,7 @@ with DAG(
             task_id="dbt_silver_test",
             bash_command=(
                 f"{_dbt_prefix} test {_dbt_flags} "
-                "--select silver "
+                "--select silver --exclude int_prices_cleaned "
                 f"--vars '{_dbt_vars}'"
             ),
         )

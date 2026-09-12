@@ -47,6 +47,7 @@ test-results/
 # ── IDE / Editor ────────────────────────────────────────────────────────────
 .vscode/
 .idea/
+.continue/
 *.swp
 *.swo
 .DS_Store

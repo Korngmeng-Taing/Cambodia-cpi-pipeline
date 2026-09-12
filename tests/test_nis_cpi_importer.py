@@ -80,9 +80,47 @@ def test_nis_importer_db_upsert():
 def test_nis_cpi_scraper_interface():
     """Verify NISCPIScraper returns valid Bronze record format."""
     scraper = NISCPIScraper()
+    scraper.importer.fetch_from_portal = MagicMock(return_value=[])
     records = scraper.fetch_records()
     assert isinstance(records, list)
     if records:
         assert "name" in records[0]
         assert "price" in records[0]
         assert "currency" in records[0]
+
+
+def test_nis_importer_with_12_divisions():
+    """Verify that all 12 division indices are correctly written to the seed CSV."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_seed = os.path.join(tmpdir, "test_nis.csv")
+        importer = NISBenchmarkImporter(seed_file_path=test_seed)
+
+        div_indices = {f"{i:02d}": 150.0 + i * 2.5 for i in range(1, 13)}
+
+        res = importer.ingest_record(
+            cpi_month="2026-08-01",
+            headline_cpi=219.007,
+            mom_inflation_pct=-0.1,
+            yoy_inflation_pct=4.8,
+            division_indices=div_indices,
+            source_notes="NIS Cambodia Aug 2026 Test",
+            sync_seed=True,
+            conn=None,
+        )
+
+        assert res["status"] in ("success", "partial")
+        assert res["seed_status"] == "synced"
+
+        with open(test_seed, encoding="utf-8") as f:
+            lines = f.readlines()
+
+        header = lines[0].strip().split(",")
+        assert "cpi_division_01" in header
+        assert "cpi_division_12" in header
+
+        row_vals = lines[1].strip().split(",")
+        div_01_idx = header.index("cpi_division_01")
+        div_12_idx = header.index("cpi_division_12")
+
+        assert float(row_vals[div_01_idx]) == 152.5000
+        assert float(row_vals[div_12_idx]) == 180.0000

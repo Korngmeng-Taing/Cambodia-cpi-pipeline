@@ -1,11 +1,12 @@
 {% macro resolve_coicop_division(
+    cache_div,
     ov_exact_div, purity_division, trap_div,
     ai_div, ai_conf,
     ov_global_div,
     cat_map_div, text_rule_div,
     store_default_div, store_slug) %}
     coalesce(
-        (select coicop_division from silver.classification_cache where item_id = f.item_id and coicop_division is not null and coicop_division not in ('UNCLASSIFIED', '99', 'REVIEW')),
+        {{ cache_div }},
         {{ ov_exact_div }},
         {{ purity_division }},
         {{ trap_div }},
@@ -19,6 +20,7 @@
 {% endmacro %}
 
 {% macro resolve_coicop_code(
+    cache_code,
     ai_div, ai_code, ai_conf,
     purity_division, purity_code,
     trap_div, trap_code,
@@ -27,7 +29,7 @@
     text_rule_div, text_rule_code,
     store_default_div, store_default_code, store_slug) %}
     coalesce(
-        (select coicop_code from silver.classification_cache where item_id = f.item_id and coicop_division is not null and coicop_division not in ('UNCLASSIFIED', '99', 'REVIEW')),
+        {{ cache_code }},
         case when {{ ov_exact_div }} is not null then {{ coicop_code_from_division(ov_exact_div) }} end,
         {{ purity_code }},
         {{ trap_code }},
@@ -56,11 +58,12 @@
 {% endmacro %}
 
 {% macro resolve_coicop_method(
+    cache_div,
     ov_exact_div, purity_division, trap_div, ov_global_div,
     ai_div, ai_conf,
     cat_map_div, text_rule_div, store_slug, store_default_div) %}
     case
-        when (select 1 from silver.classification_cache where item_id = f.item_id and coicop_division is not null and coicop_division not in ('UNCLASSIFIED', '99', 'REVIEW')) is not null then 'cache'
+        when {{ cache_div }} is not null then 'cache'
         when {{ ov_exact_div }} is not null then 'override'
         when {{ purity_division }} is not null then 'store_purity'
         when {{ trap_div }} is not null then 'critical_trap'
@@ -74,12 +77,13 @@
 {% endmacro %}
 
 {% macro resolve_coicop_confidence(
+    cache_conf,
     ov_exact_div, purity_division, trap_div, ov_global_div,
     ai_div, ai_conf,
     cat_map_div, text_rule_div, text_rule_conf,
     store_slug, store_default_div, store_default_conf) %}
     coalesce(
-        (select confidence from silver.classification_cache where item_id = f.item_id and coicop_division is not null and coicop_division not in ('UNCLASSIFIED', '99', 'REVIEW')),
+        {{ cache_conf }},
         case when {{ ov_exact_div }} is not null then 1.000 end,
         case when {{ purity_division }} is not null then 0.850 end,
         case when {{ trap_div }} is not null then 0.950 end,

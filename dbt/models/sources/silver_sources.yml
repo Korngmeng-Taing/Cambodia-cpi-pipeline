@@ -25,3 +25,5 @@ sources:
         description: Manual COICOP overrides (kept separate from the dbt-owned coicop_override seed table).
       - name: classification_queue
         description: Operational triage queue for unclassified items.
+      - name: classification_cache
+        description: Cached final hybrid ladder COICOP classifications.

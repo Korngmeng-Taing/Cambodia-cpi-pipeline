@@ -51,15 +51,15 @@ COICOP_WEIGHTS: dict[str, dict[str, Any]] = {
     },
     "05": {
         "name": "Furnishings, household equipment and routine household maintenance",
-        "weight": 0.03250,
+        "weight": 0.02743,
     },
-    "06": {"name": "Health", "weight": 0.05560},
-    "07": {"name": "Transport", "weight": 0.12180},
-    "08": {"name": "Communication", "weight": 0.03920},
-    "09": {"name": "Recreation and culture", "weight": 0.01910},
-    "10": {"name": "Education", "weight": 0.01510},
-    "11": {"name": "Restaurants and hotels", "weight": 0.03085},
-    "12": {"name": "Miscellaneous goods and services", "weight": 0.02065},
+    "06": {"name": "Health", "weight": 0.05141},
+    "07": {"name": "Transport", "weight": 0.12228},
+    "08": {"name": "Communication", "weight": 0.01136},
+    "09": {"name": "Recreation and culture", "weight": 0.02912},
+    "10": {"name": "Education", "weight": 0.01174},
+    "11": {"name": "Restaurants and hotels", "weight": 0.05861},
+    "12": {"name": "Miscellaneous goods and services", "weight": 0.02285},
 }
 
 

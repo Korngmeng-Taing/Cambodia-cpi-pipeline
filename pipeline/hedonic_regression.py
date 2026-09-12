@@ -393,8 +393,7 @@ def persist_hedonic_adjusted(
         )
 
     with engine.begin() as conn:
-        for rec in records:
-            conn.execute(stmt, rec)
+        conn.execute(stmt, records)
 
     log.info("Persisted %d hedonic-adjusted rows to silver.hedonic_adjusted_prices for %s", len(records), scrape_date)
     return len(records)

@@ -21,8 +21,7 @@ import pendulum
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
-from pipeline.bronze_ingestion import check_bronze_gate, ingest_source_bronze
-from scrapers.sources import SCRAPER_REGISTRY
+from scrapers.sources.slugs import SCRAPER_SLUGS
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +36,8 @@ DEFAULT_ARGS = {
 
 
 def _ingest_callable(source_slug: str, **context) -> dict:
+    from pipeline.bronze_ingestion import ingest_source_bronze
+
     dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
     ds = dag_run_conf.get("ds") or context["ds"]
     log.info("Bronze ingestion for '%s' on %s", source_slug, ds)
@@ -46,6 +47,8 @@ def _ingest_callable(source_slug: str, **context) -> dict:
 
 
 def _dq_gate_callable(source_slug: str, **context) -> int:
+    from pipeline.bronze_ingestion import check_bronze_gate
+
     dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
     ds = dag_run_conf.get("ds") or context["ds"]
     count = check_bronze_gate(source_slug, ds)
@@ -82,6 +85,6 @@ def _build_scraper_dag(source_slug: str, dag_id: str | None = None):
     return dag
 
 
-# Create exactly one standard DAG per source in the registry (21 DAGs total)
-for _source_slug in SCRAPER_REGISTRY:
+# Create exactly one standard DAG per source in the registry (25 DAGs total)
+for _source_slug in SCRAPER_SLUGS:
     globals()[f"scrape_{_source_slug}_dag"] = _build_scraper_dag(_source_slug)

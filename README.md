@@ -442,7 +442,7 @@ docker exec airflow-scheduler airflow tasks clear <dag_id> -t <task_id> -f -y
 
 ### 9. Access Metabase Dashboards
 ```bash
-open http://localhost:3000
+open http://localhost:3001
 ```
 
 ### 10. Access Airflow Web UI

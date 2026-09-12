@@ -32,10 +32,7 @@ try:
 except ImportError:
     HAS_COSMOS = False
 
-from pipeline.gemini_item_reviewer import auto_review_pending_items
-from pipeline.hedonic_regression import run_hedonic_regression
-from pipeline.item_matcher import ItemMatcher
-from pipeline.key_pool import get_key_pool
+
 
 
 log = logging.getLogger(__name__)
@@ -54,6 +51,8 @@ DEFAULT_ARGS = {
 
 
 def _run_item_matching(**context) -> dict:
+    from pipeline.item_matcher import ItemMatcher
+
     dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
     ds = dag_run_conf.get("ds") or context["ds"]
     log.info("Executing Silver Item Matching service (Vector + RapidFuzz + Spec Guard) for %s", ds)
@@ -69,6 +68,9 @@ def _run_item_matching(**context) -> dict:
 
 def _run_item_auto_review(**context) -> dict:
     """Executes Gemini AI + deterministic rule guards on pending item match reviews."""
+    from pipeline.gemini_item_reviewer import auto_review_pending_items
+    from pipeline.key_pool import get_key_pool
+
     log.info("Executing Gemini AI Item Match Auto-Reviewer on silver.needs_review...")
     pool = get_key_pool()
     stats = auto_review_pending_items(
@@ -89,6 +91,8 @@ def _safe_run_item_auto_review(**context) -> dict:
 
 
 def _run_hedonic_adjustment(**context) -> dict:
+    from pipeline.hedonic_regression import run_hedonic_regression
+
     dag_run_conf = context.get("dag_run").conf or {} if context.get("dag_run") else {}
     ds = dag_run_conf.get("ds") or context["ds"]
     log.info("Executing Log-Linear Hedonic Quality Adjustment for %s", ds)
@@ -107,7 +111,7 @@ with DAG(
     start_date=pendulum.datetime(2024, 1, 1, tz=local_tz),
     schedule=None,  # Orchestrated by cpi_master_dag
     catchup=False,
-    max_active_runs=16,
+    max_active_runs=1,
     default_args=DEFAULT_ARGS,
     tags=["cpi", "silver", "dbt", "matching", "classification", "vectors"],
 ) as dag:

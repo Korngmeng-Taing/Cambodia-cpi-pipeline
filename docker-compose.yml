@@ -22,8 +22,12 @@ x-airflow-common: &airflow-common
     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY:-cpi_pipeline_airflow_secret_key_2026_secure}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-    AIRFLOW__CORE__PARALLELISM: "32"
-    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "24"
+    AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: "300"
+    AIRFLOW__CORE__DAG_FILE_PROCESSOR_TIMEOUT: "300"
+    AIRFLOW__CORE__MIN_FILE_PROCESS_INTERVAL: "30"
+    AIRFLOW__CORE__PARALLELISM: "8"
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "6"
+    AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: "1"
     AIRFLOW__WEBSERVER__WORKERS: "2"
     AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: "300"
     AIRFLOW__WEBSERVER__WEB_SERVER_WORKER_TIMEOUT: "300"
@@ -136,6 +140,7 @@ services:
     restart: unless-stopped
     command: webserver
     ports:
+      - "8080:8080"
       - "8085:8080"
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -197,7 +202,7 @@ services:
     restart: unless-stopped
     <<: *logging-common
     ports:
-      - "127.0.0.1:${METABASE_PORT:-3001}:3000"
+      - "${METABASE_PORT:-3001}:3000"
     environment:
       MB_DB_TYPE: postgres
       MB_DB_DBNAME: metabase

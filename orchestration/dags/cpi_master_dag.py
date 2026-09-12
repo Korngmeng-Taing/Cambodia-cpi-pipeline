@@ -26,7 +26,7 @@ from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
-from scrapers.sources import SCRAPER_REGISTRY
+from scrapers.sources.slugs import SCRAPER_SLUGS
 
 log = logging.getLogger(__name__)
 
@@ -120,7 +120,7 @@ def _verify_minimum_scrapers_success(**context) -> None:
             successful_stores = [r[0] for r in rows]
             successful = len(successful_stores)
 
-        all_stores = set(SCRAPER_REGISTRY.keys())
+        all_stores = set(SCRAPER_SLUGS)
         missing_stores = sorted(all_stores - set(successful_stores))
 
         log.info(
@@ -157,6 +157,7 @@ with DAG(
     start_date=pendulum.datetime(2024, 1, 1, tz=local_tz),
     schedule="0 2 * * *",  # 02:00 AM Phnom Penh time daily
     catchup=False,
+    max_active_runs=1,
     default_args=DEFAULT_ARGS,
     tags=["cpi", "master", "orchestration", "medallion", "monitoring"],
 ) as dag:
@@ -173,7 +174,7 @@ with DAG(
 
     # 1. Trigger all registered Scraper DAGs dynamically
     scraper_trigger_tasks = []
-    for store_slug in sorted(SCRAPER_REGISTRY.keys()):
+    for store_slug in sorted(SCRAPER_SLUGS):
         trigger_op = TriggerDagRunOperator(
             task_id=f"trigger_scraper_{store_slug}",
             trigger_dag_id=f"scrape_{store_slug}_dag",

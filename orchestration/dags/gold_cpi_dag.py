@@ -242,6 +242,7 @@ with DAG(
     schedule=None,  # Triggered by cpi_master_dag, not cron — avoids double execution
     start_date=pendulum.datetime(2026, 8, 18, tz=local_tz),
     catchup=False,
+    max_active_runs=1,
     tags=["gold", "cpi", "inflation", "economics", "jevons", "laspeyres"],
 ) as dag:
 

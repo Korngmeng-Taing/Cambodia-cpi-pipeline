@@ -82,3 +82,35 @@ If any canonical items ever enter `silver.canonical_items` with null or unclassi
       OR coicop_code LIKE '%.unclassified';
    ```
    Must always return `0`.
+
+---
+
+## 7. Official NIS Benchmark Ingestion & Tracking Error Maintenance
+
+Official monthly CPI figures published by the National Institute of Statistics (NIS) provide the ground-truth benchmark for evaluating the high-frequency scraped nowcaster.
+
+### Automated Weekly Scraper
+* **Airflow DAG**: `nis_cpi_dag` runs every Monday at 06:00 AM ICT (`0 6 * * 1`).
+* **Scraper Module**: `pipeline/nis_cpi_importer.py` scans `https://nis.gov.kh/សន្ទស្សន៍ថ្នាក់ជាតិ/` for monthly Excel releases (`CPI-12-group-*.xlsx`).
+* Extracts Headline Index, Core Index, MoM %, YoY %, and all 12 COICOP division indices.
+
+### Manual or Ad-Hoc Ingestion CLI
+```bash
+# Automated portal fetch:
+python -m pipeline.nis_cpi_importer --scrape-portal
+
+# Or manual single month entry:
+python -m pipeline.nis_cpi_importer --cpi-month 2026-09-01 --headline 220.15 --mom 0.52 --yoy 5.34
+```
+
+### dbt Seed & Tracking Error Model Refresh
+```bash
+dbt seed --select nis_official_cpi
+dbt run --select fct_cpi_nis_comparison
+```
+
+### Metabase Dashboard Diagnostics
+Run the diagnostic audit script to verify all dashboard query cards:
+```bash
+python scripts/test_metabase_cards.py
+```

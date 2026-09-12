@@ -11,18 +11,18 @@ Every silver fact row in `silver.clean_store_prices` carries `coicop_division` +
 
 | Code | Division | Official NIS Weight (seed) | CPI Aggregate Coverage |
 | ---- | ------------------------------------------------------------------ | ------------------- | ---------------------- |
-| 01 | Food and non-alcoholic beverages | 44.800% | Headline CPI (Excluded from Core CPI) |
-| 02 | Alcoholic beverages, tobacco and narcotics | 1.500% | Headline & Core CPI |
-| 03 | Clothing and footwear | 2.900% | Headline & Core CPI |
-| 04 | Housing, water, electricity, gas and other fuels | 17.100% | Headline & Core CPI |
-| 05 | Furnishings, household equipment and routine household maintenance | 3.300% | Headline & Core CPI |
-| 06 | Health | 5.600% | Headline & Core CPI |
-| 07 | Transport | 12.200% | Headline & Core (Fuel excluded from Core) |
-| 08 | Communication (Hardware & Services) | 3.900% | Headline & Core (Hedonically Adjusted) |
-| 09 | Recreation and culture | 1.900% | Headline & Core (Hedonically Adjusted) |
-| 10 | Education | 1.500% | Headline & Core CPI |
-| 11 | Restaurants and hotels | 3.100% | Headline & Core CPI |
-| 12 | Miscellaneous goods and services (Personal Care) | 2.200% | Headline & Core CPI |
+| 01 | Food and non-alcoholic beverages | 44.775% | Headline CPI (Excluded from Core CPI) |
+| 02 | Alcoholic beverages, tobacco and narcotics | 1.625% | Headline & Core CPI |
+| 03 | Clothing and footwear | 3.036% | Headline & Core CPI |
+| 04 | Housing, water, electricity, gas and other fuels | 17.084% | Headline & Core CPI |
+| 05 | Furnishings, household equipment and routine household maintenance | 3.325% | Headline & Core CPI |
+| 06 | Health | 5.589% | Headline & Core CPI |
+| 07 | Transport | 12.228% | Headline & Core (Fuel excluded from Core) |
+| 08 | Communication (Hardware & Services) | 3.921% | Headline & Core (Hedonically Adjusted) |
+| 09 | Recreation and culture | 1.902% | Headline & Core (Hedonically Adjusted) |
+| 10 | Education | 1.472% | Headline & Core CPI |
+| 11 | Restaurants and hotels | 5.861% | Headline & Core CPI |
+| 12 | Miscellaneous goods and services (Personal Care) | 2.182% | Headline & Core CPI |
 | UNCLASSIFIED | No rule matched (triage queue) | — | Excluded from Index until classified |
 
 > Weights source: `dbt/seeds/category_weights.csv` (materialized to `gold.category_weights`), summing to 100.000%.

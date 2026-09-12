@@ -112,18 +112,18 @@ Stored in [`dbt/seeds/category_weights.csv`](file:///d:/CPI%20PIPELINE/dbt/seeds
 
 | Division Code | COICOP Division Name                               | Official NIS National Weight ($W_d$) | Headline CPI |  Core CPI   | Scope & Coverage                                             |
 | :-----------: | :------------------------------------------------- | :----------------------------------: | :----------: | :---------: | :----------------------------------------------------------- |
-|   **`01`**    | **Food & Non-Alcoholic Beverages**                 |             **44.800%**              | ✅ Included  | ❌ Excluded | Rice, Meats, Fresh Fish, Produce, Cooking Oils, Dairy        |
-|   **`02`**    | **Alcoholic Beverages & Tobacco**                  |              **1.500%**              | ✅ Included  | ✅ Included | Domestic/Imported Beer, Spirits, Wine, Cigarettes            |
-|   **`03`**    | **Clothing & Footwear**                            |              **2.900%**              | ✅ Included  | ✅ Included | Men's/Women's/Children's Apparel, Shoes, Footwear            |
-|   **`04`**    | **Housing, Water, Electricity, Gas & Other Fuels** |             **17.100%**              | ✅ Included  | ✅ Included | Residential Rentals, EDC Electricity, PPWSA Water, LPG Gas   |
-|   **`05`**    | **Furnishings & Routine Household Maintenance**    |              **3.300%**              | ✅ Included  | ✅ Included | Detergents, Kitchen Cookware, Light Bulbs, Cleaning          |
-|   **`06`**    | **Health & Pharmaceuticals**                       |              **5.600%**              | ✅ Included  | ✅ Included | OTC Analgesics, Antibiotics, Vitamins, First Aid             |
-|   **`07`**    | **Transport**                                      |             **12.200%**              | ✅ Included  | ⚠️ Partial  | Retail Fuels (Gasoline/Diesel ex-Core), Intercity Transit    |
-|   **`08`**    | **Communication**                                  |              **3.900%**              | ✅ Included  | ✅ Included | Mobile Data, Fiber Wi-Fi, Smartphones (Hedonically Adjusted) |
-|   **`09`**    | **Recreation & Culture**                           |              **1.900%**              | ✅ Included  | ✅ Included | Audio/Visual Tech, Pet Food, Sports Equipment, Subscriptions |
-|   **`10`**    | **Education**                                      |              **1.500%**              | ✅ Included  | ✅ Included | Textbooks, Stationery, Language Tuition                      |
-|   **`11`**    | **Restaurants & Hotels**                           |              **3.100%**              | ✅ Included  | ✅ Included | Restaurant Dining, Takeaway Meals, Hotel Accommodation       |
-|   **`12`**    | **Miscellaneous Goods & Services**                 |              **2.200%**              | ✅ Included  | ✅ Included | Personal Care, Skincare, Shampoos, Oral Care, Baby Care      |
+|   **`01`**    | **Food & Non-Alcoholic Beverages**                 |             **44.775%**              | ✅ Included  | ❌ Excluded | Rice, Meats, Fresh Fish, Produce, Cooking Oils, Dairy        |
+|   **`02`**    | **Alcoholic Beverages & Tobacco**                  |              **1.625%**              | ✅ Included  | ✅ Included | Domestic/Imported Beer, Spirits, Wine, Cigarettes            |
+|   **`03`**    | **Clothing & Footwear**                            |              **3.036%**              | ✅ Included  | ✅ Included | Men's/Women's/Children's Apparel, Shoes, Footwear            |
+|   **`04`**    | **Housing, Water, Electricity, Gas & Other Fuels** |             **17.084%**              | ✅ Included  | ✅ Included | Residential Rentals, EDC Electricity, PPWSA Water, LPG Gas   |
+|   **`05`**    | **Furnishings & Routine Household Maintenance**    |              **3.325%**              | ✅ Included  | ✅ Included | Detergents, Kitchen Cookware, Light Bulbs, Cleaning          |
+|   **`06`**    | **Health & Pharmaceuticals**                       |              **5.589%**              | ✅ Included  | ✅ Included | OTC Analgesics, Antibiotics, Vitamins, First Aid             |
+|   **`07`**    | **Transport**                                      |             **12.228%**              | ✅ Included  | ⚠️ Partial  | Retail Fuels (Gasoline/Diesel ex-Core), Intercity Transit    |
+|   **`08`**    | **Communication**                                  |              **3.921%**              | ✅ Included  | ✅ Included | Mobile Data, Fiber Wi-Fi, Smartphones (Hedonically Adjusted) |
+|   **`09`**    | **Recreation & Culture**                           |              **1.902%**              | ✅ Included  | ✅ Included | Audio/Visual Tech, Pet Food, Sports Equipment, Subscriptions |
+|   **`10`**    | **Education**                                      |              **1.472%**              | ✅ Included  | ✅ Included | Textbooks, Stationery, Language Tuition                      |
+|   **`11`**    | **Restaurants & Hotels**                           |              **5.861%**              | ✅ Included  | ✅ Included | Restaurant Dining, Takeaway Meals, Hotel Accommodation       |
+|   **`12`**    | **Miscellaneous Goods & Services**                 |              **2.182%**              | ✅ Included  | ✅ Included | Personal Care, Skincare, Shampoos, Oral Care, Baby Care      |
 |   **TOTAL**   | **Full National Consumer Basket**                  |             **100.000%**             | **100.000%** | **52.200%** | **National Expenditure Universe**                            |
 
 ---
@@ -579,5 +579,35 @@ CREATE TABLE IF NOT EXISTS gold.fct_cpi_daily (
 
 1. **Axiomatic Soundness:** Jevons micro-aggregation eliminates the upward substitution bias of Carli averages and the base-dependence of Dutot averages.
 2. **Quality Adjustment:** Hedonic regression removes gadget spec improvements (RAM, storage) from genuine telecommunication price inflation.
-3. **Weighting Fidelity:** Reflects official Cambodian household expenditure realities where Rice accounts for **$18.5\%$** and total Food accounts for **$44.8\%$** of the national budget.
+3. **Weighting Fidelity:** Reflects official Cambodian household expenditure realities where Rice accounts for **$18.5\%$** and total Food accounts for **$44.775\%$** of the national budget.
 4. **Monetary Stability:** Dual reporting of **Headline CPI** and **Core CPI** gives central bankers and policymakers a noise-free signal of underlying macroeconomic inflation.
+
+---
+
+## 9. Official Ground-Truth Ingestion & Tracking Error Benchmark Mart
+
+To empirically validate the daily scraped CPI nowcast against the Cambodian government's official benchmark, the pipeline incorporates an automated **Official NIS Benchmark Ingestion & Evaluation Mart**:
+
+```mermaid
+flowchart LR
+    A["Official NIS Portal<br/>(nis.gov.kh/សន្ទស្សន៍ថ្នាក់ជាតិ/)"] -->|Weekly DAG: nis_cpi_dag<br/>Mondays 06:00 ICT| B["pipeline/nis_cpi_importer.py<br/>(Excel Table 2 Extractor)"]
+    B --> C[("gold.dim_nis_official_cpi<br/>& dbt/seeds/nis_official_cpi.csv")]
+    C --> D[("gold.fct_cpi_nis_comparison<br/>(Tracking Error, Concordance, 12 Divisions)")]
+    E[("gold.fct_cpi_monthly<br/>(Scraped Nowcast)")] --> D
+    D --> F["Metabase Dashboard 01<br/>(Tracking Error pp & Concordance)"]
+```
+
+### 9.1 Data Assets
+1. **`gold.dim_nis_official_cpi`**: Official monthly benchmark table containing headline CPI, core CPI, MoM/YoY inflation %, and all 12 COICOP division indices (`cpi_division_01` to `cpi_division_12`).
+2. **`dbt/seeds/nis_official_cpi.csv`**: Version-controlled seed repository maintaining 10+ months of official historical releases.
+3. **`gold.fct_cpi_nis_comparison`**: Conformed evaluation view joining scraped pipeline CPI against official NIS releases:
+   - `pipeline_headline_cpi_rebased_to_nis`: Pipeline series rebased to official NIS base (Oct–Dec 2006 = 100).
+   - `headline_rebased_error`: Level discrepancy between rebased nowcast and official index.
+   - `mom_diff_pct_points`: Month-over-month inflation tracking error ($\Delta\%_{\text{pipeline}} - \Delta\%_{\text{NIS}}$).
+   - `directional_concordance`: Boolean indicating whether nowcast and official statistics moved in the same directional trend.
+   - 12 official division benchmarks (`nis_div_01_food` through `nis_div_12_miscellaneous`).
+
+### 9.2 Weekly Orchestration Schedule
+* **DAG**: `orchestration/dags/nis_cpi_dag.py`
+* **Cadence**: Weekly on Mondays at 06:00 AM ICT (`0 6 * * 1`).
+* **Automation**: Automatically downloads new monthly workbooks (`CPI-12-group-*.xlsx`), extracts Table 2, updates seeds, and triggers `dbt run --select fct_cpi_nis_comparison`.

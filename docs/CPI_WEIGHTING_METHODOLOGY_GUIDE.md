@@ -135,18 +135,18 @@ Stored in [`dbt/seeds/category_weights.csv`](file:///D:/CPI%20PIPELINE/dbt/seeds
 
 | Division Code | Division Name | Official NIS Weight ($W_d$) | Headline CPI | Core CPI |
 | :---: | :--- | :---: | :---: | :---: |
-| **`01`** | Food and non-alcoholic beverages | **44.800%** | Included | ❌ Excluded |
-| **`02`** | Alcoholic beverages, tobacco & narcotics | **1.500%** | Included | Included |
-| **`03`** | Clothing and footwear | **2.900%** | Included | Included |
-| **`04`** | Housing, water, electricity, gas & fuels | **17.100%** | Included | ❌ Excluded (Fuels) |
-| **`05`** | Furnishings & routine household maintenance | **3.300%** | Included | Included |
-| **`06`** | Health | **5.600%** | Included | Included |
-| **`07`** | Transport | **12.200%** | Included | ❌ Excluded (Fuel) |
-| **`08`** | Communication | **3.900%** | Included | Included |
-| **`09`** | Recreation and culture | **1.900%** | Included | Included |
-| **`10`** | Education | **1.500%** | Included | Included |
-| **`11`** | Restaurants and hotels | **3.100%** | Included | Included |
-| **`12`** | Miscellaneous goods and services | **2.200%** | Included | Included |
+| **`01`** | Food and non-alcoholic beverages | **44.775%** | Included | ❌ Excluded |
+| **`02`** | Alcoholic beverages, tobacco & narcotics | **1.625%** | Included | Included |
+| **`03`** | Clothing and footwear | **3.036%** | Included | Included |
+| **`04`** | Housing, water, electricity, gas & fuels | **17.084%** | Included | ❌ Excluded (Fuels) |
+| **`05`** | Furnishings & routine household maintenance | **3.325%** | Included | Included |
+| **`06`** | Health | **5.589%** | Included | Included |
+| **`07`** | Transport | **12.228%** | Included | ❌ Excluded (Fuel) |
+| **`08`** | Communication | **3.921%** | Included | Included |
+| **`09`** | Recreation and culture | **1.902%** | Included | Included |
+| **`10`** | Education | **1.472%** | Included | Included |
+| **`11`** | Restaurants and hotels | **5.861%** | Included | Included |
+| **`12`** | Miscellaneous goods and services | **2.182%** | Included | Included |
 | **TOTAL** | **Full National Basket** | **100.000%** | **100.000%** | **52.200%** |
 
 ### 5.3 Aggregation Formulas

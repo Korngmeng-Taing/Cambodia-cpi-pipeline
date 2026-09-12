@@ -86,7 +86,7 @@
   - **Refined Core CPI**: Excludes volatile food (Division 01), housing & utilities (Division 04), and transport fuel (Division 07) in accordance with NIS and National Bank of Cambodia core inflation standards.
 - **Machine Learning-Assisted Daily Inflation Nowcasting Engine (`ml/nowcaster.py`)**:
   - **Expanding-Window MTD Aggregation**: Partitions the current month into observed days ($1 \dots t$) and projected days ($t+1 \dots T$), aggregating daily facts from `gold.fct_cpi_daily`.
-  - **Cross-Division Momentum Projection**: Projects remaining days using high-frequency Division 01 (Food, 44.8%) and Division 07 (Transport, 12.2%) momentum (*Macias et al., 2023*).
+  - **Cross-Division Momentum Projection**: Projects remaining days using high-frequency Division 01 (Food, 44.775%) and Division 07 (Transport, 12.228%) momentum (*Macias et al., 2023*).
   - **Official Benchmark Chain-Linking**: Translates pipeline growth rates into chain-linked official NIS Phnom Penh index numbers (Base Oct–Dec 2006 = 100).
   - **Uncertainty Decay Modeling**: Computes dynamic 95% confidence intervals that narrow as the month progresses ($U_t = \sqrt{(T-t)/T}$).
 - **Serving Views & Metabase Dashboards** (`sql/views.sql`):
@@ -157,6 +157,7 @@ CPI PIPELINE/
 │       ├── silver_dag.py       # Silver layer transformation (Astronomer Cosmos DbtTaskGroup)
 │       ├── gold_dag.py         # Gold star schema + serving views (Astronomer Cosmos DbtTaskGroup)
 │       ├── gold_cpi_dag.py     # Jevons/Laspeyres CPI calculation
+│       ├── nis_cpi_dag.py      # Weekly official NIS monthly CPI release ingestion & benchmark tracking
 │       └── alerts.py           # Task failure & SLA callbacks
 ├── sql/                   # Database DDL & serving views
 │   ├── schema.sql         # Full relational schema (647 lines)

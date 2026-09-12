@@ -145,6 +145,12 @@ DEFAULT_COICOP_CLASS_MAPPING = {
     "12.2.1": "12.3.2",  # Personal effects -> Other personal effects
     "12.2.9": "12.3.2",  # Personal effects -> Other personal effects
     "12.4.0": "12.3.2",  # Social protection -> Other personal effects
+    # COICOP 2018 Division 13 (Personal Care) mapped to 1999/NIS Division 12
+    "13.1.1": "12.1.1",  # Hairdressing -> Hairdressing salons
+    "13.1.2": "12.1.3",  # Personal care articles/hygiene -> Other personal care
+    "13.2.1": "12.3.1",  # Jewellery & watches -> Jewellery, clocks and watches
+    "13.2.9": "12.3.2",  # Other personal effects -> Other personal effects
+    "13.9.0": "12.3.2",  # Other personal goods -> Other personal effects
 }
 
 class CPICalculationEngine:

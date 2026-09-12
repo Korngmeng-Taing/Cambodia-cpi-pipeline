@@ -261,9 +261,9 @@ class GeminiCOICOPClassifier:
             max_workers = max(1, min(self.key_pool.get_key_count() or 4, 8))
             log.info("Processing %d batches using %d parallel workers...", len(batches), max_workers)
 
-            update_tuples: list[tuple[str, str, str]] = []
+            update_tuples: list[tuple[str, str, str, float, str]] = []
 
-            def _process_one_batch(b: list[dict[str, Any]]) -> tuple[list[tuple[str, str, str]], int, int]:
+            def _process_one_batch(b: list[dict[str, Any]]) -> tuple[list[tuple[str, str, str, float, str]], int, int]:
                 decisions = self._call_gemini_batch(b)
                 tuples = []
                 c_count = 0
@@ -275,6 +275,8 @@ class GeminiCOICOPClassifier:
                         tuples.append((
                             dec["coicop_division"],
                             dec["coicop_code"],
+                            "gemini_ai",
+                            float(dec.get("confidence", 0.95)),
                             item_id_str,
                         ))
                         c_count += 1
@@ -301,7 +303,10 @@ class GeminiCOICOPClassifier:
                         """
                         UPDATE silver.canonical_items
                         SET coicop_division = %s,
-                            coicop_code = %s
+                            coicop_code = %s,
+                            coicop_method = %s,
+                            coicop_confidence = %s,
+                            coicop_classified_at = NOW()
                         WHERE item_id = %s::uuid;
                         """,
                         update_tuples,

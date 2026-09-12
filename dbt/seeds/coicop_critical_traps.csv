@@ -1,5 +1,5 @@
 pattern,negative_pattern,coicop_division,coicop_code,priority,method_label
-\y(iphone)\y,,08,08.2.1,1,iphone_rule
+\y(iphone)\y,,08,08.2.0,1,iphone_rule
 \y(laundry detergent|dishwashing liquid|dish washing liquid)\y,,05,05.6.1,2,laundry_detergent_rule
 \ytoothpaste\y,,12,12.1.3,3,toothpaste_rule
 \y(cleaning vinegar|household vinegar|vinaigre m[ée]nager|streak free.*vinegar|apta.*vinegar|briochin.*vinegar)\y,,05,05.6.1,4,cleaning_vinegar_rule

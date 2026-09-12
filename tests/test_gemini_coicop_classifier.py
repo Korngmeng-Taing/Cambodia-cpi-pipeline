@@ -19,14 +19,14 @@ def test_classify_batch_success(mock_gemini_client):
         {
             "id": "1",
             "coicop_division": "01",
-            "coicop_code": "01.1.1.1",
+            "coicop_code": "01.1.1",
             "confidence": 0.98,
             "reason": "Human food - rice",
         },
         {
             "id": "2",
             "coicop_division": "09",
-            "coicop_code": "09.3.4.1",
+            "coicop_code": "09.3.4",
             "confidence": 0.99,
             "reason": "Pet food guardrail",
         },
@@ -41,11 +41,11 @@ def test_classify_batch_success(mock_gemini_client):
 
     assert "1" in results
     assert results["1"]["coicop_division"] == "01"
-    assert results["1"]["coicop_code"] == "01.1.1.1"
+    assert results["1"]["coicop_code"] == "01.1.1"
 
     assert "2" in results
     assert results["2"]["coicop_division"] == "09"
-    assert results["2"]["coicop_code"] == "09.3.4.1"
+    assert results["2"]["coicop_code"] == "09.3.4"
 
 
 def test_classify_single(mock_gemini_client):
@@ -54,7 +54,7 @@ def test_classify_single(mock_gemini_client):
         {
             "id": "0",
             "coicop_division": "02",
-            "coicop_code": "02.1.1.1",
+            "coicop_code": "02.1.1",
             "confidence": 0.97,
             "reason": "Beer alcohol",
         }
@@ -65,4 +65,4 @@ def test_classify_single(mock_gemini_client):
     res = classifier.classify_single("Angkor Beer Can 330ml", brand="Angkor")
 
     assert res["coicop_division"] == "02"
-    assert res["coicop_code"] == "02.1.1.1"
+    assert res["coicop_code"] == "02.1.1"

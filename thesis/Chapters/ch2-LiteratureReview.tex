@@ -121,8 +121,13 @@
 
 \hs As documented by \cite{bates1969combination} and synthesized in modern nowcasting literature \citep{bis2024spectrum}, this intra-month information accretion can be modeled as a monotonic uncertainty decay process. By scaling daily sample price variance $\sigma_{\text{daily}}$ by the square-root unobserved temporal fraction $U_t = \sqrt{(T-t)/T}$, nowcasting systems generate dynamic 95\% confidence envelopes that contract continuously throughout the month. When $t = T$, $U_t = 0$, causing the estimated confidence interval to collapse to zero width as the nowcast achieves complete deterministic realization.
 
-\subsection{Architectural Synthesis and Methodological Blueprint for Cambodia}
-\hs The theoretical and empirical findings from these landmark studies establish the econometric and computational foundation for the Cambodia Daily CPI Medallion Pipeline. From \cite{cavallo2016billion} and \cite{aparicio2021targeted}, the pipeline adopts high-frequency daily retail price harvesting across 20 web sources to bypass the standard 30 to 60-day official survey delays. From \cite{macias2023nowcasting}, the pipeline identifies high-frequency food price momentum (COICOP Division 01, $44.775\%$ weight) and fuel transport momentum (COICOP Division 07, $12.180\%$ weight) as the twin leading drift signals for intra-month price projection. From \cite{bis2024spectrum}, the system incorporates modern semantic AI categorization to structure raw scraped product feeds into international taxonomies. Finally, following \cite{bates1969combination} and \cite{babii2022machine}, the pipeline formalizes an expanding-window nowcast aggregation combined with dynamic uncertainty envelopes and dual-index chain linking to official NIS Phnom Penh benchmarks (Oct--Dec 2006 = 100).
+\subsection{Synthesis of High-Frequency Nowcasting Frameworks}
+\hs The theoretical and empirical literature demonstrates that nowcasting high-frequency inflation relies on three synergistic methodological pillars:
+\begin{itemize}
+    \item \textbf{Leading Indicator Microdata:} Continuous scraping of high-velocity price sectors (food and fuel) captures immediate supply and demand shocks, providing crucial leading signals that anticipate broader headline inflation movements \citep{cavallo2016billion, macias2023nowcasting}.
+    \item \textbf{High-Dimensional Machine Learning:} Tree-based algorithms and regularized regressions process volatile multi-day price changes without overfitting, effectively modeling non-linear interactions across macroeconomic regimes \citep{medeiros2021forecasting, gouletcoulombe2022machine}.
+    \item \textbf{Formalized Information Accretion:} Expanding-window temporal partitioning ($t/T$) combined with monotonic variance shrinkage ($U_t = \sqrt{(T-t)/T}$) provides statistically grounded convergence toward the final monthly benchmark while maintaining robust out-of-sample calibration \citep{bates1969combination, babii2022machine}.
+\end{itemize}
 
 \section{The Emerging Market Context and Research Gap}
 \hs While the integration of web scraping, artificial intelligence, and real-time inflation nowcasting has advanced rapidly in Europe, North America, and parts of Latin America, very little empirical research has been conducted in developing Southeast Asian economies, and specifically in Cambodia.
@@ -137,7 +142,7 @@
 \hs Despite these unique conditions, national inflation tracking in Cambodia has continued to rely exclusively on monthly in-person market surveys. Prior to this research, no automated, end-to-end data engineering pipeline existed to continuously harvest, classify, calculate, and nowcast daily consumer prices across all 12 UN COICOP divisions in Cambodia. This graduation thesis directly addresses this critical gap, providing both an academic contribution to applied econometric data science and a practical digital tool for national economic governance.
 
 \section{Comparative Literature Matrix and Methodological Synthesis}
-\hs Table~\ref{tab:literature_matrix} synthesizes the seminal academic publications, international statistical standards, and central bank studies that directly inform the four operational pillars of the Cambodia Daily CPI Medallion Pipeline, mapping each theoretical framework to its concrete implementation in the Cambodian system.
+\hs Table~\ref{tab:literature_matrix} synthesizes the seminal academic publications, international statistical standards, and central bank studies that form the methodological state of the art in high-frequency inflation measurement.
 
 \begin{table}[H]
 \centering
@@ -146,17 +151,17 @@
 \begin{tabular}{|>{\raggedright\arraybackslash}p{2.5cm}|>{\centering\arraybackslash}p{1.7cm}|>{\raggedright\arraybackslash}p{3.3cm}|>{\raggedright\arraybackslash}p{3.2cm}|>{\raggedright\arraybackslash}p{3.5cm}|}
 \hline
 \rowcolor{blue!20}
-\textbf{Paper / Study} & \textbf{Pipeline Pillar} & \textbf{Key Methodology \& Dataset} & \textbf{Reported Metric / Result} & \textbf{Implementation in Cambodia Pipeline} \\ \hline
-\textbf{Billion Prices Project} \citep{cavallo2016billion} & Bronze Ingestion & Daily web crawlers, Jevons geometric mean, 22 countries & $>0.98$ correlation with official CPI; 3--14 day shock detection & Automated daily scraping of 20 retail sources across Cambodia \\ \hline
-\textbf{Targeted Price Baskets} \citep{aparicio2021targeted} & Bronze Ingestion & Targeted online price baskets, high-frequency microdata sensing & Early detection of turning points and micro-price stickiness & Standardized daily basket tracking across all 12 UN COICOP divisions \\ \hline
-\textbf{BERT COICOP NLP} \citep{berki2025nlp} & Silver AI Classification & Fine-tuned BERT transformer on scraped e-commerce titles & 94.56\% classification accuracy; 94.07\% precision & Multilingual vector embeddings mapping raw scraped listings into COICOP \\ \hline
-\textbf{Project Spectrum} \citep{bis2024spectrum} & Silver AI Classification & Generative AI LLMs, dense embeddings, relational caching & $>95\%$ classification precision; latency $<3$ minutes & Tier 3 AI categorization with database vector caching for Cambodia \\ \hline
-\textbf{CPI Manual} \citep{imf2020cpi} & Gold Axiomatic Index & Axiomatic index theory, elementary Jevons, missing price imputation & Global standard eliminating Carli upward drift (+1.18\%/yr) & Gold layer daily Jevons elementary index with CSES 2023 weights \\ \hline
-\textbf{High-Freq Food Nowcasting} \citep{macias2023nowcasting} & Gold Nowcasting & 2.4M daily food quotes, recursive bridge modeling & 15\%--35\% RMSFE reduction over AR/ARIMA benchmarks & Food Division 01 7-day momentum computed as primary leading signal \\ \hline
-\textbf{High-Freq ML Nowcasting} \citep{babii2022machine} & Gold Nowcasting & Mixed-frequency time series, walk-forward validation & Robust out-of-sample nowcasting bypassing official publication lag & Expanding-window intra-month daily aggregation ($t/T$ weight) \\ \hline
-\textbf{Dynamic Uncertainty Decay} \citep{bates1969combination} & Gold Nowcasting & Combinatorial forecasting and variance shrinkage & Asymptotic contraction of estimation error over reference period & Monotonically narrowing 95\% confidence envelope ($U_t = \sqrt{(T-t)/T}$) \\ \hline
+\textbf{Paper / Study} & \textbf{Thematic Pillar} & \textbf{Key Methodology \& Dataset} & \textbf{Reported Metric / Result} & \textbf{Core Methodological Takeaway} \\ \hline
+\textbf{Billion Prices Project} \citep{cavallo2016billion} & Daily Web Scraping & Daily web crawlers, Jevons geometric mean, 22 countries & $>0.98$ correlation with official CPI; 3--14 day shock detection & Demonstrates daily online retail prices accurately track official monthly CPI trends without lag. \\ \hline
+\textbf{Targeted Price Baskets} \citep{aparicio2021targeted} & Daily Web Scraping & Targeted online price baskets, high-frequency microdata sensing & Early detection of turning points and micro-price stickiness & Confirms targeted e-commerce monitoring captures price rigidities and early macro turning points. \\ \hline
+\textbf{BERT COICOP NLP} \citep{berki2025nlp} & AI Classification & Fine-tuned BERT transformer on scraped e-commerce titles & 94.56\% classification accuracy; 94.07\% precision & Proves deep transformer language models successfully map noisy product titles into COICOP. \\ \hline
+\textbf{Project Spectrum} \citep{bis2024spectrum} & AI Classification & Generative AI LLMs, dense embeddings, relational caching & $>95\%$ classification precision; latency $<3$ minutes & Validates large language models and semantic vector spaces for central bank inflation surveillance. \\ \hline
+\textbf{CPI Manual} \citep{imf2020cpi} & Axiomatic Index & Axiomatic index theory, elementary Jevons, missing price imputation & Global standard eliminating Carli upward drift (+1.18\%/yr) & Establishes the axiomatic requirement for geometric averaging and class-mean missing price imputation. \\ \hline
+\textbf{High-Freq Food Nowcasting} \citep{macias2023nowcasting} & Inflation Nowcasting & 2.4M daily food quotes, recursive bridge modeling & 15\%--35\% RMSFE reduction over AR/ARIMA benchmarks & Proves high-frequency food prices provide the single strongest leading signal for monthly headline CPI. \\ \hline
+\textbf{High-Freq ML Nowcasting} \citep{babii2022machine} & Inflation Nowcasting & Mixed-frequency time series, walk-forward validation & Robust out-of-sample nowcasting bypassing official publication lag & Formalizes the mathematical bridge between daily high-frequency observations and monthly target aggregates. \\ \hline
+\textbf{Dynamic Uncertainty Decay} \citep{bates1969combination} & Inflation Nowcasting & Combinatorial forecasting and variance shrinkage & Asymptotic contraction of estimation error over reference period & Provides theoretical justification for monotonically narrowing confidence intervals as daily data arrives. \\ \hline
 \end{tabular}
-\caption{Methodological Matrix of Literature Directly Informing the Cambodia Daily CPI Medallion Pipeline}
+\caption{Methodological Synthesis of Literature on High-Frequency Inflation Measurement}
 \label{tab:literature_matrix}
 \end{table}
 

@@ -43,12 +43,12 @@ log = logging.getLogger(__name__)
 DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 BATCH_SIZE = int(os.getenv("COICOP_BATCH_SIZE", "40"))
 
-SYSTEM_PROMPT = """You are an expert UN COICOP 2018 (Classification of Individual Consumption According to Purpose) classification engine for the Consumer Price Index (CPI) in Cambodia.
-Your job is to classify consumer products strictly according to the official UN COICOP 2018 hierarchical taxonomy down to the detailed Sub-class level (5 digits formatted with dots: DD.G.C.S.S or DD.G.C.S).
+SYSTEM_PROMPT = """You are an expert UN COICOP (Classification of Individual Consumption According to Purpose) classification engine for the Consumer Price Index (CPI) in Cambodia.
+Your job is to classify consumer products strictly according to the official Cambodia National Institute of Statistics (NIS) 4-digit COICOP Class taxonomy (formatted with dots: DD.G.C, e.g. 01.1.1, 01.2.2, 07.2.2, 12.1.3).
 
 Input will be a list of products with their ID, name, brand (optional), and store context.
 For each product, determine:
-1. "coicop_division": 2-digit string from '01' to '13':
+1. "coicop_division": 2-digit string from '01' to '12':
    01: Food and non-alcoholic beverages
    02: Alcoholic beverages, tobacco and narcotics
    03: Clothing and footwear
@@ -56,32 +56,33 @@ For each product, determine:
    05: Furnishings, household equipment and routine household maintenance
    06: Health
    07: Transport
-   08: Information and communication
-   09: Recreation, sport and culture
-   10: Education services
-   11: Restaurants and accommodation services
-   12: Insurance and financial services
-   13: Personal care, social protection and miscellaneous goods
+   08: Communication
+   09: Recreation and culture
+   10: Education
+   11: Restaurants and hotels
+   12: Miscellaneous goods and services
 
-2. "coicop_code": EXACT UN COICOP 2018 classification code with at least 4 to 5 numerical segments separated by dots (e.g. "01.1.1.1", "01.1.1.2", "01.1.3.1", "02.1.1.1", "09.3.4.1", "13.1.2.1").
-   NEVER return only a 2-digit division or 3-digit group. ALWAYS drill down to the full 4 or 5-digit subclass code.
+2. "coicop_code": EXACT 4-digit NIS Cambodia COICOP Class code (format DD.G.C, e.g. "01.1.1", "01.1.2", "01.2.2", "02.1.3", "03.1.2", "05.6.1", "06.1.1", "07.2.2", "08.3.0", "09.3.1", "11.1.1", "12.1.3").
+   NEVER return 5 digits (e.g. do NOT return 01.1.1.1, use 01.1.1).
+   NEVER return only 2 digits. ALWAYS return the exact 4-digit class code (DD.G.C).
 
 3. "confidence": Float between 0.0 and 1.0.
 
 CRITICAL GUARDRAIL RULES:
-- PET FOOD & ACCESSORIES: Dog food, cat food, pet treats, cat litter -> MUST BE "09.3.4.1" or "09.3.4.2" (Pets and related products), NEVER Division 01 (Human food).
-- PERSONAL CARE & HYGIENE: Shampoo, soaps, skincare, sunscreen, toothpaste, diapers, sanitary pads -> MUST BE under "13.1.2.1" or "12.1.3.1" (Personal Care), NEVER Division 01 or 05.
-- SUPERMARKET PACKAGED / READY FOOD: Frozen meals, cup noodles, instant food, canned goods -> Division "01" (Food e.g. "01.1.9.1"), NEVER Division 11 (Restaurants).
-- ALCOHOLIC BEVERAGES: Beer -> "02.1.1.1", Wine -> "02.1.2.1", Spirits -> "02.1.3.1", NEVER Division 01.
-- BABY FORMULA & BABY FOOD: Division "01" (e.g. "01.1.4.3" or "01.1.9.2").
-- CLEANING AGENTS: Detergent, dish soap, bleach, floor cleaner -> "05.6.1.1" (Cleaning and maintenance products).
+- PET FOOD & ACCESSORIES: Dog food, cat food, pet treats, cat litter -> MUST BE "09.3.1" (Games, toys and hobbies / pets), NEVER Division 01 (Human food).
+- PERSONAL CARE & HYGIENE: Shampoo, soaps, skincare, sunscreen, toothpaste, diapers, sanitary pads -> MUST BE "12.1.3" or "12.1.1" (Personal Care), NEVER Division 01 or 05.
+- SUPERMARKET PACKAGED / READY FOOD: Frozen meals, cup noodles, instant food, canned goods -> Division "01" (Food e.g. "01.1.9" or "01.1.1"), NEVER Division 11 (Restaurants).
+- ALCOHOLIC BEVERAGES: Beer -> "02.1.3", Wine -> "02.1.2", Spirits -> "02.1.1", Cigarettes -> "02.2.0", NEVER Division 01.
+- BABY FORMULA & BABY FOOD: Division "01" (e.g. "01.1.4" for milk/formula or "01.1.9").
+- CLEANING AGENTS: Detergent, dish soap, bleach, floor cleaner -> "05.6.1" (Non-durable household goods).
+- PHARMACEUTICALS & HEALTH: Medicines, vitamins, pain relief -> "06.1.1", Balms, masks, bandages -> "06.1.2".
 
 Return ONLY a JSON array of objects with the exact schema:
 [
   {
     "id": "<string or int matching input id>",
     "coicop_division": "<2-digit division e.g. 01>",
-    "coicop_code": "<full 5-digit or 4-digit subclass code e.g. 01.1.1.1>",
+    "coicop_code": "<4-digit class code e.g. 01.1.1>",
     "confidence": <float>,
     "reason": "<short justification under 10 words>"
   }
@@ -164,6 +165,13 @@ class GeminiCOICOPClassifier:
                         raw_div = str(obj.get("coicop_division", "01")).zfill(2)
                         code = str(obj.get("coicop_code", f"{raw_div}.1.1"))
                         conf = float(obj.get("confidence", 0.95))
+                        # Enforce strict 4-digit class code (DD.G.C)
+                        parts = code.split('.')
+                        if len(parts) > 3:
+                            code = '.'.join(parts[:3])
+                        elif len(parts) == 2:
+                            code = f"{code}.1"
+
                         results[item_id] = {
                             "coicop_division": raw_div,
                             "coicop_code": code,

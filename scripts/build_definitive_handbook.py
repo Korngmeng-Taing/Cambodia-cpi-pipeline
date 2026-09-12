@@ -758,16 +758,16 @@ Now multiply each division index by its share of total national spending:
 \begin{itemize}[noitemsep]
     \item Food (01): $102.38 \times 44.775\% = \mathbf{45.84}$ points
     \item Housing and Utilities (04): $100.50 \times 17.084\% = \mathbf{17.17}$ points
-    \item Transport (07): $105.20 \times 12.180\% = \mathbf{12.81}$ points
-    \item Health (06): $101.10 \times 5.560\% = \mathbf{5.62}$ points
-    \item Communication (08): $99.80 \times 3.920\% = \mathbf{3.91}$ points
-    \item Furnishings (05): $100.20 \times 3.250\% = \mathbf{3.26}$ points
-    \item Restaurants/Hotels (11): $102.00 \times 3.085\% = \mathbf{3.15}$ points
+    \item Transport (07): $105.20 \times 12.228\% = \mathbf{12.86}$ points
+    \item Restaurants/Hotels (11): $102.00 \times 5.861\% = \mathbf{5.98}$ points
+    \item Health (06): $101.10 \times 5.589\% = \mathbf{5.65}$ points
+    \item Communication (08): $99.80 \times 3.921\% = \mathbf{3.91}$ points
+    \item Furnishings (05): $100.20 \times 3.325\% = \mathbf{3.33}$ points
     \item Clothing/Footwear (03): $100.40 \times 3.036\% = \mathbf{3.05}$ points
-    \item Personal Care (12): $101.00 \times 2.065\% = \mathbf{2.09}$ points
-    \item Recreation (09): $100.10 \times 1.910\% = \mathbf{1.91}$ points
+    \item Personal Care (12): $101.00 \times 2.182\% = \mathbf{2.20}$ points
+    \item Recreation (09): $100.10 \times 1.902\% = \mathbf{1.90}$ points
     \item Alcohol/Tobacco (02): $101.50 \times 1.625\% = \mathbf{1.65}$ points
-    \item Education (10): $100.00 \times 1.510\% = \mathbf{1.51}$ points
+    \item Education (10): $100.00 \times 1.472\% = \mathbf{1.47}$ points
 \end{itemize}
 Sum of all points:
 $$\text{CPI}_{\text{Headline}} = 45.84 + 17.17 + 12.81 + 5.62 + 3.91 + 3.26 + 3.15 + 3.05 + 2.09 + 1.91 + 1.65 + 1.51 = \mathbf{101.97}$$

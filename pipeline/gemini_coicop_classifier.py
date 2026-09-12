@@ -215,23 +215,28 @@ class GeminiCOICOPClassifier:
                         f"""
                         SELECT DISTINCT ci.item_id, ci.canonical_name, ci.brand
                         FROM silver.canonical_items ci
-                        JOIN silver.item_match_log iml ON ci.item_id = iml.item_id
-                        WHERE iml.matched_at::date = %s::date
-                          AND iml.match_method = 'new_item'
-                          AND (ci.coicop_code IS NULL 
-                               OR ci.coicop_division IS NULL
-                               OR array_length(string_to_array(ci.coicop_code, '.'), 1) < 4)
+                        LEFT JOIN silver.item_match_log iml ON ci.item_id = iml.item_id
+                        WHERE (
+                            (iml.matched_at::date = %s::date AND iml.match_method = 'new_item')
+                            OR ci.coicop_code LIKE '%%.unclassified'
+                            OR ci.coicop_code IS NULL 
+                            OR ci.coicop_division IS NULL
+                            OR array_length(string_to_array(ci.coicop_code, '.'), 1) < 3
+                        )
                         {limit_clause};
                         """,
                         (scrape_date,),
                     )
                 else:
-                    limit_clause = f"LIMIT {int(limit)}" if (limit and limit > 0) else "LIMIT 500"
+                    limit_clause = f"LIMIT {int(limit)}" if (limit and limit > 0) else "LIMIT 2000"
                     cur.execute(
                         f"""
                         SELECT item_id, canonical_name, brand
                         FROM silver.canonical_items
-                        WHERE coicop_code IS NULL OR coicop_division IS NULL
+                        WHERE coicop_code IS NULL 
+                           OR coicop_division IS NULL
+                           OR coicop_code LIKE '%%.unclassified'
+                           OR array_length(string_to_array(coicop_code, '.'), 1) < 3
                         {limit_clause};
                         """
                     )

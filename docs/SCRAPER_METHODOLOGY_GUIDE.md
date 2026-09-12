@@ -1,10 +1,10 @@
 > **[!NOTE]**
 > **IMPLEMENTATION STATUS (LIVE IN PRODUCTION):** The Gold-layer CPI Calculation Engine is fully operational in production.
 > Live components:
-> - **Bronze Ingestion:** 25 scrapers (`scrapers/sources/`) extracting atomic prices and official MEF USD/KHR rates into `bronze.raw_prices`.
-> - **Silver Processing:** Data cleaning (`int_prices_cleaned.sql`), hybrid vector matching (`pipeline/vector_item_matcher.py`), 12-division COICOP classification (`pipeline/hybrid_embeddings_classifier.py`), and log-linear hedonic quality adjustment (`pipeline/hedonic_regression.py`).
+> - **Bronze Ingestion:** 25 scrapers (`scrapers/sources/`) extracting atomic prices and official MEF USD/KHR rates into `bronze.raw_prices`. Lightweight slug registry in `scrapers/sources/slugs.py` ensures sub-second Airflow DAG parsing.
+> - **Silver Processing:** Data cleaning (`int_prices_cleaned.sql`), hybrid vector matching (`pipeline/vector_item_matcher.py`), 12-division official 4-digit NIS COICOP classification (`pipeline/gemini_coicop_classifier.py`), and log-linear hedonic quality adjustment (`pipeline/hedonic_regression.py`).
 > - **Gold Econometric Layer:** Kimball star schema (`gold.dim_items`, `gold.dim_stores`, `gold.fct_daily_prices`), Jevons micro-indices with 7-day imputation (`gold.fct_elementary_indices`), and Laspeyres 12-division daily aggregates (`gold.fct_cpi_daily`).
-> - **Observability & Analytics:** Metabase dashboards (Port 3000) and Power BI models.
+> - **Observability & Analytics:** Metabase dashboards (Port 3001) and Power BI models.
 
 **Author:** CPI Engineering & Methodology Team
 **Architecture:** Pure Structured Medallion Architecture — PostgreSQL 16 + Airflow + dbt (`D:\CPI PIPELINE`)
@@ -61,7 +61,7 @@ Every night at 02:00, Airflow orchestrates daily data extraction across **24 Cam
                                                    ▼
                       ┌──────────────────────────────────────────────────────────┐
                       │               Serving, Observability & BI                │
-                      │   Metabase (Port 3000): Scraper Health Matrix & Alerts   │
+                      │   Metabase (Port 3001): Scraper Health Matrix & Alerts   │
                       │   Power BI (Port 5432): Interactive CPI & Inflation BI   │
                       └──────────────────────────────────────────────────────────┘
 ```

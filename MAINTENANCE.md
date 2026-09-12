@@ -44,3 +44,41 @@ When running large incremental joins in `int_prices_cleaned.sql` on constrained 
 - **Primary Engine:** Uses `statsmodels.api.OLS` for log-linear regression when available.
 - **Zero-Downtime Analytical Fallback:** If `statsmodels` is not installed, the module automatically uses an analytical Ordinary Least Squares solver via `numpy.linalg.lstsq` (`(X^T X)^-1 X^T y`) with identical parameter naming, R² formulation, and baseline specification adjustments.
 - **Airflow Non-Blocking Behavior:** In `orchestration/dags/silver_dag.py`, unexpected errors raise `AirflowSkipException` to ensure the Silver data pipeline remains resilient and does not block downstream gold transformations.
+
+---
+
+## 5. Airflow Performance & Concurrency Tuning
+
+To prevent worker CPU saturation during 25-scraper fan-outs:
+- **Scraper Slug Decoupling (`scrapers/sources/slugs.py`):**
+  Airflow DAGs (`cpi_master_dag.py`, `scraper_dags.py`) must import `SCRAPER_SLUGS` from `scrapers.sources.slugs`, NOT `SCRAPER_REGISTRY`. This prevents the scheduler from executing 25 dynamic scraper imports, third-party libraries, and browser drivers on every 30-second DAG parsing loop. Latency is ~1s (down from 100s).
+- **Concurrency Guards:**
+  - `AIRFLOW__CORE__PARALLELISM=8`
+  - `AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG=6`
+  - `max_active_runs=1` on all scraper DAGs.
+- **Clearing Stuck or Queued Runs via CLI:**
+  ```bash
+  # Clear a stuck task instance
+  docker compose exec airflow-scheduler airflow tasks clear <dag_id> -t <task_id> -s <start_date> -e <end_date> -y
+  ```
+
+---
+
+## 6. Purging and Batch Classifying Unclassified Items
+
+If any canonical items ever enter `silver.canonical_items` with null or unclassified COICOP codes:
+1. **Automated Dual-Query Classifier:**
+   `pipeline/gemini_coicop_classifier.py` checks both `match_method = 'new_item'` AND existing unclassified/empty codes.
+2. **Batch Classification CLI:**
+   Run the batch hierarchical classifier utility:
+   ```bash
+   python scripts/run_hierarchical_classification.py --limit 1000
+   ```
+3. **Verification Query (Postgres):**
+   ```sql
+   SELECT COUNT(*) 
+   FROM silver.canonical_items 
+   WHERE coicop_code IS NULL 
+      OR coicop_code LIKE '%.unclassified';
+   ```
+   Must always return `0`.

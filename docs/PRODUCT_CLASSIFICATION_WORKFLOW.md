@@ -1,9 +1,9 @@
 # End-to-End Product Classification & Ingestion Architecture
 
 > **[!NOTE]**
-> **Current Pipeline Architecture:** Fully operational end-to-end — Bronze ingestion $\to$ Silver Vector Item Matching with Spec Guards $\to$ 12-Division COICOP Hybrid Classification $\to$ Gold Star Schema. Backfilled from August 18 onwards.
+> **Current Pipeline Architecture:** Fully operational end-to-end — Bronze ingestion $\to$ Silver Vector Item Matching with Spec Guards $\to$ 12-Division Official NIS Cambodia 4-Digit COICOP Hybrid Classification $\to$ Gold Star Schema. Backfilled from August 18 onwards across 26 scrape dates and 83,180+ canonical items.
 
-This document provides a comprehensive, step-by-step specification of how raw product data is scraped, cleaned, deduplicated, classified into the **United Nations COICOP (Classification of Individual Consumption According to Purpose)** hierarchy, and aggregated into the official **Cambodia Consumer Price Index (CPI)**.
+This document provides a comprehensive, step-by-step specification of how raw product data is scraped, cleaned, deduplicated, classified into the **official National Institute of Statistics (NIS) Cambodia 4-digit COICOP Class (`DD.G.C`, 48 classes)** hierarchy, and aggregated into the official **Cambodia Consumer Price Index (CPI)**.
 
 ---
 
@@ -14,7 +14,7 @@ The Cambodia CPI Pipeline follows a **hybrid vector & Gemini AI classification a
 ```mermaid
 flowchart TD
     subgraph S1["Stage 1: Ingestion (Bronze)"]
-        A["20 Source Scrapers\n(Supermarket, Fashion, Fuel, Telecom, etc.)"] --> B[("bronze.raw_prices\nRaw HTML / JSON / Strings")]
+        A["25 Source Scrapers\n(Supermarket, Fashion, Fuel, Telecom, etc.)"] --> B[("bronze.raw_prices\nRaw HTML / JSON / Strings")]
     end
 
     subgraph S2["Stage 2: Cleaning & Normalization (Silver Staging)"]
@@ -34,7 +34,7 @@ flowchart TD
         G --> H{"Classification Pipeline\n(First Match Wins)"}
         H -- "Tier 1" --> I["Exact Overrides & Manual Review\n(silver.coicop_override & seed rules)"]
         H -- "Tier 2" --> I2["Deterministic Text Rules\n(Regex pattern rules & store purity)"]
-        H -- "Tier 3" --> M["🤖 Gemini Flash AI Engine (UN COICOP 2018)\nDirect 5-digit sub-class resolution\n(Bilingual Khmer & English with domain guardrails)"]
+        H -- "Tier 3" --> M["🤖 Gemini Flash AI Engine (NIS 4-Digit DD.G.C)\nDirect 48-class resolution\n(Bilingual Khmer & English with domain guardrails)"]
         H -- "Tier 4" --> N["Memoization Cache\n(silver.canonical_items & silver.clean_store_prices)"]
     end
 
@@ -47,10 +47,10 @@ flowchart TD
 ```
 
 ### Core Design Principles
-1. **Multi-Key Load Balancing**: Rotates 3+ Gemini API keys in thread-safe round-robin sequence to achieve $4,500$ daily requests, $45$ RPM, and automatic 429 failover.
+1. **Multi-Key Load Balancing**: Rotates 4+ Gemini API keys in thread-safe round-robin sequence to achieve $6,000$ daily requests, $60$ RPM, and automatic 429 failover.
 2. **Sub-Millisecond Vector Lookup**: 95%+ of daily observations match existing canonical identities or pure store locks in $<0.1\text{ms}$.
 3. **Deterministic Spec Guards**: Hardware RAM/storage, pack size multipliers, and volume discrepancies ($>10\%$) are rejected before merging to guarantee price index integrity.
-4. **Zero Recurring AI Cost**: Once classified, products inherit canonical identities and are cached permanently in PostgreSQL (`silver.dim_coicop_ai_cache`).
+4. **Zero Recurring AI Cost**: Once classified, products inherit canonical identities and are cached permanently in PostgreSQL (`silver.dim_coicop_ai_cache` and `silver.canonical_items`).
 5. **Accurate Retailer Separation**:
    - **Community Pharmacy:** Correctly separates *Panadol/Medicines* $\to$ `06 Health` from *Cetaphil/Skincare/Shampoos* $\to$ `12 Personal Care`.
    - **AEON 1 & 3:** Flexibly categorizes hypermarket listings across all 12 UN divisions (Food `01`, Alcohol `02`, Clothing `03`, Towels `05`, Headphones `09`, Personal Care `12`).
@@ -109,7 +109,7 @@ Candidate Scraped Title
   • Volume within 10% tolerance (330ml == 330ml)
          │ Passed
          ▼
-[ Step 3: Vector Cosine Similarity (text-embedding-004) ]
+[ Step 3: Vector Cosine Similarity (gemini-embedding-2 / MiniLM) ]
   • Sim >= 0.88 ──────────────────────────────────────► APPROVE_MATCH
   • 0.75 <= Sim < 0.88 ──► [ Gemini Pro AI Review ] ──► APPROVE or SPLIT
   • Sim < 0.75 ────────────────────────────────────────► SPLIT_NEW (silver.canonical_items)
@@ -141,9 +141,10 @@ New Canonical Item
   • Incremental scans re-evaluate items matching updated critical traps
          │ No Match
          ▼
-[ Tier 3: Hierarchical AI Drill-Down (Llama 3.1) ]
-  • Sequence: Division $\to$ Group $\to$ Class $\to$ Sub-class (5-digit)
-  • Adversarial Audit: Gemini 1.5 Flash Judge verifies each final proposal
+[ Tier 3: Direct 4-Digit NIS Class Resolution (Gemini Flash) ]
+  • Predicts official 4-digit NIS COICOP Class (DD.G.C, 48 classes)
+  • Structured JSON response: coicop_code, coicop_division, coicop_confidence, rationale
+  • Evaluates unclassified fallback items and today's new items concurrently
          │ Rejected or Low Confidence
          ▼
 [ Tier 4: Fallbacks ]

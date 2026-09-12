@@ -59,7 +59,7 @@ flowchart TD
     end
 
     subgraph GoldStorage["3. Gold Persistence Facts (PostgreSQL 16)"]
-        G_ELEM[("gold.fct_elementary_indices<br>27,958 item-level micro-indices<br>Grain: (calculation_date, item_id)")]
+        G_ELEM[("gold.fct_elementary_indices<br>83,000+ item-level micro-indices<br>Grain: (calculation_date, item_id)")]
         G_CPI[("gold.fct_cpi_daily<br>12 Division Indices + Headline & Core<br>Grain: (calculation_date, coicop_division)")]
         G_MON[("gold.fct_cpi_monthly<br>Monthly 12-Div & Headline/Core Mart<br>Grain: (cpi_month, coicop_division)")]
 
@@ -68,7 +68,7 @@ flowchart TD
     end
 
     subgraph ServingLayer["4. Downstream Analytics & Executive Dashboards"]
-        M1["Metabase Dashboard (Port 3000)<br>• 01: Monthly & Daily CPI Dashboard<br>• 02: Pipeline Monitoring Dashboard"]
+        M1["Metabase Dashboard (Port 3001)<br>• 01: Monthly & Daily CPI Dashboard<br>• 02: Pipeline Monitoring Dashboard"]
         M2["Power BI DirectQuery<br>• Executive Inflation & Category Elasticity"]
         V_MON["gold.v_cpi_monthly_summary<br>gold.v_cpi_monthly_divisions<br>MoM % & YoY % Inflation Views"]
 

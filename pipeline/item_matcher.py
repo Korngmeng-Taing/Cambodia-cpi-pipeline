@@ -102,11 +102,30 @@ class ItemMatcher:
                 "SELECT item_id, canonical_name, barcode, size_norm, brand FROM silver.canonical_items"
             )
             rows = cur.fetchall()
-            self.barcode_cache.clear()
-            self.exact_name_cache.clear()
-            self.name_spec_cache.clear()
-            self.items_cache.clear()
-            self.sku_cache.clear()
+            if not hasattr(self, "barcode_cache"):
+                self.barcode_cache = {}
+            else:
+                self.barcode_cache.clear()
+
+            if not hasattr(self, "exact_name_cache"):
+                self.exact_name_cache = {}
+            else:
+                self.exact_name_cache.clear()
+
+            if not hasattr(self, "name_spec_cache"):
+                self.name_spec_cache = {}
+            else:
+                self.name_spec_cache.clear()
+
+            if not hasattr(self, "items_cache"):
+                self.items_cache = []
+            else:
+                self.items_cache.clear()
+
+            if not hasattr(self, "sku_cache"):
+                self.sku_cache = {}
+            else:
+                self.sku_cache.clear()
             for row in rows:
                 item_id = row[0]
                 name = row[1] if len(row) > 1 else None

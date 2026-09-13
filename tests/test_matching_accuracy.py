@@ -536,6 +536,7 @@ class TestBatchProcessingAccuracy:
         matcher.review_threshold = 0.85
         matcher.barcode_cache = {}
         matcher.exact_name_cache = {}
+        matcher.name_spec_cache = {}
         matcher.sku_cache = {}
         matcher.items_cache = []
         matcher._vector_matcher = None

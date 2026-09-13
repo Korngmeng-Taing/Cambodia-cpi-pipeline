@@ -52,6 +52,16 @@ def _run_cold_storage_offload(**context) -> dict:
     return result
 
 
+def _run_metabase_curation(**context) -> dict:
+    """Curates Metabase catalog by hiding new partition tables and backend tables."""
+    from pipeline.metabase_curator import curate_metabase_catalog
+
+    log.info("Starting scheduled Metabase catalog curation...")
+    result = curate_metabase_catalog()
+    log.info("Metabase curation completed with result: %s", result)
+    return result
+
+
 def _run_table_vacuum_analyze(**context) -> None:
     """Refreshes statistics on high-turnover tables to optimize PostgreSQL query plans."""
     from pipeline.config import get_db_connection
@@ -88,7 +98,7 @@ with DAG(
     schedule="0 1 * * 0",  # Every Sunday at 01:00 AM Phnom Penh time
     catchup=False,
     default_args=DEFAULT_ARGS,
-    tags=["cpi", "maintenance", "partitioning", "postgres", "vacuum"],
+    tags=["cpi", "maintenance", "partitioning", "postgres", "vacuum", "metabase"],
 ) as dag:
 
     start_task = EmptyOperator(task_id="start_maintenance")
@@ -97,6 +107,12 @@ with DAG(
         task_id="maintain_monthly_partitions",
         python_callable=_run_partition_maintenance,
         execution_timeout=timedelta(minutes=10),
+    )
+
+    task_curate_metabase = PythonOperator(
+        task_id="curate_metabase_catalog",
+        python_callable=_run_metabase_curation,
+        execution_timeout=timedelta(minutes=5),
     )
 
     task_offload_cold_storage = PythonOperator(
@@ -116,6 +132,7 @@ with DAG(
     (
         start_task
         >> task_maintain_partitions
+        >> task_curate_metabase
         >> task_offload_cold_storage
         >> task_analyze_tables
         >> end_task

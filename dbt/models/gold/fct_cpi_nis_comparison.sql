@@ -45,7 +45,7 @@ nis_benchmark as (
     from {{ source('gold', 'dim_nis_official_cpi') }}
 ),
 nis_anchor as (
-    select headline_cpi as anchor_nis_headline
+    select nis_headline_cpi as anchor_nis_headline
     from nis_benchmark
     where cpi_month = '2026-08-01'
     limit 1

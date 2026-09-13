@@ -63,6 +63,18 @@ seeds:
         core_cpi: numeric(10, 4)
         mom_inflation_pct: numeric(8, 4)
         yoy_inflation_pct: numeric(8, 4)
+        cpi_division_01: numeric(10, 4)
+        cpi_division_02: numeric(10, 4)
+        cpi_division_03: numeric(10, 4)
+        cpi_division_04: numeric(10, 4)
+        cpi_division_05: numeric(10, 4)
+        cpi_division_06: numeric(10, 4)
+        cpi_division_07: numeric(10, 4)
+        cpi_division_08: numeric(10, 4)
+        cpi_division_09: numeric(10, 4)
+        cpi_division_10: numeric(10, 4)
+        cpi_division_11: numeric(10, 4)
+        cpi_division_12: numeric(10, 4)
         release_date: date
         source_notes: text
     coicop_store_defaults:

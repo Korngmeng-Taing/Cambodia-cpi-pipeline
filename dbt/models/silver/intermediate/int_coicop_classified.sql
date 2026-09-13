@@ -50,12 +50,26 @@ with items as materialized (
           and t.store_slug = p.store_slug
           and t.coicop_method not in ('unclassified', 'gemini_ai_low_conf')
           -- If an existing record was classified by AI or lower priority methods,
-          -- allow it to be re-evaluated so new deterministic traps or overrides take effect
+          -- allow it to be re-evaluated so new deterministic traps or overrides take effect.
+          -- Also, if previously marked critical_trap but no longer matches, allow re-evaluation.
           and (
-            t.coicop_method in ('override', 'critical_trap', 'store_purity')
-            or not exists (
-                select 1 from {{ ref('coicop_critical_traps') }} ct
-                where lower(ci.canonical_name) ~* ct.pattern
+            t.coicop_method in ('override', 'store_purity')
+            or (
+                t.coicop_method = 'critical_trap'
+                and exists (
+                    select 1 from {{ ref('coicop_critical_traps') }} ct
+                    where lower(ci.canonical_name) ~* ct.pattern
+                      and (ct.negative_pattern is null or lower(ci.canonical_name) !~* ct.negative_pattern)
+                      and t.coicop_division = lpad(ct.coicop_division::text, 2, '0')
+                )
+            )
+            or (
+                t.coicop_method not in ('critical_trap')
+                and not exists (
+                    select 1 from {{ ref('coicop_critical_traps') }} ct
+                    where lower(ci.canonical_name) ~* ct.pattern
+                      and (ct.negative_pattern is null or lower(ci.canonical_name) !~* ct.negative_pattern)
+                )
             )
           )
     )

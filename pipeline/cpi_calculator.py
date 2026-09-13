@@ -637,8 +637,10 @@ class CPICalculationEngine:
         valid = valid[(valid["current_price_khr"] > 0) & (valid["base_price_khr"] > 0)]
         valid["price_ratio"] = valid["current_price_khr"] / valid["base_price_khr"]
         
-        # ILO Outlier Filter: Guard against extreme price scaling or raw scraper glitches
-        valid = valid[(valid["price_ratio"] >= 0.33) & (valid["price_ratio"] <= 3.00)].copy()
+        # Dual-tier Outlier Filter:
+        # Tier 1: Global ILO bounds [0.20, 4.00]
+        # Tier 2: Median Absolute Deviation (MAD) on log price ratios per division (ILO CPI Manual §10.32)
+        valid = self.filter_statistical_outliers_mad(valid, group_col="coicop_division", z_threshold=3.5)
 
         # Store price ratio as a percentage (per-item Jevons index)
         valid["price_ratio_pct"] = valid["price_ratio"] * 100.0
@@ -646,6 +648,53 @@ class CPICalculationEngine:
         valid["calculation_date"] = calc_date
 
         return valid
+
+    @staticmethod
+    def filter_statistical_outliers_mad(
+        df: pd.DataFrame,
+        group_col: str = "coicop_division",
+        z_threshold: float = 3.5,
+    ) -> pd.DataFrame:
+        """
+        Filters price ratio outliers using Median Absolute Deviation (MAD) on log price ratios
+        (ILO CPI Manual 2020 §10.32; Diewert 1995).
+
+        For each group:
+            log_r = ln(price_ratio)
+            med = median(log_r)
+            mad = median(|log_r - med|)
+            robust_sigma = 1.4826 * mad
+            outlier if |log_r - med| > z_threshold * robust_sigma
+        When group size is small (N < 5) or mad == 0, falls back to conservative
+        bounds: 0.33 <= price_ratio <= 3.00.
+        """
+        if df.empty or "price_ratio" not in df.columns:
+            return df
+
+        clean_indices = []
+        for _, group in df.groupby(group_col, observed=True):
+            ratios = group["price_ratio"].to_numpy()
+            n = len(ratios)
+
+            # Global guardrails (catches 10x-100x decimal glitches)
+            base_mask = (ratios >= 0.20) & (ratios <= 4.00)
+
+            if n >= 5:
+                log_r = np.log(ratios)
+                med = np.median(log_r)
+                mad = np.median(np.abs(log_r - med))
+                if mad > 1e-6:
+                    robust_sigma = 1.4826 * mad
+                    mad_mask = np.abs(log_r - med) <= (z_threshold * robust_sigma)
+                    keep_mask = base_mask & mad_mask
+                else:
+                    keep_mask = base_mask & (ratios >= 0.33) & (ratios <= 3.00)
+            else:
+                keep_mask = base_mask & (ratios >= 0.33) & (ratios <= 3.00)
+
+            clean_indices.extend(group.index[keep_mask])
+
+        return df.loc[clean_indices].copy()
 
     def aggregate_division_and_headline(
         self, 

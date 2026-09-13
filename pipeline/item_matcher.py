@@ -9,9 +9,10 @@ from rapidfuzz import fuzz
 import numpy as np
 
 from pipeline.config import get_database_url
+from pipeline.gemini_coicop_classifier import GeminiCOICOPClassifier
+from pipeline.retry import retry_db_transaction
 from pipeline.text_clean import clean_name_for_matching, is_size_compatible
 from pipeline.vector_item_matcher import VectorItemMatcher, is_spec_compatible
-from pipeline.gemini_coicop_classifier import GeminiCOICOPClassifier
 
 log = logging.getLogger(__name__)
 
@@ -244,6 +245,7 @@ class ItemMatcher:
             return best_match_id, best_score, best_name
         return None
 
+    @retry_db_transaction(max_retries=4, initial_delay=0.15, max_delay=3.0)
     def create_canonical_item(
         self,
         name: str,
@@ -413,6 +415,7 @@ class ItemMatcher:
         stats["new_items_created"] += 1
         return stats
 
+    @retry_db_transaction(max_retries=4, initial_delay=0.15, max_delay=3.0)
     def _log_match(
         self,
         raw_price_id: int,
@@ -431,6 +434,7 @@ class ItemMatcher:
                 (raw_price_id, item_id, method, confidence),
             )
 
+    @retry_db_transaction(max_retries=4, initial_delay=0.15, max_delay=3.0)
     def _send_to_review(
         self,
         raw_price_id: int,
@@ -610,6 +614,24 @@ class ItemMatcher:
             match_logs.append((raw_price_id, str(new_id), "new_item", 1.0))
             totals["new_items_created"] += 1
 
+        self._flush_batch_writes(
+            conn=conn,
+            new_items=new_items,
+            sku_registrations=sku_registrations,
+            match_logs=match_logs,
+            reviews=reviews,
+        )
+        return totals
+
+    @retry_db_transaction(max_retries=4, initial_delay=0.2, max_delay=3.0)
+    def _flush_batch_writes(
+        self,
+        conn: Any,
+        new_items: list[tuple],
+        sku_registrations: list[tuple],
+        match_logs: list[tuple],
+        reviews: list[tuple],
+    ) -> None:
         with conn.cursor() as cur:
             if new_items:
                 if self._has_embedding_column:
@@ -669,5 +691,3 @@ class ItemMatcher:
                     page_size=1000,
                 )
             conn.commit()
-
-        return totals

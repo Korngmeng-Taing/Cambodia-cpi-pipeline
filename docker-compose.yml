@@ -126,7 +126,8 @@ services:
       -c "
         airflow db migrate &&
         airflow users create --username '${AIRFLOW_ADMIN_USER:?Set AIRFLOW_ADMIN_USER in .env}' --password '${AIRFLOW_ADMIN_PASSWORD:?Set a strong AIRFLOW_ADMIN_PASSWORD in .env}' --firstname Admin --lastname User --role Admin --email admin@cpi.local || true &&
-        dbt seed --project-dir /opt/airflow/dbt --profiles-dir /opt/airflow/dbt || true
+        dbt seed --project-dir /opt/airflow/dbt --profiles-dir /opt/airflow/dbt || true &&
+        dbt compile --project-dir /opt/airflow/dbt --profiles-dir /opt/airflow/dbt || true
       "
     restart: "no"
 
@@ -178,6 +179,31 @@ services:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ── Airflow Triggerer (Async Deferrable Operators) ───────────────────────────
+  airflow-triggerer:
+    <<: *airflow-common
+    build:
+      context: ./orchestration
+      dockerfile: Dockerfile
+    container_name: airflow-triggerer
+    restart: unless-stopped
+    command: triggerer
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type TriggererJob --hostname \"$${HOSTNAME}\" || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5

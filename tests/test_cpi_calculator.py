@@ -372,6 +372,22 @@ def test_unclassified_subclass_resolution(cpi_engine):
     assert cpi_engine._get_subclass_code(None, "01") == "01.unclassified"
 
 
+def test_mad_statistical_outlier_filtering(cpi_engine):
+    """Tests that MAD robust outlier filtering flags extreme price spikes/drops while preserving normal movements."""
+    # Normal group of 8 items around ratio 1.0 (0.95 to 1.05) + 1 extreme 10x decimal glitch
+    df = pd.DataFrame([
+        {"item_id": f"item-{i}", "coicop_division": "01", "price_ratio": r}
+        for i, r in enumerate([0.98, 1.00, 1.02, 1.01, 0.99, 1.03, 0.97, 10.0])  # item-7 is a 10x outlier
+    ])
+
+    filtered = cpi_engine.filter_statistical_outliers_mad(df, group_col="coicop_division", z_threshold=3.5)
+    remaining_ids = set(filtered["item_id"])
+
+    assert "item-7" not in remaining_ids, "10x price ratio outlier must be filtered by MAD"
+    assert len(remaining_ids) == 7, "All 7 valid items must be retained"
+
+
+
 
 
 

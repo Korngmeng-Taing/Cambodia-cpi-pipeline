@@ -45,6 +45,7 @@ WAIT_TIMEOUT_SECONDS = 3600
 SILVER_WAIT_TIMEOUT_SECONDS = 7200  # 2 hours for Silver layer
 MIN_SUCCESSFUL_SCRAPERS = int(os.getenv("MIN_SUCCESSFUL_SCRAPERS", "3"))
 WARNING_SCRAPERS_THRESHOLD = int(os.getenv("WARNING_SCRAPERS_THRESHOLD", "10"))
+DEFERRABLE_TRIGGERS = os.getenv("AIRFLOW_TRIGGER_DEFERRABLE", "true").lower() in ("true", "1", "yes")
 
 
 def _send_alert(subject: str, message: str, level: str = "warning") -> None:
@@ -180,7 +181,7 @@ with DAG(
             trigger_dag_id=f"scrape_{store_slug}_dag",
             conf={"ds": target_date_expr},
             wait_for_completion=True,
-            deferrable=False,
+            deferrable=DEFERRABLE_TRIGGERS,
             poke_interval=WAIT_POKE_INTERVAL,
             execution_timeout=timedelta(seconds=WAIT_TIMEOUT_SECONDS),
             reset_dag_run=True,
@@ -201,7 +202,7 @@ with DAG(
         trigger_dag_id="silver_dag",
         conf={"ds": target_date_expr},
         wait_for_completion=True,
-        deferrable=False,
+        deferrable=DEFERRABLE_TRIGGERS,
         poke_interval=WAIT_POKE_INTERVAL,
         execution_timeout=timedelta(seconds=SILVER_WAIT_TIMEOUT_SECONDS),
         reset_dag_run=True,
@@ -214,7 +215,7 @@ with DAG(
         trigger_dag_id="gold_cpi_dag",
         conf={"ds": target_date_expr},
         wait_for_completion=True,
-        deferrable=False,
+        deferrable=DEFERRABLE_TRIGGERS,
         poke_interval=WAIT_POKE_INTERVAL,
         execution_timeout=timedelta(seconds=WAIT_TIMEOUT_SECONDS),
         reset_dag_run=True,
@@ -227,7 +228,7 @@ with DAG(
         trigger_dag_id="gold_dag",
         conf={"ds": target_date_expr},
         wait_for_completion=True,
-        deferrable=False,
+        deferrable=DEFERRABLE_TRIGGERS,
         poke_interval=WAIT_POKE_INTERVAL,
         execution_timeout=timedelta(seconds=WAIT_TIMEOUT_SECONDS),
         reset_dag_run=True,

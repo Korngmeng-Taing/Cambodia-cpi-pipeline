@@ -401,6 +401,59 @@ def provision_all():
             """,
             "viz": {"table.pivot_column": None},
             "grid": (12, 30, 12, 8)
+        },
+        {
+            "name": "ML Nowcaster Rolling 3-Month Error Trend (RMSE & MAE)",
+            "desc": "Continuous tracking of nowcaster forecast error against official statistical releases across rolling quarters.",
+            "display": "line",
+            "sql": """
+                SELECT 
+                    target_month AS "Target Month",
+                    rolling_rmse_3m AS "Rolling RMSE (3M)",
+                    rolling_mae_3m AS "Rolling MAE (3M)"
+                FROM gold.nowcast_performance_metrics
+                WHERE rolling_rmse_3m IS NOT NULL
+                ORDER BY target_month ASC;
+            """,
+            "viz": {
+                "graph.dimensions": ["Target Month"],
+                "graph.metrics": ["Rolling RMSE (3M)", "Rolling MAE (3M)"]
+            },
+            "grid": (0, 38, 12, 7)
+        },
+        {
+            "name": "ML Nowcaster Directional Accuracy Rate (%)",
+            "desc": "Percentage of months where the nowcaster accurately predicted the sign/direction of inflation change.",
+            "display": "scalar",
+            "sql": """
+                SELECT 
+                    CONCAT(ROUND((COUNT(CASE WHEN directional_hit THEN 1 END)::numeric / NULLIF(COUNT(*), 0)) * 100.0, 1), '%') AS "Directional Hit Rate"
+                FROM gold.nowcast_performance_metrics
+                WHERE directional_hit IS NOT NULL;
+            """,
+            "viz": {},
+            "grid": (12, 38, 4, 7)
+        },
+        {
+            "name": "ML Nowcaster Point-in-Time Error Audit Table",
+            "desc": "Detailed point-in-time forecast accuracy audit evaluating nowcasts against official monthly inflation releases.",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    evaluation_date AS "Eval Date",
+                    target_month AS "Month",
+                    days_observed AS "Days Obs",
+                    nowcast_mom_pct AS "Nowcast MoM (%)",
+                    actual_mom_pct AS "Official MoM (%)",
+                    mom_error AS "MoM Diff (pp)",
+                    cpi_absolute_error AS "Abs Error",
+                    cpi_pct_error AS "Error (%)",
+                    directional_hit AS "Direction Hit?"
+                FROM gold.nowcast_performance_metrics
+                ORDER BY evaluation_date DESC, days_observed DESC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (16, 38, 8, 7)
         }
     ]
 

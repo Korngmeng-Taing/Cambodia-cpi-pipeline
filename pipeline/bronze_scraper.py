@@ -23,6 +23,8 @@ from typing import Any
 
 from psycopg2.extensions import connection
 
+from pipeline.retry import retry_db_transaction
+
 logger = logging.getLogger(__name__)
 
 
@@ -94,6 +96,7 @@ class BronzeScraper:
             )
             return {(row[0], row[1], float(row[2])) for row in cur.fetchall()}
 
+    @retry_db_transaction(max_retries=4, initial_delay=0.15, max_delay=3.0)
     def write_canonical_batch(
         self,
         records: list[dict[str, Any]],

@@ -25,6 +25,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from pipeline.config import get_db_connection
+from pipeline.retry import retry_db_transaction
 
 log = logging.getLogger("circuit_breaker")
 
@@ -66,6 +67,7 @@ class IngestionCircuitBreaker:
             return self._conn
         return get_db_connection()
 
+    @retry_db_transaction(max_retries=4, initial_delay=0.1, max_delay=2.0)
     def ensure_ops_tables(self) -> None:
         """Ensures ops schema and circuit_breaker_events table exist."""
         conn = self._get_connection()
@@ -222,6 +224,7 @@ class IngestionCircuitBreaker:
             message=f"Scrape passed quality checks: {incoming_count} items, median {incoming_median_price:,.0f} KHR.",
         )
 
+    @retry_db_transaction(max_retries=4, initial_delay=0.1, max_delay=2.0)
     def record_event(self, eval_result: CircuitBreakerEvaluation, action_taken: str = "quarantine") -> None:
         """Persists a circuit breaker evaluation incident into ops.circuit_breaker_events."""
         self.ensure_ops_tables()

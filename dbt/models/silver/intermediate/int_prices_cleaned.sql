@@ -200,6 +200,10 @@ select
         when p.price_khr > 100000000 then true -- Upper bound for consumer retail item (>100M KHR ~ $25,000 USD)
         when p.original_price_curr is not null and p.price_original_curr > 0 
              and p.price_original_curr > p.original_price_curr * 10 then true
+        when p.size_unit is not null and p.size_value > 0 and (
+             -- Unit price out of reasonable consumer bounds (>50M KHR/kg or L or <10 KHR)
+             (p.size_unit in ('kg', 'kilo', 'l', 'ltr', 'liter', 'litre') and (p.price_khr / (p.size_value * coalesce(nullif(p.pack_qty, 0), 1)) > 50000000 or p.price_khr / (p.size_value * coalesce(nullif(p.pack_qty, 0), 1)) < 10))
+        ) then true
         when p.store_slug in ('khmer24', 'realestate') and p.category_native ilike '%Land For Rent%' then true
         else false
     end as is_outlier,

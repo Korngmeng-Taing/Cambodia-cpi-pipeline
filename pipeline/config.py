@@ -121,11 +121,48 @@ def alternate_host_url(url: str) -> str:
 
 def get_db_connection():
     """
-    Returns a PostgreSQL psycopg2 connection to the CPI database.
+    Returns a pooled PostgreSQL connection to the CPI database with pre-ping validation.
+    When conn.close() is called, the connection is automatically returned to the pool.
     Automatically handles container (postgres:5432) and host (localhost:5432) fallbacks.
     """
+    use_pool = os.getenv("CPI_DB_POOL_ENABLED", "true").lower() in ("true", "1", "yes")
     conn_str = get_database_url()
+
+    if use_pool:
+        from pipeline.db_pool import get_pooled_connection
+        return get_pooled_connection(conn_str)
+
     try:
         return psycopg2.connect(conn_str, connect_timeout=2)
     except psycopg2.OperationalError:
         return psycopg2.connect(alternate_host_url(conn_str))
+
+
+from contextlib import contextmanager
+from typing import Iterator
+from pipeline.retry import retry_db_transaction
+
+
+@contextmanager
+def db_connection(dsn: str | None = None) -> Iterator[Any]:
+    """
+    Context manager providing a managed connection from the pool.
+    Commits on normal exit, rolls back on error, and returns connection to pool.
+    """
+    from pipeline.db_pool import db_connection as _pool_db_conn
+    target_dsn = dsn or get_database_url()
+    with _pool_db_conn(target_dsn) as conn:
+        yield conn
+
+
+@contextmanager
+def db_cursor(commit: bool = True, dsn: str | None = None) -> Iterator[Any]:
+    """
+    Context manager providing a database cursor directly from a pooled connection.
+    Commits on normal exit if commit=True.
+    """
+    from pipeline.db_pool import db_cursor as _pool_db_cursor
+    target_dsn = dsn or get_database_url()
+    with _pool_db_cursor(target_dsn, commit=commit) as cur:
+        yield cur
+

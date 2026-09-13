@@ -23,6 +23,7 @@ from datetime import datetime
 from pipeline.bronze_scraper import BronzeScraper
 from pipeline.config import get_db_connection
 from pipeline.canonical import normalize_records, validate_records
+from pipeline.retry import retry_db_transaction
 from scrapers.sources import SCRAPER_REGISTRY
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ logger = logging.getLogger(__name__)
 _get_db_connection = get_db_connection
 
 
+@retry_db_transaction(max_retries=4, initial_delay=0.15, max_delay=3.0)
 def _ingest_fx(
     raw_records: list[dict[str, Any]],
     source_slug: str,

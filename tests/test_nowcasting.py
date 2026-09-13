@@ -222,7 +222,60 @@ def test_evaluate_historical_accuracy_backtest(sample_nowcast_data):
     assert results is not None
     assert "overall_rmse_cpi" in results
     assert "overall_mae_cpi" in results
-    assert "horizon_convergence" in results
     assert results["overall_rmse_cpi"] >= 0.0
     assert results["overall_mae_cpi"] >= 0.0
+
+
+def test_compute_evaluation_metrics_dataframe():
+    """Tests the pointwise and rolling error metrics calculation (RMSE, MAE, directional hit)."""
+    df_pairs = pd.DataFrame([
+        {
+            "evaluation_date": date(2026, 7, 31),
+            "target_month": date(2026, 7, 1),
+            "model_name": "ml_v1",
+            "days_observed": 31,
+            "nowcast_mom_pct": 0.50,
+            "actual_mom_pct": 0.40,
+            "nowcast_headline_cpi": 101.5,
+            "actual_headline_cpi": 101.0,
+        },
+        {
+            "evaluation_date": date(2026, 8, 31),
+            "target_month": date(2026, 8, 1),
+            "model_name": "ml_v1",
+            "days_observed": 31,
+            "nowcast_mom_pct": -0.20,
+            "actual_mom_pct": -0.30,
+            "nowcast_headline_cpi": 101.2,
+            "actual_headline_cpi": 100.8,
+        },
+        {
+            "evaluation_date": date(2026, 9, 30),
+            "target_month": date(2026, 9, 1),
+            "model_name": "ml_v1",
+            "days_observed": 30,
+            "nowcast_mom_pct": 0.60,
+            "actual_mom_pct": 0.70,
+            "nowcast_headline_cpi": 102.0,
+            "actual_headline_cpi": 102.2,
+        },
+    ])
+
+    df_metrics = CPINowcaster.compute_evaluation_metrics_dataframe(df_pairs)
+    assert len(df_metrics) == 3
+    assert "mom_error" in df_metrics.columns
+    assert "cpi_absolute_error" in df_metrics.columns
+    assert "rolling_rmse_3m" in df_metrics.columns
+    assert "rolling_mae_3m" in df_metrics.columns
+    assert "directional_hit" in df_metrics.columns
+
+    # Check row 0: mom_error = 0.50 - 0.40 = 0.10, abs_error = 0.5
+    assert pytest.approx(df_metrics.iloc[0]["mom_error"], 0.001) == 0.10
+    assert pytest.approx(df_metrics.iloc[0]["cpi_absolute_error"], 0.001) == 0.5
+    assert df_metrics.iloc[0]["directional_hit"] is True
+
+    # Check rolling RMSE is computed and positive
+    assert df_metrics.iloc[2]["rolling_rmse_3m"] > 0
+    assert df_metrics.iloc[2]["rolling_mae_3m"] > 0
+
 

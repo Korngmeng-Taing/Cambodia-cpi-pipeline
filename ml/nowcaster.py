@@ -442,6 +442,179 @@ class CPINowcaster:
         finally:
             conn.close()
 
+    @staticmethod
+    def compute_evaluation_metrics_dataframe(df_pairs: pd.DataFrame) -> pd.DataFrame:
+        """
+        Computes pointwise and 3-month rolling RMSE, MAE, percentage error,
+        and directional hit metrics for a paired DataFrame of predictions vs ground truth actuals.
+        """
+        if df_pairs.empty:
+            return pd.DataFrame()
+
+        df = df_pairs.copy()
+        for col in ["nowcast_headline_cpi", "actual_headline_cpi", "nowcast_mom_pct", "actual_mom_pct"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        df["mom_error"] = (df["nowcast_mom_pct"] - df["actual_mom_pct"]).round(4)
+        df["cpi_absolute_error"] = (df["nowcast_headline_cpi"] - df["actual_headline_cpi"]).abs().round(4)
+        df["cpi_pct_error"] = (
+            (df["cpi_absolute_error"] / df["actual_headline_cpi"].replace(0, np.nan)) * 100.0
+        ).round(3)
+        df["directional_hit"] = np.where(
+            df["nowcast_mom_pct"].notna() & df["actual_mom_pct"].notna(),
+            (df["nowcast_mom_pct"] * df["actual_mom_pct"] >= 0) | (df["nowcast_mom_pct"].abs() < 0.05),
+            None,
+        )
+
+        # Compute 3-month rolling RMSE and MAE on CPI
+        sq_err = (df["nowcast_headline_cpi"] - df["actual_headline_cpi"]) ** 2
+        df["rolling_rmse_3m"] = (
+            sq_err.rolling(window=3, min_periods=1)
+            .mean()
+            .apply(np.sqrt)
+            .round(4)
+        )
+        df["rolling_mae_3m"] = (
+            df["cpi_absolute_error"]
+            .rolling(window=3, min_periods=1)
+            .mean()
+            .round(4)
+        )
+        return df
+
+    def persist_performance_metrics(self, target_date: date | None = None) -> list[dict[str, Any]]:
+        """
+        Evaluates historical nowcasts against official NIS and monthly CPI actuals,
+        computing RMSE, MAE, directional accuracy, and tracking error metrics, then persists
+        the results into gold.nowcast_performance_metrics.
+        """
+        if target_date is None:
+            target_date = date.today()
+
+        conn = get_db_connection()
+        records: list[dict[str, Any]] = []
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS gold.nowcast_performance_metrics (
+                        evaluation_date DATE NOT NULL,
+                        target_month DATE NOT NULL,
+                        model_name VARCHAR(50) NOT NULL,
+                        days_observed INTEGER NOT NULL,
+                        nowcast_mom_pct NUMERIC(8, 4),
+                        actual_mom_pct NUMERIC(8, 4),
+                        mom_error NUMERIC(8, 4),
+                        nowcast_headline_cpi NUMERIC(10, 4),
+                        actual_headline_cpi NUMERIC(10, 4),
+                        cpi_absolute_error NUMERIC(10, 4),
+                        cpi_pct_error NUMERIC(6, 3),
+                        directional_hit BOOLEAN,
+                        rolling_rmse_3m NUMERIC(8, 4),
+                        rolling_mae_3m NUMERIC(8, 4),
+                        updated_at TIMESTAMPTZ DEFAULT NOW(),
+                        PRIMARY KEY (evaluation_date, target_month, model_name)
+                    );
+                    """
+                )
+                cur.execute(
+                    """
+                    WITH actuals AS (
+                        SELECT 
+                            cpi_month,
+                            headline_cpi AS actual_headline_cpi,
+                            mom_inflation_pct AS actual_mom_pct
+                        FROM gold.dim_nis_official_cpi
+                        UNION ALL
+                        SELECT
+                            cpi_month,
+                            monthly_headline_cpi AS actual_headline_cpi,
+                            COALESCE(headline_mom_inflation_pct, mom_inflation_pct) AS actual_mom_pct
+                        FROM gold.fct_cpi_monthly m
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM gold.dim_nis_official_cpi n WHERE n.cpi_month = m.cpi_month
+                        )
+                    )
+                    SELECT 
+                        n.nowcast_date AS evaluation_date,
+                        n.target_month,
+                        n.model_name,
+                        n.days_observed,
+                        n.projected_mom_pct AS nowcast_mom_pct,
+                        a.actual_mom_pct,
+                        n.nowcast_headline_cpi,
+                        a.actual_headline_cpi
+                    FROM gold.fct_cpi_nowcast n
+                    JOIN actuals a ON a.cpi_month = n.target_month
+                    WHERE n.nowcast_date <= %s
+                    ORDER BY n.nowcast_date ASC;
+                    """,
+                    (target_date,),
+                )
+                cols = [desc[0] for desc in cur.description]
+                rows = cur.fetchall()
+                if not rows:
+                    return records
+
+                df_pairs = pd.DataFrame(rows, columns=cols)
+                df_metrics = self.compute_evaluation_metrics_dataframe(df_pairs)
+
+                for _, row in df_metrics.iterrows():
+                    rec = {
+                        "evaluation_date": row["evaluation_date"],
+                        "target_month": row["target_month"],
+                        "model_name": row["model_name"],
+                        "days_observed": int(row["days_observed"]),
+                        "nowcast_mom_pct": float(row["nowcast_mom_pct"]) if pd.notna(row["nowcast_mom_pct"]) else None,
+                        "actual_mom_pct": float(row["actual_mom_pct"]) if pd.notna(row["actual_mom_pct"]) else None,
+                        "mom_error": float(row["mom_error"]) if pd.notna(row["mom_error"]) else None,
+                        "nowcast_headline_cpi": float(row["nowcast_headline_cpi"]) if pd.notna(row["nowcast_headline_cpi"]) else None,
+                        "actual_headline_cpi": float(row["actual_headline_cpi"]) if pd.notna(row["actual_headline_cpi"]) else None,
+                        "cpi_absolute_error": float(row["cpi_absolute_error"]) if pd.notna(row["cpi_absolute_error"]) else None,
+                        "cpi_pct_error": float(row["cpi_pct_error"]) if pd.notna(row["cpi_pct_error"]) else None,
+                        "directional_hit": bool(row["directional_hit"]) if pd.notna(row["directional_hit"]) else None,
+                        "rolling_rmse_3m": float(row["rolling_rmse_3m"]) if pd.notna(row["rolling_rmse_3m"]) else None,
+                        "rolling_mae_3m": float(row["rolling_mae_3m"]) if pd.notna(row["rolling_mae_3m"]) else None,
+                    }
+                    records.append(rec)
+                    cur.execute(
+                        """
+                        INSERT INTO gold.nowcast_performance_metrics (
+                            evaluation_date, target_month, model_name, days_observed,
+                            nowcast_mom_pct, actual_mom_pct, mom_error,
+                            nowcast_headline_cpi, actual_headline_cpi,
+                            cpi_absolute_error, cpi_pct_error, directional_hit,
+                            rolling_rmse_3m, rolling_mae_3m
+                        ) VALUES (
+                            %(evaluation_date)s, %(target_month)s, %(model_name)s, %(days_observed)s,
+                            %(nowcast_mom_pct)s, %(actual_mom_pct)s, %(mom_error)s,
+                            %(nowcast_headline_cpi)s, %(actual_headline_cpi)s,
+                            %(cpi_absolute_error)s, %(cpi_pct_error)s, %(directional_hit)s,
+                            %(rolling_rmse_3m)s, %(rolling_mae_3m)s
+                        )
+                        ON CONFLICT (evaluation_date, target_month, model_name) DO UPDATE
+                        SET days_observed = EXCLUDED.days_observed,
+                            nowcast_mom_pct = EXCLUDED.nowcast_mom_pct,
+                            actual_mom_pct = EXCLUDED.actual_mom_pct,
+                            mom_error = EXCLUDED.mom_error,
+                            nowcast_headline_cpi = EXCLUDED.nowcast_headline_cpi,
+                            actual_headline_cpi = EXCLUDED.actual_headline_cpi,
+                            cpi_absolute_error = EXCLUDED.cpi_absolute_error,
+                            cpi_pct_error = EXCLUDED.cpi_pct_error,
+                            directional_hit = EXCLUDED.directional_hit,
+                            rolling_rmse_3m = EXCLUDED.rolling_rmse_3m,
+                            rolling_mae_3m = EXCLUDED.rolling_mae_3m,
+                            updated_at = NOW();
+                        """,
+                        rec,
+                    )
+                conn.commit()
+                log.info("Persisted %d nowcast performance records into gold.nowcast_performance_metrics.", len(records))
+        finally:
+            conn.close()
+        return records
+
     def run_daily_nowcast(self, target_date: date | None = None) -> dict[str, Any]:
         """Runs the live daily nowcasting pipeline."""
         if target_date is None:
@@ -452,6 +625,10 @@ class CPINowcaster:
             df_daily, df_fx, df_monthly, df_nis = self.fetch_training_data(target_date)
             res = self.nowcast_for_date(target_date, df_daily, df_fx, df_monthly, df_nis)
             self.save_nowcast(res)
+            try:
+                self.persist_performance_metrics(target_date)
+            except Exception as e_perf:
+                log.warning("Could not update nowcast performance tracking metrics: %s", e_perf)
             return res
         except Exception as e:
             log.warning("Database unavailable for live nowcasting. Generating synthetic dry-run: %s", e)

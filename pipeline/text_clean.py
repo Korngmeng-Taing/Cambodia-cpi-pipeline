@@ -561,36 +561,56 @@ def full_normalize(raw: str | None) -> str:
 _SIZE_FACTORS = {
     "ml": 0.001,
     "l": 1.0,
+    "ltr": 1.0,
     "g": 0.001,
+    "gm": 0.001,
     "kg": 1.0,
+    "mm": 0.001,
+    "cm": 0.01,
+    "m": 1.0,
 }
 
 _UNIT_DIMENSION = {
     "ml": "volume",
     "l": "volume",
+    "ltr": "volume",
     "g": "mass",
+    "gm": "mass",
     "kg": "mass",
+    "mm": "length",
+    "cm": "length",
+    "m": "length",
 }
+
+_APPAREL_SIZES = {"XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL", "2XL", "3XL", "4XL"}
 
 def is_size_compatible(
     size1: str | None, size2: str | None, tolerance: float = 0.10
 ) -> bool:
-    """Check if two package sizes are compatible within a relative tolerance.
+    """Check if two package sizes, lengths, or apparel sizes are compatible within a relative tolerance.
 
-    Cross-normalizes g↔kg and ml↔L so "100g" matches "0.1kg" and "330ml"
-    matches "0.33L". Returns True if either size is blank/None (permissive).
+    Cross-normalizes g↔kg, ml↔L, and mm↔cm↔m.
+    Strictly checks apparel sizes (e.g. 'M' != 'L').
+    Returns True if either size is blank/None (permissive).
     """
     if not size1 or not size2:
         return True
 
-    s1 = size1.strip().lower()
-    s2 = size2.strip().lower()
+    s1 = size1.strip().upper()
+    s2 = size2.strip().upper()
 
     if s1 == s2:
         return True
 
-    m1 = re.match(r"^([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)$", s1)
-    m2 = re.match(r"^([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)$", s2)
+    # Apparel size check: if either size is an apparel size, exact match is required!
+    if s1 in _APPAREL_SIZES or s2 in _APPAREL_SIZES:
+        return s1 == s2
+
+    s1_low = s1.lower()
+    s2_low = s2.lower()
+
+    m1 = re.match(r"^([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)$", s1_low)
+    m2 = re.match(r"^([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)$", s2_low)
 
     if m1 and m2:
         v1, u1 = float(m1.group(1)), m1.group(2)
@@ -600,8 +620,10 @@ def is_size_compatible(
             f1 = _SIZE_FACTORS.get(u1)
             f2 = _SIZE_FACTORS.get(u2)
 
-            # Cross-normalize if same dimension (volume↔volume, mass↔mass)
-            if f1 is not None and f2 is not None and _UNIT_DIMENSION.get(u1) == _UNIT_DIMENSION.get(u2):
+            # Cross-normalize if same dimension (volume↔volume, mass↔mass, length↔length)
+            dim1 = _UNIT_DIMENSION.get(u1)
+            dim2 = _UNIT_DIMENSION.get(u2)
+            if dim1 and dim2 and dim1 == dim2 and f1 is not None and f2 is not None:
                 b1, b2 = v1 * f1, v2 * f2
                 diff = abs(b1 - b2) / max(b1, b2)
                 return diff <= tolerance

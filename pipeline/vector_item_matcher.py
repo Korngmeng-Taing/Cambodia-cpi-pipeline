@@ -74,7 +74,14 @@ def is_spec_compatible(cand_name: str, base_name: str) -> bool:
     if not is_size_compatible(cand_size, base_size, tolerance=0.10):
         return False
 
-    # 6. Diet / Zero flavor vs Original flavor variant conflict
+    # 6. Apparel Size conflict (e.g. Size M vs Size XL)
+    _APP_SIZES = {"XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL", "2XL", "3XL", "4XL"}
+    cand_app = set(re.findall(r"\b(?:SIZE\s*)?(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL)\b", cand_name.upper())) & _APP_SIZES
+    base_app = set(re.findall(r"\b(?:SIZE\s*)?(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL)\b", base_name.upper())) & _APP_SIZES
+    if cand_app and base_app and cand_app != base_app:
+        return False
+
+    # 7. Diet / Zero flavor vs Original flavor variant conflict
     cand_lower, base_lower = cand_name.lower(), base_name.lower()
     is_cand_diet = any(k in cand_lower for k in ("zero", "diet", "light", "no sugar"))
     is_base_diet = any(k in base_lower for k in ("zero", "diet", "light", "no sugar"))

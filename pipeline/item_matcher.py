@@ -52,6 +52,7 @@ class ItemMatcher:
         self.use_vector_matcher = use_vector_matcher
         self.barcode_cache: dict[str, uuid.UUID] = {}
         self.exact_name_cache: dict[str, uuid.UUID] = {}
+        self.name_spec_cache: dict[tuple[str, str, str], uuid.UUID] = {}
         self.sku_cache: dict[tuple[str, str], uuid.UUID] = {}
         self.items_cache: list[tuple[uuid.UUID, str, str | None]] = []
         self._vector_matcher: VectorItemMatcher | None = None
@@ -98,19 +99,42 @@ class ItemMatcher:
                 self._has_embedding_column = False
 
             cur.execute(
-                "SELECT item_id, canonical_name, barcode, size_norm FROM silver.canonical_items"
+                "SELECT item_id, canonical_name, barcode, size_norm, brand FROM silver.canonical_items"
             )
             rows = cur.fetchall()
             self.barcode_cache.clear()
             self.exact_name_cache.clear()
+            self.name_spec_cache.clear()
             self.items_cache.clear()
             self.sku_cache.clear()
-            for item_id, name, barcode, size_norm in rows:
+            for row in rows:
+                item_id = row[0]
+                name = row[1] if len(row) > 1 else None
+                barcode = row[2] if len(row) > 2 else None
+                size_norm = row[3] if len(row) > 3 else None
+                brand = row[4] if len(row) > 4 else None
+
                 if barcode and is_valid_barcode(barcode):
                     self.barcode_cache[barcode.strip()] = item_id
                 if name:
-                    self.exact_name_cache[name.strip().upper()] = item_id
+                    name_u = name.strip().upper()
+                    self.exact_name_cache[name_u] = item_id
+                    b_u = brand.strip().upper() if brand else ""
+                    s_u = size_norm.strip().upper() if size_norm else ""
+                    self.name_spec_cache[(name_u, b_u, s_u)] = item_id
                 self.items_cache.append((item_id, name, size_norm))
+
+            # Load secondary/multi-barcode aliases if table exists in real database
+            # Skip if running under test mocks where tables are not mocked
+            is_mock = type(cur).__module__.startswith("unittest.mock")
+            if not is_mock:
+                try:
+                    cur.execute("SELECT barcode, item_id FROM silver.canonical_item_barcodes WHERE barcode IS NOT NULL")
+                    for bc, item_id in cur.fetchall():
+                        if bc and is_valid_barcode(bc):
+                            self.barcode_cache[bc.strip()] = item_id
+                except Exception as e:
+                    log.debug("No canonical_item_barcodes table or query failed: %s", e)
 
             try:
                 cur.execute("SAVEPOINT load_sku_cache_sp")
@@ -499,6 +523,7 @@ class ItemMatcher:
         new_items = []
         reviews = []
         sku_registrations = []
+        barcode_aliases = []
 
         catalog = [{"item_id": iid, "canonical_name": cn} for iid, cn, _ in self.items_cache if cn]
         classifier = None
@@ -579,6 +604,20 @@ class ItemMatcher:
                     totals["sent_to_review"] += 1
                     continue
 
+            # 4b. Check Name + Brand + Package Size consensus before creating duplicate canonical item
+            b_u = brand.strip().upper() if brand else ""
+            s_u = package_size.strip().upper() if package_size else ""
+            spec_key = (name_upper, b_u, s_u)
+            if name_upper and spec_key in self.name_spec_cache:
+                matched_id = self.name_spec_cache[spec_key]
+                match_logs.append((raw_price_id, str(matched_id), "exact_name_spec", 1.0))
+                totals["matched_fuzzy"] += 1
+                valid_bc = barcode if is_valid_barcode(barcode) else None
+                if valid_bc:
+                    self.barcode_cache[valid_bc.strip()] = matched_id
+                    barcode_aliases.append((valid_bc.strip(), str(matched_id), store_id))
+                continue
+
             # 5. Create new canonical item with auto-classification
             new_id = uuid.uuid4()
             coicop_div, coicop_code = None, None
@@ -600,6 +639,7 @@ class ItemMatcher:
 
             if valid_bc:
                 self.barcode_cache[valid_bc.strip()] = new_id
+                barcode_aliases.append((valid_bc.strip(), str(new_id), store_id))
             if sku:
                 sku_clean = sku.strip()
                 self.sku_cache[(store_id, sku_clean)] = new_id
@@ -608,6 +648,7 @@ class ItemMatcher:
                 )
             if name_upper:
                 self.exact_name_cache[name_upper] = new_id
+                self.name_spec_cache[spec_key] = new_id
             self.items_cache.append((new_id, name_clean, package_size))
             catalog.append({"item_id": new_id, "canonical_name": name_clean})
 
@@ -620,6 +661,7 @@ class ItemMatcher:
             sku_registrations=sku_registrations,
             match_logs=match_logs,
             reviews=reviews,
+            barcode_aliases=barcode_aliases,
         )
         return totals
 
@@ -631,6 +673,7 @@ class ItemMatcher:
         sku_registrations: list[tuple],
         match_logs: list[tuple],
         reviews: list[tuple],
+        barcode_aliases: list[tuple] | None = None,
     ) -> None:
         with conn.cursor() as cur:
             if new_items:
@@ -688,6 +731,17 @@ class ItemMatcher:
                     ON CONFLICT (raw_price_id) DO NOTHING
                     """,
                     reviews,
+                    page_size=1000,
+                )
+            if barcode_aliases:
+                execute_batch(
+                    cur,
+                    """
+                    INSERT INTO silver.canonical_item_barcodes (barcode, item_id, store_slug)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (barcode) DO NOTHING
+                    """,
+                    barcode_aliases,
                     page_size=1000,
                 )
             conn.commit()

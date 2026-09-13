@@ -286,11 +286,24 @@ class CPICalculationEngine:
         if "discount_pct" in df.columns:
             df["discount_pct"] = pd.to_numeric(df["discount_pct"], errors="coerce")
         
+        # Normalize coicop_division to clean 2-digit format (01-12) or truncate anomalies
+        def _clean_div(val):
+            if pd.isna(val) or not str(val).strip():
+                return "01"
+            s = str(val).strip()
+            if s.upper() == "UNCLASSIFIED":
+                return "01"
+            if s.isdigit():
+                return s.zfill(2)[:2]
+            return s[:2]
+
+        df["coicop_division"] = df["coicop_division"].apply(_clean_div)
+
         # Only accept metric unit prices for grocery and consumable divisions
         # For non-consumable divisions (03, 04, 07, 08, 09, 10, 11), sizes like "5G" or "2.4G"
         # are electronic specs, not weight/volume.
         consumable_divisions = {"01", "02", "05", "06", "12"}
-        is_consumable = df["coicop_division"].astype(str).str.zfill(2).isin(consumable_divisions)
+        is_consumable = df["coicop_division"].isin(consumable_divisions)
         df.loc[~is_consumable, "unit_price_khr"] = np.nan
 
         df = df[df["price_khr"] > 0]

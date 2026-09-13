@@ -76,3 +76,23 @@ models:
           - not_null
           - unique
 
+unit_tests:
+  - name: test_dim_stores_aggregation
+    description: "Verify that dim_stores correctly aggregates observations and products from fct_daily_prices"
+    model: dim_stores
+    given:
+      - input: ref('coicop_store_defaults')
+        rows:
+          - {store_slug: 'aeon', store_name: 'AEON 1', source_type: 'scrape', channel: 'supermarket', default_currency: 'USD', default_coicop_division: '01', is_active: true}
+          - {store_slug: 'makro', store_name: 'Makro', source_type: 'scrape', channel: 'wholesale', default_currency: 'USD', default_coicop_division: '01', is_active: true}
+      - input: ref('fct_daily_prices')
+        rows:
+          - {store_slug: 'aeon', item_id: 'item-1', scrape_date: '2026-08-18'}
+          - {store_slug: 'aeon', item_id: 'item-2', scrape_date: '2026-08-18'}
+          - {store_slug: 'aeon', item_id: 'item-1', scrape_date: '2026-08-19'}
+    expect:
+      rows:
+        - {store_slug: 'aeon', total_observations: 3, distinct_products_count: 2, is_active: true}
+        - {store_slug: 'makro', total_observations: 0, distinct_products_count: 0, is_active: true}
+
+

@@ -312,3 +312,25 @@ This real-world case study demonstrates the immense value of daily digital price
     \item \textbf{Production Test Suite and Quality Verification:} The end-to-end software codebase enforces rigorous continuous integration with \textbf{451 automated Python unit/integration tests} spanning econometric property bounds, scraper normalization schemas, and Airflow DAG dependency graphs (100\% test pass rate in pytest). Additionally, \textbf{56 automated dbt data and unit tests} continuously validate relational integrity, not-null constraints, unique keys, and zero code-division mismatches in production (\texttt{PASS=56, WARN=0, ERROR=0}).
 \end{itemize}
 
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{images/dashboard_97_macro_cpi.png}
+    \caption{Production Executive Dashboard 01: Macro CPI \& Inflation Analytics (Port 3001), showing real-time Headline CPI, Core CPI, and the official 12-division COICOP matrix.}
+    \label{fig:metabase_macro_cpi}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{images/dashboard_98_telemetry.png}
+    \caption{Production Executive Dashboard 02: Operations \& Multi-Source Telemetry (Port 3001), tracking 24 active store scrapers, daily ingestion success rates, and Airflow DAG states.}
+    \label{fig:metabase_telemetry}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{images/dashboard_99_silver_quality.png}
+    \caption{Production Executive Dashboard 03: Silver Data Quality Screener \& Pre-CPI Quality Gate (Port 3001), displaying outlier quarantine counts, zero review backlog, and COICOP coverage.}
+    \label{fig:metabase_quality}
+\end{figure}
+
+

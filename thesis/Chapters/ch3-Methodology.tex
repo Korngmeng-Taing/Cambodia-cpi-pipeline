@@ -191,49 +191,107 @@ By excluding Division 01 (Food and Non-Alcoholic Beverages: $44.775\%$) and fuel
 \section{Phase 4: Real-Time Inflation Nowcasting and Micro-to-Macro Econometrics}
 
 \subsection{The Official Reporting Lag and Micro-to-Macro Nowcasting Formulation}
-\hs While conventional statistical agencies rely on retrospective monthly consumer surveys published 30 to 60 days after price collection, monetary authorities and fiscal planners require continuous, real-time macroeconomic intelligence \citep{cavallo2016billion, macias2023nowcasting}. To bridge this critical temporal gap, the pipeline implements an autonomous \textbf{Micro-to-Macro Daily Inflation Nowcasting Engine} (\texttt{ml/nowcaster.py}). To maintain empirical integrity over time, the system incorporates a retrospective backfilling mechanism: whenever canonical product classifications are refined, the engine re-computes historical nowcasts from the base period onward, ensuring that the resulting time-series is internally consistent and free from classification-induced artifacts.
+\hs While conventional statistical agencies rely on retrospective monthly consumer surveys published 30 to 60 days after price collection, monetary authorities and fiscal planners require continuous, real-time macroeconomic intelligence \citep{cavallo2016billion, macias2023nowcasting}. To bridge this critical temporal gap, the pipeline implements an autonomous \textbf{Two-Stage Hybrid Ridge Disaggregated Nowcasting Engine} (\texttt{ml/nowcaster.py}). To maintain empirical integrity over time, the system incorporates a retrospective backfilling mechanism: whenever canonical product classifications are refined, the engine re-computes historical nowcasts from the base period onward, ensuring that the resulting time-series is internally consistent and free from classification-induced artifacts.
 
-\hs For any active calendar month $M$ consisting of $T$ total calendar days, on calculation day $t \le T$, the final month-end Headline CPI is not yet observed in full. The nowcasting engine estimates the complete monthly index $\widehat{\text{CPI}}_M(t)$ by dynamically partitioning the month into realized and unobserved trading days:
+\subsection{Two-Stage Hybrid Architecture: Micro Jevons to Regularized Ridge}
+\hs Rather than fitting a black-box model to aggregate headline inflation, the nowcaster operates in two coordinated econometric stages:
+\begin{itemize}
+    \item \textbf{Stage 1 (Microdata Aggregation):} High-frequency retail listings are aggregated daily into elementary Jevons price relatives ($I_{k, t}$) across all 12 UN COICOP divisions, grouped into five analytical consumption baskets:
+    \begin{enumerate}
+        \item \textbf{Food and Non-Alcoholic Beverages (Division 01, weight 44.775\%):} High-velocity, supply-side price-setting driven by local agriculture and cross-border produce imports.
+        \item \textbf{Transport and Fuels (Division 07, weight 12.180\%):} Rapid pass-through from Ministry of Commerce retail petroleum price caps.
+        \item \textbf{Housing and Utilities (Division 04, weight 13.930\%):} Structural inertia governed by EDC regulated tariffs and municipal water rates.
+        \item \textbf{Currency and Foreign Exchange (USD/KHR):} Daily commercial and central bank exchange rate fluctuations driving import price dynamics.
+        \item \textbf{Other Core Divisions (Divisions 02, 03, 05, 06, 08, 09, 10, 11, 12, weight 29.115\%):} Semi-sticky manufactured goods and services.
+    \end{enumerate}
+    \item \textbf{Stage 2 (Disaggregated Regularized Ridge Projection):} For each division $k \in \{1, \dots, 12\}$, an independent regularized Ridge regression projects expected price growth over the remainder of the calendar month using daily indicator vectors $\mathbf{x}_t \in \mathbb{R}^9$. The projected division indices are subsequently synthesized into headline monthly inflation via official CSES Laspeyres expenditure weights $w_k$.
+\end{itemize}
+
+\subsection{Nine-Dimensional Indicator Feature Vector}
+\hs On any calculation day $t \le T$, the feature vector $\mathbf{x}_t \in \mathbb{R}^9$ captures high-velocity price momentum, structural trends, exchange rate shifts, and intra-month calendar dynamics:
 \begin{equation}
-    \widehat{\text{CPI}}_M(t) = \left( \frac{t}{T} \right) \overline{\text{CPI}}_{\text{realized}}(t) + \left( \frac{T - t}{T} \right) \widehat{\text{CPI}}_{\text{remaining}}(t)
+    \mathbf{x}_t = \left[ \Delta_{\text{Food}, 7d}, \, \Delta_{\text{Food}, 30d}, \, \Delta_{\text{Trans}, 7d}, \, \Delta_{\text{Util}, 30d}, \, \Delta_{\text{USD}, 7d}, \, \tau_{\text{month}}, \, \phi_{\text{decay}}, \, \mathbb{I}_{\text{Mon}}, \, \mathbb{I}_{\text{Fri}} \right]^T
 \end{equation}
 where:
-\begin{equation}
-    \overline{\text{CPI}}_{\text{realized}}(t) = \frac{1}{t} \sum_{\tau=1}^{t} \text{CPI}_\tau
-\end{equation}
-represents the empirical arithmetic mean of the high-frequency daily Headline CPI facts realized from Day $1$ to Day $t$ in \texttt{gold.fct\_cpi\_daily}. As $t \to T$, the realized weight $\frac{t}{T} \to 1$, ensuring that the nowcast asymptotically converges to the deterministic full-month index with zero residual estimation variance.
+\begin{itemize}
+    \item $\Delta_{\text{Food}, 7d} = \frac{I_{1, t} - I_{1, t-7}}{I_{1, t-7}}$: Short-run 7-day food price velocity.
+    \item $\Delta_{\text{Food}, 30d} = \frac{I_{1, t} - I_{1, t-30}}{I_{1, t-30}}$: Medium-run 30-day baseline food trend.
+    \item $\Delta_{\text{Trans}, 7d} = \frac{I_{7, t} - I_{7, t-7}}{I_{7, t-7}}$: 7-day fuel price shock momentum.
+    \item $\Delta_{\text{Util}, 30d} = \frac{I_{4, t} - I_{4, t-30}}{I_{4, t-30}}$: 30-day housing/utility tariff inertia.
+    \item $\Delta_{\text{USD}, 7d} = \frac{E_{\text{USD}, t} - E_{\text{USD}, t-7}}{E_{\text{USD}, t-7}}$: 7-day USD/KHR foreign exchange rate movement.
+    \item $\tau_{\text{month}} = \frac{t}{T}$: Intra-month calendar progress ratio.
+    \item $\phi_{\text{decay}} = \frac{T - t}{T}$: Remaining unobserved calendar fraction.
+    \item $\mathbb{I}_{\text{Mon}}, \mathbb{I}_{\text{Fri}} \in \{0, 1\}$: Day-of-week indicator flags for weekend retail repricing cycles.
+\end{itemize}
 
-\subsection{Leading Cross-Division Momentum, Festival Shocks, and Drift Estimation}
-\hs To project prices across the remaining unobserved days ($t+1 \dots T$), empirical research in developing economies indicates that headline inflation is predominantly driven by high-frequency supply-side shocks in food and transport \citep{cavallo2016billion, macias2023nowcasting}. In Cambodia, Division 01 (Food and Non-Alcoholic Beverages, $44.775\%$ basket weight) and Division 07 (Transport and Fuels, $12.180\%$ basket weight) represent nearly $57\%$ of the entire national consumption expenditure.
+\subsection{Mathematical Derivation of the Regularized Ridge Coefficients}
+\hs To estimate the sensitivity vector $\boldsymbol{\beta}_k \in \mathbb{R}^9$ for division $k$ across historical training matrices $\mathbf{X} \in \mathbb{R}^{N \times 9}$ and realized target price relatives $\mathbf{y}_k \in \mathbb{R}^N$, standard Ordinary Least Squares (OLS) minimizes the residual sum of squares:
+\begin{equation}
+    \hat{\boldsymbol{\beta}}_{\text{OLS}, k} = \arg\min_{\boldsymbol{\beta}_k} \|\mathbf{y}_k - \mathbf{X}\boldsymbol{\beta}_k\|_2^2 = (\mathbf{X}^T \mathbf{X})^{-1} \mathbf{X}^T \mathbf{y}_k
+\end{equation}
+However, in high-frequency daily price sensing, the Gram matrix $\mathbf{X}^T \mathbf{X}$ is ill-conditioned due to high collinearity between short-run and medium-run food and transport momentum ($\Delta_{\text{Food}, 7d}$ and $\Delta_{\text{Food}, 30d}$). Under ill-conditioning, the condition number $\kappa(\mathbf{X}^T \mathbf{X}) \gg 10^3$, inflating the parameter covariance matrix:
+\begin{equation}
+    \text{Var}(\hat{\boldsymbol{\beta}}_{\text{OLS}}) = \sigma^2 (\mathbf{X}^T \mathbf{X})^{-1}
+\end{equation}
+which produces violently fluctuating coefficients and out-of-sample forecast divergence.
 
-\hs The pipeline estimates the expected daily price drift rate $\hat{\delta}_t$ for the remainder of the month as a weighted linear combination of the 7-day annualized momentum observed in these two leading divisions, augmented by a seasonal festival demand shock $\psi_t$:
+\hs To guarantee numerical stability, the pipeline applies $L_2$-regularized Ridge regression \citep{hoerl1970ridge}:
 \begin{equation}
-    M_{\text{Food}, t}^{(7)} = \left( \frac{I_{\text{Food}, t} - I_{\text{Food}, t-7}}{I_{\text{Food}, t-7}} \right), \quad M_{\text{Trans}, t}^{(7)} = \left( \frac{I_{\text{Trans}, t} - I_{\text{Trans}, t-7}}{I_{\text{Trans}, t-7}} \right)
+    \hat{\boldsymbol{\beta}}_k = \arg\min_{\boldsymbol{\beta}_k} \left\{ \|\mathbf{y}_k - \mathbf{X}\boldsymbol{\beta}_k\|_2^2 + \alpha \|\boldsymbol{\beta}_k\|_2^2 \right\}
+\end{equation}
+Expanding the objective function:
+\begin{equation}
+    \mathcal{L}(\boldsymbol{\beta}_k) = (\mathbf{y}_k - \mathbf{X}\boldsymbol{\beta}_k)^T (\mathbf{y}_k - \mathbf{X}\boldsymbol{\beta}_k) + \alpha \boldsymbol{\beta}_k^T \boldsymbol{\beta}_k
+\end{equation}
+Setting the first-order gradient with respect to $\boldsymbol{\beta}_k$ to zero:
+\begin{equation}
+    \nabla_{\boldsymbol{\beta}_k} \mathcal{L} = -2 \mathbf{X}^T (\mathbf{y}_k - \mathbf{X}\boldsymbol{\beta}_k) + 2\alpha \boldsymbol{\beta}_k = \mathbf{0}
 \end{equation}
 \begin{equation}
-    \hat{\delta}_t = \left[ \frac{\omega_{\text{Food}} \cdot \left( \frac{M_{\text{Food}, t}^{(7)}}{7} \right) + \omega_{\text{Trans}} \cdot \left( \frac{M_{\text{Trans}, t}^{(7)}}{7} \right)}{\omega_{\text{Food}} + \omega_{\text{Trans}}} \right] + \psi_t
+    (\mathbf{X}^T \mathbf{X} + \alpha \mathbf{I}) \boldsymbol{\beta}_k = \mathbf{X}^T \mathbf{y}_k
 \end{equation}
-where $\omega_{\text{Food}} = 0.44775$, $\omega_{\text{Trans}} = 0.12180$, and $\psi_t$ captures transitory festive demand surges during major Cambodian cultural celebrations (Khmer New Year in mid-April, Pchum Ben in late September/October, and Water Festival in November):
+Since $\alpha > 0$, the matrix $(\mathbf{X}^T \mathbf{X} + \alpha \mathbf{I})$ is strictly positive definite and invertible even when $\mathbf{X}^T \mathbf{X}$ is rank-deficient:
 \begin{equation}
-    \psi_t = 
-    \begin{cases}
-        +0.0012 & \text{if } t \in \text{Festival Peak Days} \\
-        +0.0006 & \text{if } t \in \text{Festival Lead/Lag Window} \\
-        0.0000 & \text{otherwise}
-    \end{cases}
+    \hat{\boldsymbol{\beta}}_k = (\mathbf{X}^T \mathbf{X} + \alpha \mathbf{I})^{-1} \mathbf{X}^T \mathbf{y}_k
 \end{equation}
-\hs For the remaining $N = T - t$ unobserved calendar days in the month, daily prices advance progressively from the latest observed quote $P_t$ subject to cumulative drift $\hat{\delta}_t$. Rather than compounding or treating each unobserved day as an identical month-end endpoint, the expected average price index across the remainder of the month corresponds to the linear midpoint trajectory expectation:
+The optimal regularization hyperparameter $\alpha \in [10^{-2}, 10^3]$ is chosen autonomously for each division via Leave-One-Out Cross-Validation (\texttt{RidgeCV}). Leveraging the Sherman--Morrison--Woodbury matrix identity, the out-of-sample prediction error for observation $i$ is evaluated in closed form without retraining:
 \begin{equation}
-    E[P_{\text{remaining}}] = P_t \times \left( 1.0 + \hat{\delta}_t \cdot \frac{N + 1}{2} \right)
+    e_{i, -i} = \frac{y_i - \hat{y}_i}{1 - H_{ii}(\alpha)}, \quad H(\alpha) = \mathbf{X}(\mathbf{X}^T \mathbf{X} + \alpha \mathbf{I})^{-1}\mathbf{X}^T
 \end{equation}
-The overall projected monthly index $\widehat{\text{CPI}}_M(t)$ is subsequently computed as the weighted time-integral of realized daily indices and projected remaining days:
-\begin{equation}
-    \widehat{\text{CPI}}_M(t) = \frac{\sum_{\tau=1}^t \text{CPI}_\tau + N \times E[P_{\text{remaining}}]}{T}
-\end{equation}
-Similarly, Core CPI is projected utilizing half the pure leading drift rate ($\frac{1}{2}\hat{\delta}_{\text{core}, t}$), reflecting the reduced sensitivity of core manufactured goods to festive food and transit surges.
 
-\subsection{Projected Month-over-Month Inflation and Official Benchmark Chain-Linking}
-\hs From the finalized intra-month index projection $\widehat{\text{CPI}}_M(t)$, the estimated Month-over-Month (MoM \%) inflation rate is derived relative to the previous month's final monthly CPI:
+\subsection{Empirical Bayes Shrinkage Intensity Formulation}
+\hs In newly established divisions where historical daily records are limited, the estimated regression vector $\hat{\boldsymbol{\beta}}_k$ could overfit idiosyncratic noise. To prevent over-extrapolation, the pipeline applies Empirical Bayes shrinkage toward a conservative, economically neutral baseline $\boldsymbol{\beta}_0 = [0, \dots, 0]^T$:
+\begin{equation}
+    \hat{\boldsymbol{\beta}}_k^{\text{shrink}} = (1 - \lambda_{\text{shrink}, k}) \hat{\boldsymbol{\beta}}_k + \lambda_{\text{shrink}, k} \boldsymbol{\beta}_0
+\end{equation}
+The shrinkage weight $\lambda_{\text{shrink}, k} \in [0, 1]$ is determined by the in-sample coefficient of determination $R_k^2$:
+\begin{equation}
+    \lambda_{\text{shrink}, k} = \max\left(0, \; 1 - R_k^2\right)
+\end{equation}
+When the feature vector strongly explains division variation ($R_k^2 \to 1$), shrinkage is minimal ($\lambda_{\text{shrink}} \to 0$); conversely, if historical correlation is weak ($R_k^2 \le 0.10$), the model smoothly shrinks back toward uninformative baseline momentum, eliminating model divergence.
+
+\subsection{Gauss Midpoint Triangular Price Aggregation}
+\hs Using the shrunk coefficient vector $\hat{\boldsymbol{\beta}}_k^{\text{shrink}}$, the estimated daily price drift rate $\hat{\delta}_{k, t}$ for division $k$ is given by:
+\begin{equation}
+    \hat{\delta}_{k, t} = \mathbf{x}_t^T \hat{\boldsymbol{\beta}}_k^{\text{shrink}} + \psi_t
+\end{equation}
+where $\psi_t$ incorporates seasonal festival demand shocks during major Cambodian cultural celebrations (Khmer New Year, Pchum Ben, and Water Festival).
+
+\hs For the remaining $N = T - t$ unobserved calendar days in the month, daily prices advance progressively from the latest observed quote $P_{k, t}$ subject to cumulative drift $\hat{\delta}_{k, t}$. Rather than compounding or treating each unobserved day as an identical month-end endpoint, the expected average price index across the remainder of the month corresponds to the linear midpoint trajectory expectation:
+\begin{equation}
+    E[P_{\text{remaining}, k}] = P_{k, t} \times \left( 1.0 + \hat{\delta}_{k, t} \cdot \frac{N + 1}{2} \right)
+\end{equation}
+The overall projected full-month division index $\bar{I}_{k, M}(t)$ represents the exact temporal integral of realized daily quotes and unobserved remaining days:
+\begin{equation}
+    \bar{I}_{k, M}(t) = \frac{\sum_{\tau=1}^t I_{k, \tau} + N \times E[P_{\text{remaining}, k}]}{T}
+\end{equation}
+
+\subsection{Laspeyres Macroeconomic Synthesis and Dual-Index Chain-Linking}
+\hs Once all 12 division indices $\bar{I}_{k, M}(t)$ are projected, the National Headline CPI nowcast $\widehat{\text{CPI}}_M(t)$ is synthesized via official National Institute of Statistics (NIS) CSES 2023 Laspeyres expenditure weights $w_k$:
+\begin{equation}
+    \widehat{\text{CPI}}_M(t) = \sum_{k=1}^{12} w_k \bar{I}_{k, M}(t)
+\end{equation}
+From this synthesized headline index, the projected Month-over-Month inflation rate is derived:
 \begin{equation}
     \widehat{\pi}_{\text{MoM}, M}(t) = \left( \frac{\widehat{\text{CPI}}_M(t) - \text{CPI}_{M-1}}{\text{CPI}_{M-1}} \right) \times 100\%
 \end{equation}
@@ -260,7 +318,7 @@ Let $\sigma_{\text{daily}}$ denote the historical daily price volatility (sample
 This mathematically guarantees that confidence intervals narrow monotonically as the month draws to a close, visually conveying increasing conviction to executive decision-makers.
 
 \subsection{Database Persistence and Out-of-Sample Evaluation Mart}
-\hs Computed nowcasting parameters are saved daily into the Gold analytical mart \texttt{gold.fct\_cpi\_nowcast}. When the official NIS monthly release is published in the subsequent month, the analytical view \texttt{gold.v\_nowcast\_evaluation} automatically joins nowcasted figures against ground truth, tracking the tracking error:
+\hs Computed nowcasting parameters are saved daily into the Gold analytical mart \texttt{gold.fct\_nowcast\_daily} and view \texttt{gold.v\_nowcast\_evaluation}. When the official NIS monthly release is published in the subsequent month, the evaluation view automatically joins nowcasted figures against ground truth, tracking the tracking error:
 \begin{equation}
     \epsilon_{\text{nowcast}} = \widehat{\pi}_{\text{MoM}, M}(t) - \pi_{\text{NIS, actual}}
 \end{equation}

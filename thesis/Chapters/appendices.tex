@@ -86,19 +86,19 @@ with strict inequality holding whenever price ratios $p_{i,t}/p_{i,0}$ are not s
 \hline
 \rowcolor{blue!20}
 \textbf{Analytical Field} & \textbf{Type} & \textbf{Economic Concept} & \textbf{Mathematical Formulation} \\ \hline
-\texttt{calculation\_date} & Date & Reference nowcast execution date & Current date $t$ \\ \hline
+\texttt{calculation\_date} & Date & Reference nowcast execution date & Current calculation date $t$ \\ \hline
 \texttt{days\_observed} / \texttt{days\_in\_month} & Int & Intra-month sample completion & $t$ observed days out of $T$ total days \\ \hline
 \texttt{realized\_share} & Float & Realized data weighting & $w_{\text{realized}} = t / T$ \\ \hline
 \texttt{unobserved\_share} & Float & Projected residual weighting & $w_{\text{proj}} = (T - t) / T$ \\ \hline
-\texttt{food\_momentum\_7d} & Float & Division 01 leading supply signal & $M_{\text{Food}, t}^{(7)} = \frac{I_{\text{Food}, t} - I_{\text{Food}, t-7}}{I_{\text{Food}, t-7}}$ \\ \hline
-\texttt{transport\_momentum\_7d} & Float & Division 07 fuel/transit signal & $M_{\text{Trans}, t}^{(7)} = \frac{I_{\text{Trans}, t} - I_{\text{Trans}, t-7}}{I_{\text{Trans}, t-7}}$ \\ \hline
-\texttt{projected\_daily\_drift} & Float & Weighted residual daily drift rate & $\hat{\delta}_t = \omega_{\text{Food}}\frac{M_{\text{Food}, t}^{(7)}}{7} + \omega_{\text{Trans}}\frac{M_{\text{Trans}, t}^{(7)}}{7}$ \\ \hline
-\texttt{nowcast\_headline\_cpi} & Float & Full-month projected Headline index & $\widehat{\text{CPI}}_M(t) = \frac{t}{T}\overline{\text{CPI}}_t + \frac{T-t}{T}\widehat{\text{CPI}}_{\text{rem}}(t)$ \\ \hline
+\texttt{indicator\_feature\_vector} & JSONB & 9D macro indicator signals & $\mathbf{x}_t \in \mathbb{R}^9$ (Food, Transport, Utilities, FX, calendar) \\ \hline
+\texttt{ridge\_alpha} & Float & Regularization parameter via LOOCV & $\alpha^* = \arg\min_\alpha \text{LOOCV}(\alpha) \in [10^{-2}, 10^3]$ \\ \hline
+\texttt{shrinkage\_factor} & Float & Empirical Bayes shrinkage intensity & $\lambda_{\text{shrink}, k} = \max(0, 1 - R_k^2)$ \\ \hline
+\texttt{projected\_headline\_cpi} & Float & Full-month projected Headline index & $\widehat{\text{CPI}}_M(t) = \sum_{k=1}^{12} w_k \bar{I}_{k, M}(t)$ \\ \hline
 \texttt{nowcast\_mom\_inflation} & Float & Projected Month-over-Month inflation & $\widehat{\pi}_M(t) = \frac{\widehat{\text{CPI}}_M(t) - \text{CPI}_{M-1}}{\text{CPI}_{M-1}} \times 100\%$ \\ \hline
 \texttt{uncertainty\_decay\_factor} & Float & Asymptotic variance decay ratio & $U_t = \sqrt{\frac{T - t}{T}} \in [0, 1]$ \\ \hline
 \texttt{ci\_lower\_95}, \texttt{ci\_upper\_95} & Float & Dynamic 95\% confidence envelope & $\widehat{\text{CPI}}_M(t) \pm 1.95996 \cdot \sigma_{\text{daily}} \cdot U_t$ \\ \hline
-\texttt{nowcast\_nis\_headline\_cpi} & Float & Chain-linked official NIS benchmark & $\text{CPI}_{\text{NIS}, M-1} \times (1 + \widehat{\pi}_M(t)/100)$ \\ \hline
+\texttt{chain\_linked\_nis\_cpi} & Float & Chain-linked official NIS benchmark & $\text{CPI}_{\text{NIS}, M-1} \times (1 + \widehat{\pi}_M(t)/100)$ \\ \hline
 \end{tabular}
-\caption{Production Analytical Mart Schema for Real-Time Daily Inflation Nowcasting (\texttt{gold.fct\_cpi\_nowcast})}
+\caption{Production Analytical Mart Schema for Real-Time Daily Inflation Nowcasting (\texttt{gold.fct\_nowcast\_daily})}
 \label{tab:appendix_nowcast_store}
 \end{table}

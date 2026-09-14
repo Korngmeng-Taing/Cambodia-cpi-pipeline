@@ -128,6 +128,51 @@ def build_definitive_handbook():
 \newpage
 
 % =============================================================================
+% EXECUTIVE SUMMARY & SYSTEM ARCHITECTURE
+% =============================================================================
+\section*{Executive Summary: The Cambodia Daily CPI Architecture}
+\addcontentsline{toc}{section}{Executive Summary: The Cambodia Daily CPI Architecture}
+
+\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{System Overview \& Institutional Mission}]
+\small
+The \textbf{Cambodia Daily Consumer Price Index (CPI) Medallion Pipeline} is an institutional-grade macroeconomic intelligence platform designed to eliminate the 30-day reporting delay inherent in conventional statistical survey methods. 
+
+By autonomously scraping and analyzing daily price quotes across Cambodian digital commerce, regulated utilities, and fuel distributors, the pipeline provides the \textbf{National Bank of Cambodia (NBC)}, the \textbf{Ministry of Economy and Finance (MEF)}, and international development partners with daily high-frequency price indices, core inflation indicators, and current-month nowcasting projections.
+\end{tcolorbox}
+
+\vspace{0.3cm}
+
+\begin{center}
+\begin{tcolorbox}[colback=CodeBg,colframe=Teal,width=0.98\textwidth,title=\textbf{The Medallion Production Pipeline Topology}]
+\footnotesize\ttfamily
+\centering
+\begin{tabular}{c}
+\textbf{BRONZE LAYER (2:00 AM Automated Ingestion)} \\
+25 Production Scrapers (Supermarkets, Pharmacies, Telcos, EDC Power, PPWSA Water, Gas Stations) \\
+$\Downarrow$ 45,000+ Raw Daily Price Quotes $\Downarrow$ \\
+\midrule
+\textbf{SILVER LAYER (0.4s Fast-Start Cosmos Orchestration)} \\
+Multi-Key Gemini 2.5 Flash Batch Classification + HNSW 768-D Vector Embeddings \\
+Deterministic Regex Spec Guards (Storage, Volume, Pack Units) + MEF USD/KHR Daily FX Splicing \\
+$\Downarrow$ 100.00\% Categorized \& Standardized Observations $\Downarrow$ \\
+\midrule
+\textbf{GOLD LAYER (Axiomatic Econometric Aggregation)} \\
+Subclass-First ILO Class-Mean Imputation + Elementary Jevons Geometric Means \\
+Laspeyres Expenditure Weight Aggregation across 12 UN COICOP Divisions (44.8\% Food, 12.2\% Transport) \\
+$\Downarrow$ National Daily Headline CPI \& Refined Core CPI $\Downarrow$ \\
+\midrule
+\textbf{ML SERVING \& NOWCASTING (Two-Stage Hybrid Ridge)} \\
+Disaggregated Price Relatives across 5 Key Baskets (81.58\% Expenditure Coverage) \\
+RidgeCV Regularization + Empirical Bayes Shrinkage Prior + Monotonic Uncertainty Decay \\
+Out-of-Sample Accuracy: \textbf{+0.0181 pp error vs. official NIS ground truth}
+\end{tabular}
+\end{tcolorbox}
+\end{center}
+
+\newpage
+
+
+% =============================================================================
 \section{Why Cambodia Needs a Daily Price Tracker}
 % =============================================================================
 
@@ -796,7 +841,7 @@ $$\text{CPI}_{\text{Headline}} = 45.84 + 17.17 + 12.81 + 5.62 + 3.91 + 3.26 + 3.
 Every mathematical equation used across our data collection, cleaning, vector matching, hedonic adjustments, index calculation, and nowcasting engines has a clear purpose. Here is each formula explained in plain, simple English with a practical shopping example and its exact code location.
 
 % Equation 1
-\subsection{Equation 1: Base Price for an Item ($P_{i, 0}$)}
+\subsection{Equation 1: Base Reference Price for an Item (P {i,0})}
 \begin{equation}
 P_{i, 0} = \left( \prod_{d=1}^{D} P_{i, d} \right)^{\frac{1}{D}}
 \end{equation}
@@ -807,7 +852,7 @@ P_{i, 0} = \left( \prod_{d=1}^{D} P_{i, d} \right)^{\frac{1}{D}}
 \end{itemize}
 
 % Equation 2
-\subsection{Equation 2: Item Price Ratio ($R_{i, t}$)}
+\subsection{Equation 2: Item Price Ratio (R {i,t})}
 \begin{equation}
 R_{i, t} = \frac{P_{i, t}}{P_{i, 0}}
 \end{equation}
@@ -828,7 +873,7 @@ R_{i, t} = \frac{P_{i, t}}{P_{i, 0}}
 \end{itemize}
 
 % Equation 4
-\subsection{Equation 4: Average Daily Change for a Group ($R_{c, t}$)}
+\subsection{Equation 4: Average Daily Change for a Group (R {c,t})}
 \begin{equation}
 R_{c, t} = \left( \prod_{j \in N_{c, t}^{\text{obs}}} \frac{P_{j, t}}{P_{j, t-1}} \right)^{\frac{1}{|N_{c, t}^{\text{obs}}|}}
 \end{equation}
@@ -839,7 +884,7 @@ R_{c, t} = \left( \prod_{j \in N_{c, t}^{\text{obs}}} \frac{P_{j, t}}{P_{j, t-1}
 \end{itemize}
 
 % Equation 5
-\subsection{Equation 5: Estimating an Out-of-Stock Price ($\widehat{P}_{i, t}$)}
+\subsection{Equation 5: Estimating an Out-of-Stock Price (P hat {i,t})}
 \begin{equation}
 \widehat{P}_{i, t} = P_{i, t-\Delta t} \times \left( R_{c, t} \right)^{\Delta t}
 \end{equation}
@@ -850,7 +895,7 @@ R_{c, t} = \left( \prod_{j \in N_{c, t}^{\text{obs}}} \frac{P_{j, t}}{P_{j, t-1}
 \end{itemize}
 
 % Equation 6
-\subsection{Equation 6: Group Price Index (Jevons Index) ($I_{J, c}^{0:t}$)}
+\subsection{Equation 6: Group Price Index (Jevons Index) (I {J,c})}
 \begin{equation}
 I_{J, c}^{0:t} = \left( \prod_{i=1}^{n_c} \frac{P_{i, t}}{P_{i, 0}} \right)^{\frac{1}{n_c}} \times 100.0
 \end{equation}
@@ -861,7 +906,7 @@ I_{J, c}^{0:t} = \left( \prod_{i=1}^{n_c} \frac{P_{i, t}}{P_{i, 0}} \right)^{\fr
 \end{itemize}
 
 % Equation 7
-\subsection{Equation 7: Big Category Index ($I_{\text{div}, k}^{0:t}$)}
+\subsection{Equation 7: Division Category Index (I {div,k})}
 \begin{equation}
 I_{\text{div}, k}^{0:t} = \sum_{c \in C_k} w_{c|k} \cdot I_{J, c}^{0:t}
 \end{equation}
@@ -872,7 +917,7 @@ I_{\text{div}, k}^{0:t} = \sum_{c \in C_k} w_{c|k} \cdot I_{J, c}^{0:t}
 \end{itemize}
 
 % Equation 8
-\subsection{Equation 8: National Headline CPI ($\text{CPI}_{\text{Headline}}^{0:t}$)}
+\subsection{Equation 8: National Headline CPI (CPI {Headline})}
 \begin{equation}
 \text{CPI}_{\text{Headline}}^{0:t} = \sum_{k=1}^{12} W_k \cdot I_{\text{div}, k}^{0:t}
 \end{equation}
@@ -883,7 +928,7 @@ I_{\text{div}, k}^{0:t} = \sum_{c \in C_k} w_{c|k} \cdot I_{J, c}^{0:t}
 \end{itemize}
 
 % Equation 9
-\subsection{Equation 9: Core CPI (Excluding Food and Fuel) ($\text{CPI}_{\text{Core}}^{0:t}$)}
+\subsection{Equation 9: Core CPI (Excluding Food and Fuel) (CPI {Core})}
 \begin{equation}
 \text{CPI}_{\text{Core}}^{0:t} = \frac{\sum_{k \notin \{01, 04, 07\}} W_k \cdot I_{\text{div}, k}^{0:t}}{\sum_{k \notin \{01, 04, 07\}} W_k}
 \end{equation}
@@ -954,7 +999,7 @@ P_{i, t}^{\text{adjusted}} = P_{i, t}^{\text{raw}} \times \exp\left( \widehat{\l
 \end{itemize}
 
 % Equation 16
-\subsection{Equation 16: Trailing 7-Day Leading Drift ($\hat{\delta}_{\text{leading}}$)}
+\subsection{Equation 16: Trailing 7-Day Leading Drift (delta leading)}
 \begin{equation}
 \hat{\delta}_{\text{leading}} = \frac{W_{01} \cdot \left(\frac{\Delta \text{Food}_{7d}}{7}\right) + W_{07} \cdot \left(\frac{\Delta \text{Transport}_{7d}}{7}\right)}{W_{01} + W_{07}}
 \end{equation}
@@ -964,7 +1009,7 @@ P_{i, t}^{\text{adjusted}} = P_{i, t}^{\text{raw}} \times \exp\left( \widehat{\l
 \end{itemize}
 
 % Equation 17
-\subsection{Equation 17: Trailing 7-Day Exchange Rate Drift ($\hat{\delta}_{\text{FX}}$)}
+\subsection{Equation 17: Trailing 7-Day Exchange Rate Drift (delta FX)}
 \begin{equation}
 \hat{\delta}_{\text{FX}} = \beta_{\text{ERPT}} \times \left( \frac{S_t^{\text{USD/KHR}} - S_{t-7}^{\text{USD/KHR}}}{7 \cdot S_{t-7}^{\text{USD/KHR}}} \right) \quad (\beta_{\text{ERPT}} = 0.28)
 \end{equation}
@@ -974,7 +1019,7 @@ P_{i, t}^{\text{adjusted}} = P_{i, t}^{\text{raw}} \times \exp\left( \widehat{\l
 \end{itemize}
 
 % Equation 18
-\subsection{Equation 18: Festive Demand Shock Adjustment ($\phi_{\text{fest}}$)}
+\subsection{Equation 18: Festive Demand Shock Adjustment (phi fest)}
 \begin{equation}
 \phi_{\text{fest}} = \begin{cases}
 +0.0012 \; (+0.12\%/\text{day}), & \text{peak Khmer New Year or Pchum Ben days} \\
@@ -988,7 +1033,7 @@ P_{i, t}^{\text{adjusted}} = P_{i, t}^{\text{raw}} \times \exp\left( \widehat{\l
 \end{itemize}
 
 % Equation 19
-\subsection{Equation 19: Total Composite Daily Drift ($\hat{\delta}_t$)}
+\subsection{Equation 19: Total Composite Daily Drift (delta t)}
 \begin{equation}
 \hat{\delta}_t = \hat{\delta}_{\text{leading}} + \hat{\delta}_{\text{FX}} + \phi_{\text{fest}}
 \end{equation}
@@ -998,7 +1043,7 @@ P_{i, t}^{\text{adjusted}} = P_{i, t}^{\text{raw}} \times \exp\left( \widehat{\l
 \end{itemize}
 
 % Equation 20
-\subsection{Equation 20: Midpoint Price for Remaining Days ($\mathbb{E}[\bar{P}_{\text{rem}}]$)}
+\subsection{Equation 20: Midpoint Price for Remaining Days (E[P rem])}
 \begin{equation}
 \mathbb{E}[\bar{P}_{\text{remaining}}] = P_t \left( 1.0 + \hat{\delta}_t \cdot \frac{N_{\text{rem}} + 1}{2} \right)
 \end{equation}
@@ -1008,7 +1053,7 @@ P_{i, t}^{\text{adjusted}} = P_{i, t}^{\text{raw}} \times \exp\left( \widehat{\l
 \end{itemize}
 
 % Equation 21
-\subsection{Equation 21: Blended Month-End Headline Nowcast ($\text{Nowcast CPI}_M$)}
+\subsection{Equation 21: Blended Month-End Headline Nowcast (Nowcast CPI M)}
 \begin{equation}
 \text{Nowcast CPI}_M = \left( \frac{N_{\text{obs}}}{T} \right) \bar{P}_{\text{obs}} + \left( \frac{N_{\text{rem}}}{T} \right) \mathbb{E}[\bar{P}_{\text{remaining}}]
 \end{equation}
@@ -1018,7 +1063,7 @@ P_{i, t}^{\text{adjusted}} = P_{i, t}^{\text{raw}} \times \exp\left( \widehat{\l
 \end{itemize}
 
 % Equation 22
-\subsection{Equation 22: Time-Decaying Uncertainty Ratio ($U_t$)}
+\subsection{Equation 22: Time-Decaying Uncertainty Ratio (U t)}
 \begin{equation}
 U_t = \frac{N_{\text{rem}}}{T} = \frac{T - t}{T}
 \end{equation}
@@ -1028,7 +1073,7 @@ U_t = \frac{N_{\text{rem}}}{T} = \frac{T - t}{T}
 \end{itemize}
 
 % Equation 23
-\subsection{Equation 23: Dynamic 95\% Confidence Interval ($\text{CI}_{95\%}$)}
+\subsection{Equation 23: Dynamic 95\% Confidence Interval (CI 95)}
 \begin{equation}
 \text{ME} = 1.96 \cdot \sigma_{\text{daily}} \cdot \sqrt{\frac{N_{\text{rem}}}{T}}, \quad \text{CI}_{95\%} = \left[ \text{Nowcast} - \text{ME}, \; \text{Nowcast} + \text{ME} \right]
 \end{equation}
@@ -1038,7 +1083,7 @@ U_t = \frac{N_{\text{rem}}}{T} = \frac{T - t}{T}
 \end{itemize}
 
 % Equation 24
-\subsection{Equation 24: Connecting to the Official NIS Scale ($\widehat{\text{CPI}}_{\text{NIS}}$)}
+\subsection{Equation 24: Connecting to the Official NIS Scale (CPI hat NIS)}
 \begin{equation}
 \widehat{\text{CPI}}_{\text{NIS, } M} = \text{CPI}_{\text{latest}}^{\text{NIS, 2006}} \times \left( 1.0 + \frac{\pi_{\text{MoM}}}{100.0} \right)
 \end{equation}
@@ -1050,7 +1095,11 @@ U_t = \frac{N_{\text{rem}}}{T} = \frac{T - t}{T}
 \newpage
 
 % =============================================================================
-\section{Predicting the Rest of the Month (The 10 Nowcasting Equations)}
+\section{Evolution of Inflation Nowcasting: From Heuristic Momentum to Disaggregated ML}
+\subsection{The Heuristic Baseline: 2-Division Composite Drift}
+To understand why our modern pipeline employs the Two-Stage Hybrid Ridge Model detailed in Section 15, we must first examine the foundational heuristic nowcasting model originally deployed in Version 1.0 of the pipeline.
+
+This early model relied on high-frequency momentum from the two largest volatile consumer divisions (Food 01 and Transport 07) combined with exchange rate movements and holiday calendar shocks:
 % =============================================================================
 
 \subsection{Why We Nowcast Instead of Waiting for Month-End}
@@ -1065,33 +1114,33 @@ Our nowcasting engine in \texttt{ml/nowcaster.py} runs a complete system of \tex
 
 \subsection{The 10 Nowcasting Equations in Production}
 
-\subsubsection{Equation 1: Trailing 7-Day Food Momentum ($\Delta_{\text{Food}, 7d}$)}
+\subsubsection{Equation 1: Trailing 7-Day Food Momentum (Delta Food 7d)}
 Food represents 44.8\% of Cambodian household spending and adjusts prices daily. We calculate its trailing 7-day rate of change:
 \begin{equation}
 \Delta_{\text{Food}, 7d} = \frac{I_{01, t} - I_{01, t-7}}{I_{01, t-7}}
 \end{equation}
 where $I_{01, t}$ is today's Food Division price index and $I_{01, t-7}$ is the index 7 days ago.
 
-\subsubsection{Equation 2: Trailing 7-Day Transport Momentum ($\Delta_{\text{Trans}, 7d}$)}
+\subsubsection{Equation 2: Trailing 7-Day Transport Momentum (Delta Trans 7d)}
 Gasoline and diesel at pump stations fluctuate rapidly with world crude oil prices:
 \begin{equation}
 \Delta_{\text{Trans}, 7d} = \frac{I_{07, t} - I_{07, t-7}}{I_{07, t-7}}
 \end{equation}
 where $I_{07, t}$ is today's Transport Division price index.
 
-\subsubsection{Equation 3: Leading Indicator Combined Daily Drift ($\hat{\delta}_{\text{leading}}$)}
+\subsubsection{Equation 3: Leading Indicator Combined Daily Drift (delta leading)}
 Together, Food (44.775\%) and Transport (12.180\%) make up 57\% of the total national basket. We normalize their daily velocity:
 \begin{equation}
 \hat{\delta}_{\text{leading}} = \frac{W_{01} \cdot \left(\frac{\Delta_{\text{Food}, 7d}}{7}\right) + W_{07} \cdot \left(\frac{\Delta_{\text{Trans}, 7d}}{7}\right)}{W_{01} + W_{07}} = \frac{0.44775 \cdot \left(\frac{\Delta_{\text{Food}, 7d}}{7}\right) + 0.12180 \cdot \left(\frac{\Delta_{\text{Trans}, 7d}}{7}\right)}{0.56955}
 \end{equation}
 
-\subsubsection{Equation 4: Dual-Currency Exchange Rate Pass-Through Drift ($\hat{\delta}_{\text{FX}}$)}
+\subsubsection{Equation 4: Dual-Currency Exchange Rate Pass-Through Drift (delta FX)}
 When the Riel depreciates against the US Dollar, modern supermarket prices rise because goods are imported in USD. Using our empirical pass-through elasticity $\beta_{\text{ERPT}} = 0.28$:
 \begin{equation}
 \hat{\delta}_{\text{FX}} = \beta_{\text{ERPT}} \times \left( \frac{S_t^{\text{USD/KHR}} - S_{t-7}^{\text{USD/KHR}}}{7 \cdot S_{t-7}^{\text{USD/KHR}}} \right) = 0.28 \times \left( \frac{\Delta \text{FX}_{7d}}{7} \right)
 \end{equation}
 
-\subsubsection{Equation 5: Holiday Shopping Demand Shock ($\phi_{\text{fest}}$)}
+\subsubsection{Equation 5: Holiday Shopping Demand Shock (phi fest)}
 During major national celebrations (Khmer New Year in April and Pchum Ben in September/October), demand for passenger travel, pork, poultry, and beer temporarily spikes:
 \begin{equation}
 \phi_{\text{fest}} = \begin{cases}
@@ -1101,26 +1150,26 @@ During major national celebrations (Khmer New Year in April and Pchum Ben in Sep
 \end{cases}
 \end{equation}
 
-\subsubsection{Equation 6: Total Composite Forward Daily Drift ($\hat{\delta}_t$)}
+\subsubsection{Equation 6: Total Composite Forward Daily Drift (delta t)}
 We sum all 3 forward drift components to get the expected daily trajectory for remaining days:
 \begin{equation}
 \hat{\delta}_t = \hat{\delta}_{\text{leading}} + \hat{\delta}_{\text{FX}} + \phi_{\text{fest}}
 \end{equation}
 
-\subsubsection{Equation 7: Expected Average Index for Remaining Days ($\mathbb{E}[\bar{P}_{\text{rem}}]$)}
+\subsubsection{Equation 7: Expected Average Index for Remaining Days (E[P rem])}
 Using today's realized index level $P_t$ and the daily drift rate $\hat{\delta}_t$, the midpoint expectation across the remaining $N_{\text{rem}}$ days is:
 \begin{equation}
 \mathbb{E}[\bar{P}_{\text{remaining}}] = P_t \times \left( 1.0 + \hat{\delta}_t \cdot \frac{N_{\text{rem}} + 1}{2} \right)
 \end{equation}
 
-\subsubsection{Equation 8: Blended Headline Nowcast ($\text{Nowcast CPI}_M$)}
+\subsubsection{Equation 8: Blended Headline Nowcast (Nowcast CPI M)}
 The predicted monthly index combines observed calendar days with projected remaining days:
 \begin{equation}
 \text{Nowcast CPI}_M = \left( \frac{N_{\text{obs}}}{T} \right) \bar{P}_{\text{obs}} + \left( \frac{N_{\text{rem}}}{T} \right) \mathbb{E}[\bar{P}_{\text{remaining}}]
 \end{equation}
 where $\bar{P}_{\text{obs}} = \frac{1}{N_{\text{obs}}} \sum_{d=1}^{N_{\text{obs}}} P_d$ is the arithmetic average of days observed so far.
 
-\subsubsection{Equation 9: Projected Month-over-Month (MoM) Inflation Rate ($\pi_{\text{MoM}}$)}
+\subsubsection{Equation 9: Projected Month-over-Month (MoM) Inflation Rate (pi MoM)}
 We compare today's full-month nowcast against the actual CPI of the prior month:
 \begin{equation}
 \pi_{\text{MoM}} = \left( \frac{\text{Nowcast CPI}_M - \text{CPI}_{\text{prior}}}{\text{CPI}_{\text{prior}}} \right) \times 100.0\%
@@ -1130,7 +1179,7 @@ Conversely, if an analyst knows the inflation rate $\pi_{\text{MoM}}$, they can 
 \widehat{\text{CPI}}_M = \text{CPI}_{\text{prior}} \times \left( 1.0 + \frac{\pi_{\text{MoM}}}{100.0} \right)
 \end{equation}
 
-\subsubsection{Equation 10: Dynamic 95\% Confidence Interval ($\text{CI}_{95\%}$)}
+\subsubsection{Equation 10: Dynamic 95\% Confidence Interval (CI 95)}
 By the Central Limit Theorem, forecast uncertainty decays as remaining days run out:
 \begin{equation}
 \text{Margin of Error (ME)} = 1.96 \cdot \sigma_{\text{daily}} \cdot \sqrt{\frac{N_{\text{rem}}}{T}}
@@ -1382,7 +1431,7 @@ where:
     \item $\text{dist}_{\text{holiday}}$: Gaussian proximity decay to the nearest festive shock center ($\exp(-(\Delta \text{days})^2 / 18.0)$).
 \end{itemize}
 
-\subsubsection{How the Model Computes the Ridge Regression Coefficients ($\hat{\boldsymbol{\beta}}_k$)}
+\subsubsection{How the Model Computes the Ridge Regression Coefficients (beta hat k)}
 For each target basket $k$, the historical training dataset consists of historical target dates $d < t$. For each historical date $d$, the realized forward trajectory drift across the remaining days of that historical month was:
 \begin{equation}
 y_{k, d} = \frac{\bar{P}_{k, \text{rem}, d} - P_{k, d}}{P_{k, d} \cdot \left(\frac{N_{\text{rem}, d} + 1}{2}\right)}
@@ -1444,7 +1493,7 @@ Using Gauss's triangular summation formula $\sum_{j=1}^N j = \frac{N(N+1)}{2}$:
 \end{equation}
 This midpoint formula is mathematically exact under linear drift.
 
-\subsubsection{Intra-Month Division Index Nowcast ($\bar{I}_k$)}
+\subsubsection{Intra-Month Division Index Nowcast (I bar k)}
 The projected full-month mean index for basket $k$ is computed as the weighted combination of realized days and projected remaining days:
 \begin{equation}
 \bar{I}_{k, \text{month}} = \left( \frac{t}{T} \right) \bar{P}_{k, \text{obs}} + \left( \frac{N_{\text{rem}}}{T} \right) \mathbb{E}[\bar{P}_{k, \text{rem}}]

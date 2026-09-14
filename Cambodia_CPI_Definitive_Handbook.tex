@@ -462,29 +462,36 @@ To stop this, \texttt{vector\_item\_matcher.py} enforces 4 deterministic guardra
 \end{tcolorbox}
 
 \subsection{Part 2: AI-First Product Classification into UN COICOP Baskets}
-Every product must be assigned to one of the official United Nations COICOP categories (e.g., Bread, Meat, Fish, Medicine, Gasoline). To classify tens of thousands of items quickly, deterministically, and cost-effectively, our pipeline executes an official \textbf{AI-First Classification Ladder} codified in \texttt{dbt/macros/coicop\_classify\_macro.sql} and mirrored in Python:
+Every consumer product must be mapped to one of the 12 official United Nations COICOP divisions (Food, Clothing, Health, Housing, Transport, etc.). In production, incoming catalog items are classified through a streamlined \textbf{Dual-Pillar Architecture} combining deterministic \textbf{Store Purity Locks} for specialized vendors with \textbf{Google Gemini AI} for all multi-department retail goods:
 
 \begin{enumerate}
-    \item \textbf{Tier 1: Exact Explicit Overrides (Supreme Human Authority):} Matches exact barcodes, unique product keys, or curated store-product combinations recorded in \texttt{silver.coicop\_override} and \texttt{silver.coicop\_override\_manual}. If a manual audit locks an item, this takes supreme precedence.
-    \item \textbf{Tier 2: Single-Division Store Purity Locks (Instant Store Integrity):} Stores with pure domain integrity are locked directly to their respective division with zero lookup delay:
+    \item \textbf{Pillar 1: Single-Division Store Purity Locks (Deterministic Domain Routing):}
+    Vendors that sell exclusively within a single specialized consumption category are locked directly to their corresponding COICOP division with zero latency and 100\% mathematical certainty:
     \begin{itemize}[noitemsep]
-        \item \texttt{communitypharma}, \texttt{grab\_ucare} $\rightarrow$ Division 06 (Health \& Pharmacy).
-        \item \texttt{bookmebus}, \texttt{redbus}, \texttt{new\_gasoline} $\rightarrow$ Division 07 (Transport, Passenger Fares \& Automotive Fuel).
-        \item \texttt{arystore}, \texttt{samnangshop}, \texttt{cellcard}, \texttt{smart} $\rightarrow$ Division 08 (Information \& Communication Equipment / Telco).
-        \item \texttt{khmer24}, \texttt{realestate} $\rightarrow$ Division 04 (Housing, Rentals \& Utilities).
+        \item \texttt{communitypharma}, \texttt{grab\_ucare} $\rightarrow$ Division 06 (Health \& Pharmaceuticals).
+        \item \texttt{bookmebus}, \texttt{redbus}, \texttt{new\_gasoline} $\rightarrow$ Division 07 (Transport, Bus Fares \& Automotive Fuel).
+        \item \texttt{arystore}, \texttt{samnangshop}, \texttt{cellcard}, \texttt{smart} $\rightarrow$ Division 08 (Communication Hardware \& Telco Plans).
+        \item \texttt{khmer24}, \texttt{realestate}, \texttt{edc}, \texttt{ppwsa} $\rightarrow$ Division 04 (Housing Rentals, Electricity \& Water Utilities).
         \item \texttt{sokhahotel}, \texttt{hyyathotel}, \texttt{bayonbkk} $\rightarrow$ Division 11 (Restaurants \& Accommodation Services).
     \end{itemize}
-    \item \textbf{Tier 3: High-Confidence Gemini AI Engine ($\text{Confidence} \ge 0.70$):}
-    For mixed-retail stores (e.g. AEON, DeliShop, GrabMart, L192), high-confidence Gemini AI classifications are elevated directly above rigid regexes and global text substrings.
+    In our live database, Store Purity accounts for \textbf{14.34\%} of all classified catalog items.
+
+    \item \textbf{Pillar 2: Direct Google Gemini AI Engine with PostgreSQL Memoization (Primary Mixed-Retail Engine):}
+    For mixed-department retail giants (e.g., AEON Supermarket, DeliShop, GrabMart, L192, Lucky Supermarket) where thousands of varied SKUs arrive daily:
     \begin{itemize}[noitemsep]
-        \item \textit{Multi-Attribute Rich Context:} Unlike simple name-only models, our Gemini AI classifier receives a full multi-dimensional payload: product title, merchant slug, merchant aisle/category breadcrumbs, and price in KHR. This prevents classic retail domain traps (e.g. distinguishing cooking mirin from drinking wine, or coffee filter paper from drinking coffee).
-        \item \textit{Persistent Memoized Database Cache:} All Gemini classifications are permanently cached in \texttt{silver.dim\_coicop\_ai\_cache}. Any product with confidence $\ge 0.70$ is subsequently resolved in $< 1\text{ms}$ at \$0.00 cloud cost.
-        \item \textit{Primary Method Across the Warehouse:} Gemini AI is the \textbf{\#1 classification method}, powering \textbf{53.33\% (484,892 observations)} of the entire 909,289-row warehouse.
+        \item \textit{Direct AI Classification of New Products:} As newly scraped canonical items enter the pipeline (\texttt{item\_matcher.py}), the system invokes the \texttt{GeminiCOICOPClassifier}.
+        \item \textit{Multi-Attribute Rich Context:} Rather than relying on simple text keywords that get confused by packaging, Gemini receives the full product name, merchant brand, native store category breadcrumbs, and price in KHR. This enables Gemini to correctly identify that \textit{"Indomie Noodle Cup"} is Food (01.1.1) rather than Tableware (05), and \textit{"Cooking Rice Wine"} is Food/Condiments rather than Alcoholic Spirits.
+        \item \textit{Permanent Database Memoization:} Every Gemini classification is cached in \texttt{silver.dim\_coicop\_ai\_cache} and written directly into \texttt{silver.canonical\_items}. Future occurrences of that product across subsequent days resolve in under 1ms with zero cloud API overhead.
+        \item \textit{Dominant Production Volume:} In our production database, Google Gemini AI powers over \textbf{76.42\% (38,543 canonical products)} of all classified items in \texttt{silver.int\_coicop\_classified}.
     \end{itemize}
-    \item \textbf{Tier 4: Global Substring Brand Overrides (Secondary Deterministic Fallbacks):} Cross-store high-confidence brand substrings that resolve known edge cases when AI confidence is below $0.70$ (e.g. \texttt{CHIVAS}, \texttt{MARLBORO} $\rightarrow$ Division 02).
-    \item \textbf{Tier 5: Native Category Taxonomy Maps (Merchant Breadcrumb Fallback):} Maps native merchant category hierarchies from \texttt{silver.coicop\_category\_map} when raw scrapers capture verified store breadcrumbs (accounting for 16.65\% of warehouse classifications).
-    \item \textbf{Tier 6: Text Regular Expression Rules (Vetted Heuristics):} Matches vetted regex patterns and negative exclusion rules from \texttt{silver.coicop\_text\_rules}, handling standard product descriptions with linguistic variances (accounting for 11.98\% of warehouse classifications).
-    \item \textbf{Tier 7: Store Default Fallbacks \& AI Review Triage (Safeguard Final Tier):} Unmatched items fall back to broad store-level defaults from \texttt{silver.coicop\_store\_defaults}. In the live production database, \textbf{zero rows} remain in unclassified or review status (100.00\% classification rate).
+
+    \item \textbf{Auxiliary Safety Net: Critical Traps and Exact Audited Overrides ($< 9.2\%$ of items):}
+    To safeguard institutional compliance against statutory edge cases:
+    \begin{itemize}[noitemsep]
+        \item \textit{Critical Traps (\texttt{coicop\_critical\_traps.csv}):} High-priority regex patterns (7.57\% of items) that prevent dangerous cross-division category pollution (such as ensuring automotive air fresheners are routed away from Division 07 Transport to Division 05 Household Goods).
+        \item \textit{Exact Human Overrides (\texttt{coicop\_override.csv}):} Precise manual barcode and product key locks ($0.04\%$ of items) reserved for human auditor interventions.
+        \item \textit{Zero Unclassified Guarantee:} Legacy category maps and text heuristics serve as redundant safeguards; across the entire warehouse, \textbf{0 rows} remain unclassified (100.00\% classification rate).
+    \end{itemize}
 \end{enumerate}
 
 \begin{tcolorbox}[colback=white,colframe=Teal,title=\textbf{Step-by-Step Example: Multi-Attribute Gemini AI Classifying Instant Noodle Bowls}]

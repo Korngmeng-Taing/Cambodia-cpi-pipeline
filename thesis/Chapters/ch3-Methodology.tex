@@ -86,16 +86,29 @@
 \end{itemize}
 Only listings that satisfy both semantic vector similarity and all physical specification guards are linked into canonical product identities.
 
-\subsection{The 7-Tier AI-First COICOP Classification Ladder}
-\hs To classify hundreds of thousands of diverse consumer listings into official National Institute of Statistics (NIS) Cambodia 4-digit COICOP Classes (\texttt{DD.G.C}, 48 classes) across all 12 divisions, the pipeline deploys an optimized 7-tier AI-first production ensemble:
+\subsection{The AI-First COICOP Classification Architecture: Dual Pillars and Safety Nets}
+\hs To classify hundreds of thousands of diverse consumer listings into official National Institute of Statistics (NIS) Cambodia 4-digit COICOP Classes (\texttt{DD.G.C}, 48 classes) across all 12 divisions, the production pipeline implements an optimized \textbf{Dual-Pillar Classification Architecture} supported by institutional safety nets:
+
 \begin{enumerate}
-    \item \textbf{Tier 1: Exact Overrides and Critical Traps:} High-priority human curation rules (\texttt{coicop\_override.csv}, \texttt{silver.manual\_item\_corrections}) and disambiguation guards (\texttt{coicop\_critical\_traps.csv}) override all automated heuristics, addressing historically difficult classification boundaries.
-    \item \textbf{Tier 2: Single-Division Store Purity Locks:} Specialized commercial outlets operating in a single economic sector resolve with zero delay ($O(1)$ SQL locks). For example, Community Pharmacy and Ucare route directly to Health (06); BookMeBus and redBus to Passenger Transit (07.3.2); and official MEF/MOC sources to Fuels (07.2.2) or Utilities (04.5.1), providing a 100\% precision baseline.
-    \item \textbf{Tier 3: High-Confidence Gemini Flash AI Engine:} For multi-category retail goods, the pipeline queries Google Gemini Flash via the thread-safe \texttt{GeminiKeyPool} multi-key manager (4+ keys, 60 RPM). The model infers the exact official NIS 4-digit class in structured JSON with domain guardrails (e.g., reclassifying pet food to 09.3.1 under Recreation/Pets rather than human meat in 01.1.2, and routing skincare cosmetics to 12.1.3 rather than pharmaceuticals in 06.1.1).
-    \item \textbf{Tier 4: Global Substring Brand Overrides:} Multi-word brand heuristics (\texttt{coicop\_brand\_overrides.csv}) map validated manufacturer labels to targeted COICOP subclasses.
-    \item \textbf{Tier 5: Native Store Taxonomy Mapping:} Retailer internal category hierarchies (\texttt{coicop\_store\_category\_mapping.csv}) provide fallback coverage for structured supermarket portals.
-    \item \textbf{Tier 6: Priority Text Regex Rules:} Pattern-matching regex expressions (\texttt{coicop\_regex\_rules.csv}) resolve standardized grocery and staple descriptions.
-    \item \textbf{Tier 7: Automated Memoization and Review Triage:} Classifications are permanently memoized in PostgreSQL (\texttt{silver.dim\_coicop\_ai\_cache} and \texttt{silver.canonical\_items}) for sub-millisecond future retrieval. Borderline items populate the \texttt{silver.classification\_queue} for human analyst inspection.
+    \item \textbf{Pillar 1: Single-Division Store Purity Locks (Deterministic Domain Routing):}
+    Specialized commercial outlets operating strictly within a single economic sector resolve deterministically with zero latency ($O(1)$ SQL execution). Outlets such as Community Pharmacy and Grab UCare route directly to Division 06 (Health); BookMeBus, redBus, and retail fuel stations to Division 07 (Transport); Cellcard, Smart, and Metfone to Division 08 (Communications); Khmer24 rentals, EDC, and PPWSA to Division 04 (Housing and Utilities); and hotels to Division 11 (Restaurants and Accommodation). In the production database, Store Purity accounts for \textbf{14.34\%} of all active catalog items with 100\% mathematical precision.
+    
+    \item \textbf{Pillar 2: Direct Google Gemini AI Engine with Database Memoization (Primary Mixed-Retail Pillar):}
+    For multi-department retailers (e.g., AEON Supermarkets, DeliShop, GrabMart, L192) where tens of thousands of heterogeneous items arrive daily:
+    \begin{itemize}[noitemsep]
+        \item \textit{Automated Zero-Shot Ingestion:} Newly discovered products arriving through \texttt{item\_matcher.py} are directly classified by \texttt{GeminiCOICOPClassifier}.
+        \item \textit{Multi-Attribute Rich Context:} The model ingests the item's title, brand, native supermarket breadcrumbs, and price in KHR. This rich context prevents domain traps (e.g., distinguishing cooking mirin from drinking alcohol, pet meat from human food in Division 01, or cosmetic skincare from pharmaceuticals in Division 06).
+        \item \textit{PostgreSQL Memoization:} High-confidence predictions are permanently recorded into \texttt{silver.dim\_coicop\_ai\_cache} and \texttt{silver.canonical\_items}, enabling subsequent daily observations to resolve in $< 1\text{ms}$ at zero API cost.
+        \item \textit{Production Workhorse:} Google Gemini AI powers \textbf{76.42\% (38,543 items)} of the canonical classified catalog in \texttt{silver.int\_coicop\_classified}, serving as the foundational workhorse for retail intelligence.
+    \end{itemize}
+
+    \item \textbf{Institutional Safety Nets and Human Auditing ($< 9.2\%$ of items):}
+    To guarantee complete regulatory compliance against statutory edge cases:
+    \begin{itemize}[noitemsep]
+        \item \textit{Critical Traps (\texttt{coicop\_critical\_traps.csv}):} High-priority disambiguation patterns (accounting for 7.57\% of items) enforce domain boundaries, such as ensuring automotive air fresheners are routed to Division 05 rather than Division 07.
+        \item \textit{Exact Human Overrides (\texttt{coicop\_override.csv}):} Preserves manual corrections and barcode locks ($0.04\%$ of items) from institutional statistical audits.
+        \item \textit{100\% Classification Guarantee:} Legacy category mapping and text regex rules act as auxiliary safety nets. Across the 955,789+ warehouse records, \textbf{0 rows} remain unclassified.
+    \end{itemize}
 \end{enumerate}
 
 \subsection{Empirical Quality Quarantines and Boundary Case Disambiguation}

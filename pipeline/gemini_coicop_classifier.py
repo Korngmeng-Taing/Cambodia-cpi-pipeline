@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -41,7 +42,9 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-2.5-flash")
 BATCH_SIZE = int(os.getenv("COICOP_BATCH_SIZE", "40"))
+MAX_RETRIES = int(os.getenv("GEMINI_MAX_RETRIES", "5"))
 
 SYSTEM_PROMPT = """You are an expert UN COICOP (Classification of Individual Consumption According to Purpose) classification engine for the Consumer Price Index (CPI) in Cambodia.
 Your job is to classify consumer products strictly according to the official Cambodia National Institute of Statistics (NIS) 4-digit COICOP Class taxonomy (formatted with dots: DD.G.C, e.g. 01.1.1, 01.2.2, 07.2.2, 12.1.3).
@@ -115,7 +118,14 @@ class GeminiCOICOPClassifier:
         return conn
 
     def _call_gemini_batch(self, items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-        """Invokes Gemini with a batch of products and parses structured JSON output."""
+        """Invokes Gemini with a batch of products and parses structured JSON output.
+
+        Resilience features:
+        - Exponential backoff with jitter for transient failures.
+        - Longer backoff for 503 (server overload) vs general errors.
+        - Key rotation on 429 rate-limit errors.
+        - Automatic fallback to FALLBACK_MODEL when primary model exhausts retries.
+        """
         if not HAS_GENAI or genai is None:
             log.error("google-genai library not available.")
             return {}
@@ -141,50 +151,89 @@ class GeminiCOICOPClassifier:
 
         results: dict[str, dict[str, Any]] = {}
 
-        for attempt in range(3):
-            try:
-                config = genai_types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    system_instruction=SYSTEM_PROMPT,
-                    temperature=0.1,
-                )
-                response = client.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt_str,
-                    config=config,
-                )
-                resp_text = response.text.strip()
-                if resp_text.startswith("```"):
-                    resp_text = re.sub(r"^```(?:json)?\s*", "", resp_text)
-                    resp_text = re.sub(r"\s*```$", "", resp_text)
+        models_to_try = [self.model_name]
+        if FALLBACK_MODEL and FALLBACK_MODEL != self.model_name:
+            models_to_try.append(FALLBACK_MODEL)
 
-                parsed = json.loads(resp_text)
-                if isinstance(parsed, list):
-                    for obj in parsed:
-                        item_id = str(obj.get("id"))
-                        raw_div = str(obj.get("coicop_division", "01")).zfill(2)
-                        code = str(obj.get("coicop_code", f"{raw_div}.1.1"))
-                        conf = float(obj.get("confidence", 0.95))
-                        # Enforce strict 4-digit class code (DD.G.C)
-                        parts = code.split('.')
-                        if len(parts) > 3:
-                            code = '.'.join(parts[:3])
-                        elif len(parts) == 2:
-                            code = f"{code}.1"
-
-                        results[item_id] = {
-                            "coicop_division": raw_div,
-                            "coicop_code": code,
-                            "confidence": conf,
-                            "reason": obj.get("reason", "gemini_classified"),
-                        }
-                break
-            except Exception as e:
-                log.warning("Gemini classification batch failed (attempt %d/3): %s", attempt + 1, e)
+        for model_idx, current_model in enumerate(models_to_try):
+            if model_idx > 0:
+                log.info("Falling back to model %s for batch of %d items.", current_model, len(items))
+                # Get a fresh key for the fallback attempt
                 api_key = self.key_pool.get_next_key()
                 if api_key:
                     client = genai.Client(api_key=api_key)
-                time.sleep(1.5 * (attempt + 1))
+
+            for attempt in range(MAX_RETRIES):
+                try:
+                    config = genai_types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        system_instruction=SYSTEM_PROMPT,
+                        temperature=0.1,
+                    )
+                    response = client.models.generate_content(
+                        model=current_model,
+                        contents=prompt_str,
+                        config=config,
+                    )
+                    resp_text = response.text.strip()
+                    if resp_text.startswith("```"):
+                        resp_text = re.sub(r"^```(?:json)?\s*", "", resp_text)
+                        resp_text = re.sub(r"\s*```$", "", resp_text)
+
+                    parsed = json.loads(resp_text)
+                    if isinstance(parsed, list):
+                        for obj in parsed:
+                            item_id = str(obj.get("id"))
+                            raw_div = str(obj.get("coicop_division", "01")).zfill(2)
+                            code = str(obj.get("coicop_code", f"{raw_div}.1.1"))
+                            conf = float(obj.get("confidence", 0.95))
+                            # Enforce strict 4-digit class code (DD.G.C)
+                            parts = code.split('.')
+                            if len(parts) > 3:
+                                code = '.'.join(parts[:3])
+                            elif len(parts) == 2:
+                                code = f"{code}.1"
+
+                            results[item_id] = {
+                                "coicop_division": raw_div,
+                                "coicop_code": code,
+                                "confidence": conf,
+                                "reason": obj.get("reason", "gemini_classified"),
+                            }
+                    return results  # Success — return immediately
+                except Exception as e:
+                    err_str = str(e).lower()
+                    is_503 = "503" in err_str or "unavailable" in err_str
+                    is_429 = "429" in err_str or "resourceexhausted" in err_str or "quota" in err_str
+
+                    log.warning(
+                        "Gemini classification batch failed (model=%s, attempt %d/%d): %s",
+                        current_model, attempt + 1, MAX_RETRIES, e,
+                    )
+
+                    if is_429:
+                        # Rate-limited: rotate to a different API key and cool down current one
+                        self.key_pool.mark_key_rate_limited(api_key)
+                        api_key = self.key_pool.get_next_key()
+                        if api_key:
+                            client = genai.Client(api_key=api_key)
+
+                    if is_503:
+                        # Server overload: longer exponential backoff (base 3s)
+                        backoff = min(3.0 * (2 ** attempt) + random.uniform(0, 2.0), 60.0)
+                    else:
+                        # General error: standard exponential backoff (base 2s)
+                        backoff = min(2.0 * (2 ** attempt) + random.uniform(0, 1.0), 30.0)
+
+                    log.info("Retrying in %.1fs...", backoff)
+                    time.sleep(backoff)
+
+            # All retries exhausted for this model — try next model if available
+            log.warning(
+                "All %d retries exhausted for model %s. %s",
+                MAX_RETRIES, current_model,
+                "Trying fallback model..." if model_idx < len(models_to_try) - 1 else "No more models to try.",
+            )
 
         return results
 

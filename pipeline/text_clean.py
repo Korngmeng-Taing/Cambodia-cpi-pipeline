@@ -640,7 +640,7 @@ def is_size_compatible(
 # Specification & Hardware Feature Extraction
 # ──────────────────────────────────────────────────────────────────────────────
 
-_RE_STORAGE = re.compile(r"\b(\d+)\s*(gb|tb)\b", re.IGNORECASE)
+_RE_STORAGE = re.compile(r"\b(\d+)\s*(?:gb|tb|g)\b", re.IGNORECASE)
 _RE_PACK_QTY = re.compile(
     r"(?:(\d+)\s*(?:x|\*)\s*\d+(?:\.\d+)?\s*(?:ml|l|g|kg|gm|ltr)\b)"
     r"|(?:(?:pack of|case of|pack|pk|box of)\s*(\d+)\b)"

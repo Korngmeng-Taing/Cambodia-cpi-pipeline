@@ -201,7 +201,7 @@ def normalize_record(
         raise ValueError(f"Price bound violation for '{slug}' ('{name}'): {price}")
 
     if curr is None:
-        # Default currency inference: store hints and retail price magnitude
+        # Default currency inference: registered store defaults take precedence
         khr_stores = {
             "new_gasoline",
             "aeon",
@@ -210,8 +210,33 @@ def normalize_record(
             "grab_chipmong",
             "grab_ucare",
             "mef_fx",
+            "edc",
+            "ppwsa",
+            "nis_official_cpi",
         }
-        if raw.get("price_khr") is not None or slug in khr_stores or price > 50000.0:
+        usd_stores = {
+            "delishop",
+            "l192",
+            "communitypharma",
+            "samnangshop",
+            "arystore",
+            "cellcard",
+            "smart",
+            "khmer24",
+            "realestate",
+            "redbus",
+            "bookmebus",
+            "sokhahotel",
+            "hyyathotel",
+            "bayonbkk",
+            "khmermoto",
+            "metfone",
+        }
+        if raw.get("price_khr") is not None or slug in khr_stores:
+            curr = "KHR"
+        elif slug in usd_stores:
+            curr = "USD"
+        elif price > 50000.0:
             curr = "KHR"
         else:
             curr = "USD"

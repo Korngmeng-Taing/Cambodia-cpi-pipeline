@@ -631,7 +631,11 @@ class CPICalculationEngine:
                             days_gap = max(1, min(days_gap, 7))
                         else:
                             days_gap = 1
-                        imputed_curr[item_id] = float(val) * (movement ** days_gap)
+                        # Advance from last observed price using the class/division movement.
+                        # Do not compound movement exponentially over multiple days (movement ** days_gap)
+                        # as movement is calculated day-over-day and exponential compounding creates severe
+                        # distortion on multi-day gaps.
+                        imputed_curr[item_id] = float(val) * movement
                         if b_price is not None and pd.notna(b_price) and float(b_price) > 0:
                             imputed_base[item_id] = float(b_price)
 

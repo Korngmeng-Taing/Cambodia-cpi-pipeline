@@ -88,7 +88,7 @@ class AryStorePhoneScraper(BaseScraper):
                     resp = self.session.get(
                         ARYSTORE_API_URL,
                         params={"per_page": ARYSTORE_PAGE_SIZE, "page": page},
-                        timeout=60,
+                        timeout=(10, 30),
                     )
                     resp.raise_for_status()
                     break

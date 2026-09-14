@@ -53,6 +53,7 @@ from ml.config import (
     NOWCAST_TARGET_BASKETS,
     RIDGE_ALPHAS,
     Z_SCORE_95,
+    get_cambodia_holidays_for_year,
 )
 from pipeline.config import get_db_connection
 
@@ -69,11 +70,12 @@ class RidgeBasketDriftEstimator:
 
     @staticmethod
     def _extract_holiday_features(eval_date: date) -> tuple[float, float]:
-        """Returns (festival_proximity_kernel, is_holiday_window)."""
+        """Returns (festival_proximity_kernel, is_holiday_window) using year-accurate Cambodian holidays."""
         _, days_in_month = calendar.monthrange(eval_date.year, eval_date.month)
         prox = 0.0
         is_window = 0.0
-        for hol in CAMBODIA_ANNUAL_HOLIDAYS:
+        holidays = get_cambodia_holidays_for_year(eval_date.year)
+        for hol in holidays:
             if hol["month"] == eval_date.month:
                 peak_days = hol["peak_days"]
                 window = hol.get("window_days", 4)

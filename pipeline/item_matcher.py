@@ -9,7 +9,6 @@ from rapidfuzz import fuzz
 import numpy as np
 
 from pipeline.config import get_database_url
-from pipeline.gemini_coicop_classifier import GeminiCOICOPClassifier
 from pipeline.retry import retry_db_transaction
 from pipeline.text_clean import clean_name_for_matching, is_size_compatible
 from pipeline.vector_item_matcher import VectorItemMatcher, is_spec_compatible
@@ -300,15 +299,8 @@ class ItemMatcher:
     ) -> uuid.UUID:
         item_id = uuid.uuid4()
         
-        # Auto-classify new canonical item into UN COICOP using Direct Gemini Flash
+        # Classification is handled asynchronously in bulk by downstream task gemini_coicop_classification
         coicop_div, coicop_code = None, None
-        try:
-            classifier = GeminiCOICOPClassifier()
-            res = classifier.classify_single(name, brand=brand)
-            coicop_div = res.get("coicop_division")
-            coicop_code = res.get("coicop_code")
-        except Exception as e:
-            log.warning("Gemini COICOP classification on create_canonical_item failed: %s", e)
 
         valid_bc = barcode if is_valid_barcode(barcode) else None
         vec_str = self._format_vector(name) if self._has_embedding_column else None
@@ -545,12 +537,6 @@ class ItemMatcher:
         barcode_aliases = []
 
         catalog = [{"item_id": iid, "canonical_name": cn} for iid, cn, _ in self.items_cache if cn]
-        classifier = None
-        try:
-            classifier = GeminiCOICOPClassifier()
-        except Exception as e:
-            log.warning("Gemini COICOP classifier init in ItemMatcher failed: %s", e)
-            classifier = None
 
         for row in rows:
             raw_price_id, desc, barcode, sku, store_id, brand, package_size = row
@@ -637,17 +623,9 @@ class ItemMatcher:
                     barcode_aliases.append((valid_bc.strip(), str(matched_id), store_id))
                 continue
 
-            # 5. Create new canonical item with auto-classification
+            # 5. Create new canonical item (classification handled downstream in bulk)
             new_id = uuid.uuid4()
             coicop_div, coicop_code = None, None
-            try:
-                if classifier is None:
-                    classifier = GeminiCOICOPClassifier()
-                res = classifier.classify_single(name_clean, brand=brand)
-                coicop_div = res.get("coicop_division")
-                coicop_code = res.get("coicop_code")
-            except Exception as e:
-                log.warning("Gemini COICOP classification on batch new item failed: %s", e)
 
             vec_str = self._format_vector(name_clean) if self._has_embedding_column else None
             valid_bc = barcode if is_valid_barcode(barcode) else None

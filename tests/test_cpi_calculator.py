@@ -310,8 +310,8 @@ def test_compounded_imputation_with_timestamp(cpi_engine):
     result = cpi_engine.compute_daily_elementary_indices(calc_date, base_df, df_history)
     item2_row = result[result["item_id"] == "item-2"].iloc[0]
     assert bool(item2_row["is_imputed"]) is True
-    # 3 days gap: movement = 1.10 -> compounded = 2000.0 * (1.10 ** 3) = 2662.0
-    expected = 2000.0 * (1.10 ** 3)
+    # Under ILO CPI Manual §6.58, movement is applied to the last observed price without exponential compounding
+    expected = 2000.0 * 1.10
     assert pytest.approx(item2_row["current_price_khr"], 0.01) == expected
 
 

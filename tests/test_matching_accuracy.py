@@ -386,7 +386,7 @@ class TestMatchingLadderPriority:
         cursor.fetchone.return_value = (new_id,)
         conn.cursor.return_value.__enter__.return_value = cursor
 
-        with patch("pipeline.item_matcher.GeminiCOICOPClassifier") as mock_cls:
+        with patch("pipeline.gemini_coicop_classifier.GeminiCOICOPClassifier") as mock_cls:
             mock_cls.return_value.classify_single.return_value = {
                 "coicop_division": "01",
                 "coicop_code": "01.1.1",

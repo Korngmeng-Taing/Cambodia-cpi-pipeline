@@ -258,6 +258,7 @@ ORDER BY curr.cpi_month DESC, curr.coicop_division ASC;
 
 
 -- 10.9 Out-of-Sample Nowcasting Evaluation & Tracking vs. Official NIS Benchmarks
+DROP VIEW IF EXISTS gold.v_nowcast_evaluation CASCADE;
 CREATE OR REPLACE VIEW gold.v_nowcast_evaluation AS
 SELECT 
     n.nowcast_date,
@@ -267,9 +268,21 @@ SELECT
     n.projected_mom_pct AS nowcasted_mom_pct,
     o.mom_inflation_pct AS actual_nis_mom_pct,
     ROUND(n.projected_mom_pct - o.mom_inflation_pct, 4) AS mom_forecast_error,
+    n.nowcast_headline_cpi,
     n.nowcast_nis_headline_cpi AS nowcasted_nis_cpi,
     o.headline_cpi AS actual_nis_cpi,
     ROUND(n.nowcast_nis_headline_cpi - o.headline_cpi, 4) AS cpi_forecast_error,
+    n.nowcast_food_cpi,
+    n.projected_food_mom_pct,
+    n.nowcast_transport_cpi,
+    n.projected_transport_mom_pct,
+    n.nowcast_housing_cpi,
+    n.projected_housing_mom_pct,
+    n.nowcast_restaurant_cpi,
+    n.projected_restaurant_mom_pct,
+    n.nowcast_alcohol_cpi,
+    n.projected_alcohol_mom_pct,
+    n.baskets_detail,
     n.ci_lower_95,
     n.ci_upper_95,
     CASE 

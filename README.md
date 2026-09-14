@@ -85,9 +85,11 @@
   - **Harmonized Monthly Headline & Core CPI**: Computed as the windowed Laspeyres sum of monthly division indices:
     $$\text{monthly\_headline\_cpi} = \frac{\sum_{\text{active}} W_d \cdot I_d^{\text{month}}}{\sum_{\text{active}} W_d}$$
   - **Refined Core CPI**: Excludes volatile food (Division 01), housing & utilities (Division 04), and transport fuel (Division 07) in accordance with NIS and National Bank of Cambodia core inflation standards.
-- **Machine Learning-Assisted Daily Inflation Nowcasting Engine (`ml/nowcaster.py`)**:
-  - **Expanding-Window MTD Aggregation**: Partitions the current month into observed days ($1 \dots t$) and projected days ($t+1 \dots T$), aggregating daily facts from `gold.fct_cpi_daily`.
-  - **Cross-Division Momentum Projection**: Projects remaining days using high-frequency Division 01 (Food, 44.775%) and Division 07 (Transport, 12.228%) momentum (*Macias et al., 2023*).
+- **Two-Stage Hybrid Ridge Daily Inflation Nowcasting Engine (`ml/nowcaster.py`)**:
+  - **Axiomatic Bottom-Up 5-Basket Price Relatives**: Directly models price relatives across **5 key consumption divisions** (Food 44.78%, Alcohol 1.63%, Housing/Energy 17.08%, Transport 12.23%, Restaurants 5.86%) covering **81.58%** of Cambodia's national basket.
+  - **Empirical Bayes Ridge Drift Estimator (`RidgeBasketDriftEstimator`)**: Uses `RidgeCV` across rolling multi-horizon momentum features (3d/7d/14d food momentum, 3d/7d transport momentum, 7d/14d MEF FX momentum, holiday demand proximity) with empirical Bayesian shrinkage prior to forecast remaining-days drift.
+  - **Exact Laspeyres Axiomatic Aggregation**: Synthesizes basket-level trajectories using cumulative midpoint expectations and weights them into the official headline CPI nowcast:
+    $$\widehat{\text{HeadlineCPI}}_T = \sum_{k \in \mathcal{K}} w_k \cdot \bar{I}_{k, \text{month}} + \sum_{m \notin \mathcal{K}} w_m \cdot I_{m, \text{baseline}}$$
   - **Official Benchmark Chain-Linking**: Translates pipeline growth rates into chain-linked official NIS Phnom Penh index numbers (Base Oct–Dec 2006 = 100).
   - **Uncertainty Decay Modeling**: Computes dynamic 95% confidence intervals that narrow as the month progresses ($U_t = \sqrt{(T-t)/T}$).
 - **Serving Views & Metabase Dashboards** (`sql/views.sql`):

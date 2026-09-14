@@ -1,6 +1,4 @@
-import os
-
-latex_code = r"""\documentclass[11pt,a4paper]{article}
+\documentclass[11pt,a4paper]{article}
 
 \usepackage[margin=1in]{geometry}
 \usepackage{fontspec}
@@ -573,9 +571,3 @@ The inclusion of daily web-scraped price microdata reduces out-of-sample Root Me
 \end{center}
 
 \end{document}
-"""
-
-target_path = os.path.join(os.getcwd(), "Cambodia_CPI_Technical_Specification.tex")
-with open(target_path, "w", encoding="utf-8") as f:
-    f.write(latex_code.strip())
-print(f"File created successfully at: {target_path}")

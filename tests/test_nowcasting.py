@@ -148,6 +148,12 @@ def test_synthetic_nowcast_execution():
         "ci_upper_95",
         "uncertainty_pct",
         "model_name",
+        "nowcast_food_cpi",
+        "nowcast_alcohol_cpi",
+        "nowcast_housing_cpi",
+        "nowcast_transport_cpi",
+        "nowcast_restaurant_cpi",
+        "baskets_detail",
     ]
     for k in required_keys:
         assert k in res, f"Missing expected key {k} in nowcast result"
@@ -277,5 +283,53 @@ def test_compute_evaluation_metrics_dataframe():
     # Check rolling RMSE is computed and positive
     assert df_metrics.iloc[2]["rolling_rmse_3m"] > 0
     assert df_metrics.iloc[2]["rolling_mae_3m"] > 0
+
+
+def test_bottom_up_5basket_price_relatives(sample_nowcast_data):
+    """Verifies that all 5 key market baskets are nowcasted individually with valid price relatives."""
+    target_date, df_daily, df_fx, df_monthly, df_nis = sample_nowcast_data
+    nowcaster = CPINowcaster()
+
+    res = nowcaster.nowcast_for_date(target_date, df_daily, df_fx, df_monthly, df_nis)
+
+    # 1. Check top-level 5 basket fields
+    assert "nowcast_food_cpi" in res
+    assert "nowcast_alcohol_cpi" in res
+    assert "nowcast_housing_cpi" in res
+    assert "nowcast_transport_cpi" in res
+    assert "nowcast_restaurant_cpi" in res
+
+    assert res["nowcast_food_cpi"] > 0.0
+    assert res["nowcast_alcohol_cpi"] > 0.0
+    assert res["nowcast_housing_cpi"] > 0.0
+    assert res["nowcast_transport_cpi"] > 0.0
+    assert res["nowcast_restaurant_cpi"] > 0.0
+
+    # 2. Check baskets_detail dictionary
+    baskets = res.get("baskets_detail", {})
+    assert len(baskets) == 12
+
+    for div in ["01", "02", "04", "07", "11"]:
+        info = baskets[div]
+        assert "price_relative" in info
+        assert "mom_pct" in info
+        assert "contribution_pp" in info
+        assert info["price_relative"] > 0.0
+
+
+def test_laspeyres_exact_aggregation(sample_nowcast_data):
+    """Verifies that sum(weight * division_nowcast) equals headline nowcast CPI within 0.001 tolerance."""
+    target_date, df_daily, df_fx, df_monthly, df_nis = sample_nowcast_data
+    nowcaster = CPINowcaster()
+
+    res = nowcaster.nowcast_for_date(target_date, df_daily, df_fx, df_monthly, df_nis)
+    baskets = res["baskets_detail"]
+
+    aggregated_headline = sum(b["weight"] * b["nowcast"] for b in baskets.values())
+    assert pytest.approx(res["nowcast_headline_cpi"], 0.001) == aggregated_headline
+
+    # Check sum of percentage-point contributions equals overall projected MoM rate (approx)
+    total_contribution = sum(b["contribution_pp"] for b in baskets.values())
+    assert pytest.approx(res["projected_mom_pct"], 0.05) == total_contribution
 
 

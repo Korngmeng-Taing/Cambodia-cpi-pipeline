@@ -47,3 +47,19 @@ FEATURE_WINDOWS = {
 CI_ALPHA = 0.05  # 95% Confidence Interval (z = 1.96)
 Z_SCORE_95 = 1.95996
 
+# 5 Key Market-Driven Nowcasting Baskets (representing ~81.6% of Cambodia's CPI)
+NOWCAST_TARGET_BASKETS: list[str] = ["01", "02", "04", "07", "11"]
+
+BASKET_COLUMN_MAP: dict[str, str] = {
+    "01": "food",
+    "02": "alcohol",
+    "04": "housing",
+    "07": "transport",
+    "11": "restaurant",
+}
+
+DEFAULT_NOWCAST_MODEL: str = "hybrid_ridge_5basket_v1"
+
+# Ridge Regression hyperparameter search grid for Generalized Cross-Validation (RidgeCV)
+RIDGE_ALPHAS: list[float] = [0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0, 50.0, 100.0]
+

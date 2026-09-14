@@ -403,6 +403,58 @@ def provision_all():
             "grid": (12, 30, 12, 8)
         },
         {
+            "name": "5-Basket Nowcast Trajectory & MoM Inflation (%)",
+            "desc": "Real-time month-over-month inflation nowcasts across 5 major consumer baskets covering 81.58% of Cambodia's CPI.",
+            "display": "line",
+            "sql": """
+                SELECT 
+                    nowcast_date AS "Nowcast Date",
+                    projected_mom_pct AS "Headline MoM (%)",
+                    projected_food_mom_pct AS "Food (01) MoM (%)",
+                    projected_transport_mom_pct AS "Transport (07) MoM (%)",
+                    projected_housing_mom_pct AS "Housing/Energy (04) MoM (%)",
+                    projected_restaurant_mom_pct AS "Restaurants (11) MoM (%)",
+                    projected_alcohol_mom_pct AS "Alcohol (02) MoM (%)"
+                FROM gold.v_nowcast_evaluation
+                WHERE model_name = 'hybrid_ridge_5basket_v1'
+                ORDER BY nowcast_date ASC;
+            """,
+            "viz": {
+                "graph.dimensions": ["Nowcast Date"],
+                "graph.metrics": [
+                    "Headline MoM (%)",
+                    "Food (01) MoM (%)",
+                    "Transport (07) MoM (%)",
+                    "Housing/Energy (04) MoM (%)",
+                    "Restaurants (11) MoM (%)",
+                    "Alcohol (02) MoM (%)"
+                ]
+            },
+            "grid": (0, 38, 14, 8)
+        },
+        {
+            "name": "5-Basket Price Relatives & Contribution Breakdown",
+            "desc": "Axiomatic Laspeyres price relatives and basket index levels for current month nowcast.",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    nowcast_date AS "Date",
+                    ROUND(nowcast_headline_cpi::numeric, 2) AS "Headline",
+                    ROUND(nowcast_food_cpi::numeric, 2) AS "Food (44.8%)",
+                    ROUND(nowcast_transport_cpi::numeric, 2) AS "Transport (12.2%)",
+                    ROUND(nowcast_housing_cpi::numeric, 2) AS "Housing (17.1%)",
+                    ROUND(nowcast_restaurant_cpi::numeric, 2) AS "Restaurants (5.9%)",
+                    ROUND(nowcast_alcohol_cpi::numeric, 2) AS "Alcohol (1.6%)",
+                    CONCAT(ROUND(ci_lower_95::numeric, 2), ' - ', ROUND(ci_upper_95::numeric, 2)) AS "95% CI"
+                FROM gold.v_nowcast_evaluation
+                WHERE model_name = 'hybrid_ridge_5basket_v1'
+                ORDER BY nowcast_date DESC
+                LIMIT 15;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (14, 38, 10, 8)
+        },
+        {
             "name": "ML Nowcaster Rolling 3-Month Error Trend (RMSE & MAE)",
             "desc": "Continuous tracking of nowcaster forecast error against official statistical releases across rolling quarters.",
             "display": "line",
@@ -419,7 +471,7 @@ def provision_all():
                 "graph.dimensions": ["Target Month"],
                 "graph.metrics": ["Rolling RMSE (3M)", "Rolling MAE (3M)"]
             },
-            "grid": (0, 38, 12, 7)
+            "grid": (0, 46, 12, 7)
         },
         {
             "name": "ML Nowcaster Directional Accuracy Rate (%)",
@@ -432,7 +484,7 @@ def provision_all():
                 WHERE directional_hit IS NOT NULL;
             """,
             "viz": {},
-            "grid": (12, 38, 4, 7)
+            "grid": (12, 46, 4, 7)
         },
         {
             "name": "ML Nowcaster Point-in-Time Error Audit Table",
@@ -453,7 +505,7 @@ def provision_all():
                 ORDER BY evaluation_date DESC, days_observed DESC;
             """,
             "viz": {"table.pivot_column": None},
-            "grid": (16, 38, 8, 7)
+            "grid": (16, 46, 8, 7)
         }
     ]
 

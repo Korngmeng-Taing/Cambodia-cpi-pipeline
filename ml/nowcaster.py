@@ -42,9 +42,16 @@ if str(ROOT_DIR) not in sys.path:
 import numpy as np
 import pandas as pd
 
+import json
+from sklearn.linear_model import RidgeCV
+
 from ml.config import (
+    BASKET_COLUMN_MAP,
     CAMBODIA_ANNUAL_HOLIDAYS,
+    DEFAULT_NOWCAST_MODEL,
     NIS_COICOP_WEIGHTS,
+    NOWCAST_TARGET_BASKETS,
+    RIDGE_ALPHAS,
     Z_SCORE_95,
 )
 from pipeline.config import get_db_connection
@@ -52,11 +59,229 @@ from pipeline.config import get_db_connection
 log = logging.getLogger(__name__)
 
 
-class CPINowcaster:
-    """Production High-Frequency Inflation Nowcaster."""
+class RidgeBasketDriftEstimator:
+    """Estimates daily drift rates for 5 key COICOP divisions using Ridge Regression (RidgeCV)
+    with empirical Bayesian prior shrinkage for small samples.
+    """
 
-    def __init__(self, model_name: str = "ml_assisted_nowcaster_v1"):
+    def __init__(self, alphas: list[float] | None = None):
+        self.alphas = alphas or RIDGE_ALPHAS
+
+    @staticmethod
+    def _extract_holiday_features(eval_date: date) -> tuple[float, float]:
+        """Returns (festival_proximity_kernel, is_holiday_window)."""
+        _, days_in_month = calendar.monthrange(eval_date.year, eval_date.month)
+        prox = 0.0
+        is_window = 0.0
+        for hol in CAMBODIA_ANNUAL_HOLIDAYS:
+            if hol["month"] == eval_date.month:
+                peak_days = hol["peak_days"]
+                window = hol.get("window_days", 4)
+                min_day = max(1, min(peak_days) - window)
+                max_day = min(days_in_month, max(peak_days) + 2)
+                if min_day <= eval_date.day <= max_day:
+                    is_window = 1.0
+                dist = min(abs(eval_date.day - p) for p in peak_days)
+                prox = float(np.exp(-0.4 * min(dist, 10)))
+                break
+        return prox, is_window
+
+    @staticmethod
+    def _extract_fx_features(eval_date: date, df_fx: pd.DataFrame | None) -> tuple[float, float]:
+        """Returns (fx_momentum_7d, fx_momentum_14d)."""
+        if df_fx is None or df_fx.empty or "rate" not in df_fx.columns:
+            return 0.0, 0.0
+        sub = df_fx[pd.to_datetime(df_fx["execution_date"]).dt.date <= eval_date].sort_values("execution_date")
+        if len(sub) < 2:
+            return 0.0, 0.0
+        rates = sub["rate"].astype(float).values
+        r_now = rates[-1]
+        r_7 = rates[-7] if len(rates) >= 7 else rates[0]
+        r_14 = rates[-14] if len(rates) >= 14 else rates[0]
+        mom_7d = float((r_now - r_7) / r_7) if r_7 > 0 else 0.0
+        mom_14d = float((r_now - r_14) / r_14) if r_14 > 0 else 0.0
+        return mom_7d, mom_14d
+
+    @staticmethod
+    def _get_division_momentum(
+        eval_date: date, df_daily: pd.DataFrame | None, div_code: str
+    ) -> tuple[float, float, float]:
+        """Returns (mom_3d, mom_7d, mom_14d) for a given COICOP division."""
+        if df_daily is None or df_daily.empty or "coicop_division" not in df_daily.columns:
+            return 0.0, 0.0, 0.0
+        sub = df_daily[
+            (df_daily["coicop_division"] == div_code)
+            & (pd.to_datetime(df_daily["calculation_date"]).dt.date <= eval_date)
+        ].sort_values("calculation_date")
+        if sub.empty:
+            return 0.0, 0.0, 0.0
+        sub = sub.drop_duplicates(subset=["calculation_date"])
+        if len(sub) < 2:
+            return 0.0, 0.0, 0.0
+        vals = sub["division_index"].astype(float).values
+        v_now = vals[-1]
+        v_3 = vals[-3] if len(vals) >= 3 else vals[0]
+        v_7 = vals[-7] if len(vals) >= 7 else vals[0]
+        v_14 = vals[-14] if len(vals) >= 14 else vals[0]
+
+        m_3 = float((v_now - v_3) / v_3) if v_3 > 0 else 0.0
+        m_7 = float((v_now - v_7) / v_7) if v_7 > 0 else 0.0
+        m_14 = float((v_now - v_14) / v_14) if v_14 > 0 else 0.0
+        return m_3, m_7, m_14
+
+    def extract_features_for_basket(
+        self,
+        eval_date: date,
+        df_daily: pd.DataFrame,
+        df_fx: pd.DataFrame,
+        div_code: str,
+    ) -> np.ndarray:
+        """Extracts specialized feature vector for each of the 5 key baskets."""
+        _, days_in_month = calendar.monthrange(eval_date.year, eval_date.month)
+        prog_ratio = float(eval_date.day / days_in_month)
+        fest_prox, is_window = self._extract_holiday_features(eval_date)
+        fx_7d, fx_14d = self._extract_fx_features(eval_date, df_fx)
+
+        f_3, f_7, f_14 = self._get_division_momentum(eval_date, df_daily, "01")
+        t_3, t_7, _ = self._get_division_momentum(eval_date, df_daily, "07")
+
+        if div_code == "01":  # Food
+            return np.array([f_3, f_7, f_14, fx_7d, fest_prox, prog_ratio], dtype=float)
+        elif div_code == "02":  # Alcohol & Tobacco
+            _, a_7, _ = self._get_division_momentum(eval_date, df_daily, "02")
+            return np.array([a_7, fx_7d, fx_14d, is_window, prog_ratio], dtype=float)
+        elif div_code == "04":  # Housing & Energy
+            _, h_7, h_14 = self._get_division_momentum(eval_date, df_daily, "04")
+            return np.array([h_7, h_14, fx_14d, prog_ratio], dtype=float)
+        elif div_code == "07":  # Transport
+            return np.array([t_3, t_7, fx_7d, fest_prox, prog_ratio], dtype=float)
+        elif div_code == "11":  # Restaurants & Hotels
+            _, r_7, _ = self._get_division_momentum(eval_date, df_daily, "11")
+            return np.array([r_7, f_7, is_window, prog_ratio], dtype=float)
+        else:
+            _, d_7, _ = self._get_division_momentum(eval_date, df_daily, div_code)
+            return np.array([d_7, fx_7d, prog_ratio], dtype=float)
+
+    def compute_structural_prior_drift(
+        self,
+        eval_date: date,
+        df_daily: pd.DataFrame,
+        df_fx: pd.DataFrame,
+        div_code: str,
+    ) -> float:
+        """Computes calibrated economic structural prior for cold-start / shrinkage."""
+        _, is_window = self._extract_holiday_features(eval_date)
+        fx_7d, fx_14d = self._extract_fx_features(eval_date, df_fx)
+        f_3, f_7, f_14 = self._get_division_momentum(eval_date, df_daily, "01")
+        fest_shock = 0.0012 if is_window > 0 else 0.0
+
+        if div_code == "01":  # Food
+            return float((f_7 / 7.0) + (fest_shock * 0.5) + (0.15 * fx_7d / 7.0))
+        elif div_code == "02":  # Alcohol & Tobacco
+            _, a_7, _ = self._get_division_momentum(eval_date, df_daily, "02")
+            return float((a_7 / 7.0) + (0.20 * fx_7d / 7.0) + (fest_shock * 0.25))
+        elif div_code == "04":  # Housing & Energy
+            _, h_7, h_14 = self._get_division_momentum(eval_date, df_daily, "04")
+            return float((h_14 / 14.0) * 0.5 + (0.10 * fx_14d / 14.0))
+        elif div_code == "07":  # Transport
+            t_3, t_7, _ = self._get_division_momentum(eval_date, df_daily, "07")
+            return float((t_7 / 7.0) + (0.35 * fx_7d / 7.0) + (fest_shock * 0.5))
+        elif div_code == "11":  # Restaurants & Hotels
+            _, r_7, _ = self._get_division_momentum(eval_date, df_daily, "11")
+            return float((r_7 / 7.0) + (0.30 * f_7 / 7.0) + (fest_shock * 0.25))
+        else:
+            _, d_7, _ = self._get_division_momentum(eval_date, df_daily, div_code)
+            return float((d_7 / 14.0) * 0.3)
+
+    def fit_and_predict_drift(
+        self,
+        target_date: date,
+        df_daily: pd.DataFrame,
+        df_fx: pd.DataFrame,
+    ) -> dict[str, float]:
+        """Trains RidgeCV models on available historical daily facts and predicts daily drift for all 12 divisions."""
+        drifts: dict[str, float] = {}
+
+        df_daily_clean = df_daily.copy() if not df_daily.empty else pd.DataFrame()
+        if not df_daily_clean.empty and "calculation_date" in df_daily_clean.columns:
+            df_daily_clean["calculation_date"] = pd.to_datetime(df_daily_clean["calculation_date"]).dt.date
+
+        unique_dates = sorted(df_daily_clean["calculation_date"].unique()) if not df_daily_clean.empty else []
+
+        for div_code in NIS_COICOP_WEIGHTS.keys():
+            structural_prior = self.compute_structural_prior_drift(target_date, df_daily_clean, df_fx, div_code)
+
+            if div_code not in NOWCAST_TARGET_BASKETS:
+                drifts[div_code] = float(np.clip(structural_prior, -0.015, 0.015))
+                continue
+
+            X_train = []
+            y_train = []
+
+            for d in unique_dates:
+                if d >= target_date:
+                    continue
+                _, dim = calendar.monthrange(d.year, d.month)
+                m_end = d.replace(day=dim)
+
+                rem_days = dim - d.day
+                if rem_days < 2:
+                    continue
+
+                sub_rem = df_daily_clean[
+                    (df_daily_clean["coicop_division"] == div_code)
+                    & (df_daily_clean["calculation_date"] > d)
+                    & (df_daily_clean["calculation_date"] <= m_end)
+                ]
+                sub_now = df_daily_clean[
+                    (df_daily_clean["coicop_division"] == div_code)
+                    & (df_daily_clean["calculation_date"] == d)
+                ]
+                if sub_rem.empty or sub_now.empty:
+                    continue
+
+                idx_now = float(sub_now["division_index"].iloc[-1])
+                if idx_now <= 0:
+                    continue
+                mean_rem = float(sub_rem["division_index"].mean())
+
+                implied_drift = (mean_rem - idx_now) / (idx_now * (rem_days + 1) / 2.0)
+                feat = self.extract_features_for_basket(d, df_daily_clean, df_fx, div_code)
+                X_train.append(feat)
+                y_train.append(implied_drift)
+
+            pred_drift = structural_prior
+            n_samples = len(X_train)
+
+            if n_samples >= 8:
+                try:
+                    X_arr = np.array(X_train)
+                    y_arr = np.array(y_train)
+                    ridge = RidgeCV(alphas=self.alphas)
+                    ridge.fit(X_arr, y_arr)
+
+                    x_target = self.extract_features_for_basket(target_date, df_daily_clean, df_fx, div_code).reshape(1, -1)
+                    ml_pred = float(ridge.predict(x_target)[0])
+
+                    prior_weight = max(0.0, min(1.0, 1.0 - (n_samples - 8) / 22.0))
+                    pred_drift = (1.0 - prior_weight) * ml_pred + prior_weight * structural_prior
+                except Exception as e:
+                    log.debug("Ridge fitting fallback for division %s: %s", div_code, e)
+                    pred_drift = structural_prior
+            else:
+                pred_drift = structural_prior
+
+            drifts[div_code] = float(np.clip(pred_drift, -0.015, 0.015))
+
+        return drifts
+
+
+class CPINowcaster:
+    """Production High-Frequency Inflation Nowcaster with 5-Basket Bottom-Up Disaggregation and Ridge Regularization."""
+
+    def __init__(self, model_name: str = DEFAULT_NOWCAST_MODEL):
         self.model_name = model_name
+        self.drift_estimator = RidgeBasketDriftEstimator()
 
     def fetch_training_data(
         self, target_date: date
@@ -153,198 +378,168 @@ class CPINowcaster:
         df_monthly: pd.DataFrame,
         df_nis: pd.DataFrame | None = None,
     ) -> dict[str, Any]:
-        """Calculates Month-to-Date nowcast, intra-month projection, and uncertainty bounds."""
+        """Calculates Month-to-Date nowcast, intra-month projection, and uncertainty bounds
+        using bottom-up 5-basket disaggregation with Ridge regularization and exact Laspeyres aggregation.
+        """
         target_month = target_date.replace(day=1)
         _, days_in_month = calendar.monthrange(target_date.year, target_date.month)
         days_observed = min(target_date.day, days_in_month)
         days_remaining = max(0, days_in_month - days_observed)
 
         # Standardize dates
-        if not df_daily.empty and "calculation_date" in df_daily.columns:
-            df_daily = df_daily.copy()
-            df_daily["calculation_date"] = pd.to_datetime(df_daily["calculation_date"]).dt.date
+        df_daily_clean = df_daily.copy() if not df_daily.empty else pd.DataFrame()
+        if not df_daily_clean.empty and "calculation_date" in df_daily_clean.columns:
+            df_daily_clean["calculation_date"] = pd.to_datetime(df_daily_clean["calculation_date"]).dt.date
 
-        # Filter daily facts to active month
-        df_month = df_daily[
-            (df_daily["calculation_date"] >= target_month)
-            & (df_daily["calculation_date"] <= target_date)
-        ] if not df_daily.empty else pd.DataFrame()
+        # Filter daily facts to active month up to target_date
+        df_month = (
+            df_daily_clean[
+                (df_daily_clean["calculation_date"] >= target_month)
+                & (df_daily_clean["calculation_date"] <= target_date)
+            ]
+            if not df_daily_clean.empty
+            else pd.DataFrame()
+        )
 
-        # Fallback if active month has no data yet: use latest available
-        if df_month.empty and not df_daily.empty:
-            headline_series = df_daily["headline_cpi"].dropna()
-            if not headline_series.empty:
-                latest_cpi = float(headline_series.iloc[-1])
-                core_series = df_daily["core_cpi"].dropna() if "core_cpi" in df_daily.columns else pd.Series()
-                latest_core = float(core_series.iloc[-1]) if not core_series.empty else latest_cpi
-                realized_cpi = latest_cpi
-                realized_core = latest_core
-                daily_volatility = 0.25
-            else:
-                realized_cpi = 100.0
-                realized_core = 100.0
-                daily_volatility = 0.25
-        elif not df_month.empty:
-            # Dedup by calculation_date to get daily headline series
-            daily_series = df_month.drop_duplicates(subset=["calculation_date"])
-            realized_cpi = float(daily_series["headline_cpi"].mean())
-            realized_core = float(daily_series["core_cpi"].dropna().mean()) if "core_cpi" in daily_series.columns else realized_cpi
-            daily_volatility = float(daily_series["headline_cpi"].std()) if len(daily_series) > 1 else 0.25
-            if np.isnan(daily_volatility) or daily_volatility == 0:
-                daily_volatility = 0.25
-        else:
-            realized_cpi = 100.0
-            realized_core = 100.0
-            daily_volatility = 0.25
+        obs_weight = float(days_observed / days_in_month)
+        rem_weight = float(days_remaining / days_in_month)
 
-        # -------------------------------------------------------------------------
-        # Leading Momentum Signals (Division 01 Food & Division 07 Transport)
-        # Following Macias et al. (2023)
-        # -------------------------------------------------------------------------
-        food_momentum = 0.0
-        transport_momentum = 0.0
-        food_days = 7.0
-        trans_days = 7.0
-        if not df_daily.empty and "coicop_division" in df_daily.columns:
-            # Division 01 Food 7-day momentum
-            df_food = df_daily[df_daily["coicop_division"] == "01"].sort_values("calculation_date")
-            if len(df_food) >= 7:
-                food_recent = float(df_food["division_index"].iloc[-1])
-                food_prior = float(df_food["division_index"].iloc[-7])
-                if "calculation_date" in df_food.columns:
-                    d1 = pd.to_datetime(df_food["calculation_date"].iloc[-1])
-                    d0 = pd.to_datetime(df_food["calculation_date"].iloc[-7])
-                    food_days = max(1.0, float((d1 - d0).days))
-                if food_prior > 0:
-                    food_momentum = (food_recent - food_prior) / food_prior
-
-            # Division 07 Transport 7-day momentum
-            df_trans = df_daily[df_daily["coicop_division"] == "07"].sort_values("calculation_date")
-            if len(df_trans) >= 7:
-                trans_recent = float(df_trans["division_index"].iloc[-1])
-                trans_prior = float(df_trans["division_index"].iloc[-7])
-                if "calculation_date" in df_trans.columns:
-                    d1 = pd.to_datetime(df_trans["calculation_date"].iloc[-1])
-                    d0 = pd.to_datetime(df_trans["calculation_date"].iloc[-7])
-                    trans_days = max(1.0, float((d1 - d0).days))
-                if trans_prior > 0:
-                    transport_momentum = (trans_recent - trans_prior) / trans_prior
-
-        # Combined daily drift rate from leading signals
-        # Food (44.8% weight) + Transport (12.2% weight), normalized to their combined share (0.56955)
-        combined_momentum_weight = 0.44775 + 0.12180
-        leading_signal_drift = (
-            (0.44775 * (food_momentum / food_days)) + (0.12180 * (transport_momentum / trans_days))
-        ) / combined_momentum_weight
-
-        # -------------------------------------------------------------------------
-        # Cambodian Seasonal / Festival Shock Adjustment (Khmer New Year, Pchum Ben, etc.)
-        # -------------------------------------------------------------------------
-        festival_shock = 0.0
-        _active_festival = None
-        for hol in CAMBODIA_ANNUAL_HOLIDAYS:
-            if hol["month"] == target_date.month:
-                peak_days = hol["peak_days"]
-                window = hol.get("window_days", 4)
-                min_day = max(1, min(peak_days) - window)
-                max_day = min(days_in_month, max(peak_days) + 2)
-                # Check if target date falls within the festival surge window
-                if min_day <= target_date.day <= max_day:
-                    _active_festival = hol["name"]
-                    # Peak festival days experience heightened demand surge in Food & Transport
-                    if target_date.day in peak_days:
-                        festival_shock = 0.0012  # ~0.12% daily festive premium
-                    else:
-                        festival_shock = 0.0006  # ~0.06% lead/lag festive premium
-                    break
-
-        # -------------------------------------------------------------------------
-        # Dual-Currency Exchange Rate Pass-Through (ERPT)
-        # Empirical pass-through coefficient beta_erpt = 0.28 (Chapter 11)
-        # -------------------------------------------------------------------------
-        fx_momentum = 0.0
-        fx_daily_drift = 0.0
-        beta_erpt = 0.28
-        if df_fx is not None and not df_fx.empty and "rate" in df_fx.columns:
-            df_fx_sorted = df_fx.sort_values("execution_date") if "execution_date" in df_fx.columns else df_fx
-            if len(df_fx_sorted) >= 7:
-                fx_recent = float(df_fx_sorted["rate"].iloc[-1])
-                fx_prior = float(df_fx_sorted["rate"].iloc[-7])
-                fx_days = 7.0
-                if "execution_date" in df_fx_sorted.columns:
-                    d_recent = pd.to_datetime(df_fx_sorted["execution_date"].iloc[-1])
-                    d_prior = pd.to_datetime(df_fx_sorted["execution_date"].iloc[-7])
-                    fx_days = max(1.0, float((d_recent - d_prior).days))
-                if fx_prior > 0:
-                    fx_momentum = (fx_recent - fx_prior) / fx_prior
-                    fx_daily_drift = beta_erpt * (fx_momentum / fx_days)
-            elif len(df_fx_sorted) >= 2:
-                fx_recent = float(df_fx_sorted["rate"].iloc[-1])
-                fx_prior = float(df_fx_sorted["rate"].iloc[0])
-                n_days = max(1, len(df_fx_sorted) - 1)
-                if fx_prior > 0:
-                    fx_momentum = (fx_recent - fx_prior) / fx_prior
-                    fx_daily_drift = beta_erpt * (fx_momentum / float(n_days))
-
-        projected_daily_drift = leading_signal_drift + festival_shock + fx_daily_drift
-
-        # Project CPI for remaining days
-        # Average projected index over remaining trajectory: realized * (1 + drift * (N+1)/2)
-        if days_remaining > 0:
-            projected_avg_cpi = realized_cpi * (1.0 + (projected_daily_drift * (days_remaining + 1) / 2.0))
-            # Core CPI incorporates imported USD pass-through plus dampened general drift
-            projected_core_avg = realized_core * (1.0 + ((leading_signal_drift * 0.5 + fx_daily_drift) * (days_remaining + 1) / 2.0))
-        else:
-            projected_avg_cpi = realized_cpi
-            projected_core_avg = realized_core
-
-        # Weighted combination: Observed days share + Remaining days share
-        obs_weight = days_observed / days_in_month
-        rem_weight = days_remaining / days_in_month
-
-        nowcast_headline_cpi = round((obs_weight * realized_cpi) + (rem_weight * projected_avg_cpi), 4)
-        nowcast_core_cpi = round((obs_weight * realized_core) + (rem_weight * projected_core_avg), 4)
-
-        # -------------------------------------------------------------------------
-        # Prior Month Baseline & Projected Month-over-Month (MoM %) Inflation
-        # -------------------------------------------------------------------------
+        # Determine prior month baseline headline CPI
         prior_month_cpi = 100.0
         if df_monthly is not None and not df_monthly.empty:
-            # Look for month immediately preceding target_month
             prior_months = df_monthly[pd.to_datetime(df_monthly["cpi_month"]).dt.date < target_month]
             if not prior_months.empty:
                 prior_month_cpi = float(prior_months.iloc[-1]["monthly_headline_cpi"])
             else:
                 prior_month_cpi = float(df_monthly.iloc[-1]["monthly_headline_cpi"])
-        elif not df_daily.empty:
-            # Fallback to earliest recorded daily CPI
-            prior_daily = df_daily[df_daily["calculation_date"] < target_month]
+        elif not df_daily_clean.empty:
+            prior_daily = df_daily_clean[df_daily_clean["calculation_date"] < target_month]
             if not prior_daily.empty:
                 prior_month_cpi = float(prior_daily["headline_cpi"].iloc[-1])
-            else:
-                prior_month_cpi = 100.0
 
+        # -------------------------------------------------------------------------
+        # Predict Division Drift Rates via Ridge (with Empirical Bayesian Fallback)
+        # -------------------------------------------------------------------------
+        drift_map = self.drift_estimator.fit_and_predict_drift(target_date, df_daily_clean, df_fx)
+
+        # -------------------------------------------------------------------------
+        # Bottom-Up Disaggregation: Compute Price Relatives & Projections for 12 Divisions
+        # -------------------------------------------------------------------------
+        division_results: dict[str, dict[str, Any]] = {}
+
+        for div_code, div_info in NIS_COICOP_WEIGHTS.items():
+            weight = float(div_info["weight"])
+            div_name = div_info["name"]
+
+            # 1. Realized MTD index for this division
+            sub_div_month = (
+                df_month[df_month["coicop_division"] == div_code]
+                if not df_month.empty and "coicop_division" in df_month.columns
+                else pd.DataFrame()
+            )
+            if not sub_div_month.empty:
+                realized_div = float(sub_div_month["division_index"].mean())
+                latest_div = float(sub_div_month.sort_values("calculation_date")["division_index"].iloc[-1])
+            elif not df_daily_clean.empty and "coicop_division" in df_daily_clean.columns:
+                sub_all = df_daily_clean[df_daily_clean["coicop_division"] == div_code]
+                if not sub_all.empty:
+                    realized_div = float(sub_all["division_index"].iloc[-1])
+                    latest_div = realized_div
+                else:
+                    realized_div = 100.0
+                    latest_div = 100.0
+            else:
+                realized_div = 100.0
+                latest_div = 100.0
+
+            # 2. Projected remaining index for this division
+            div_drift = float(drift_map.get(div_code, 0.0))
+            if days_remaining > 0:
+                projected_div = latest_div * (1.0 + (div_drift * (days_remaining + 1) / 2.0))
+            else:
+                projected_div = realized_div
+
+            # 3. Blended monthly nowcast index
+            nowcast_div = round((obs_weight * realized_div) + (rem_weight * projected_div), 4)
+
+            # 4. Prior month baseline for this division
+            prior_div = prior_month_cpi
+            if not df_daily_clean.empty and "coicop_division" in df_daily_clean.columns:
+                sub_prior = df_daily_clean[
+                    (df_daily_clean["calculation_date"] < target_month)
+                    & (df_daily_clean["coicop_division"] == div_code)
+                ]
+                if not sub_prior.empty:
+                    prior_div = float(sub_prior.sort_values("calculation_date")["division_index"].iloc[-1])
+
+            div_mom_pct = round(((nowcast_div - prior_div) / prior_div) * 100.0, 4) if prior_div > 0 else 0.0
+            contribution_pp = round(weight * div_mom_pct, 4)
+            price_relative = round(nowcast_div / prior_div, 6) if prior_div > 0 else 1.0
+
+            division_results[div_code] = {
+                "name": div_name,
+                "weight": weight,
+                "realized": round(realized_div, 4),
+                "latest": round(latest_div, 4),
+                "projected": round(projected_div, 4),
+                "nowcast": nowcast_div,
+                "prior": round(prior_div, 4),
+                "mom_pct": div_mom_pct,
+                "contribution_pp": contribution_pp,
+                "price_relative": price_relative,
+                "drift_daily": round(div_drift, 6),
+            }
+
+        # -------------------------------------------------------------------------
+        # Axiomatic Laspeyres Aggregation: Headline CPI & Core CPI
+        # -------------------------------------------------------------------------
+        nowcast_headline_cpi = round(sum(res["weight"] * res["nowcast"] for res in division_results.values()), 4)
+        realized_cpi = round(sum(res["weight"] * res["realized"] for res in division_results.values()), 4)
+        projected_avg_cpi = round(sum(res["weight"] * res["projected"] for res in division_results.values()), 4)
+
+        core_weights = sum(res["weight"] for d, res in division_results.items() if d not in ["01", "04"])
+        nowcast_core_cpi = (
+            round(sum(res["weight"] * res["nowcast"] for d, res in division_results.items() if d not in ["01", "04"]) / core_weights, 4)
+            if core_weights > 0
+            else nowcast_headline_cpi
+        )
+
+        prior_headline_from_divisions = sum(res["weight"] * res["prior"] for res in division_results.values())
+        if prior_headline_from_divisions > 0 and abs(prior_headline_from_divisions - prior_month_cpi) < 0.5:
+            prior_month_cpi = round(prior_headline_from_divisions, 4)
+        else:
+            prior_month_cpi = round(prior_month_cpi, 4)
         projected_mom_pct = round(((nowcast_headline_cpi - prior_month_cpi) / prior_month_cpi) * 100.0, 4)
 
-        # -------------------------------------------------------------------------
-        # Chain-Linking to Official NIS Benchmark (Oct–Dec 2006 = 100)
-        # -------------------------------------------------------------------------
+        # Chain-linking to official NIS benchmark
         nowcast_nis_headline_cpi = None
         latest_nis_cpi = None
         if df_nis is not None and not df_nis.empty:
             latest_nis_row = df_nis.iloc[0]
             latest_nis_cpi = float(latest_nis_row["headline_cpi"])
-            # Apply estimated MoM rate to latest published NIS official index
             nowcast_nis_headline_cpi = round(latest_nis_cpi * (1.0 + (projected_mom_pct / 100.0)), 4)
 
-        # -------------------------------------------------------------------------
-        # Dynamic Uncertainty Ratio and 95% Confidence Interval
-        # -------------------------------------------------------------------------
+        # Dynamic uncertainty & 95% CI
+        daily_series = df_month.drop_duplicates(subset=["calculation_date"]) if not df_month.empty else pd.DataFrame()
+        daily_volatility = float(daily_series["headline_cpi"].std()) if len(daily_series) > 1 else 0.25
+        if np.isnan(daily_volatility) or daily_volatility == 0:
+            daily_volatility = 0.25
+
         uncertainty_ratio = round(float(days_remaining / days_in_month), 3)
         margin_of_error = Z_SCORE_95 * daily_volatility * np.sqrt(days_remaining / days_in_month)
-
         ci_lower_95 = float(round(max(0.0, nowcast_headline_cpi - margin_of_error), 4))
         ci_upper_95 = float(round(nowcast_headline_cpi + margin_of_error, 4))
+
+        # Backward compatibility for FX telemetry
+        fx_mom_7d, _ = self.drift_estimator._extract_fx_features(target_date, df_fx)
+        fx_daily_drift = round(float(0.28 * fx_mom_7d / 7.0), 6)
+
+        # 5 Target Baskets Specific Outputs
+        food_res = division_results.get("01", {})
+        alcohol_res = division_results.get("02", {})
+        housing_res = division_results.get("04", {})
+        transport_res = division_results.get("07", {})
+        restaurant_res = division_results.get("11", {})
 
         return {
             "nowcast_date": target_date,
@@ -358,18 +553,30 @@ class CPINowcaster:
             "nowcast_headline_cpi": nowcast_headline_cpi,
             "nowcast_nis_headline_cpi": nowcast_nis_headline_cpi,
             "nowcast_core_cpi": nowcast_core_cpi,
-            "prior_month_cpi": round(float(prior_month_cpi), 4),
+            "prior_month_cpi": prior_month_cpi,
             "latest_nis_baseline_cpi": latest_nis_cpi,
             "ci_lower_95": ci_lower_95,
             "ci_upper_95": ci_upper_95,
             "uncertainty_pct": uncertainty_ratio,
-            "fx_momentum_7d": round(float(fx_momentum), 6),
-            "fx_daily_drift": round(float(fx_daily_drift), 6),
+            "fx_momentum_7d": round(float(fx_mom_7d), 6),
+            "fx_daily_drift": fx_daily_drift,
             "model_name": self.model_name,
+            # 5 Key Disaggregated Baskets
+            "nowcast_food_cpi": food_res.get("nowcast", nowcast_headline_cpi),
+            "projected_food_mom_pct": food_res.get("mom_pct", projected_mom_pct),
+            "nowcast_alcohol_cpi": alcohol_res.get("nowcast", nowcast_headline_cpi),
+            "projected_alcohol_mom_pct": alcohol_res.get("mom_pct", projected_mom_pct),
+            "nowcast_housing_cpi": housing_res.get("nowcast", nowcast_headline_cpi),
+            "projected_housing_mom_pct": housing_res.get("mom_pct", projected_mom_pct),
+            "nowcast_transport_cpi": transport_res.get("nowcast", nowcast_headline_cpi),
+            "projected_transport_mom_pct": transport_res.get("mom_pct", projected_mom_pct),
+            "nowcast_restaurant_cpi": restaurant_res.get("nowcast", nowcast_headline_cpi),
+            "projected_restaurant_mom_pct": restaurant_res.get("mom_pct", projected_mom_pct),
+            "baskets_detail": division_results,
         }
 
     def save_nowcast(self, nowcast_res: dict[str, Any]) -> None:
-        """Upserts computed nowcast into gold.fct_cpi_nowcast."""
+        """Upserts computed nowcast into gold.fct_cpi_nowcast with 5-basket support."""
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
@@ -391,12 +598,44 @@ class CPINowcaster:
                         ci_lower_95 NUMERIC(10, 4),
                         ci_upper_95 NUMERIC(10, 4),
                         uncertainty_pct NUMERIC(6, 3),
-                        model_name VARCHAR(50) DEFAULT 'ml_assisted_nowcaster_v1',
+                        model_name VARCHAR(50) DEFAULT 'hybrid_ridge_5basket_v1',
                         created_at TIMESTAMPTZ DEFAULT NOW(),
+                        nowcast_food_cpi NUMERIC(10, 4),
+                        nowcast_alcohol_cpi NUMERIC(10, 4),
+                        nowcast_housing_cpi NUMERIC(10, 4),
+                        nowcast_transport_cpi NUMERIC(10, 4),
+                        nowcast_restaurant_cpi NUMERIC(10, 4),
+                        projected_food_mom_pct NUMERIC(8, 4),
+                        projected_alcohol_mom_pct NUMERIC(8, 4),
+                        projected_housing_mom_pct NUMERIC(8, 4),
+                        projected_transport_mom_pct NUMERIC(8, 4),
+                        projected_restaurant_mom_pct NUMERIC(8, 4),
+                        baskets_detail JSONB,
                         PRIMARY KEY (nowcast_date, target_month, model_name)
                     );
                     """
                 )
+                cur.execute(
+                    """
+                    ALTER TABLE gold.fct_cpi_nowcast
+                    ADD COLUMN IF NOT EXISTS nowcast_food_cpi NUMERIC(10, 4),
+                    ADD COLUMN IF NOT EXISTS nowcast_alcohol_cpi NUMERIC(10, 4),
+                    ADD COLUMN IF NOT EXISTS nowcast_housing_cpi NUMERIC(10, 4),
+                    ADD COLUMN IF NOT EXISTS nowcast_transport_cpi NUMERIC(10, 4),
+                    ADD COLUMN IF NOT EXISTS nowcast_restaurant_cpi NUMERIC(10, 4),
+                    ADD COLUMN IF NOT EXISTS projected_food_mom_pct NUMERIC(8, 4),
+                    ADD COLUMN IF NOT EXISTS projected_alcohol_mom_pct NUMERIC(8, 4),
+                    ADD COLUMN IF NOT EXISTS projected_housing_mom_pct NUMERIC(8, 4),
+                    ADD COLUMN IF NOT EXISTS projected_transport_mom_pct NUMERIC(8, 4),
+                    ADD COLUMN IF NOT EXISTS projected_restaurant_mom_pct NUMERIC(8, 4),
+                    ADD COLUMN IF NOT EXISTS baskets_detail JSONB;
+                    """
+                )
+
+                payload = dict(nowcast_res)
+                if "baskets_detail" in payload and isinstance(payload["baskets_detail"], (dict, list)):
+                    payload["baskets_detail"] = json.dumps(payload["baskets_detail"])
+
                 cur.execute(
                     """
                     INSERT INTO gold.fct_cpi_nowcast (
@@ -405,14 +644,24 @@ class CPINowcaster:
                         nowcast_headline_cpi, nowcast_nis_headline_cpi,
                         nowcast_core_cpi, prior_month_cpi,
                         ci_lower_95, ci_upper_95,
-                        uncertainty_pct, model_name
+                        uncertainty_pct, model_name,
+                        nowcast_food_cpi, nowcast_alcohol_cpi, nowcast_housing_cpi,
+                        nowcast_transport_cpi, nowcast_restaurant_cpi,
+                        projected_food_mom_pct, projected_alcohol_mom_pct, projected_housing_mom_pct,
+                        projected_transport_mom_pct, projected_restaurant_mom_pct,
+                        baskets_detail
                     ) VALUES (
                         %(nowcast_date)s, %(target_month)s, %(days_observed)s, %(days_remaining)s, %(days_in_month)s,
                         %(realized_cpi_so_far)s, %(projected_remaining_cpi)s, %(projected_mom_pct)s,
                         %(nowcast_headline_cpi)s, %(nowcast_nis_headline_cpi)s,
                         %(nowcast_core_cpi)s, %(prior_month_cpi)s,
                         %(ci_lower_95)s, %(ci_upper_95)s,
-                        %(uncertainty_pct)s, %(model_name)s
+                        %(uncertainty_pct)s, %(model_name)s,
+                        %(nowcast_food_cpi)s, %(nowcast_alcohol_cpi)s, %(nowcast_housing_cpi)s,
+                        %(nowcast_transport_cpi)s, %(nowcast_restaurant_cpi)s,
+                        %(projected_food_mom_pct)s, %(projected_alcohol_mom_pct)s, %(projected_housing_mom_pct)s,
+                        %(projected_transport_mom_pct)s, %(projected_restaurant_mom_pct)s,
+                        %(baskets_detail)s
                     )
                     ON CONFLICT (nowcast_date, target_month, model_name) DO UPDATE
                     SET days_observed = EXCLUDED.days_observed,
@@ -426,18 +675,30 @@ class CPINowcaster:
                         prior_month_cpi = EXCLUDED.prior_month_cpi,
                         ci_lower_95 = EXCLUDED.ci_lower_95,
                         ci_upper_95 = EXCLUDED.ci_upper_95,
-                        uncertainty_pct = EXCLUDED.uncertainty_pct;
+                        uncertainty_pct = EXCLUDED.uncertainty_pct,
+                        nowcast_food_cpi = EXCLUDED.nowcast_food_cpi,
+                        nowcast_alcohol_cpi = EXCLUDED.nowcast_alcohol_cpi,
+                        nowcast_housing_cpi = EXCLUDED.nowcast_housing_cpi,
+                        nowcast_transport_cpi = EXCLUDED.nowcast_transport_cpi,
+                        nowcast_restaurant_cpi = EXCLUDED.nowcast_restaurant_cpi,
+                        projected_food_mom_pct = EXCLUDED.projected_food_mom_pct,
+                        projected_alcohol_mom_pct = EXCLUDED.projected_alcohol_mom_pct,
+                        projected_housing_mom_pct = EXCLUDED.projected_housing_mom_pct,
+                        projected_transport_mom_pct = EXCLUDED.projected_transport_mom_pct,
+                        projected_restaurant_mom_pct = EXCLUDED.projected_restaurant_mom_pct,
+                        baskets_detail = EXCLUDED.baskets_detail;
                     """,
-                    nowcast_res,
+                    payload,
                 )
                 conn.commit()
                 log.info(
-                    "✅ Nowcast persisted: %s -> Month %s | MoM: %s%% | Headline CPI: %s | NIS Base 2006: %s",
+                    "✅ Nowcast persisted: %s -> Month %s | MoM: %s%% | Headline CPI: %s | Food: %s | Transport: %s",
                     nowcast_res["nowcast_date"],
                     nowcast_res["target_month"],
                     nowcast_res["projected_mom_pct"],
                     nowcast_res["nowcast_headline_cpi"],
-                    nowcast_res.get("nowcast_nis_headline_cpi"),
+                    nowcast_res.get("nowcast_food_cpi"),
+                    nowcast_res.get("nowcast_transport_cpi"),
                 )
         finally:
             conn.close()
@@ -896,11 +1157,17 @@ if __name__ == "__main__":
     else:
         target = pd.to_datetime(args.date).date() if args.date else date.today()
         out = nowcaster.run_daily_nowcast(target)
-        print(f"\n[OK] Nowcast Completed for {out['nowcast_date']}:")
+        print(f"\n[OK] Nowcast Completed for {out['nowcast_date']} ({out.get('model_name')}):")
         print(f"  Target Month:     {out['target_month']}")
         print(f"  Observed Days:    {out['days_observed']} / {out['days_in_month']} ({round(out['days_observed']/out['days_in_month']*100, 1)}%)")
         print(f"  Headline CPI:     {out['nowcast_headline_cpi']}")
         print(f"  Projected MoM:    {out['projected_mom_pct']}%")
         print(f"  95% CI Bounds:    [{out['ci_lower_95']} - {out['ci_upper_95']}]")
+        print(f"  5-Basket Disaggregation:")
+        print(f"    - Food (44.8%):       CPI {out.get('nowcast_food_cpi')} (MoM: {out.get('projected_food_mom_pct')}%)")
+        print(f"    - Alcohol (1.6%):     CPI {out.get('nowcast_alcohol_cpi')} (MoM: {out.get('projected_alcohol_mom_pct')}%)")
+        print(f"    - Housing (17.1%):    CPI {out.get('nowcast_housing_cpi')} (MoM: {out.get('projected_housing_mom_pct')}%)")
+        print(f"    - Transport (12.2%):  CPI {out.get('nowcast_transport_cpi')} (MoM: {out.get('projected_transport_mom_pct')}%)")
+        print(f"    - Restaurant (5.9%):  CPI {out.get('nowcast_restaurant_cpi')} (MoM: {out.get('projected_restaurant_mom_pct')}%)")
         print(f"  FX 7d Momentum:   {out.get('fx_momentum_7d')}")
 

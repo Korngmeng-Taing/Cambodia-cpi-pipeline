@@ -155,17 +155,40 @@ To achieve maximum accuracy, speed, and cost efficiency in the Cambodia CPI Meda
   $$\widetilde{P}_{i,t} = P_{i,t} \cdot \exp\left(-\sum_k \widehat{\beta}_k (X_{i,k} - \bar{X}_k)\right)$$
   When sample size is inadequate ($n < 5$), features lack variance, or the design matrix is collinear, `run_hedonic_regression()` gracefully catches the condition, logs `SKIPPED_RANK_DEFICIENT`, and passes the observed price forward untouched.
 
-### Module 3: Machine Learning-Assisted Daily Inflation Nowcasting (ml/nowcaster.py)
-- Aggregates daily facts from `gold.fct_cpi_daily` for the active calendar month ($1 \dots t_{\text{observed}}$).
-- Projects remaining days ($t+1 \dots T$) using 7-day momentum in **Division 01 (Food - 44.8% weight)** and **Division 07 (Transport - 12.2% weight)** following *Macias et al. (2023)*.
-- **Midpoint Trajectory Drift Expectation**: For remaining unobserved days $N = T - t$, the average expected price index across the remainder of the month reflects cumulative linear progression:
-  $$E[P_{\text{remaining}}] = P_t \times \left(1.0 + \text{drift} \times \frac{N + 1}{2}\right)$$
-  The monthly mean index is then computed as the weighted time average of realized daily indices and projected remaining days:
-  $$\bar{I}_{\text{month}} = \frac{\sum_{s=1}^t P_s + N \times E[P_{\text{remaining}}]}{T}$$
-- Incorporates Cambodian festival and holiday shock calendars (`CAMBODIA_ANNUAL_HOLIDAYS` in `ml/config.py`) to model transitory consumer demand surges during Khmer New Year, Pchum Ben, and Water Festival (+0.12% peak, +0.06% lead/lag window).
-- Derives Month-over-Month (MoM %) estimated inflation and chain-links to official National Institute of Statistics (NIS) Phnom Penh benchmark levels in `gold.fct_cpi_nowcast`.
-- Computes dynamic 95% confidence intervals based on daily price dispersion and uncertainty decay ($U_t = \sqrt{(T-t)/T}$).
-- Exposes out-of-sample tracking via `gold.v_nowcast_evaluation` on Metabase Dashboard 01.
+### Module 3: Two-Stage Hybrid Ridge Nowcasting Engine (`ml/nowcaster.py` & `ml/config.py`)
+- **Axiomatic Bottom-Up 5-Basket Aggregation**:
+  Rather than predicting an ad-hoc aggregate headline index directly, the nowcaster models the price relatives of **5 key consumption divisions** representing **81.58%** of Cambodia's CPI basket:
+  1. **Division 01: Food & Non-Alcoholic Beverages** (Weight: 44.78%)
+  2. **Division 02: Alcoholic Beverages & Tobacco** (Weight: 1.63%)
+  3. **Division 04: Housing, Water, Electricity, Gas & Other Fuels** (Weight: 17.08%)
+  4. **Division 07: Transport & Vehicle Fuels** (Weight: 12.23%)
+  5. **Division 11: Restaurants & Hotels** (Weight: 5.86%)
+  *(Remaining 7 divisions covering 18.42% are anchored to neutral carryover/prior month indices).*
+
+- **Two-Stage Hybrid Architecture**:
+  - **Stage 1 (Deterministic Micro-Aggregation & Realized MTD Trajectory)**:
+    Aggregates daily elementary Jevons price indices for observed calendar days $1 \dots t_{\text{observed}}$.
+  - **Stage 2 (Empirical Bayes Shrinkage Ridge Drift Estimator)**:
+    Estimates the expected daily drift $\widehat{\mu}_k$ for remaining days $N = T - t$ via `RidgeCV` fitted across rolling multi-horizon momentum features:
+    - Intra-month division momentum: 3-day, 7-day, 14-day rolling price trends ($m_{\text{food}, 3d/7d/14d}$, $m_{\text{trans}, 3d/7d}$).
+    - Daily official USD/KHR exchange rate momentum from MEF ($m_{\text{fx}, 7d/14d}$).
+    - Transitory holiday shocks and demand proximity metrics (`CAMBODIA_ANNUAL_HOLIDAYS`).
+    - Empirical Bayesian shrinkage prior pulling extreme drift estimates back to zero ($R^2$-weighted shrinkage) to prevent out-of-sample variance explosion early in the month.
+
+- **Midpoint Trajectory Drift Expectation**:
+  For remaining unobserved days $N = T - t$, the average expected price index across the remainder of the month reflects cumulative linear progression:
+  $$E[P_{k, \text{remaining}}] = P_{k, t} \times \left(1.0 + \widehat{\mu}_k \times \frac{N + 1}{2}\right)$$
+  The monthly mean index for basket $k$ is computed as the weighted time average:
+  $$\bar{I}_{k, \text{month}} = \frac{\sum_{s=1}^t P_{k, s} + N \times E[P_{k, \text{remaining}}]}{T}$$
+
+- **Exact Laspeyres Axiomatic Aggregation**:
+  The headline CPI nowcast strictly adheres to the Laspeyres index formulation:
+  $$\widehat{\text{HeadlineCPI}}_T = \sum_{k \in \mathcal{K}} w_k \cdot \bar{I}_{k, \text{month}} + \sum_{m \notin \mathcal{K}} w_m \cdot I_{m, \text{baseline}}$$
+  The overall Month-over-Month (MoM %) projected inflation is derived directly from the aggregate index and chain-linked to official National Institute of Statistics (NIS) Phnom Penh benchmark levels in `gold.fct_cpi_nowcast`.
+
+- **Dynamic Uncertainty Decay & Evaluation**:
+  - Dynamic 95% confidence intervals scale with daily price dispersion and time decay ($U_t = \sqrt{(T-t)/T}$).
+  - Full tracking and evaluation is exposed via PostgreSQL view `gold.v_nowcast_evaluation` (`nowcast_food_cpi`, `nowcast_transport_cpi`, `nowcast_housing_cpi`, `nowcast_restaurant_cpi`, `nowcast_alcohol_cpi`, and individual `projected_*_mom_pct`).
 
 ### Module 4: Self-Learning Rule Generation Loop (scripts/automated_rule_suggester.py)
 - **Human-in-the-Loop (HITL) Feedback**: Analyst corrections from the `analyst_quick_fix` tool are recorded in `silver.manual_item_corrections`.

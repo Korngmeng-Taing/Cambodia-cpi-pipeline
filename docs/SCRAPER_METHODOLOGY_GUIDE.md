@@ -164,10 +164,10 @@ Every night at 02:00, Airflow orchestrates daily data extraction across **24 Cam
 - **Category / Source Type**: Telecommunications & Mobile Data (`telecom`)
 - **COICOP Division**: `08` (Information & Communication Services)
 - **Target Website**: [https://www.cellcard.com.kh/en/mobile](https://www.cellcard.com.kh/en/mobile)
-- **Best Scraping Method**: **Next.js `__NEXT_DATA__` JSON / Card Parser**
+- **Best Scraping Method**: **Live DOM Card Parser (`.js-card`) + Next.js Fallback**
   - **Endpoint**: `GET https://www.cellcard.com.kh/en/mobile`
-  - **Extraction**: Extracts subscription dial codes (e.g. `*1618*150#`), data allowance (`20 GB`), plan validity (`7 Days`, `30 Days`), and monthly/weekly plan cost in USD.
-  - **Coverage**: AO Mobile 5G, Serey, Big Love, Tourist SIMs.
+  - **Extraction**: Selects live `.js-card` DOM elements, extracting plan name (`h4`), data allowance (`\d+\s*GB`), validity period, and USD price (`\$\s*(\d+(\.\d+)?)`). Automatically falls back to `__NEXT_DATA__` JSON parsing or curated baseline if live cards are modified.
+  - **Coverage**: AO Mobile 5G, Serey, Big Love, Tourist SIMs (25 live plans + 3 fixed broadband tiers).
 
 ---
 
@@ -209,8 +209,9 @@ Every night at 02:00, Airflow orchestrates daily data extraction across **24 Cam
 - **Category / Source Type**: Residential Housing Rentals (`realestate`)
 - **COICOP Division**: `04` (Housing, Water, Electricity, Gas & Other Fuels - Actual Rentals)
 - **Target Website**: [https://www.khmer24.com/c-house-for-rent](https://www.khmer24.com/c-house-for-rent)
-- **Best Scraping Method**: **Multi-Language Search Scraping (`/en/` and `/km/`)**
+- **Best Scraping Method**: **Nuxt SSR Offset-Based Pagination Scraping (`?offset={(page-1)*30}`)**
   - **Target URLs**: Houses, apartments, condos, villas for rent across Phnom Penh and major provinces.
+  - **Pagination**: Uses `?offset={(page - 1) * 30}` to match Nuxt SSR infinite scrolling across multiple pages, fetching up to 500–750 active rental listings daily.
   - **Extraction**: Monthly rental price (USD), bedroom count, bathroom count, floor/land area ($m^2$), district/location.
 
 ---
@@ -426,6 +427,25 @@ Every scraper normalizes its output via `pipeline.canonical.normalize_record()` 
      DO UPDATE SET payload = staging.raw_scrapes.payload || EXCLUDED.payload;
      ```
    - This prevents subsequent retries or sub-batch executions from overwriting earlier batch telemetry, appending audit objects into an aggregated JSONB payload.
+
+### 3.2 Ingestion Circuit Breaker & Dual-Currency Normalization
+
+To protect the Medallion architecture against corrupted retailer price dumps, flash crashes, or parsing anomalies before data enters Silver and Gold:
+
+1. **Volume & Price Velocity Checks (`pipeline/circuit_breaker.py`)**:
+   - **Volume Drop Ratio**: Evaluates incoming batch record volume against the 7-day rolling median (`min_volume_ratio = 0.30`).
+   - **Price Velocity Deviation**: Compares the incoming batch median price against the retailer's 7-day historical clean median (`max_price_change_pct = 0.50`).
+
+2. **Dual-Currency (USD/KHR) Normalization**:
+   - Historical store prices in `silver.clean_store_prices` are strictly denominated in KHR (`price_khr`).
+   - For USD-denominated retailers (e.g. Delishop, Cellcard, Hyatt, Sokha), incoming raw prices are dynamically converted to KHR using today's official exchange rate from `staging.exchange_rates` (with a 4,050 KHR/USD fallback):
+     $$\tilde{P}_{\text{incoming, KHR}} = P_{\text{incoming, USD}} \times \text{FX}_{\text{USD/KHR}}$$
+   - This prevents false positive halts that would otherwise occur if USD prices (e.g. \$6.10) were compared directly against KHR historical medians (e.g. 24,717 KHR).
+
+3. **Circuit Breaker Status & Non-Blocking Resilience**:
+   - **`PASSED`**: Metrics within standard thresholds.
+   - **`WARNING_FLAGGED`**: Anomalies logged to `ops.circuit_breaker_events` and pipeline proceeds in non-blocking mode with audit telemetry.
+   - **`HALTED`**: Triggered only if `halt_on_fail=True` and severe data corruption is confirmed.
 
 ---
 

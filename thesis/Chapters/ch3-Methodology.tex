@@ -44,8 +44,10 @@
     \end{equation}
     Critically, the nominal price column is strictly excluded from this constraint. When a scraper re-executes on the same day following a partial network timeout, it updates the existing observation in-place rather than inserting duplicate records with diverging prices.
     \item \textbf{Staging Audit Payload Concatenation (\texttt{staging.raw\_scrapes}):} Scraper batch metadata and execution payloads are ingested with atomic JSONB concatenation on conflict (\texttt{payload = staging.raw\_scrapes.payload || EXCLUDED.payload}), preserving audit trails across multiple run retries without overwriting earlier batch telemetry.
+    \item \textbf{Threaded Database Connection Pooling (\texttt{pipeline/db\_pool.py}):} Database connections are managed via a robust thread-safe connection pool with automated reconnection handling, preventing connection exhaustion across 25 concurrent scraper streams.
+    \item \textbf{Exponential Backoff with Full Jitter (\texttt{pipeline/retry.py}):} Network calls and database transactions implement exponential backoff retry algorithms with full jitter, smoothing network bursts and preventing thundering-herd congestion during retailer inventory updates.
+    \item \textbf{Preflight Environment Validator (\texttt{scripts/validate\_environment.py}):} Automated preflight checks verify database connectivity, schema permissions, API key quotas, directory paths, and dependent services prior to executing daily batch ingestion.
     \item \textbf{Circuit Breakers for Extraction Failures:} If an automated crawler returns zero products or an abnormally low quote count (less than $50\%$ of historical volume), the system triggers a circuit breaker that halts downstream processing, logs an anomaly alert, and prevents corrupt or empty batches from polluting the pipeline.
-    \item \textbf{Automated Retry and Backoff Protocols:} Network requests implement exponential backoff retry algorithms with TLS fingerprint impersonation (\texttt{curl\_cffi}) to handle transient server errors and bot challenges.
     \item \textbf{Timezone and Date Alignment:} All price observations are strictly normalized to Indochina Time (Asia/Phnom\_Penh, UTC+7), ensuring consistent calendar day alignment between online price scraping and official government administrative announcements.
 \end{itemize}
 
@@ -64,37 +66,43 @@
     This metric unit price forms the core defense against \textbf{shrinkflation}. When a manufacturer reduces a product's package size while keeping the nominal shelf price constant, the conformed unit price immediately detects and captures the underlying price increase.
 \end{enumerate}
 
-\subsection{Semantic Entity Matching with Physical Specification Guards}
-\hs To calculate true price changes over time, the system must track the exact same product from day to day across a master catalog of over 40,000 canonical products. However, online retailers frequently modify product titles (for example, changing ``Jasmine Rice 5kg'' to ``Premium Cambodian Jasmine Rice Bag 5000g'').
-
+\subsection{Semantic Entity Matching with Multi-Barcode Aliasing and Physical Specification Guards}
+\hs To calculate true price changes over time, the system must track the exact same product from day to day across a master catalog of over 83,180 canonical products. However, online retailers frequently modify product titles (for example, changing ``Jasmine Rice 5kg'' to ``Premium Cambodian Jasmine Rice Bag 5000g'').
 \hs Standard text-matching algorithms often make catastrophic errors in retail data. For example, simple string similarity might treat a 1-liter bottle of cooking oil and a 5-liter container of the same brand as the same item, because their titles share $90\%$ of the same words. Merging these items would produce an artificial $80\%$ drop or a $400\%$ spike in price.
 
-\hs To solve this problem, the pipeline develops a hybrid entity resolution engine combining:
+\hs To solve this problem, the pipeline deploys a hybrid entity resolution engine combining:
 \begin{itemize}
+    \item \textbf{Multi-Barcode Alias Mapping (\texttt{silver.canonical\_product\_barcodes}):} In real-world retail supply chains, identical canonical items are frequently sold under multiple barcodes or GTINs due to regional packaging updates, promotional sleeves, or distributor variations. The pipeline implements a dedicated 1-to-many barcode alias resolution table, linking all associated physical barcodes to their unique canonical master record without splitting longitudinal history.
     \item \textbf{Dense Multilingual Vector Embeddings:} Product titles are converted into 768-dimensional dense mathematical vectors using advanced multilingual text embedding models. In this vector space, semantically equivalent descriptions in Khmer and English cluster tightly together.
-    \item \textbf{Deterministic Specification Guards:} Before two listings can be merged as the same canonical product, they must pass strict physical attribute constraints:
+    \item \textbf{Deterministic Physical Specification Guards:} Before two listings can be merged as the same canonical product, they must pass strict physical attribute constraints:
     \begin{itemize}
-        \item \textit{Metric Tolerance Guard:} The parsed volume or weight between the two items must match within a tight tolerance ($\le 10\%$). A 500ml bottle is never merged with a 1-liter bottle.
+        \item \textit{Metric Volume and Weight Guard:} The parsed volume or weight between the two items must match within a tight tolerance ($\le 10\%$). A 500ml bottle is never merged with a 1-liter bottle.
+        \item \textit{Linear Measurement Guard:} For household textiles, building supplies, and cables, linear dimensions (meters, centimeters) are strictly matched, preventing 1m and 2m cables from collapsing into a single item.
+        \item \textit{Apparel Size Guard:} For clothing and footwear (Division 03), distinct garment sizes (e.g., S, M, L, XL, XXL) maintain independent canonical records.
         \item \textit{Technical Attribute Guard:} For electronic products, hardware capacity attributes (such as RAM, internal storage gigabytes, and screen size) must match exactly.
         \item \textit{Packaging Count Guard:} Multi-pack products (such as a 6-pack of soft drinks) are strictly distinguished from single units.
     \end{itemize}
+    \item \textbf{Automated Canonical Deduplication (\texttt{scripts/deduplicate\_canonical\_items.py}):} Periodically audits canonical product clusters to merge redundant identifiers created across divergent scraper runs while maintaining referential integrity across barcode mappings and historical price facts.
 \end{itemize}
 Only listings that satisfy both semantic vector similarity and all physical specification guards are linked into canonical product identities.
 
-\subsection{The 5-Tier Local-First AI COICOP Classification Ladder}
-\hs To classify thousands of diverse consumer goods into the 12 United Nations COICOP divisions, the pipeline deploys an optimized 5-tier local-first AI classification ladder designed to maximize auto-classification accuracy while minimizing cloud API quota consumption and human review effort:
+\subsection{The 7-Tier AI-First COICOP Classification Ladder}
+\hs To classify hundreds of thousands of diverse consumer listings into official National Institute of Statistics (NIS) Cambodia 4-digit COICOP Classes (\texttt{DD.G.C}, 48 classes) across all 12 divisions, the pipeline deploys an optimized 7-tier AI-first production ensemble:
 \begin{enumerate}
-    \item \textbf{Tier 1: Single-Division Store Domain Purity Locks:} Specialized commercial outlets operating in a single economic sector resolve with zero delay ($O(1)$ SQL locks). For example, all products from Community Pharmacy and Ucare are routed to Health (06); BookMeBus and redBus to Passenger Transit (07.3.2); and official MEF/MOC sources to Fuels (07.2.2) or Utilities (04.5.1). This ensures a $100\%$ precision baseline for domain-pure sources.
-    \item \textbf{Tier 2: Semantic Reference Space (Vector Cosine):} For multi-category retail stores (AEON, DeliShop, GrabMart), the system generates 768-dimensional dense embeddings of the product title. These are compared against official COICOP division centroids using cosine similarity. If the similarity score is $\ge 0.85$, the item is auto-classified, eliminating the need for LLM inference.
-    \item \textbf{Tier 3: Direct AI Classification Engine (Gemini Flash):} For complex or unmapped consumer goods, the pipeline invokes Google Gemini Flash via the thread-safe \texttt{GeminiKeyPool} multi-key manager (4+ keys). The model performs direct one-shot resolution into official National Institute of Statistics (NIS) Cambodia 4-digit COICOP Classes (\texttt{DD.G.C}, 48 classes) in structured JSON, leveraging native bilingual comprehension of mixed Khmer and English product descriptions, with domain guardrails that prevent cross-category classification errors (such as pet food vs meat, or medicines vs skincare).
-    \item \textbf{Tier 4: Automated Database Memoization:} Validated classifications are permanently persisted in PostgreSQL (\texttt{silver.canonical\_items} and \texttt{silver.clean\_store\_prices}) to guarantee zero recurring latency or inference cost for previously resolved products.
-    \item \textbf{Tier 5: Human Review Triage:} Borderline items that require manual review enter the \texttt{silver.needs\_review} queue for analyst inspection. Accepted labels are recorded in \texttt{silver.manual\_item\_corrections} to continuously discover new deterministic rules.
+    \item \textbf{Tier 1: Exact Overrides and Critical Traps:} High-priority human curation rules (\texttt{coicop\_override.csv}, \texttt{silver.manual\_item\_corrections}) and disambiguation guards (\texttt{coicop\_critical\_traps.csv}) override all automated heuristics, addressing historically difficult classification boundaries.
+    \item \textbf{Tier 2: Single-Division Store Purity Locks:} Specialized commercial outlets operating in a single economic sector resolve with zero delay ($O(1)$ SQL locks). For example, Community Pharmacy and Ucare route directly to Health (06); BookMeBus and redBus to Passenger Transit (07.3.2); and official MEF/MOC sources to Fuels (07.2.2) or Utilities (04.5.1), providing a 100\% precision baseline.
+    \item \textbf{Tier 3: High-Confidence Gemini Flash AI Engine:} For multi-category retail goods, the pipeline queries Google Gemini Flash via the thread-safe \texttt{GeminiKeyPool} multi-key manager (4+ keys, 60 RPM). The model infers the exact official NIS 4-digit class in structured JSON with domain guardrails (e.g., reclassifying pet food to 09.3.1 under Recreation/Pets rather than human meat in 01.1.2, and routing skincare cosmetics to 12.1.3 rather than pharmaceuticals in 06.1.1).
+    \item \textbf{Tier 4: Global Substring Brand Overrides:} Multi-word brand heuristics (\texttt{coicop\_brand\_overrides.csv}) map validated manufacturer labels to targeted COICOP subclasses.
+    \item \textbf{Tier 5: Native Store Taxonomy Mapping:} Retailer internal category hierarchies (\texttt{coicop\_store\_category\_mapping.csv}) provide fallback coverage for structured supermarket portals.
+    \item \textbf{Tier 6: Priority Text Regex Rules:} Pattern-matching regex expressions (\texttt{coicop\_regex\_rules.csv}) resolve standardized grocery and staple descriptions.
+    \item \textbf{Tier 7: Automated Memoization and Review Triage:} Classifications are permanently memoized in PostgreSQL (\texttt{silver.dim\_coicop\_ai\_cache} and \texttt{silver.canonical\_items}) for sub-millisecond future retrieval. Borderline items populate the \texttt{silver.classification\_queue} for human analyst inspection.
 \end{enumerate}
 
 \subsection{Empirical Quality Quarantines and Boundary Case Disambiguation}
 \hs Operating web scrapers in developing retail environments encounters boundary edge cases that distort elementary indices if unaddressed:
 \begin{itemize}
-    \item \textbf{Land for Rent Outlier Quarantine:} Real estate portals frequently list agricultural land and development leases alongside residential dwellings. Listings matching raw land keywords (\texttt{Land For Rent}) are programmatically flagged as outliers (\texttt{is\_outlier = true}, \texttt{cpi\_eligible = false}) in \texttt{int\_prices\_cleaned.sql}, preventing massive land valuations from contaminating residential rent metrics.
+    \item \textbf{Median Absolute Deviation (MAD) Outlier Filter:} In addition to standard ratio clamping ($0.20 \le P_t/P_0 \le 5.00$), the pipeline applies a non-parametric Median Absolute Deviation (MAD) filter in \texttt{int\_prices\_cleaned.sql}. Aberrant price shocks exceeding $3.5 \times \text{MAD}$ from subclass rolling medians are flagged as outliers (\texttt{is\_outlier = true}, \texttt{cpi\_eligible = false}), shielding elementary indices from web input typos.
+    \item \textbf{Land for Rent Outlier Quarantine:} Real estate portals frequently list agricultural land and development leases alongside residential dwellings. Listings matching raw land keywords (\texttt{Land For Rent}) are programmatically quarantined in \texttt{int\_prices\_cleaned.sql}, preventing massive commercial valuations from distorting residential rental metrics.
     \item \textbf{Retail Transport Leakage Guardrail:} Supermarket and electronics retailers frequently sell automotive accessories (car phone chargers, dashboard diffusers). Explicit retailer slug constraints in \texttt{int\_coicop\_classified.sql} prohibit retail stores from classifying into Division 07 (Transport), routing electronics to Division 08 and air fresheners to Division 05.
     \item \textbf{Decoding HTML Entities and Size Extraction Fallbacks:} The \texttt{clean\_product\_name} SQL macro decodes obfuscated HTML escape entities (such as quotation marks, apostrophes, and ampersands), while fallback regex rules extract package quantities directly from raw item titles when scraper attribute fields are unpopulated.
 \end{itemize}
@@ -258,14 +266,32 @@ This mathematically guarantees that confidence intervals narrow monotonically as
 \end{equation}
 and verifying whether actual inflation fell within the estimated 95\% confidence interval.
 
+\subsection{Ground-Truth Official NIS Benchmark Ingestion and Tracking Error Mart}
+\hs To provide rigorous, continuous validation against the sovereign statistical standard, the pipeline implements an automated \textbf{Official NIS Ground-Truth Ingestion and Tracking Error Engine}:
+\begin{enumerate}
+    \item \textbf{Weekly Benchmark Scraping (\texttt{nis\_cpi\_dag}):} Scheduled every Monday at 06:00 AM (ICT), the \texttt{NISBenchmarkImporter} (\texttt{pipeline/nis\_cpi\_importer.py}) queries the National Institute of Statistics portal, extracts the latest published 12-group monthly index releases (\texttt{CPI-12-group-*.xlsx}), and synchronizes \texttt{gold.dim\_nis\_official\_cpi} and \texttt{dbt/seeds/nis\_official\_cpi.csv}.
+    \item \textbf{Index Rebasing Formulation:} Because the daily web-scraped pipeline is anchored to August 18, 2026 ($100.00$), whereas official NIS series are anchored to Oct--Dec 2006 ($100.00$), the Gold mart \texttt{gold.fct\_cpi\_nis\_comparison} splices the pipeline series onto the official scale using the baseline anchor index:
+    \begin{equation}
+        \text{CPI}_{M, \text{rebased}}^{\text{pipeline}} = \left( \frac{\text{CPI}_M^{\text{pipeline}}}{100.0} \right) \times \text{CPI}_{2026-08}^{\text{NIS}}
+    \end{equation}
+    \item \textbf{Tracking Error and Directional Concordance:} The mart continuously computes the level tracking error and month-over-month inflation differential:
+    \begin{equation}
+        \epsilon_{\text{tracking}, M} = \text{CPI}_{M, \text{rebased}}^{\text{pipeline}} - \text{CPI}_M^{\text{NIS}}
+    \end{equation}
+    \begin{equation}
+        \Delta \pi_M = \pi_{\text{MoM}, M}^{\text{pipeline}} - \pi_{\text{MoM}, M}^{\text{NIS}}
+    \end{equation}
+    providing policymakers with verified quantitative confidence in digital price sensing.
+\end{enumerate}
+
 \section{Phase 5: Interactive Dashboard Architecture and Production Deployment}
 
 \subsection{Consolidated 3-Dashboard Metabase Architecture and BI Serving}
 \hs To ensure that the analytical outputs of the pipeline are immediately usable by economic policymakers, researchers, and data engineers, the system provisions \textbf{3 consolidated enterprise Metabase dashboards} (Port 3001/3000) and Microsoft Power BI reporting:
 \begin{itemize}
-    \item \textbf{Dashboard 01 (Macro CPI \& Inflation Analytics):} Real-time Headline and Core CPI tickers, 12-Division COICOP table with official NIS weights, longitudinal inflation trendlines, top price movers, and official benchmark evaluation charts.
-    \item \textbf{Dashboard 02 (Pipeline \& 23-Source Telemetry):} 23-source live store volume rankings, 14-day ingestion heatmap matrix, official MEF USD/KHR exchange rate freshness, and Airflow DAG health.
-    \item \textbf{Dashboard 03 (Silver Data Quality Screener):} 12-Division product classification distribution, log-price relative distribution ($0.20 \le P_t/P_0 \le 5.00$), promotional clamping validation, and automated AI review triage queues.
+    \item \textbf{Dashboard 01 (Macro CPI \& Inflation Analytics):} Real-time Headline and Core CPI tickers, 12-Division COICOP table with official NIS CSES weights, longitudinal inflation trendlines, top price movers, MLOps model monitoring cards, and official NIS ground-truth tracking error charts.
+    \item \textbf{Dashboard 02 (Pipeline \& 25-Source Telemetry):} 25-source live store volume rankings, 14-day ingestion heatmap matrix, official MEF USD/KHR exchange rate freshness, and Airflow DAG health.
+    \item \textbf{Dashboard 03 (Silver Data Quality Screener):} 12-Division product classification distribution, log-price relative distribution ($0.20 \le P_t/P_0 \le 5.00$), MAD outlier filtering, promotional clamping validation, and automated AI review triage queues.
 \end{itemize}
 
 \subsection{Declarative Monthly Table Partitioning and Storage Scalability}
@@ -277,11 +303,11 @@ and verifying whether actual inflation fell within the estimated 95\% confidence
 \end{itemize}
 
 \subsection{Containerized Infrastructure and Orchestration Lineage}
-\hs The complete ecosystem is containerized using Docker Compose, integrating PostgreSQL 16 (Medallion database storage), Apache Airflow 2.9.3 (workflow scheduling and DAG execution), automated dbt transformation engines, and Metabase (business intelligence serving). 
+\hs The complete ecosystem is containerized using Docker Compose, integrating PostgreSQL 16 (Medallion database storage), Apache Airflow 2.9.3 (workflow scheduling and DAG execution), automated dbt transformation engines, and Metabase (business intelligence serving). In production, Docker Compose enforces CPU limits, memory reservations, and container healthchecks to ensure service high-availability.
 
 \hs Airflow enforces a strict, dependency-validated Directed Acyclic Graph (DAG) execution topology:
 \begin{enumerate}
-    \item \textbf{Master Fan-Out (\texttt{cpi\_master\_dag}):} Triggers all 23 scraper feeds concurrently at 02:00 Phnom Penh time, enforcing Bronze quality gates before triggering downstream layers.
+    \item \textbf{Master Fan-Out (\texttt{cpi\_master\_dag}):} Triggers all 25 scraper feeds concurrently at 02:00 Phnom Penh time using asynchronous deferrable operators, enforcing Bronze quality gates before triggering downstream layers.
     \item \textbf{Silver Layer Dependency (\texttt{silver\_dag}):} Enforces the verified sequence:
     \begin{equation*}
         \text{Item Matching} \longrightarrow \text{AI Review} \longrightarrow \text{COICOP AI Cache} \longrightarrow \text{dbt Seed/Run} \longrightarrow \text{Hedonic Regression} \longrightarrow \text{dbt Tests}
@@ -292,6 +318,8 @@ and verifying whether actual inflation fell within the estimated 95\% confidence
         \text{Annual Rebase Task} \longrightarrow \text{Daily Jevons CPI} \longrightarrow \text{Monthly Index} \longrightarrow \text{ML Nowcaster}
     \end{equation*}
     guaranteeing that indices are compiled relative to the active December base period without step jumps.
+    \item \textbf{Official Ground-Truth Ingestion (\texttt{nis\_cpi\_dag}):} Executes weekly (Monday 06:00 ICT) to scrape new official NIS monthly publications and refresh the gold tracking error mart.
+    \item \textbf{Automated Warehouse Maintenance (\texttt{cpi\_maintenance\_dag}):} Scheduled weekly (Sundays at 01:00 ICT) to proactively provision monthly partitions, offload completed historical monthly partitions to compressed columnar Parquet files, run table statistics (\texttt{ANALYZE}), and curate the Metabase metadata catalog (\texttt{pipeline/metabase\_curator.py}) by hiding partition backend slices from business analysts.
 \end{enumerate}
 The entire stack operates locally or on secure government cloud infrastructure, providing an independent, sovereign digital public tool for Cambodia.
 

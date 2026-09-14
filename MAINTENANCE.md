@@ -114,3 +114,41 @@ Run the diagnostic audit script to verify all dashboard query cards:
 ```bash
 python scripts/test_metabase_cards.py
 ```
+
+---
+
+## 8. Circuit Breaker Dual-Currency Price Velocity Normalization
+
+`pipeline/circuit_breaker.py` guards against corrupt data ingestion by checking rolling volume drops and price velocities against 7-day clean medians from `silver.clean_store_prices`.
+
+### Dual-Currency Alignment
+Because `silver.clean_store_prices` stores prices in **Khmer Riel (KHR)** (`price_khr`), incoming raw records from USD-denominated retailers (e.g. Delishop, Cellcard, Hyatt, Sokha) must be converted to KHR before price velocity checks:
+```python
+rate = self.get_exchange_rate(scrape_date)
+# If raw record currency is 'USD', price is multiplied by rate before computing incoming median
+```
+- **Exchange Rate Source:** Dynamically fetched from `staging.exchange_rates` on `scrape_date`, falling back to `4,050.0 KHR/USD` if missing.
+- **Audit Logging:** Events evaluated are permanently logged to `ops.circuit_breaker_events` with status (`PASSED`, `WARNING_FLAGGED`, `HALTED`), record count, median price, price velocity delta %, and payload details.
+
+---
+
+## 9. Scraper DOM Selectors & Graceful Degradation Maintenance
+
+When retailers update their frontend templates, follow these verified operational protocols:
+
+### Cellcard Mobile (`scrapers/sources/cellcard.py`)
+- **Live Selector:** Parses `.js-card` elements on `https://www.cellcard.com.kh/en/mobile` for AO Mobile 5G/4G plans.
+- **Regex Extraction:** Extracts pricing via `\$\s*(\d+(\.\d+)?)` and data quotas via `(\d+\s*GB)`.
+- **Fallback Cascade:** If DOM cards change, falls back automatically to `__NEXT_DATA__` JSON parsing, and then to `CELLCARD_PLANS_BASELINE` with `is_fallback=True`.
+
+### Khmer24 Real Estate (`scrapers/sources/khmer24.py`)
+- **Nuxt SSR Offset Pagination:** Khmer24 utilizes infinite scroll driven by `?offset={(page - 1) * 30}` rather than `?page={page}`.
+- **Rate-Limiting:** Maintain randomized delays (1.0–2.0s) between offset requests to adhere to anti-scraping policies.
+
+### Khmer Samnang Phone Shop (`scrapers/sources/samnangshop.py`)
+- **WooCommerce Store API:** Target `https://khmersamnang.com/wp-json/wc/store/v1/products?per_page=100`.
+- **Catalog Size:** Active listings reflect current in-stock catalog (e.g. 73 items following inventory audits). All active products are captured in a single paginated query.
+
+### Bayon BKK (`scrapers/sources/bayonbkk.py`)
+- **Anti-Bot Graceful Degradation:** Foodpanda/PerimeterX blocks live scrapers with HTTP 403 (`px-captcha`). In adherence to scraping ethics (never bypassing CAPTCHA), the scraper gracefully engages `BAYON_MENU_BASELINE` (`is_fallback=True`).
+

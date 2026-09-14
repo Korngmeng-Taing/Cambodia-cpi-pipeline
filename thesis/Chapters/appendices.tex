@@ -38,16 +38,19 @@
 \textbf{Data Collection Workflow} & \textbf{Schedule (ICT)} & \textbf{Target Platform} & \textbf{Ingestion Method} \\ \hline
 Supermarket Retail Ingestion & 01:00 AM & AEON Stores 1 \& 3 & Automated Web Parser \\ \hline
 Online Grocery Ingestion & 01:15 AM & DeliShop Asia Cambodia & Dynamic DOM Crawler \\ \hline
+Quick-Commerce Ingestion & 01:20 AM & GrabMart (Lucky, Chip Mong) & Embedded JSON Feed \\ \hline
 E-Commerce Marketplace Extraction & 01:30 AM & L192 Marketplace & Mobile Feed Extractor \\ \hline
-Pharmaceutical Products Monitor & 01:45 AM & Community Pharmacy & Structured Web Scraper \\ \hline
+Pharmaceutical Products Monitor & 01:45 AM & Community Pharmacy \& Ucare & Structured Web Scraper \\ \hline
 Housing and Rental Listings & 02:00 AM & Khmer24 Real Estate & Real Estate Crawler \\ \hline
 Passenger Inter-Provincial Fares & 02:15 AM & redBus \& BookMeBus & Transit Search Extractor \\ \hline
 Telecommunication Service Tariffs & 02:30 AM & Cellcard, Smart, Metfone & Tariff Portal Monitor \\ \hline
 Regulated Retail Fuel Prices & 06:00 AM & Ministry of Commerce & Official Data Endpoint \\ \hline
 Official Foreign Exchange Rates & 06:30 AM & Ministry of Economy & Official Daily Currency Feed \\ \hline
 Econometric Mart Transformations & 07:00 AM & Central Database & Automated Analytics Engine \\ \hline
+Official NIS Benchmark Ingestion & Mon 06:00 AM & National Institute of Statistics & Automated Portal Scraper \\ \hline
+Automated Maintenance \& Parquet & Sun 01:00 AM & Operations Schema & Partition \& Storage Offloader \\ \hline
 \end{tabular}
-\caption{Operational Schedule for Automated Daily Market Data Ingestion}
+\caption{Operational Schedule for Automated Daily Market Data Ingestion and Maintenance DAGs}
 \label{tab:appendix_airflow_dags}
 \end{table}
 

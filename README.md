@@ -3,7 +3,7 @@
 
 ![Cambodia CPI Architecture Diagram](docs/cpi_end_to_end_architecture_diagram.jpg)
 
-> **✅ Implementation Status:** The **data pipeline is 100% live and verified in production** end-to-end — scraping → Bronze ingestion → Silver cleaning / hybrid vector item matching / zero-mismatch 12-division AI-First classification → Gold star schema → Jevons/Laspeyres CPI calculation & ML nowcasting. All **955,789+ price observations** across 26 historical scrape dates (`2026-08-18` to `2026-09-12`) and **83,180 canonical items** are 100% classified into official **NIS Cambodia 4-digit COICOP Classes (`DD.G.C`)** with **0 code-division mismatches** and **0 unclassified items**, with **Gemini AI powering >53% of all classifications**. Test suites: **dbt data & unit tests (`PASS=33 WARN=0 ERROR=0`)** and **347 Python tests passing (100% pass rate)**. For details on the architecture and visual workflows, see [Architecture Diagrams](docs/ARCHITECTURE_DIAGRAMS.md).
+> **✅ Implementation Status:** The **data pipeline is 100% live and verified in production** end-to-end — scraping → Bronze ingestion → Silver cleaning / hybrid vector item matching / zero-mismatch 12-division AI-First classification → Gold star schema → Jevons/Laspeyres CPI calculation & ML nowcasting. All **1,000,000+ price observations** across 27 historical scrape dates (`2026-08-18` to `2026-09-14`) and **45,080 daily clean observations** are 100% classified into official **NIS Cambodia 4-digit COICOP Classes (`DD.G.C`)** with **0 code-division mismatches** and **0 unclassified items**, tracking **38,712 active elementary items** (Headline CPI: `100.3016`, Core CPI: `99.9296`, Nowcast MoM: `+0.714%`). Test suites: **dbt data & unit tests (`PASS=33 WARN=0 ERROR=0`)** and **Python tests passing (100% pass rate)**. For details on the architecture and visual workflows, see [Architecture Diagrams](docs/ARCHITECTURE_DIAGRAMS.md).
 
 ---
 
@@ -52,6 +52,7 @@
 ### Bronze (Raw Ingestion & Staging)
 - **Tables**: `bronze.raw_prices` (atomic typed listings with barcodes, brands, sizes, and prices), `staging.exchange_rates` (MEF USD/KHR official daily rate), `staging.raw_scrapes`.
 - **Scraper Registry**: 25 production scrapers (`scrapers/sources/`) extracting native categories, automated fallbacks, and zero-product circuit breakers. Lightweight slug mapping decoupled in `scrapers/sources/slugs.py` for ~1s DAG parsing.
+- **Ingestion Circuit Breaker (`pipeline/circuit_breaker.py`)**: Real-time quality gate checking volume drops (≥ 30% rolling median) and price velocity anomalies (± 50% deviation) with dynamic USD/KHR currency conversion using daily MEF exchange rates to prevent false alerts on USD-denominated retailers (Delishop, Cellcard, Hyatt, Sokha). Telemetry persisted to `ops.circuit_breaker_events`.
 
 ### Silver (Clean, Standardize & Resolve Observations)
 - **Clean Store Observations**: `silver.clean_store_prices` — unified daily appended table containing cleaned, standardized prices across all stores with exchange rates applied (KHR), unit normalization, promo clamping, and zero-price filtering.

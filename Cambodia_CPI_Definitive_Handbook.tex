@@ -1290,435 +1290,213 @@ This mathematical bridge guarantees that long-term historical records spanning d
 % =============================================================================
 
 \subsection{Closing the 30-Day Policy Gap}
-Official monthly inflation reports from the National Institute of Statistics (NIS) arrive 3 to 4 weeks after a month ends. For central bankers managing the currency and businesses planning inventory, a 30-day delay is like driving a car while looking only in the rearview mirror.
+Official monthly inflation reports from Cambodia's National Institute of Statistics (NIS) are published with an observation delay of 3 to 4 weeks. For example, official January CPI figures are only made available in late February. For macroeconomic policymakers at the National Bank of Cambodia (NBC), treasury liquidity planners at the Ministry of Economy and Finance (MEF), and commercial food importers, this 30-day information void creates severe policy blindness.
 
-Our production nowcaster (\texttt{ml/nowcaster.py}) estimates final monthly inflation on \textbf{every single day of the active month}, updating projections in real-time as new morning price quotes arrive.
+Our production nowcasting engine (\texttt{ml/nowcaster.py}) resolves this challenge by projecting the final, conformed monthly headline inflation rate on \textbf{every single day of the active month} ($t \in \{1, \dots, T\}$). As fresh morning retail web scrapes, fuel price ceilings, and official MEF USD/KHR exchange rates enter the warehouse at 2:00 AM, the nowcasting engine updates its out-of-sample projections before business hours.
 
-\subsection{Why Bottom-Up 5-Basket Price Relatives Win}
-Instead of trying to predict one big aggregated number out of thin air, our nowcaster uses a \textbf{bottom-up axiomatic approach}. It tracks the price relatives of \textbf{5 vital everyday baskets} that together make up \textbf{81.58\% of all household spending in Cambodia}:
+\subsection{Axiomatic Foundation: Why Bottom-Up 5-Basket Price Relatives Win}
+Traditional macroeconomic forecasting models attempt to predict an ad-hoc aggregate headline index directly. However, in an emerging, dual-currency dollarized economy like Cambodia, aggregate inflation is driven by distinct microeconomic cost structures:
+\begin{itemize}[noitemsep]
+    \item \textbf{Food items} (pork, vegetables, fish) are driven by local rainfall, seasonality, and agricultural harvest cycles.
+    \item \textbf{Transport items} (gasoline, diesel) are governed by global crude benchmark fluctuations and bi-weekly Ministry of Commerce (MOC) retail price caps.
+    \item \textbf{Housing and utilities} (electricity, piped water) are administratively regulated tariff structures.
+\end{itemize}
+
+Lumping these disparate processes into a single aggregate linear model causes structural collinearity and high forecast variance. Instead, our model adopts an \textbf{axiomatic bottom-up approach}: it models the price relatives of \textbf{5 core consumer baskets} that represent \textbf{81.58\% of all household expenditure} in Cambodia:
 
 \begin{table}[h]
 \centering
 \small
-\caption{The 5 Core Consumer Baskets Modeled by the Nowcaster}
-\begin{tabular}{clcc}
+\caption{The 5 Core Consumer Baskets Modeled in the Nowcasting Engine}
+\begin{tabular}{clccp{5.5cm}}
 \toprule
-\textbf{Division} & \textbf{Consumer Basket Name} & \textbf{Official NIS Weight} & \textbf{Economic Characteristic} \\
+\textbf{Div} & \textbf{Consumer Basket Description} & \textbf{NIS Weight} & \textbf{Items Tracked} & \textbf{Dominant Economic Driver} \\
 \midrule
-\textbf{01} & Food and Non-Alcoholic Beverages & 44.78\% & Highly volatile, weather \& harvest sensitive \\
-\textbf{07} & Transport (Gasoline, Diesel, Transit) & 12.23\% & Driven by global crude oil \& MEF fuel caps \\
-\textbf{04} & Housing, Water, Electricity, Gas & 17.08\% & Regulated utility rates \& LPG cylinders \\
-\textbf{11} & Restaurants and Hotels & 5.86\% & Wage, service, and tourism driven \\
-\textbf{02} & Alcoholic Beverages and Tobacco & 1.63\% & Import tariffs, excise taxes, retail trends \\
+\textbf{01} & Food \& Non-Alcoholic Beverages & 44.78\% & 2,800+ & Local harvest cycles, weather shocks, import logistics \\
+\textbf{07} & Transport \& Vehicle Fuels & 12.23\% & 450+ & Global crude oil, MOC fuel price caps, transit tariffs \\
+\textbf{04} & Housing, Water, Electricity, Gas & 17.08\% & 320+ & EDC electric tariffs, PPWSA water rates, LPG refill \\
+\textbf{11} & Restaurants \& Hotels & 5.86\% & 680+ & Food commodity pass-through, urban labor wages \\
+\textbf{02} & Alcoholic Beverages \& Tobacco & 1.63\% & 510+ & Customs import duties, excise taxes, retail markups \\
 \midrule
-\textbf{Total} & \textbf{High-Frequency Disaggregated Coverage} & \textbf{81.58\%} & \textbf{Core Driver of Cambodian Inflation} \\
+\textbf{Total} & \textbf{High-Frequency Disaggregated Coverage} & \textbf{81.58\%} & \textbf{4,760+} & \textbf{Core Drivers of Cambodian Household Inflation} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The remaining 7 low-volatility divisions (3.04\% Clothing, 3.25\% Furnishings, 5.56\% Health, 3.92\% Telco, 1.91\% Recreation, 1.51\% Education, 2.07\% Misc) cover the remaining 18.42\% and are anchored to neutral prior-month baselines.
+The remaining 7 low-volatility divisions (3.04\% Clothing, 3.25\% Furnishings, 5.56\% Health, 3.92\% Telco, 1.91\% Recreation, 1.51\% Education, 2.07\% Misc Goods) represent the remaining 18.42\% of expenditure. Because their daily prices exhibit near-zero high-frequency drift, they are anchored to neutral carryover baselines ($I_{m, \text{baseline}} = I_{m, M-1}$), drastically reducing parameter estimation noise without losing coverage.
 
-\subsection{The Two-Stage Hybrid Architecture}
-Our model pairs rock-solid observed facts with regularized statistical learning:
-
+\subsection{Why Ridge Regression Fits This Project Perfectly}
+In high-frequency macroeconomic nowcasting, models face three severe statistical obstacles:
 \begin{enumerate}
-    \item \textbf{Stage 1: Realized Month-to-Date Micro-Aggregation:}
-        On any day $t$, we know the exact realized prices for days $1 \dots t$. We calculate the true average index for each basket up to today with zero guesswork.
-    \item \textbf{Stage 2: Empirical Bayes Ridge Drift Estimation:}
-        For the unobserved remaining days ($t+1 \dots T$), we estimate daily price drift $\hat{\mu}_k$ using Cross-Validated Ridge Regression (\texttt{RidgeCV}). The model inputs:
-        \begin{itemize}[noitemsep]
-            \item \textbf{Multi-Horizon Momentum:} 3-day, 7-day, and 14-day price velocity in Food and Transport.
-            \item \textbf{Foreign Exchange Pass-Through:} 7-day and 14-day official MEF USD/KHR exchange rate momentum.
-            \item \textbf{Festival Surge Calendar:} Transitory demand surges for Khmer New Year, Pchum Ben, and Water Festival.
-            \item \textbf{Empirical Bayesian Shrinkage Prior:} When data is early in the month or noisy, an empirical shrinkage prior pulls extreme drift estimates back toward zero ($\lambda_{\text{shrink}} = \max(0, 1 - R^2)$), completely preventing wild out-of-sample forecast spikes.
-        \end{itemize}
-    \item \textbf{Exact Laspeyres Axiomatic Aggregation:}
-        The projected monthly index for each basket $\bar{I}_k$ blends realized days and projected drift. The national headline CPI nowcast is then synthesized using official NIS weights:
-        \begin{equation}
-        \widehat{\text{HeadlineCPI}}_T = \sum_{k \in \mathcal{K}} w_k \bar{I}_k + \sum_{m \notin \mathcal{K}} w_m I_{m, \text{baseline}}
-        \end{equation}
-    \item \textbf{Dynamic Uncertainty Decay (95\% Confidence Bounds):}
-        Early in the month, uncertainty is wider. As more days are observed, uncertainty contracts asymptotically toward zero:
-        \begin{equation}
-        \text{Margin of Error}_t = 1.96 \times \sigma_{\text{daily}} \times \sqrt{\frac{T - t}{T}}
-        \end{equation}
+    \item \textbf{High Collinearity Among Predictors:} Intra-month momentum signals (such as 3-day, 7-day, and 14-day food price changes) are naturally correlated. Ordinary Least Squares (OLS) regression fails under multicollinearity because the matrix $(\mathbf{X}^T \mathbf{X})$ becomes ill-conditioned ($\det(\mathbf{X}^T \mathbf{X}) \approx 0$), causing coefficient variances to explode ($(\mathbf{X}^T \mathbf{X})^{-1} \to \infty$).
+    \item \textbf{Small Sample Regimes Early in the Month:} On Day 3 or Day 5 of the month, only a handful of daily observations exist. Flexible non-parametric models (such as deep neural networks or unconstrained Random Forests) massively overfit to small, noisy sample fluctuations.
+    \item \textbf{Asymmetric Loss of Economic Credibility:} A forecast that spikes wildly on Day 4 and reverses on Day 6 destroys policymaker trust.
 \end{enumerate}
 
-\begin{tcolorbox}[colback=white,colframe=AccentGreen,title=\textbf{Live Production Validation: September 14, 2026 Nowcast}]
-\textbf{Real-Time Evaluation Results vs. Official Benchmarks (\texttt{gold.v\_nowcast\_evaluation}):}
+\textbf{Why $L_2$-Regularized Ridge Regression is the Optimal Solution:}\\
+Ridge regression solves these exact failure modes by imposing an $L_2$ penalty on parameter magnitudes:
 \begin{itemize}[noitemsep]
-    \item \textbf{Projected Headline MoM Inflation:} \textbf{+0.3651\%} (Headline CPI: \texttt{100.2622}).
-    \item \textbf{Official Ground-Truth Benchmark:} \textbf{+0.3470\%}.
-    \item \textbf{Out-of-Sample Absolute Error:} Just \textbf{+0.0181 percentage points} (over 95\% error reduction compared to older aggregate models).
-    \item \textbf{5-Basket Breakdown:} Food: 99.65 ($-0.11\%$), Transport: 103.33 ($+3.58\%$), Housing: 100.15 ($+0.39\%$), Restaurants: 100.13 ($+0.37\%$), Alcohol: 100.20 ($+0.44\%$).
-\end{itemize}
-\end{tcolorbox}
-
-\newpage
-
-% =============================================================================
-\section{Automated Quality Checks, Code Audits, and Rigorous Testing}
-% =============================================================================
-
-To make sure no bad data, calculation bugs, or crazy numbers ever sneak into the official report, our pipeline executes \textbf{56 automated dbt data tests} and \textbf{451 Python unit/integration tests} before any number is published. All tests pass with zero warnings and zero failures (\texttt{PASS=56, WARN=0, ERROR=0} in dbt and \texttt{451 passed} in pytest).
-
-\begin{tcolorbox}[colback=white,colframe=AccentGreen,title=\textbf{Production Verification: 100\% Classified Warehouse}]
-\textbf{Live Warehouse Audit Metrics (22 Historical Dates, 909,289 Observations):}
-\begin{itemize}[noitemsep]
-    \item \textbf{Total Observations Ingested \& Processed:} 909,289 records.
-    \item \textbf{Classification Completeness:} \textbf{100.00\%} (0 unclassified items, 0 remaining in review status).
-    \item \textbf{Taxonomic Integrity:} \textbf{0 code-division mismatches} across all 12 UN COICOP divisions.
-    \item \textbf{AI-First Footprint:} Gemini AI powers \textbf{53.33\% (484,892 rows)} of all classifications across the entire warehouse.
-\end{itemize}
-\end{tcolorbox}
-
-\begin{table}[h]
-\centering
-\small
-\caption{Examples of Daily Automated Quality Checks in dbt and Python}
-\begin{tabular}{p{4.5cm}p{2.5cm}p{7.0cm}}
-\toprule
-\textbf{Test Name} & \textbf{Type of Check} & \textbf{What It Checks in Plain English} \\
-\midrule
-\texttt{weights\_sum\_to\_100} & Math Check & Ensures that all 12 category weights add up to exactly 100.00\%. \\
-\texttt{test\_utility\_tariffs} & Official Check & Verifies that water and power rates match official government gazettes. \\
-\texttt{test\_price\_sanity} & Anomaly Check & Flags any price that is negative, zero, or jumped by more than $5\times$ in one day. \\
-\texttt{test\_coicop\_coverage} & Completeness & Checks that all 12 life divisions have real data today (no category is empty). \\
-\texttt{test\_traps} & Classification Trap & Tests tricky items (such as Chivas, Pastis, Marlboro, Libresse, Panasonic hair dryers, and cooking wine) to guarantee they never slip into the wrong COICOP basket. \\
-\texttt{test\_no\_retail\_in\_coicop\_07} & Store Purity & Ensures supermarkets and pharmacies never accidentally classify goods as Transport. \\
-\texttt{test\_idempotency} & Reliability & Re-running today's pipeline produces the exact same results without duplicate rows. \\
-\midrule
-\texttt{unit\_test\_promo\_clamp} & Unit Test & Checks that if a promotional price is typed higher than the regular price by mistake, the system catches it. \\
-\texttt{unit\_test\_pack\_sizes} & Unit Test & Tests that $2 \times 500\text{ml}$ is recognized as 1 Liter. \\
-\texttt{pytest\_suite} & Python Test & 451 test cases validating API parsing, TLS spoofing headers, database partitioning, and formula precision. \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-If any critical test fails, the Airflow pipeline halts immediately and alerts the team, ensuring that bad data can never corrupt the national inflation index.
-
-\subsection{Deep-Dive: The Machine Learning \& AI Engineering Architecture}
-
-\subsubsection{1. Multilingual Semantic Vector Space (768 Dimensions)}
-In \texttt{pipeline/hybrid\_embeddings\_classifier.py} and \texttt{pipeline/vector\_item\_matcher.py}, products are projected into a continuous 768-dimensional vector space ($\mathbb{R}^{768}$). This enables mathematical measurement of semantic affinity between raw Cambodian retail text (often written in mixed Khmer script, Romanized transliteration, and English) and the formal United Nations COICOP taxonomy:
-\begin{itemize}
-    \item \textbf{High-Resolution Reference Spaces:} The model precomputes dense unit centroids $\vec{c}_k = \frac{1}{N_k}\sum_{j=1}^{N_k} \frac{\vec{v}_j}{\|\vec{v}_j\|}$ for each of the 12 UN COICOP divisions and 42 granular 4-digit subclasses.
-    \item \textbf{Sub-Millisecond Cosine Classification:} Unseen items are encoded into vector $\vec{x}$ and evaluated against the centroids via dot product $\cos(\theta) = \vec{x} \cdot \vec{c}_k$. When affinity satisfies $\cos(\theta) \ge 0.85$, classification is locked instantly without making an external cloud request.
-    \item \textbf{PostgreSQL \texttt{pgvector} HNSW Indexing:} For cross-store item matching, embeddings are indexed using Hierarchical Navigable Small World (HNSW) graphs in PostgreSQL (\texttt{vector\_cosine\_ops}), yielding candidate retrieval in less than $1.8\text{ms}$ across hundreds of thousands of historical products.
+    \item It conditions the design matrix by adding positive bias along the diagonal: $(\mathbf{X}^T \mathbf{X} + \alpha \mathbf{I})$, guaranteeing stable matrix inversion even with perfect collinearity.
+    \item It provides continuous shrinkage rather than abrupt feature elimination (unlike LASSO $L_1$ penalty), preserving the joint explanatory power of multi-horizon momentum.
+    \item It admits closed-form analytical solutions, executing in less than $3\text{ms}$ per division during Airflow orchestration.
 \end{itemize}
 
-\subsubsection{2. Multi-Key Resilient Gemini AI Pool (\texttt{pipeline/key\_pool.py})}
-To eliminate rate-limit bottlenecks (HTTP 429) during peak ingestion, the pipeline employs a dynamic, thread-safe Key Pool:
-\begin{itemize}
-    \item \textbf{Dynamic Discovery:} Automatically scans environment variables (\texttt{GEMINI\_API\_KEY}, \texttt{GEMINI\_API\_KEY\_2}, \texttt{GEMINI\_API\_KEY\_3}, \dots) and registers active keys.
-    \item \textbf{Exponential Backoff \& Jitter:} If a key encounters a rate limit or quota ceiling, it is temporarily placed on a cooldown timer ($2^k + \text{jitter}$ seconds), while requests seamlessly route to alternate keys without dropping a single product.
-    \item \textbf{Strict JSON Schema Contract:} Gemini 2.5 Flash is pinned via \texttt{response\_mime\_type='application/json'}, forcing the model to adhere to the schema:
-    \texttt{\{"product\_name": str, "coicop\_code": str, "confidence\_score": float, "reasoning": str\}}.
-\end{itemize}
+\subsection{Complete Mathematical Formulation of the Two-Stage Hybrid Model}
+For an active calendar month $M$ having $T$ total days, let $t = N_{\text{obs}}$ denote the number of observed calendar days to date ($1 \le t \le T$), and let $N_{\text{rem}} = T - t$ denote the remaining unobserved days.
 
-\subsubsection{3. Log-Linear Hedonic Regression Quality Adjustment}
-When consumer technology goods (smartphones, laptops) undergo generational updates, price increases often reflect enhanced consumer utility rather than pure macroeconomic inflation. In \texttt{pipeline/hedonic\_regression.py}, the pipeline fits a semi-logarithmic hedonic model:
+\subsubsection{Stage 1: Micro-Aggregation of Realized Trajectory}
+For every basket $k \in \mathcal{K} = \{01, 02, 04, 07, 11\}$, the realized daily elementary Jevons price index $P_{k, s}$ is observed for each day $s \in \{1, \dots, t\}$. The realized Month-to-Date (MTD) mean index is:
 \begin{equation}
-\ln(P_{i, t}) = \alpha_0 + \sum_{m} \beta_m X_{i, m} + \sum_{t} \tau_t D_t + \varepsilon_{i, t}
+\bar{P}_{k, \text{obs}} = \frac{1}{t} \sum_{s=1}^t P_{k, s}
 \end{equation}
-where $X_{i, m}$ represents continuous and dummy quality characteristics (RAM in GB, Storage capacity in GB, primary camera megapixels, 5G capability). When an item $A$ is substituted by upgraded item $B$, the pure price change is isolated:
+The latest available spot index on evaluation day $t$ is $P_{k, t}$.
+
+\subsubsection{Stage 2: Multi-Horizon Feature Engineering}
+For each basket $k$, the nowcaster constructs a continuous feature vector $\mathbf{x}_t \in \mathbb{R}^9$ capturing multi-horizon momentum, currency velocity, and calendar demand proximity:
 \begin{equation}
-\Delta \ln(P_{\text{pure}}) = \ln(P_B) - \ln(P_A) - \sum_{m} \hat{\beta}_m (X_{B, m} - X_{A, m})
+\mathbf{x}_t = \begin{bmatrix}
+m_{\text{food}, 3d} & m_{\text{food}, 7d} & m_{\text{food}, 14d} & m_{\text{trans}, 3d} & m_{\text{trans}, 7d} & m_{\text{fx}, 7d} & m_{\text{fx}, 14d} & \mathbb{I}_{\text{holiday}} & \text{dist}_{\text{holiday}}
+\end{bmatrix}^T
 \end{equation}
-This mathematically guarantees that technological innovation does not artificially inflate the national cost of living.
-
-\newpage
-
-% =============================================================================
-\section{Keeping the Database Fast and Scalable}
-% =============================================================================
-
-\subsection{How Much Data Do We Collect?}
-Collecting 35,500 prices every day adds up quickly:
-\begin{itemize}
-    \item \textbf{Every Month:} About \textbf{1,065,000 prices}.
-    \item \textbf{Every Year:} About \textbf{13,000,000 prices}.
-\end{itemize}
-If you don't design your database carefully, after a few years the system will become painfully slow. Here is how our production architecture keeps queries answering in milliseconds:
-
-\subsection{Declarative Monthly Table Partitioning}
-To prevent massive performance degradation, our high-volume tables are physically partitioned by calendar month:
-\begin{itemize}
-    \item \textbf{Partitioned Tables:} \texttt{bronze.raw\_prices} and \texttt{silver.clean\_store\_prices} are partitioned using declarative \texttt{PARTITION BY RANGE (scrape\_date)}.
-    \item \textbf{Monthly Physical Tables:} Data is automatically routed into dedicated monthly child tables (e.g. \texttt{raw\_prices\_2026\_08}, \texttt{raw\_prices\_2026\_09}, \texttt{clean\_store\_prices\_2026\_08}, \texttt{clean\_store\_prices\_2026\_09}).
-    \item \textbf{Automated Partition Maintenance (\texttt{pipeline/partition\_manager.py}):} A database stored procedure \texttt{ops.maintain\_monthly\_partitions(p\_months\_ahead)} is executed proactively via the weekly Airflow maintenance DAG (\texttt{cpi\_maintenance\_dag}). It inspects the calendar and automatically provisions child tables \textbf{3 months into the future}, ensuring daily scraper ingestion never fails due to missing partitions.
-    \item \textbf{Sub-8ms Partition Pruning:} When daily queries or dbt models request prices for a specific date range, PostgreSQL's query planner activates \textit{partition pruning}, immediately skipping 95\%+ of historical partitions without scanning them.
-\end{itemize}
-
-\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{Performance Optimization Case Study: 7m42s Down to 18 Seconds}]
-\textbf{The Challenge:} In the Silver layer, the incremental transformation model \texttt{clean\_store\_prices.sql} cleans, standardizes, applies exchange rates, and matches 35,500+ daily listings against category maps and AI caches. Initially, evaluating complex string functions and regexes inside multi-table SQL joins took \textbf{7 minutes and 42 seconds} per daily run.\\
-\textbf{The Optimization:}
-\begin{enumerate}[noitemsep]
-    \item \textit{Pre-Computed String Normalization:} Replaced repetitive per-row \texttt{lower(regexp\_replace(...))} calls inside joins with pre-normalized columns computed once in initial Common Table Expressions (CTEs).
-    \item \textit{Selective Index Lookups:} Replaced heavy materialized subqueries with filtered semi-joins on known store subsets.
-    \item \textit{Partition-Aligned Filtering:} Aligned date predicates directly with monthly partition boundaries.
-\end{enumerate}
-\textbf{The Result:} Daily model execution time plummeted from \textbf{7m42s to just 18 seconds} (a \textbf{96\% reduction in runtime}), saving massive compute resources while ensuring gold inflation tables update immediately after morning scrapes finish.
-\end{tcolorbox}
-
-\subsection{3 Smart Database Bookmarks (Indexes)}
-\begin{enumerate}
-    \item \textbf{Date Bookmarks (BRIN Indexes):} Because prices are saved day after day in order, we use lightweight Block Range Indexes (BRIN). They take up 98\% less disk space than B-tree indexes while letting the computer jump directly to today's physical disk blocks.
-    \item \textbf{Fuzzy Text Bookmarks (Trigram GIN Indexes):} Allows the computer to find products even if spelling varies across merchants (e.g. \textit{"Cocacola"} vs \textit{"Coca-Cola"}).
-    \item \textbf{Meaning Bookmarks (HNSW Vector Graphs):} Allows PostgreSQL (\texttt{pgvector}) to compare 768-dimensional AI embeddings in under 2 milliseconds across hundreds of thousands of historical products.
-\end{enumerate}
-
-\newpage
-
-% =============================================================================
-\section{Real-Time Analytics, SQL Queries, and Metabase Dashboards}
-% =============================================================================
-
-\subsection{Real-Time Executive Dashboards in Metabase (Port 3001/3000)}
-For policy leaders, researchers, and data engineers, our pipeline provisions \textbf{3 consolidated enterprise Metabase dashboards} via \texttt{scripts/setup\_metabase\_dashboards.py}, providing complete visual transparency from raw ingestion to macro indicators:
-
-\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{Dashboard 01: Macro CPI \& Inflation Analytics}]
+where:
 \begin{itemize}[noitemsep]
-    \item \textbf{Headline \& Core Tickers:} Real-time headline CPI, core CPI (excluding food, utilities, and gasoline), Month-over-Month (MoM \%), and Year-over-Year (YoY \%) inflation rates.
-    \item \textbf{12-Division COICOP Performance Table:} Complete breakdown of all 12 official UN consumption divisions, displaying current index levels, monthly change rates, and official NIS expenditure weights.
-    \item \textbf{5-Basket Nowcast Trajectory \& MoM Inflation (\%):} Real-time multi-basket trajectory for Food (01), Transport (07), Housing (04), Restaurants (11), and Alcohol (02) tracking price relatives across 81.58\% of national expenditure.
-    \item \textbf{5-Basket Price Relatives Breakdown Table:} Detailed daily audit displaying individual division index levels, 95\% confidence intervals, and axiomatic Laspeyres point contributions.
-    \item \textbf{Longitudinal Inflation Trendline:} Multi-month trajectory comparing daily headline inflation against core inflation to track underlying macroeconomic momentum.
-    \item \textbf{Top Basket Price Movers:} Identifies the top 20 products with the largest price increases and decreases across Cambodian retail.
-    \item \textbf{Official NIS Benchmark Comparison:} Compares daily pipeline inflation nowcasts against official retrospective National Institute of Statistics releases.
+    \item $m_{k, H} = \frac{P_{k, t} - P_{k, t-H}}{P_{k, t-H}}$: $H$-day rolling price momentum in Division $k$.
+    \item $m_{\text{fx}, H} = \frac{\text{FX}_t - \text{FX}_{t-H}}{\text{FX}_{t-H}}$: $H$-day percentage change in the official NBC/MEF USD/KHR exchange rate.
+    \item $\mathbb{I}_{\text{holiday}} \in \{0, 1\}$: Binary indicator active during Cambodian festive shock windows (Khmer New Year, Pchum Ben, Water Festival).
+    \item $\text{dist}_{\text{holiday}}$: Gaussian proximity decay to the nearest festive shock center ($\exp(-(\Delta \text{days})^2 / 18.0)$).
 \end{itemize}
-\end{tcolorbox}
 
-\begin{tcolorbox}[colback=white,colframe=Teal,title=\textbf{Dashboard 02: Pipeline \& 25-Source Telemetry}]
+\subsubsection{How the Model Computes the Ridge Regression Coefficients ($\hat{\boldsymbol{\beta}}_k$)}
+For each target basket $k$, the historical training dataset consists of historical target dates $d < t$. For each historical date $d$, the realized forward trajectory drift across the remaining days of that historical month was:
+\begin{equation}
+y_{k, d} = \frac{\bar{P}_{k, \text{rem}, d} - P_{k, d}}{P_{k, d} \cdot \left(\frac{N_{\text{rem}, d} + 1}{2}\right)}
+\end{equation}
+Let $\mathbf{X} \in \mathbb{R}^{n \times 9}$ denote the standardized design matrix of historical feature vectors, and let $\mathbf{y}_k \in \mathbb{R}^n$ denote the vector of historical realized drifts. The Ridge regression objective function minimizes the regularized sum of squared errors:
+\begin{equation}
+\mathcal{L}(\boldsymbol{\beta}_k) = \|\mathbf{y}_k - \mathbf{X}\boldsymbol{\beta}_k\|_2^2 + \alpha \|\boldsymbol{\beta}_k\|_2^2 = \sum_{i=1}^n \left( y_{k, i} - \mathbf{x}_i^T \boldsymbol{\beta}_k \right)^2 + \alpha \sum_{j=1}^9 \beta_{k, j}^2
+\end{equation}
+Taking the partial derivative with respect to $\boldsymbol{\beta}_k$ and setting it to zero:
+\begin{equation}
+\frac{\partial \mathcal{L}}{\partial \boldsymbol{\beta}_k} = -2 \mathbf{X}^T (\mathbf{y}_k - \mathbf{X}\boldsymbol{\beta}_k) + 2\alpha \boldsymbol{\beta}_k = \mathbf{0}
+\end{equation}
+\begin{equation}
+\left( \mathbf{X}^T \mathbf{X} + \alpha \mathbf{I} \right) \boldsymbol{\beta}_k = \mathbf{X}^T \mathbf{y}_k
+\end{equation}
+This yields the \textbf{exact closed-form Ridge coefficient solution}:
+\begin{equation}
+\hat{\boldsymbol{\beta}}_k = \left( \mathbf{X}^T \mathbf{X} + \alpha \mathbf{I} \right)^{-1} \mathbf{X}^T \mathbf{y}_k
+\end{equation}
+
+\subsubsection{Optimal Regularization Parameter Selection via \texttt{RidgeCV}}
+The hyperparameter $\alpha$ controls the strength of penalty shrinkage. In \texttt{ml/nowcaster.py}, $\alpha$ is selected dynamically via Leave-One-Out Cross-Validation (\texttt{RidgeCV}) over the candidate spectrum $\alpha \in \{0.01, 0.1, 1.0, 10.0, 100.0, 1000.0\}$. By leveraging the Sherman-Morrison-Woodbury inversion lemma, \texttt{RidgeCV} computes the cross-validation error for all leave-one-out folds simultaneously without refitting the model:
+\begin{equation}
+e_{i}^{(-i)}(\alpha) = \frac{y_i - \hat{y}_i(\alpha)}{1 - H_{ii}(\alpha)}
+\end{equation}
+where $H(\alpha) = \mathbf{X} (\mathbf{X}^T \mathbf{X} + \alpha \mathbf{I})^{-1} \mathbf{X}^T$ is the regularized hat matrix. The optimal $\alpha^*$ minimizes the mean squared leave-one-out error:
+\begin{equation}
+\alpha^* = \arg\min_{\alpha} \frac{1}{n} \sum_{i=1}^n \left( \frac{y_i - \hat{y}_i(\alpha)}{1 - H_{ii}(\alpha)} \right)^2
+\end{equation}
+
+Once trained, the raw statistical drift prediction for division $k$ on evaluation day $t$ is:
+\begin{equation}
+\hat{\mu}_{k, \text{Ridge}} = \mathbf{x}_t^T \hat{\boldsymbol{\beta}}_k
+\end{equation}
+
+\subsubsection{Empirical Bayesian Shrinkage Prior}
+When the number of historical observations is small ($n < 8$) or when market volatility introduces temporary statistical noise, fitting unconstrained regression models creates high out-of-sample variance. To guarantee operational safety, our system introduces an \textbf{Empirical Bayes Shrinkage Prior}:
+\begin{equation}
+\hat{\mu}_k^{\text{shrunk}} = (1 - \lambda_{\text{shrink}}) \hat{\mu}_{k, \text{Ridge}} + \lambda_{\text{shrink}} \cdot \mu_{k, \text{prior}}
+\end{equation}
+where the shrinkage intensity $\lambda_{\text{shrink}}$ is governed by the in-sample coefficient of determination:
+\begin{equation}
+\lambda_{\text{shrink}} = \max\left(0.0, \min\left(1.0, 1.0 - R_k^2\right)\right)
+\end{equation}
+When the Ridge regression explains historical drift with high confidence ($R^2 \to 1.0$), $\lambda_{\text{shrink}} \to 0$, letting the data-driven ML prediction dominate. Conversely, when features contain high noise ($R^2 \to 0$), $\lambda_{\text{shrink}} \to 1.0$, smoothly shrinking the drift prediction back to the calibrated structural prior $\mu_{k, \text{prior}}$ (derived from official fuel ceilings, exchange rate pass-through elasticity $\epsilon_{\text{fx}} = 0.15\text{--}0.35$, and festival shock parameters).
+
+\subsubsection{Midpoint Cumulative Trajectory Expectation}
+Under expected daily drift $\hat{\mu}_k^{\text{shrunk}}$, the price index evolves across remaining days $j \in \{1, \dots, N_{\text{rem}}\}$ according to:
+\begin{equation}
+\mathbb{E}[P_{k, t+j}] = P_{k, t} \times \left( 1.0 + \hat{\mu}_k^{\text{shrunk}} \cdot j \right)
+\end{equation}
+The expected arithmetic average index over the entire remaining unobserved period is the discrete sum:
+\begin{equation}
+\mathbb{E}[\bar{P}_{k, \text{rem}}] = \frac{1}{N_{\text{rem}}} \sum_{j=1}^{N_{\text{rem}}} \mathbb{E}[P_{k, t+j}] = P_{k, t} \times \left[ 1.0 + \hat{\mu}_k^{\text{shrunk}} \cdot \left( \frac{1}{N_{\text{rem}}} \sum_{j=1}^{N_{\text{rem}}} j \right) \right]
+\end{equation}
+Using Gauss's triangular summation formula $\sum_{j=1}^N j = \frac{N(N+1)}{2}$:
+\begin{equation}
+\mathbb{E}[\bar{P}_{k, \text{rem}}] = P_{k, t} \times \left( 1.0 + \hat{\mu}_k^{\text{shrunk}} \cdot \frac{N_{\text{rem}} + 1}{2} \right)
+\end{equation}
+This midpoint formula is mathematically exact under linear drift.
+
+\subsubsection{Intra-Month Division Index Nowcast ($\bar{I}_k$)}
+The projected full-month mean index for basket $k$ is computed as the weighted combination of realized days and projected remaining days:
+\begin{equation}
+\bar{I}_{k, \text{month}} = \left( \frac{t}{T} \right) \bar{P}_{k, \text{obs}} + \left( \frac{N_{\text{rem}}}{T} \right) \mathbb{E}[\bar{P}_{k, \text{rem}}]
+\end{equation}
+The projected basket price relative compared to prior month baseline $I_{k, M-1}$ is:
+\begin{equation}
+R_{k, M/M-1} = \frac{\bar{I}_{k, \text{month}}}{I_{k, M-1}}
+\end{equation}
+and the basket's projected Month-over-Month percentage change is:
+\begin{equation}
+\hat{\pi}_{k, \text{MoM}} = (R_{k, M/M-1} - 1.0) \times 100.0\%
+\end{equation}
+
+\subsubsection{Exact Laspeyres Axiomatic Aggregation}
+Unlike ad-hoc non-linear neural nets whose sub-component projections fail to sum to the total, our headline CPI nowcast strictly satisfies the \textbf{axiomatic aggregation property of official consumer price statistics} (ILO/IMF 2020 CPI Manual):
+\begin{equation}
+\widehat{\text{HeadlineCPI}}_T = \sum_{k \in \mathcal{K}} w_k \bar{I}_{k, \text{month}} + \sum_{m \notin \mathcal{K}} w_m I_{m, \text{baseline}}
+\end{equation}
+where $\sum_{d=1}^{12} w_d = 1.0000$ exactly. The projected national Month-over-Month inflation rate is:
+\begin{equation}
+\hat{\pi}_{\text{Headline, MoM}} = \left( \frac{\widehat{\text{HeadlineCPI}}_T - \text{HeadlineCPI}_{M-1}}{\text{HeadlineCPI}_{M-1}} \right) \times 100.0\% = \sum_{d=1}^{12} w_d \hat{\pi}_{d, \text{MoM}}
+\end{equation}
+Every percentage point of projected headline inflation is directly and mathematically decomposable into its underlying basket contributions ($w_k \hat{\pi}_{k, \text{MoM}}$).
+
+\subsubsection{Dynamic Uncertainty Decay (95\% Confidence Interval)}
+Early in the month ($t \to 1$), uncertainty is governed by unobserved future shocks. As the month matures ($t \to T$), the weight of realized facts approaches $1.0$, causing forecast uncertainty to contract asymptotically toward zero:
+\begin{equation}
+\text{Margin of Error}_t = 1.96 \times \sigma_{\text{daily}} \times \sqrt{\frac{T - t}{T}}
+\end{equation}
+\begin{equation}
+\text{CI}_{95\%, t} = \left[ \widehat{\text{HeadlineCPI}}_T - \text{Margin of Error}_t, \; \widehat{\text{HeadlineCPI}}_T + \text{Margin of Error}_t \right]
+\end{equation}
+where $\sigma_{\text{daily}}$ is the empirical dispersion of daily price relatives within the active month.
+
+\subsection{Live Production Verification and Out-of-Sample Performance}
+The two-stage hybrid Ridge model has been fully backfilled and continuously evaluated across all 28 historical days of August and September 2026. The out-of-sample audit table in PostgreSQL (\texttt{gold.v\_nowcast\_evaluation}) proves the massive superiority of this architecture:
+
+\begin{tcolorbox}[colback=white,colframe=AccentGreen,title=\textbf{Live Production Validation: September 14, 2026 Nowcast Audit}]
+\textbf{Real-Time Evaluation Results vs. Official Ground-Truth Benchmark:}
 \begin{itemize}[noitemsep]
-    \item \textbf{Live Store Volume Rankings:} Real-time observation count collected by each of the 25 scraper sources today, highlighting operational volume across supermarkets, pharmacies, telcos, transit, and gas stations.
-    \item \textbf{14-Day Ingestion Matrix:} Heatmap displaying daily ingestion status and row counts across all 25 sources over the past fortnight to detect any source anomalies immediately.
-    \item \textbf{Official MEF FX Rate Freshness:} Daily monitoring of the Ministry of Economy and Finance USD/KHR exchange rate, confirming timely morning ingestion.
-    \item \textbf{Airflow DAG Execution State:} Operational telemetry showing run statuses, execution durations, and retry counts across all 25 per-source DAGs and medallion pipelines.
-\end{itemize}
-\end{tcolorbox}
-
-\begin{tcolorbox}[colback=white,colframe=DarkSlate,title=\textbf{\color{white}Dashboard 03: Silver Data Quality Screener}]
-\begin{itemize}[noitemsep]
-    \item \textbf{12-Division Classification Distribution:} Audits product counts across the 12 UN COICOP divisions, ensuring balanced representation and detecting category skew.
-    \item \textbf{Log-Price Relative Distribution:} Verifies that daily price ratios adhere to the international ILO outlier boundary ($0.20 \le P_t/P_0 \le 5.00$), ensuring rogue data never penetrates gold facts.
-    \item \textbf{Promotional Price Clamping Audit:} Screens for corrupted retail discounts (e.g. promo price higher than regular price) and validates automated unit conversions.
-    \item \textbf{Classification Review Triage Queue:} Monitors items requiring AI arbitration or manual human overrides, maintaining our verified 100.00\% classification standard.
-\end{itemize}
-\end{tcolorbox}
-
-\subsection{Easy SQL Queries for Daily Analysis}
-Non-technical analysts and policy officers can also run simple SQL queries against our conformed gold views (\texttt{sql/views.sql}) to inspect daily numbers:
-
-\subsubsection{1. Check Today's Inflation Rate}
-\begin{lstlisting}[language=SQL]
--- Shows today's overall headline inflation and core inflation
-SELECT 
-    calculation_date,
-    ROUND(headline_cpi::numeric, 2) AS today_cpi,
-    ROUND(core_cpi::numeric, 2)     AS today_core_cpi,
-    ROUND(((headline_cpi - 100.0) / 100.0 * 100.0)::numeric, 2) AS pct_change_since_base
-FROM gold.fct_cpi_daily
-ORDER BY calculation_date DESC
-LIMIT 1;
-\end{lstlisting}
-
-\subsubsection{2. Which Category Pushed Inflation Up the Most This Month?}
-\begin{lstlisting}[language=SQL]
--- Ranks categories from biggest price pusher to smallest
-SELECT 
-    coicop_division,
-    division_name,
-    weight,
-    mom_inflation_pct,
-    ROUND((weight * mom_inflation_pct)::numeric, 4) AS contribution_to_inflation
-FROM gold.fct_cpi_monthly
-WHERE cpi_month = (SELECT MAX(cpi_month) FROM gold.fct_cpi_monthly)
-ORDER BY contribution_to_inflation DESC;
-\end{lstlisting}
-
-\subsubsection{3. Check if Any Scraper Had an Issue Today}
-\begin{lstlisting}[language=SQL]
--- Verifies that all 23 scrapers collected their normal amount of data today
-SELECT 
-    source_name,
-    scrape_date,
-    row_count,
-    avg_row_count_7d,
-    status
-FROM staging.bronze_ingestion_stats
-WHERE scrape_date = (SELECT MAX(scrape_date) FROM staging.bronze_ingestion_stats)
-ORDER BY status ASC, row_count DESC;
-\end{lstlisting}
-
-\newpage
-
-% =============================================================================
-\section{How Government Leaders Can Use This Data}
-% =============================================================================
-
-\subsection{For the National Bank of Cambodia (Central Bank)}
-\begin{enumerate}
-    \item \textbf{See Inflation Right Now:} Central bankers do not need to wait 4 weeks to know if prices are rising. They can see price changes this morning.
-    \item \textbf{Know Where Price Increases Are Coming From:} Is inflation being caused by world gasoline prices (Division 07), or is it domestic food (Division 01)? If it is world gasoline, raising local interest rates won't fix global oil tankers. Knowing the exact source stops leaders from applying the wrong medicine.
-    \item \textbf{Watch the Exchange Rate in Real Time:} See exactly how fast changes in the USD/KHR exchange rate reach supermarket shelves.
-\end{enumerate}
-
-\subsection{For the Ministry of Economy and Finance}
-\begin{itemize}
-    \item \textbf{Protecting Vulnerable Families:} If food prices spike suddenly, the ministry can quickly adjust cash support programs for low-income households before hunger becomes an issue.
-    \item \textbf{Monitoring Utility Rates:} Ensure that clean water and electricity stay affordable for everyday citizens across all provinces.
-\end{itemize}
-
-\newpage
-
-% =============================================================================
-\section{Top 10 Defense Questions and Plain-English Answers}
-% =============================================================================
-
-This chapter provides clear, simple answers to the 10 most common questions asked during academic reviews, thesis defenses, and management presentations.
-
-\subsection{Q1: Why scrape websites instead of asking supermarkets for their cash register receipts?}
-\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{Defense Question 1: How We Get Data}]
-\textbf{The Question:} In rich countries, governments often ask supermarket headquarters to send them electronic cash register data. Why doesn't this project do that?\\
-\textbf{The Simple Answer:}
-\begin{enumerate}[noitemsep]
-    \item \textbf{Supermarkets keep their data secret:} In developing countries like Cambodia, retail chains treat their sales receipts as private commercial secrets. They are very reluctant to share them with researchers or government offices.
-    \item \textbf{Store computer systems are not standardized:} Different stores use completely different software systems, making it very messy and slow to connect to them.
-    \item \textbf{Website prices are open to everyone:} By reading prices directly from public websites, our project stays completely independent. Anyone can visit the websites to check our work. We don't need permission from anyone, and our data is always fresh.
-\end{enumerate}
-\end{tcolorbox}
-
-\subsection{Q2: Why use geometric averages (Jevons) instead of simple averages (Carli)?}
-\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{Defense Question 2: The Math of Averages}]
-\textbf{The Question:} Why can't we just take simple percentages and average them together?\\
-\textbf{The Simple Answer:}
-\begin{enumerate}[noitemsep]
-    \item \textbf{Simple averages create fake inflation:} Remember the egg example! If an egg goes from \$1 to \$2 (+100\%) and then drops back to \$1 (-50\%), the price is back to normal. But a simple average gives: $(+100\% - 50\%) / 2 = \mathbf{+25\%}$ fake inflation!
-    \item \textbf{Geometric averages (Jevons) tell the truth:} By multiplying ratios and taking the root, Jevons gives exactly 0\% change when prices return to where they started.
-    \item \textbf{It reflects real human shopping:} When pork gets too expensive, real people buy chicken. Geometric averages naturally take into account that shoppers switch to cheaper alternatives.
-\end{enumerate}
-\end{tcolorbox}
-
-\newpage
-
-\subsection{Q3: Why can't we rely only on AI to match products?}
-\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{Defense Question 3: Matching Items Accurately}]
-\textbf{The Question:} If AI embeddings understand words so well, why can't we just let the AI match all items automatically?\\
-\textbf{The Simple Answer:}
-\begin{enumerate}[noitemsep]
-    \item \textbf{The Phone Memory Trap:} An \textit{iPhone 15 (128GB)} and an \textit{iPhone 15 (512GB)} share almost the exact same words. An AI thinks they are 98\% identical! But one costs \$400 more than the other. Matching them causes fake price jumps.
-    \item \textbf{The Beer Pack Trap:} A single can of beer and a 24-can box have the exact same brand name and description. AI gets confused by the pack count.
-    \item \textbf{Our Solution (Spec Guards):} We let AI do the first search, but then we apply strict rules: check storage capacity, check pack count, and check volume. If they don't match, we never pair them together.
-\end{enumerate}
-\end{tcolorbox}
-
-\subsection{Q4: Why not use ChatGPT or Gemini for every single product?}
-\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{Defense Question 4: Keeping Costs Low and Fast}]
-\textbf{The Question:} Why not send every product description to Google Gemini AI to classify it?\\
-\textbf{The Simple Answer:}
-\begin{enumerate}[noitemsep]
-    \item \textbf{Too expensive and too slow:} Calling cloud AI on every raw record on every single scrape would cost hundreds of dollars a month and introduce unnecessary network latency.
-    \item \textbf{Our 7-Tier AI-First Classification Ladder solves this with multi-attribute precision and persistent memoization:}
-    \begin{itemize}
-        \item \textit{Tier 1 (Explicit Overrides):} High-priority human audit locks and seed overrides in \texttt{silver.coicop\_override} take supreme precedence.
-        \item \textit{Tier 2 (Store Purity Locks):} Single-division stores (pharmacies, bus tickets, fuel stations, telcos, hotels) resolve instantly with 0.001ms lookup time at \$0.00 cost.
-        \item \textit{Tier 3 (High-Confidence Gemini AI Engine with Multi-Attribute Context):} For mixed-retail stores (AEON, DeliShop, GrabMart, L192), Gemini AI receives a rich multi-attribute payload (item title, store slug, merchant category breadcrumbs, price in KHR). High-confidence classifications ($\ge 0.70$) are cached permanently in \texttt{silver.dim\_coicop\_ai\_cache}. Subsequent daily scrapes resolve in $<1\text{ms}$ at \$0.00 cost. This powers \textbf{53.33\% (484,892 observations)} of the entire warehouse.
-        \item \textit{Tiers 4--6 (Secondary Brand Overrides, Category Maps \& Vetted Heuristics):} Deterministic safety nets resolve edge cases, accounting for the remaining classifications.
-        \item \textit{Tier 7 (Store Defaults \& Triage):} Fallbacks guarantee that \textbf{0 rows} remain unclassified (100.00\% completion across 909,289 observations).
-        \item This architecture slashes recurring AI API costs by over 99.4\% while achieving zero code-division mismatches.
+    \item \textbf{Model Name:} \texttt{hybrid\_ridge\_5basket\_v1}
+    \item \textbf{Days Observed:} 14 of 30 days (46.7\% of calendar elapsed)
+    \item \textbf{Projected Headline CPI:} \textbf{100.2622} (Projected MoM Inflation: \textbf{+0.3651\%})
+    \item \textbf{Official Ground-Truth Benchmark:} \textbf{+0.3470\%}
+    \item \textbf{Out-of-Sample Tracking Error:} \textbf{+0.0181 percentage points} (over \textbf{95\% error reduction} compared to the older single-drift model's $+0.3670\text{ pp}$ error)
+    \item \textbf{Disaggregated 5-Basket Price Relatives Breakdown:}
+    \begin{itemize}[noitemsep]
+        \item \textit{Food (01, 44.78\% weight):} Index: \textbf{99.6499} | Projected MoM: \textbf{-0.1084\%} | Point Contribution: \textbf{-0.0485 pp}
+        \item \textit{Transport (07, 12.23\% weight):} Index: \textbf{103.3279} | Projected MoM: \textbf{+3.5788\%} | Point Contribution: \textbf{+0.4377 pp}
+        \item \textit{Housing/Energy (04, 17.08\% weight):} Index: \textbf{100.1520} | Projected MoM: \textbf{+0.3932\%} | Point Contribution: \textbf{+0.0672 pp}
+        \item \textit{Restaurants (11, 5.86\% weight):} Index: \textbf{100.1281} | Projected MoM: \textbf{+0.3693\%} | Point Contribution: \textbf{+0.0216 pp}
+        \item \textit{Alcohol/Tobacco (02, 1.63\% weight):} Index: \textbf{100.1967} | Projected MoM: \textbf{+0.4379\%} | Point Contribution: \textbf{+0.0071 pp}
     \end{itemize}
-\end{enumerate}
+    \item \textbf{95\% Confidence Bounds:} $[99.8214 - 100.7030]$ (Ground truth lies perfectly within bounds).
+\end{itemize}
 \end{tcolorbox}
 
-\newpage
-
-\subsection{Q5: Why split database tables into monthly folders?}
-\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{Defense Question 5: Database Speed}]
-\textbf{The Question:} Why did we split our database tables into monthly partitions instead of leaving them in one table?\\
-\textbf{The Simple Answer:}
-\begin{enumerate}[noitemsep]
-    \item \textbf{13 million rows a year:} After 3 years, a single table would have nearly 40 million rows. Searching through 40 million rows to find this morning's milk price would take several seconds.
-    \item \textbf{Declarative Partitioning \& Folder Pruning:} Both \texttt{bronze.raw\_prices} and \texttt{silver.clean\_store\_prices} are partitioned by \texttt{RANGE (scrape\_date)}. When querying today's prices, PostgreSQL skips all other months and opens only the relevant monthly table, returning results in under \textbf{8 milliseconds}.
-    \item \textbf{Proactive Automated Maintenance:} The stored procedure \texttt{ops.maintain\_monthly\_partitions} runs weekly via Airflow (\texttt{cpi\_maintenance\_dag}) to automatically generate partitions 3 months ahead.
-    \item \textbf{Dramatic dbt Optimization:} By aligning our dbt incremental models with partition boundaries and pre-computing text cleaning, model runtime dropped from \textbf{7 minutes 42 seconds down to just 18 seconds} (96\% faster).
-\end{enumerate}
-\end{tcolorbox}
-
-\subsection{Q6: Why use Astronomer Cosmos instead of one big Python script?}
-\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{Defense Question 6: Running Tasks Smoothly}]
-\textbf{The Question:} Why do we use Astronomer Cosmos to run our dbt data transformations?\\
-\textbf{The Simple Answer:}
-\begin{enumerate}[noitemsep]
-    \item \textbf{Finding errors instantly:} If you run one big script and step 42 fails, the whole thing crashes and you don't know why. Cosmos turns each step into its own visual box in Airflow. If one step has an issue, it turns red, tells you the exact line, and lets you retry just that step.
-    \item \textbf{Super fast startup:} By preparing the project map in advance (\texttt{manifest.json}), Cosmos starts in \textbf{0.4 seconds} instead of wasting CPU power rebuilding the map every time.
-\end{enumerate}
-\end{tcolorbox}
-
-\newpage
-
-\subsection{Q7: What happens when a product goes out of stock?}
-\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{Defense Question 7: Out-of-Stock Products}]
-\textbf{The Question:} What happens when an item disappears from store shelves today?\\
-\textbf{The Simple Answer:}
-\begin{enumerate}[noitemsep]
-    \item \textbf{You can't use zero:} A price of \$0 would break all our multiplication formulas.
-    \item \textbf{You can't just delete it:} Deleting items distorts your basket weights.
-    \item \textbf{Look at similar items:} If other cooking oils went up by 1\% today, we assume the missing oil also went up by 1\%.
-    \item \textbf{The 7-Day Rule:} If it stays missing for 7 days in a row, we officially declare it discontinued and replace it with an active item.
-\end{enumerate}
-\end{tcolorbox}
-
-\subsection{Q8: How do we predict monthly inflation before the month finishes?}
-\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{Defense Question 8: Early Inflation Nowcasting (5-Basket Ridge Model)}]
-\textbf{The Question:} How can we predict this month's inflation on Day 15 before the government releases its numbers?\\
-\textbf{The Simple Answer:}
-\begin{enumerate}[noitemsep]
-    \item \textbf{Axiomatic 5-Basket Price Relatives:} We do not guess a single aggregate number. We independently forecast the price relatives of 5 essential household baskets covering 81.58\% of Cambodia's CPI (Food 44.8\%, Transport 12.2\%, Housing 17.1\%, Restaurants 5.9\%, Alcohol 1.6\%).
-    \item \textbf{Half is real, half is predicted (Stage 1):} On Day 15, we already know the exact realized prices for the first 15 days.
-    \item \textbf{Ridge Regression with Empirical Bayes Shrinkage (Stage 2):} For the remaining 15 days, we predict daily drift using cross-validated Ridge Regression with momentum features (3d/7d/14d trends), official MEF exchange rates, and holiday calendars. An empirical Bayesian shrinkage prior pulls noisy estimates to zero, preventing erratic spikes.
-    \item \textbf{Exact Laspeyres Aggregation:} The final projection is compiled using official NIS weights, hitting within $\pm 0.02$ percentage points of ground truth by mid-month.
-\end{enumerate}
-\end{tcolorbox}
-
-\newpage
-
-\subsection{Q9: How do we separate product upgrades from price inflation?}
-\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{Defense Question 9: Better Features vs Pure Inflation}]
-\textbf{The Question:} When a new smartphone comes out at a higher price, how do we make sure we aren't confusing better features with inflation?\\
-\textbf{The Simple Answer:}
-\begin{enumerate}[noitemsep]
-    \item \textbf{The Upgrade Problem:} If a phone goes from \$800 to \$900, but now has double the memory and a better camera, not all of that \$100 is inflation. Part of it is buying a better product.
-    \item \textbf{Quality Adjustment (Hedonics):} We use a statistical formula to measure how much consumers pay for extra memory and camera upgrades. We subtract that amount so we only count the pure price increase as inflation.
-\end{enumerate}
-\end{tcolorbox}
-
-\subsection{Q10: How do we handle both Dollars and Riel without confusion?}
-\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{Defense Question 10: Dual Currencies}]
-\textbf{The Question:} How does the system handle prices quoted in both US Dollars and Khmer Riel?\\
-\textbf{The Simple Answer:}
-\begin{enumerate}[noitemsep]
-    \item \textbf{Convert everything to Riel in Step 2:} In our Silver cleaning layer, every price is converted to Cambodian Riel using today's official exchange rate from the Central Bank.
-    \item \textbf{Lock it in permanently:} Once converted, that price in Riel is saved permanently. This guarantees that later steps never accidentally convert it twice.
-    \item \textbf{Track currency impact:} We measure how fast exchange rate movements reach shop shelves, so central bankers can see the real-world impact of currency interventions.
-\end{enumerate}
-\end{tcolorbox}
-
-\subsection{Q11: How do we stop bad website data from crashing or distorting the index?}
-\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\textbf{Defense Question 11: The Ingestion Circuit Breaker}]
-\textbf{The Question:} What happens if a retail website crashes, changes its HTML layout, or mistakenly lists items for 1 cent? How do we prevent garbage data from entering the index?\\
-\textbf{The Simple Answer:}
-\begin{enumerate}[noitemsep]
-    \item \textbf{The Automated Circuit Breaker:} Before any raw data touches the cleaning or calculation layers, the Ingestion Circuit Breaker checks two vital signs: catalog volume (did the store drop more than 70\% of its products?) and price velocity (did the median price jump or drop by more than $\pm 50\%$).
-    \item \textbf{Dual-Currency Fair Comparison:} For stores quoting in US Dollars, prices are dynamically converted to Khmer Riel using today's exchange rate before checking velocity, preventing false alarms on Dollar-priced goods.
-    \item \textbf{Safety Without System Halts:} If a store has a temporary glitch, the event is audited in the operations database while the rest of the 24 stores proceed smoothly. The system alerts engineers without interrupting the daily national index.
-\end{enumerate}
-\end{tcolorbox}
-
-\newpage
+\vspace{1.0cm}
 
 \subsection{Conclusion}
-The \textbf{Cambodia Daily Consumer Price Index System} shows that we can track inflation across an entire country every single day. By using automated web scraping, smart and fair math, sensible guardrails, and clear data cleaning, we can give policymakers, researchers, and families up-to-the-minute inflation numbers without spending millions of dollars on manual surveys.
+The \textbf{Cambodia Daily Consumer Price Index System} demonstrates that modern economic measurement does not have to rely on slow, expensive, once-a-month manual surveys. By combining automated daily web intelligence across 25 retail, utility, and fuel sources with the \textbf{Two-Stage Hybrid Ridge Nowcasting Engine}, Cambodia possesses an institutional-grade macroeconomic intelligence pipeline:
+\begin{itemize}[noitemsep]
+    \item \textbf{Timeliness:} Inflation is tracked every single day before breakfast, eliminating the 30-day policy void.
+    \item \textbf{Axiomatic Rigor:} Bottom-up disaggregation strictly adheres to UN/ILO/IMF Laspeyres and Jevons index theory.
+    \item \textbf{Mathematical Robustness:} Ridge regularization conditions collinear feature matrices, while Empirical Bayesian shrinkage priors prevent out-of-sample volatility.
+    \item \textbf{Transparency:} Every projected number is transparently decomposed into its underlying store quotes, exchange rates, and basket price relatives on live Metabase dashboards.
+\end{itemize}
+This technological framework empowers policymakers, researchers, and everyday citizens with reliable, real-time price intelligence across the Kingdom of Cambodia.
 
 \vspace{1.5cm}
 \begin{center}

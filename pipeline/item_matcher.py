@@ -36,6 +36,7 @@ def is_valid_barcode(barcode: str | None) -> bool:
 class ItemMatcher:
     use_vector_matcher: bool = True
     _has_embedding_column: bool = False
+    item_size_cache: dict[uuid.UUID, str | None] = {}
 
     def __init__(
         self,
@@ -53,6 +54,7 @@ class ItemMatcher:
         self.exact_name_cache: dict[str, uuid.UUID] = {}
         self.name_spec_cache: dict[tuple[str, str, str], uuid.UUID] = {}
         self.sku_cache: dict[tuple[str, str], uuid.UUID] = {}
+        self.item_size_cache: dict[uuid.UUID, str | None] = {}
         self.items_cache: list[tuple[uuid.UUID, str, str | None]] = []
         self._vector_matcher: VectorItemMatcher | None = None
         self._has_embedding_column: bool = False
@@ -140,6 +142,7 @@ class ItemMatcher:
                     b_u = brand.strip().upper() if brand else ""
                     s_u = size_norm.strip().upper() if size_norm else ""
                     self.name_spec_cache[(name_u, b_u, s_u)] = item_id
+                    self.item_size_cache[item_id] = size_norm
                 self.items_cache.append((item_id, name, size_norm))
 
             # Load secondary/multi-barcode aliases if table exists in real database
@@ -243,7 +246,10 @@ class ItemMatcher:
             return None
         name_clean_upper = name_clean.strip().upper()
         if name_clean_upper in self.exact_name_cache:
-            return self.exact_name_cache[name_clean_upper], 1.0, name_clean_upper
+            cand_id = self.exact_name_cache[name_clean_upper]
+            cand_size = getattr(self, "item_size_cache", {}).get(cand_id)
+            if is_size_compatible(size_norm, cand_size):
+                return cand_id, 1.0, name_clean_upper
 
         best_match_id = None
         best_score = 0.0
@@ -396,9 +402,11 @@ class ItemMatcher:
         name_upper = name_clean.strip().upper() if name_clean else ""
         if name_upper and name_upper in self.exact_name_cache:
             item_id = self.exact_name_cache[name_upper]
-            self._log_match(raw_price_id, item_id, "exact_text", 1.0, actual_conn)
-            stats["matched_fuzzy"] += 1
-            return stats
+            cand_size = getattr(self, "item_size_cache", {}).get(item_id)
+            if is_size_compatible(size_norm, cand_size):
+                self._log_match(raw_price_id, item_id, "exact_text", 1.0, actual_conn)
+                stats["matched_fuzzy"] += 1
+                return stats
 
         # 4. Vector or Fuzzy text match with Spec Guard
         match = None
@@ -560,9 +568,12 @@ class ItemMatcher:
             name_upper = name_clean.strip().upper() if name_clean else ""
             if name_upper and name_upper in self.exact_name_cache:
                 item_id = self.exact_name_cache[name_upper]
-                match_logs.append((raw_price_id, str(item_id), "exact_text", 1.0))
-                totals["matched_fuzzy"] += 1
-                continue
+                cand_size = getattr(self, "item_size_cache", {}).get(item_id)
+                raw_size = rec.get("package_size") or rec.get("quantity")
+                if is_size_compatible(raw_size, cand_size):
+                    match_logs.append((raw_price_id, str(item_id), "exact_text", 1.0))
+                    totals["matched_fuzzy"] += 1
+                    continue
 
             # 4. Vector or Fuzzy Text match
             match = None

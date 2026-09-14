@@ -80,10 +80,16 @@ def _first(*values: Any) -> Any:
 
 
 def _as_float(value: Any) -> float | None:
-    if value is None:
+    if value is None or value == "":
         return None
-    try:
+    if isinstance(value, (int, float)):
         return float(value)
+    val_str = str(value).strip().replace(",", "")
+    khmer_digits = {'០': '0', '១': '1', '២': '2', '៣': '3', '៤': '4', '៥': '5', '៦': '6', '៧': '7', '៨': '8', '៩': '9'}
+    for k, v in khmer_digits.items():
+        val_str = val_str.replace(k, v)
+    try:
+        return float(val_str)
     except (TypeError, ValueError):
         return None
 

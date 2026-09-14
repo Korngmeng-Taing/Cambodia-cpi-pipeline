@@ -47,13 +47,13 @@ class MefExchangeRateScraper(BaseScraper):
                         if curr_id == "USD" or "USD/KHR" in symbol:
                             val = item.get("average") or item.get("bid") or item.get("ask") or item.get("rate") or item.get("value")
                             parsed = _to_float(val)
-                            if parsed and parsed > 0:
+                            if parsed and 3500.0 <= parsed <= 4500.0:
                                 rate = parsed
                                 found = True
                                 break
             elif isinstance(body, dict):
                 parsed = _to_float(body.get("rate") or body.get("usd_khr") or body.get("value"))
-                if parsed and parsed > 0:
+                if parsed and 3500.0 <= parsed <= 4500.0:
                     rate = parsed
                     found = True
             if not found:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import pendulum
@@ -137,37 +138,66 @@ class CellcardScraper(BaseScraper):
             resp = _cffi_get(CELLCARD_MOBILE_URL, timeout=15)
             if resp.status_code == 200 and HAS_BS4:
                 soup = BeautifulSoup(resp.text, "html.parser")
-                script = soup.find("script", id="__NEXT_DATA__")
-                if script and script.string:
-                    next_data = json.loads(script.string)
-                    props = (next_data.get("props") or {}).get("pageProps") or {}
-                    for key in ("plans", "mobilePlans", "data"):
-                        plans = props.get(key)
-                        if isinstance(plans, list) and plans:
-                            for idx, plan in enumerate(plans):
-                                name = plan.get("name") or plan.get("title") or ""
-                                price = _to_float(
-                                    plan.get("price") or plan.get("monthly_price")
-                                )
-                                if price and name:
-                                    records.append(
-                                        build_canonical_record(
-                                            source_slug=self.store_slug,
-                                            source_type="telecom",
-                                            store_name="Cellcard Cambodia Mobile",
-                                            item_id=str(
-                                                plan.get("id", f"cell_mob_{idx}")
-                                            ),
-                                            name=name,
-                                            price=price,
-                                            currency="USD",
-                                            category_native=plan.get("type")
-                                            or "Mobile Prepaid",
-                                            package_size=plan.get("data"),
-                                            url=CELLCARD_MOBILE_URL,
-                                            scrape_date=ds,
-                                        )
+                cards = soup.find_all("div", class_=lambda c: c and "js-card" in c)
+                for idx, c in enumerate(cards):
+                    h4 = c.find("h4")
+                    name = h4.get_text(strip=True) if h4 else None
+                    if not name:
+                        continue
+                    text = c.get_text(" ", strip=True)
+                    m_price = re.search(r"\$\s*(\d+(\.\d+)?)", text)
+                    price = _to_float(m_price.group(1)) if m_price else None
+                    if price and price > 0:
+                        m_data = re.search(r"(\d+\s*GB)", text, re.I)
+                        pkg_size = m_data.group(1) if m_data else None
+                        records.append(
+                            build_canonical_record(
+                                source_slug=self.store_slug,
+                                source_type="telecom",
+                                store_name="Cellcard Cambodia Mobile",
+                                item_id=f"cell_ao_{idx}",
+                                name=name,
+                                price=price,
+                                currency="USD",
+                                category_native="Mobile Prepaid > 5G/4G Data",
+                                package_size=pkg_size,
+                                url=CELLCARD_MOBILE_URL,
+                                scrape_date=ds,
+                            )
+                        )
+
+                if not records:
+                    script = soup.find("script", id="__NEXT_DATA__")
+                    if script and script.string:
+                        next_data = json.loads(script.string)
+                        props = (next_data.get("props") or {}).get("pageProps") or {}
+                        for key in ("plans", "mobilePlans", "data"):
+                            plans = props.get(key)
+                            if isinstance(plans, list) and plans:
+                                for idx, plan in enumerate(plans):
+                                    name = plan.get("name") or plan.get("title") or ""
+                                    price = _to_float(
+                                        plan.get("price") or plan.get("monthly_price")
                                     )
+                                    if price and name:
+                                        records.append(
+                                            build_canonical_record(
+                                                source_slug=self.store_slug,
+                                                source_type="telecom",
+                                                store_name="Cellcard Cambodia Mobile",
+                                                item_id=str(
+                                                    plan.get("id", f"cell_mob_{idx}")
+                                                ),
+                                                name=name,
+                                                price=price,
+                                                currency="USD",
+                                                category_native=plan.get("type")
+                                                or "Mobile Prepaid",
+                                                package_size=plan.get("data"),
+                                                url=CELLCARD_MOBILE_URL,
+                                                scrape_date=ds,
+                                            )
+                                        )
         except Exception as exc:
             log.warning("Cellcard Mobile live scrape error: %s", exc)
 

@@ -99,11 +99,40 @@ class IngestionCircuitBreaker:
             if should_close:
                 conn.close()
 
+    def get_exchange_rate(self, target_date: date) -> float:
+        """Retrieves the latest official/fallback USD/KHR exchange rate for the given date.
+
+        Falls back to the most recent available rate in staging.exchange_rates or 4050.0.
+        """
+        conn = self._get_connection()
+        should_close = self._conn is None
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT rate FROM staging.exchange_rates
+                    WHERE execution_date <= %s
+                    ORDER BY execution_date DESC
+                    LIMIT 1;
+                    """,
+                    (target_date,),
+                )
+                row = cur.fetchone()
+                if row and row[0]:
+                    return float(row[0])
+        except Exception as e:
+            log.warning("Could not query exchange rate for circuit breaker: %s", e)
+        finally:
+            if should_close:
+                conn.close()
+        return 4050.0
+
     def evaluate_scrape(
         self,
         store_slug: str,
         incoming_records: list[dict[str, Any]],
         scrape_date: date | None = None,
+        fx_rate: float | None = None,
     ) -> CircuitBreakerEvaluation:
         """
         Evaluates an incoming scrape payload against historical baseline metrics.
@@ -126,12 +155,22 @@ class IngestionCircuitBreaker:
                 message=f"Store '{store_slug}' produced 0 records on {scrape_date}.",
             )
 
-        # Compute incoming median price (KHR)
-        prices = [
-            float(r.get("price_khr") or r.get("price") or 0.0)
-            for r in incoming_records
-            if float(r.get("price_khr") or r.get("price") or 0.0) > 0
-        ]
+        # Compute incoming median price (KHR), normalizing USD prices using fx_rate if necessary
+        prices = []
+        for r in incoming_records:
+            price_khr = float(r.get("price_khr") or 0.0)
+            if price_khr > 0:
+                prices.append(price_khr)
+            else:
+                raw_p = float(r.get("price") or 0.0)
+                if raw_p > 0:
+                    curr = str(r.get("currency") or "USD").strip().upper()
+                    if curr == "KHR":
+                        prices.append(raw_p)
+                    else:
+                        if fx_rate is None:
+                            fx_rate = self.get_exchange_rate(scrape_date)
+                        prices.append(raw_p * fx_rate)
         incoming_median_price = float(np.median(prices)) if prices else 0.0
 
         # Query 7-day rolling history for this store from silver.clean_store_prices

@@ -109,3 +109,30 @@ def test_circuit_breaker_record_event():
 
     mock_cur.execute.assert_any_call("CREATE SCHEMA IF NOT EXISTS ops;")
     mock_conn.commit.assert_called()
+
+
+def test_circuit_breaker_usd_currency_normalized():
+    """Verify that records denominated in USD are converted to KHR before price velocity checks."""
+    mock_conn = MagicMock()
+    mock_cur = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+
+    # Mock historical median price: 24,717 KHR (e.g. Delishop baseline)
+    mock_cur.fetchall.return_value = [
+        (date(2026, 9, 8), 100, 24717.0),
+    ]
+
+    cb = IngestionCircuitBreaker(conn=mock_conn)
+    # Incoming 100 records with price=6.10 USD (which equals 6.10 * 4052 = 24,717.20 KHR)
+    records = [{"price": 6.10, "currency": "USD"} for _ in range(100)]
+    res = cb.evaluate_scrape(
+        store_slug="delishop",
+        incoming_records=records,
+        scrape_date=date(2026, 9, 9),
+        fx_rate=4052.0,
+    )
+
+    assert res.status == CircuitBreakerStatus.PASSED
+    assert abs(res.incoming_median_price - 24717.20) < 0.1
+    assert res.price_change_pct < 0.01
+

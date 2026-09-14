@@ -115,7 +115,8 @@ class Khmer24Scraper(BaseScraper):
             return records
         seen_ids: set[str] = set()
         for page in range(1, max(1, max_pages) + 1):
-            url = cat_url if page == 1 else f"{cat_url}?page={page}"
+            offset = (page - 1) * 30
+            url = cat_url if page == 1 else f"{cat_url}?offset={offset}"
             try:
                 resp = _cffi_get(url, timeout=15)
                 if resp.status_code != 200:

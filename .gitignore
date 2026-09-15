@@ -71,6 +71,9 @@ Thumbs.db
 *.synctex.gz
 *.toc
 *.xdv
+*.nav
+*.snm
+*.vrb
 Cambodia_CPI_Definitive_Handbook_*.pdf
 thesis/*.aux
 thesis/*.bbl

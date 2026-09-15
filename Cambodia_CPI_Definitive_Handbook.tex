@@ -131,7 +131,7 @@ By autonomously scraping and analyzing daily price quotes across Cambodian digit
 \footnotesize\ttfamily
 \centering
 \begin{tabular}{c}
-\textbf{BRONZE LAYER (2:00 AM Automated Ingestion)} \\
+\textbf{BRONZE LAYER (8:00 AM Automated Ingestion)} \\
 25 Production Scrapers (Supermarkets, Pharmacies, Telcos, EDC Power, PPWSA Water, Gas Stations) \\
 $\Downarrow$ 45,000+ Raw Daily Price Quotes $\Downarrow$ \\
 \midrule
@@ -188,7 +188,7 @@ While this traditional method is thorough, it has three big problems:
 \end{enumerate}
 
 \subsection{Our Daily Solution: Automated Web Intelligence}
-Our automated system solves this problem. Every single morning at 2:00 AM, while the city is asleep, our software automatically visits 25 online store catalogs, fuel company websites, utility regulators, phone providers, vehicle retailers, and bus portals. It collects over 45,000 real prices every day, cleans them, and calculates today's true inflation rate. Government leaders and researchers can see price changes right now, rather than waiting a whole month.
+Our automated system solves this problem. Every single morning at 8:00 AM, while the city begins its business hours, our software automatically visits 25 online store catalogs, fuel company websites, utility regulators, phone providers, vehicle retailers, and bus portals. It collects over 45,000 real prices every day, cleans them, and calculates today's true inflation rate. Government leaders and researchers can see price changes right now, rather than waiting a whole month.
 
 \newpage
 
@@ -204,7 +204,7 @@ Think of data like metal dug out of the ground. When it first comes out, it is r
 \small
 \textbf{Step 1: BRONZE (Raw Store Prices)}
 \begin{itemize}[noitemsep]
-    \item We collect raw text and price tags from 25 production sources every morning at 2:00 AM.
+    \item We collect raw text and price tags from 25 production sources every morning at 8:00 AM.
     \item Exactly as the stores wrote them, typos and all. Nothing is thrown away.
     \item Stored in our raw database table: \texttt{bronze.raw\_prices}.
 \end{itemize}
@@ -237,10 +237,10 @@ Think of data like metal dug out of the ground. When it first comes out, it is r
 \subsection{How Airflow and Cosmos Keep Everything Running on Time}
 To make sure this entire process happens smoothly without humans needing to press buttons at 2:00 AM, we use an automatic manager called \textbf{Apache Airflow} and a tool called \textbf{Astronomer Cosmos}:
 \begin{itemize}
-    \item \textbf{The Master Alarm Clock (\texttt{cpi\_master\_dag}):} Rings every day at 2:00 AM. It starts all 25 per-source scraper DAGs in parallel. Once they finish and pass quality checks, it wakes up the next step.
+    \item \textbf{The Master Alarm Clock (\texttt{cpi\_master\_dag}):} Rings every day at 8:00 AM. It starts all 25 per-source scraper DAGs in parallel. Once they finish and pass quality checks, it wakes up the next step.
     \item \textbf{The Cleaning Step (\texttt{silver\_dag}):} Runs our data cleaning models. Thanks to Cosmos, each cleaning task is its own step. If one step has an issue, we can see exactly which one it is, while the rest keep going.
-    \item \textbf{The Final Calculation Step (\texttt{gold\_cpi\_dag}):} Calculates today's official daily inflation rate and updates our dashboards before breakfast.
-    \item \textbf{The Weekly Housekeeping Step (\texttt{cpi\_maintenance\_dag}):} Runs every Sunday at 1:00 AM to organize database folders for the coming months and keep the system fast.
+    \item \textbf{The Final Calculation Step (\texttt{gold\_cpi\_dag}):} Calculates today's official daily inflation rate and updates our dashboards before business hours.
+    \item \textbf{The Weekly Housekeeping Step (\texttt{cpi\_maintenance\_dag}):} Runs every Sunday at 8:00 AM to organize database folders for the coming months and keep the system fast.
 \end{itemize}
 
 \subsection{Splitting Big Tables into Monthly Folders}
@@ -567,7 +567,7 @@ To understand how the entire system works from start to finish, let's follow one
 \begin{center}
 \begin{tcolorbox}[colback=white,colframe=NavyBlue,width=0.95\textwidth,title=\bfseries The 5 Steps in the Life of a Price]
 \small
-\textbf{2:00 AM -- Step 1: Raw Collection (Bronze)}
+\textbf{8:00 AM -- Step 1: Raw Collection (Bronze)}
 \begin{itemize}[noitemsep]
     \item Our automated scraper visits Lucky Supermarket's online store.
     \item It sees: \textit{"MegaChef Premium Fish Sauce 500ml"} with a price of \textbf{\$1.50 USD}.
@@ -1130,7 +1130,7 @@ This mathematical bridge guarantees that long-term historical records spanning d
 \subsection{Closing the 30-Day Policy Gap}
 Official monthly inflation reports from Cambodia's National Institute of Statistics (NIS) are published with an observation delay of 3 to 4 weeks. For example, official January CPI figures are only made available in late February. For macroeconomic policymakers at the National Bank of Cambodia (NBC), treasury liquidity planners at the Ministry of Economy and Finance (MEF), and commercial food importers, this 30-day information void creates severe policy blindness.
 
-Our production nowcasting engine (\texttt{ml/nowcaster.py}) resolves this challenge by projecting the final, conformed monthly headline inflation rate on \textbf{every single day of the active month} ($t \in \{1, \dots, T\}$). As fresh morning retail web scrapes, fuel price ceilings, and official MEF USD/KHR exchange rates enter the warehouse at 2:00 AM, the nowcasting engine updates its out-of-sample projections before business hours.
+Our production nowcasting engine (\texttt{ml/nowcaster.py}) resolves this challenge by projecting the final, conformed monthly headline inflation rate on \textbf{every single day of the active month} ($t \in \{1, \dots, T\}$). As fresh morning retail web scrapes, fuel price ceilings, and official MEF USD/KHR exchange rates enter the warehouse at 8:00 AM, the nowcasting engine updates its out-of-sample projections before business hours.
 
 \subsection{Axiomatic Foundation: Why Bottom-Up 5-Basket Price Relatives Win}
 Traditional macroeconomic forecasting models attempt to predict an ad-hoc aggregate headline index directly. However, in an emerging, dual-currency dollarized economy like Cambodia, aggregate inflation is driven by distinct microeconomic cost structures:
@@ -1196,6 +1196,16 @@ For each basket $k$, the nowcaster constructs a continuous feature vector $\math
 m_{\text{food}, 3d} & m_{\text{food}, 7d} & m_{\text{food}, 14d} & m_{\text{trans}, 3d} & m_{\text{trans}, 7d} & m_{\text{fx}, 7d} & m_{\text{fx}, 14d} & \mathbb{I}_{\text{holiday}} & \text{dist}_{\text{holiday}}
 \end{bmatrix}^T
 \end{equation}
+
+\textbf{Why We Use Multi-Horizon Rolling Windows ($3\text{d}, 7\text{d}, 14\text{d}$):}\\
+Economic prices move at different velocities across consumption sectors:
+\begin{itemize}[noitemsep]
+    \item \textbf{3-Day Window ($m_{k, 3d}$):} Measures \textit{ultra-fast velocity} and immediate supply shocks (e.g., Kampot vegetable floods or flash retail promotions).
+    \item \textbf{7-Day Window ($m_{k, 7d}$):} Filters out \textit{weekly discount cycles} (weekend promotions vs. weekday baselines).
+    \item \textbf{14-Day Window ($m_{k, 14d}$):} Measures \textit{sustained macro drift} (e.g., bi-weekly fuel ceiling shifts or import price trends).
+    \item \textbf{Acceleration Detection:} By observing $3\text{d}$, $7\text{d}$, and $14\text{d}$ features simultaneously, the regularized ML model calculates both first-derivative velocity and second-derivative acceleration, distinguishing between a fresh price shock ($m_{3d} \gg m_{14d}$) and a cooling trend.
+\end{itemize}
+
 where:
 \begin{itemize}[noitemsep]
     \item $m_{k, H} = \frac{P_{k, t} - P_{k, t-H}}{P_{k, t-H}}$: $H$-day rolling price momentum in Division $k$.

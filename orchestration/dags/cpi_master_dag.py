@@ -3,7 +3,7 @@ orchestration/dags/cpi_master_dag.py
 ────────────────────────────────────
 Master Orchestrator for the Cambodia CPI Medallion Pipeline.
 
-Daily 02:00 Asia/Phnom_Penh (or manual trigger):
+Daily 08:00 Asia/Phnom_Penh (or manual trigger):
     Stage 1 (Bronze): Trigger all per-source scraper DAGs in SCRAPER_REGISTRY in parallel.
     Stage 2 (Silver): Trigger silver_dag (Item matching + Vector & Gemini AI Classification + Log-Linear Hedonic + dbt Silver).
     Stage 3 (Gold CPI): Trigger gold_cpi_dag (Jevons elementary indices + 12-division Laspeyres + ML-Assisted Nowcasting).
@@ -156,7 +156,7 @@ with DAG(
     dag_id=DAG_ID,
     description="Daily Cambodia CPI Master DAG: Fans out to all registered scrapers, then runs Silver and Gold layers sequentially.",
     start_date=pendulum.datetime(2024, 1, 1, tz=local_tz),
-    schedule="0 2 * * *",  # 02:00 AM Phnom Penh time daily
+    schedule="0 8 * * *",  # 08:00 AM Phnom Penh time daily
     catchup=False,
     max_active_runs=1,
     default_args=DEFAULT_ARGS,

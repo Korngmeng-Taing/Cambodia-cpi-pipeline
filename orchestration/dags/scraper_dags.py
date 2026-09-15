@@ -9,7 +9,7 @@ Each DAG implements the guide's Bronze ingestion path:
       ─► bronze_dq_gate (verifies non-empty staging row)
 
 DAG ids:  scrape_{source_slug}_dag   (e.g. scrape_aeon_dag, scrape_delishop_dag)
-Schedule: None — triggered by cpi_master_dag at 02:00 daily (also runnable standalone).
+Schedule: None — triggered by cpi_master_dag at 08:00 daily (also runnable standalone).
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ def _build_scraper_dag(source_slug: str, dag_id: str | None = None):
         dag_id=effective_dag_id,
         description=f"Daily scrape & Bronze ingestion for {source_slug}",
         start_date=pendulum.datetime(2024, 1, 1, tz=local_tz),
-        schedule=None,  # orchestrated by cpi_master_dag at 02:00
+        schedule=None,  # orchestrated by cpi_master_dag at 08:00
         catchup=False,
         default_args=DEFAULT_ARGS,
         tags=["bronze", "scraper", source_slug, "cpi"],

@@ -131,7 +131,7 @@ By autonomously scraping and analyzing daily price quotes across Cambodian digit
 \footnotesize\ttfamily
 \centering
 \begin{tabular}{c}
-\textbf{BRONZE LAYER (8:00 AM Automated Ingestion)} \\
+\textbf{BRONZE LAYER (2:00 AM Automated Ingestion)} \\
 25 Production Scrapers (Supermarkets, Pharmacies, Telcos, EDC Power, PPWSA Water, Gas Stations) \\
 $\Downarrow$ 45,000+ Raw Daily Price Quotes $\Downarrow$ \\
 \midrule
@@ -160,35 +160,32 @@ Out-of-Sample Accuracy: \textbf{+0.0181 pp error vs. official NIS ground truth}
 \section{Why Cambodia Needs a Daily Price Tracker}
 % =============================================================================
 
-\subsection{Cambodia Uses Two Currencies at the Same Time}
-Cambodia is unique because people use two currencies every day: the United States Dollar (USD) and the Cambodian Riel (KHR).
+\subsection{Inflation and the 30-Day Policy Blind Spot}
+The \textbf{Consumer Price Index (CPI)} measures how fast the cost of living rises and purchasing power erodes. In Cambodia, where families spend \textbf{44.8\%} of their income on Food and \textbf{12.2\%} on Transport, price spikes directly threaten household welfare.
+
+Yet for decades, official CPI has relied on manual field surveys: enumerators visiting physical stores with clipboards once a month. This creates a crippling \textbf{30-to-60-day reporting lag}. By the time an official inflation report is published, the data reflects past history rather than active market realities. Policymakers are left steering national economic policy through the rearview mirror.
+
+\subsection{The Reality: Prices Move in Hours, Not Months}
+The fatal flaw of monthly point-in-time checks is that \textbf{prices do not wait for the end of the month to change}. In today's economy, three volatile forces trigger rapid shelf-price shocks:
 \begin{itemize}
-    \item \textbf{Where Dollars are used:} In modern supermarkets (like AEON and Lucky), phone shops, electronics stores, restaurant chains, and online shopping apps, prices are almost always shown in US Dollars.
-    \item \textbf{Where Riel is used:} In traditional open markets, street food stalls, local tuk-tuks, and for government utility bills (like your home electricity and clean tap water), prices are quoted in Cambodian Riel.
+    \item \textbf{Dual-Currency Swings (USD \& KHR):} Modern supermarkets and electronics retailers price in USD, while wages and wet markets run on KHR. Daily exchange rate fluctuations shift shelf costs overnight.
+    \item \textbf{Flash Commodity Shocks:} Weather anomalies, floods, and border frictions spike the prices of staple foods (pork, rice, vegetables) and fuel within 48 hours.
+    \item \textbf{Dynamic E-Commerce Pricing:} Online supermarkets constantly launch flash sales, algorithmic price tweaks, and subtle shrinkflation that monthly visits completely miss.
 \end{itemize}
-Because both currencies are used side by side, when the exchange rate moves, prices in shops can change quickly. For example, if a family earns their living in Riel, but buys groceries in a supermarket priced in Dollars, any drop in the value of the Riel means their groceries immediately cost more money.
 
-\subsection{What Cambodian Families Spend Most of Their Money On}
-According to official household surveys from the government's National Institute of Statistics (NIS), Cambodian families spend almost all of their monthly budget on three basic things:
-\begin{enumerate}
-    \item \textbf{Food and Non-Alcoholic Drinks (44.8\%):} Nearly half of every dollar spent goes directly to eating and drinking (rice, pork, fish, cooking oil, and vegetables). For poorer families, food can take more than 55\% of their budget!
-    \item \textbf{Housing, Water, Electricity, and Gas (17.1\%):} Paying for rent, home power, cooking gas, and water.
-    \item \textbf{Transport and Fuel (12.2\%):} Gasoline for motorbikes, diesel for trucks, and bus tickets.
-\end{enumerate}
-Together, these three categories make up \textbf{74\% of all household spending}. That means when global fuel prices go up, or when meat and rice prices rise, regular families feel the squeeze immediately.
+\subsection{The Solution: Modernizing Price Tracking with Data Disciplines}
+To overcome this critical information delay, modern \textbf{Data Engineering and Data Science} provide the opportunity to revolutionize inflation monitoring:
+\begin{itemize}
+    \item \textbf{Data Engineering} automates the regular extraction, cleaning, and storage of large-scale price data from digital retail channels, eliminating manual clipboard bottlenecks and ensuring reliable, continuous data feeds.
+    \item \textbf{Data Science} enables intelligent product harmonization, consistent index calculation according to international standards, and real-time modeling of price trends as they happen.
+\end{itemize}
 
-\subsection{Why the Traditional Monthly Survey is Too Slow}
-In the past, the only way to measure inflation was through official monthly surveys. Government workers would walk into physical markets with clipboards once a month, write down prices by hand, and take them back to the office to calculate.
-
-While this traditional method is thorough, it has three big problems:
-\begin{enumerate}
-    \item \textbf{It is 3 to 4 weeks late:} The official report for January is usually not published until late February. If food or gasoline prices jump today, leaders at the Central Bank and government ministries do not see the official numbers until a month later.
-    \item \textbf{It only checks prices once a month:} If inspectors visit a store on the 10th day of the month, they completely miss sales, discounts, or price jumps that happen on the 20th or 28th.
-    \item \textbf{It takes a lot of time and people:} Walking to hundreds of stalls in heavy traffic is slow, expensive, and easy to make mistakes when copying numbers.
-\end{enumerate}
-
-\subsection{Our Daily Solution: Automated Web Intelligence}
-Our automated system solves this problem. Every single morning at 8:00 AM, while the city begins its business hours, our software automatically visits 25 online store catalogs, fuel company websites, utility regulators, phone providers, vehicle retailers, and bus portals. It collects over 45,000 real prices every day, cleans them, and calculates today's true inflation rate. Government leaders and researchers can see price changes right now, rather than waiting a whole month.
+\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\bfseries Core Impact: Modernizing Price Measurement]
+\centering
+\textbf{Traditional Method:} Monthly manual surveys $\cdot$ 30-to-60-day reporting delay $\cdot$ Retrospective post-mortem \\
+$\Downarrow$ \\
+\textbf{Modern Approach:} Continuous digital collection $\cdot$ Timely price intelligence $\cdot$ Real-time economic radar
+\end{tcolorbox}
 
 \newpage
 
@@ -204,7 +201,7 @@ Think of data like metal dug out of the ground. When it first comes out, it is r
 \small
 \textbf{Step 1: BRONZE (Raw Store Prices)}
 \begin{itemize}[noitemsep]
-    \item We collect raw text and price tags from 25 production sources every morning at 8:00 AM.
+    \item We collect raw text and price tags from 25 production sources every morning at 2:00 AM.
     \item Exactly as the stores wrote them, typos and all. Nothing is thrown away.
     \item Stored in our raw database table: \texttt{bronze.raw\_prices}.
 \end{itemize}
@@ -237,10 +234,10 @@ Think of data like metal dug out of the ground. When it first comes out, it is r
 \subsection{How Airflow and Cosmos Keep Everything Running on Time}
 To make sure this entire process happens smoothly without humans needing to press buttons at 2:00 AM, we use an automatic manager called \textbf{Apache Airflow} and a tool called \textbf{Astronomer Cosmos}:
 \begin{itemize}
-    \item \textbf{The Master Alarm Clock (\texttt{cpi\_master\_dag}):} Rings every day at 8:00 AM. It starts all 25 per-source scraper DAGs in parallel. Once they finish and pass quality checks, it wakes up the next step.
+    \item \textbf{The Master Alarm Clock (\texttt{cpi\_master\_dag}):} Rings every day at 2:00 AM. It starts all 25 per-source scraper DAGs in parallel. Once they finish and pass quality checks, it wakes up the next step.
     \item \textbf{The Cleaning Step (\texttt{silver\_dag}):} Runs our data cleaning models. Thanks to Cosmos, each cleaning task is its own step. If one step has an issue, we can see exactly which one it is, while the rest keep going.
-    \item \textbf{The Final Calculation Step (\texttt{gold\_cpi\_dag}):} Calculates today's official daily inflation rate and updates our dashboards before business hours.
-    \item \textbf{The Weekly Housekeeping Step (\texttt{cpi\_maintenance\_dag}):} Runs every Sunday at 8:00 AM to organize database folders for the coming months and keep the system fast.
+    \item \textbf{The Final Calculation Step (\texttt{gold\_cpi\_dag}):} Calculates today's official daily inflation rate and updates our dashboards before breakfast.
+    \item \textbf{The Weekly Housekeeping Step (\texttt{cpi\_maintenance\_dag}):} Runs every Sunday at 1:00 AM to organize database folders for the coming months and keep the system fast.
 \end{itemize}
 
 \subsection{Splitting Big Tables into Monthly Folders}
@@ -417,44 +414,6 @@ Think of a physical supermarket where similar items live in the same aisle:
     \item A phrase like \textit{"Motorbike Engine Oil"} is mapped to a completely different neighborhood far away.
 \end{itemize}
 
-\subsection{How Multilingual Embeddings Align Khmer and English Vectors Without Translation}
-A fundamental question in computational linguistics is: \textit{How can \textit{"\khmer{សាច់គោ}"} (Khmer) and \textit{"Beef"} (English) share virtually identical vectors in $\mathbb{R}^{768}$ when they use completely different scripts and byte sequences, without running machine translation?}
-
-The neural network achieves cross-lingual vector convergence through four mathematical and architectural principles:
-
-\subsubsection{1. Unified Subword Tokenization and Latent Projection}
-To a transformer neural network, raw Unicode scripts and letters do not exist. Text in any language is first mapped by a unified SentencePiece tokenizer into integer token IDs from a shared vocabulary matrix $V$:
-$$\text{"beef"} \longrightarrow [\text{Token ID: 4821}]$$
-$$\text{"\khmer{សាច់គោ}"} \longrightarrow [\text{Token ID: 91043}]$$
-Both token IDs are mapped via embedding matrix $\mathbf{E} \in \mathbb{R}^{|V| \times d}$ into initial vector representations before passing through 12 to 24 deep self-attention layers.
-
-\subsubsection{2. Translation Language Modeling (TLM) and Cross-Attention}
-During model pre-training on parallel corpus pairs (e.g., $[\text{EN}] \text{ Fresh beef } [\text{KH}] \text{ \khmer{សាច់គោស្រស់} }$), the Multi-Head Self-Attention layers compute scalar attention scores between all tokens:
-\begin{equation}
-\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{Q K^T}{\sqrt{d_k}}\right) V
-\end{equation}
-Where Query vector $Q$ for \textit{"beef"} interacts directly with Key vector $K$ for \textit{"\khmer{សាច់គោ}"}. The attention weights force the network to correlate their hidden state representations across language boundaries.
-
-\subsubsection{3. Contrastive Learning and InfoNCE Loss Minimization}
-During supervised embedding alignment, the model optimizes its weight matrices ($W_Q, W_K, W_V$) using the \textbf{InfoNCE (Information Noise-Contrastive Estimation) loss}:
-\begin{equation}
-\mathcal{L}_i = -\log \frac{\exp\left(\frac{\mathbf{z}_{a,i} \cdot \mathbf{z}_{p,i}}{\tau}\right)}{\exp\left(\frac{\mathbf{z}_{a,i} \cdot \mathbf{z}_{p,i}}{\tau}\right) + \sum_{j=1}^{N-1} \exp\left(\frac{\mathbf{z}_{a,i} \cdot \mathbf{z}_{n,j}}{\tau}\right)}
-\end{equation}
-Where:
-\begin{itemize}
-    \item $\mathbf{z}_{a,i}$ is the output vector for Khmer term \textit{"\khmer{សាច់គោ}"}.
-    \item $\mathbf{z}_{p,i}$ is the output vector for positive English match \textit{"beef"}.
-    \item $\mathbf{z}_{n,j}$ are output vectors for $N-1$ non-matching negative English items (e.g., \textit{"shampoo"}, \textit{"gasoline"}).
-    \item $\tau$ is the temperature scaling hyperparameter.
-\end{itemize}
-Minimizing $\mathcal{L}_i$ via stochastic gradient descent updates model parameters to project $\mathbf{z}_{a,i}$ and $\mathbf{z}_{p,i}$ to the exact same numerical coordinates in $\mathbb{R}^{768}$, resulting in a cosine similarity $\cos(\theta) \ge 0.92$.
-
-\subsubsection{4. Manifold Alignment and Isomorphism}
-Human conceptual relationships are geometrically \textbf{isomorphic} across languages: in both English and Khmer, the distance matrix between \textit{beef/meat/pork/grill} is identical. The transformer's deep linear layers function as an orthogonal projection matrix $R \in \mathbb{R}^{768 \times 768}$, rotating the Khmer vector manifold so it overlaps 1:1 with English space ($R \cdot \mathbf{v}_{\text{Khmer}} \approx \mathbf{v}_{\text{English}}$).
-
-\subsubsection{5. Deterministic Domain Keyword Augmentation}
-As a secondary deterministic guarantee in our pipeline (\texttt{pipeline/text\_clean.py}), core Cambodian retail terms are augmented with canonical English tokens (\textit{"\khmer{សាច់គោ}"} $\rightarrow$ \texttt{BEEF}, \textit{"\khmer{អង្ករ}"} $\rightarrow$ \texttt{RICE}, \textit{"\khmer{សាំង}"} $\rightarrow$ \texttt{GASOLINE}). This appends canonical tags alongside raw Khmer text, ensuring 100\% recall without modifying the original raw script.
-
 \subsection{Part 1: Semantic Product Matching (Connecting Scraped Names to Catalog)}
 Every morning, scrapers collect thousands of product listings. To track an item's price over time, we must match today's scraped name against our master catalog of known products (\texttt{silver.dim\_canonical\_items}).
 
@@ -567,7 +526,7 @@ To understand how the entire system works from start to finish, let's follow one
 \begin{center}
 \begin{tcolorbox}[colback=white,colframe=NavyBlue,width=0.95\textwidth,title=\bfseries The 5 Steps in the Life of a Price]
 \small
-\textbf{8:00 AM -- Step 1: Raw Collection (Bronze)}
+\textbf{2:00 AM -- Step 1: Raw Collection (Bronze)}
 \begin{itemize}[noitemsep]
     \item Our automated scraper visits Lucky Supermarket's online store.
     \item It sees: \textit{"MegaChef Premium Fish Sauce 500ml"} with a price of \textbf{\$1.50 USD}.
@@ -1130,7 +1089,7 @@ This mathematical bridge guarantees that long-term historical records spanning d
 \subsection{Closing the 30-Day Policy Gap}
 Official monthly inflation reports from Cambodia's National Institute of Statistics (NIS) are published with an observation delay of 3 to 4 weeks. For example, official January CPI figures are only made available in late February. For macroeconomic policymakers at the National Bank of Cambodia (NBC), treasury liquidity planners at the Ministry of Economy and Finance (MEF), and commercial food importers, this 30-day information void creates severe policy blindness.
 
-Our production nowcasting engine (\texttt{ml/nowcaster.py}) resolves this challenge by projecting the final, conformed monthly headline inflation rate on \textbf{every single day of the active month} ($t \in \{1, \dots, T\}$). As fresh morning retail web scrapes, fuel price ceilings, and official MEF USD/KHR exchange rates enter the warehouse at 8:00 AM, the nowcasting engine updates its out-of-sample projections before business hours.
+Our production nowcasting engine (\texttt{ml/nowcaster.py}) resolves this challenge by projecting the final, conformed monthly headline inflation rate on \textbf{every single day of the active month} ($t \in \{1, \dots, T\}$). As fresh morning retail web scrapes, fuel price ceilings, and official MEF USD/KHR exchange rates enter the warehouse at 2:00 AM, the nowcasting engine updates its out-of-sample projections before business hours.
 
 \subsection{Axiomatic Foundation: Why Bottom-Up 5-Basket Price Relatives Win}
 Traditional macroeconomic forecasting models attempt to predict an ad-hoc aggregate headline index directly. However, in an emerging, dual-currency dollarized economy like Cambodia, aggregate inflation is driven by distinct microeconomic cost structures:
@@ -1196,16 +1155,6 @@ For each basket $k$, the nowcaster constructs a continuous feature vector $\math
 m_{\text{food}, 3d} & m_{\text{food}, 7d} & m_{\text{food}, 14d} & m_{\text{trans}, 3d} & m_{\text{trans}, 7d} & m_{\text{fx}, 7d} & m_{\text{fx}, 14d} & \mathbb{I}_{\text{holiday}} & \text{dist}_{\text{holiday}}
 \end{bmatrix}^T
 \end{equation}
-
-\textbf{Why We Use Multi-Horizon Rolling Windows ($3\text{d}, 7\text{d}, 14\text{d}$):}\\
-Economic prices move at different velocities across consumption sectors:
-\begin{itemize}[noitemsep]
-    \item \textbf{3-Day Window ($m_{k, 3d}$):} Measures \textit{ultra-fast velocity} and immediate supply shocks (e.g., Kampot vegetable floods or flash retail promotions).
-    \item \textbf{7-Day Window ($m_{k, 7d}$):} Filters out \textit{weekly discount cycles} (weekend promotions vs. weekday baselines).
-    \item \textbf{14-Day Window ($m_{k, 14d}$):} Measures \textit{sustained macro drift} (e.g., bi-weekly fuel ceiling shifts or import price trends).
-    \item \textbf{Acceleration Detection:} By observing $3\text{d}$, $7\text{d}$, and $14\text{d}$ features simultaneously, the regularized ML model calculates both first-derivative velocity and second-derivative acceleration, distinguishing between a fresh price shock ($m_{3d} \gg m_{14d}$) and a cooling trend.
-\end{itemize}
-
 where:
 \begin{itemize}[noitemsep]
     \item $m_{k, H} = \frac{P_{k, t} - P_{k, t-H}}{P_{k, t-H}}$: $H$-day rolling price momentum in Division $k$.

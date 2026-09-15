@@ -141,25 +141,26 @@
 \end{frame}
 
 % ── Slide 4: Research Objectives ──────────────────────────────────────────────
-\begin{frame}[shrink=12]{Project Objectives \& Core Research Questions}
+\begin{frame}[shrink=10]{Project Objectives \& Research Focus}
   \begin{columns}
-    \begin{column}{0.48\textwidth}
+    \begin{column}{0.50\textwidth}
       \begin{block}{Project Goal}
-        Design, build, and deploy an automated, production-grade daily Consumer Price Index pipeline and real-time inflation nowcasting engine for Cambodia.
+        Close the gap between how quickly consumer prices change in Cambodia and how slowly the official statistical system measures them, by using automated, daily online price data to support faster inflation monitoring.
       \end{block}
 
-      \begin{exampleblock}{Core Technical Objectives}
+      \begin{exampleblock}{Specific Operational Objectives}
         \begin{enumerate}
-          \item \textbf{Automated Multi-Source Ingestion:} Harvest 25 retail and public endpoints daily at 08:00 AM ICT.
-          \item \textbf{Lakehouse Data Engineering:} PostgreSQL 16 Medallion architecture (Bronze, Silver, Gold).
-          \item \textbf{AI \& Store Priority Classification:} Resolve 12 UN COICOP divisions with domain trap protection.
-          \item \textbf{Axiomatic Econometrics:} Jevons geometric formula to eliminate $+1.18\%$/year formula drift.
-          \item \textbf{Nowcasting Engine:} Two-Stage Hybrid Ridge Nowcaster with dynamic uncertainty decay.
+          \item \textbf{Build Automated Collection \& Monitoring:}
+          Set up a resilient pipeline that continuously collects and stores price data from 25 online retail sources, and monitors it for completeness and quality.
+          \item \textbf{Calculate Price Index \& Forecast Inflation:}
+          Apply the axiomatic Jevons geometric formula to compute daily price relatives, and use \texttt{RidgeCV}-based modeling to forecast inflation ahead of official releases.
+          \item \textbf{Build Decision-Support Dashboard:}
+          Develop an interactive dashboard presenting daily CPI results, category-level trends, and forecasted inflation for real-time monitoring.
         \end{enumerate}
       \end{exampleblock}
     \end{column}
 
-    \begin{column}{0.48\textwidth}
+    \begin{column}{0.46\textwidth}
       \begin{center}
         \includegraphics[width=\textwidth]{../thesis/images/cpi_simple_architecture.jpg}
       \end{center}

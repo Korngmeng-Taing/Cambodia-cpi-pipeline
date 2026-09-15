@@ -60,28 +60,52 @@
     \item \textbf{Innovation \& Ecosystem Development:} Collaborating with public and private stakeholders to support digital startups, accelerate SME digitalization, and maintain a secure digital commerce environment.
 \end{itemize}
 
-\section{Background and Motivation: Applied Data Science and Modern Digital Governance}
-\hs The Consumer Price Index (CPI) serves as the primary macroeconomic benchmark for quantifying inflation, tracking cost-of-living fluctuations, calibrating monetary policy, and safeguarding the real purchasing power of households. In developing economies such as Cambodia, inflation dynamics pose acute socio-economic risks because basic sustenance items---particularly Food and Non-Alcoholic Beverages---constitute \textbf{44.775\%} of total household expenditure in the national consumer basket (CSES 2023), meaning unmonitored price spikes directly undermine household welfare. Under the Royal Government of Cambodia's \textit{Pentagonal Strategy -- Phase 1} and the digital economy initiatives led by the Ministry of Economy and Finance (MEF), modernizing macroeconomic surveillance through sovereign Digital Public Infrastructure (DPI) has become a national priority. Concurrently, rapid commercial digitalization across supermarket chains, e-commerce marketplaces, pharmacy networks, and utility providers generates a daily stream of online price quotations. Harnessing applied data science to capture this digital exhaust and compile a high-frequency Consumer Price Index offers fiscal authorities at the MEF and monetary planners at the National Bank of Cambodia (NBC) real-time inflation visibility, enabling timely and evidence-based policy interventions.
+\section{Background of the Study}
+\hs Consumer price inflation is an important economic indicator because it reflects changes in the prices of goods and services purchased by households. The Consumer Price Index (CPI) is commonly used to measure these changes by comparing the cost of a representative basket of consumer goods and services over time. In Cambodia, the National Institute of Statistics (NIS) is the official institution responsible for producing and publishing the Consumer Price Index and related inflation statistics. NIS publishes CPI information on a monthly basis, providing an important measure of price developments in the Cambodian economy.
+
+\hs Although the official CPI provides a standardized and reliable measure of inflation, its monthly publication creates a time lag between the period in which price changes occur and the time when the corresponding official information becomes available. This creates a challenge for timely monitoring of current price conditions. When consumer prices change rapidly, particularly for frequently purchased products such as food and other essential goods, the latest officially published CPI may describe price conditions from an earlier period rather than the current situation.
+
+\hs The increasing availability of online retail data provides an opportunity to reduce this information gap. Many retailers and online shopping platforms publish product prices electronically, allowing prices to be observed at a much higher frequency than traditional monthly statistical collection. Instead of waiting for a monthly CPI release, online prices can potentially be collected every day and used to monitor changes in consumer prices continuously.
+
+\hs However, collecting online prices alone does not produce a measure that can be directly compared with the official CPI. Products must first be identified and organized into appropriate expenditure categories, price observations must be cleaned and standardized, and changes in individual product prices must be aggregated into meaningful price indices. A consistent methodology is therefore required to transform high-frequency retail price observations into an indicator of overall consumer price movements.
+
+\hs In this study, daily online retail prices collected from selected Cambodian sources are organized according to the relevant CPI expenditure categories. The Jevons price index is applied at the elementary aggregation level to measure price changes among comparable products, while a Laspeyres-type weighted aggregation is applied to combine the resulting indices using expenditure weights and obtain the CPI measure at a higher level. The resulting daily price information provides a higher-frequency view of consumer price movements than the official monthly CPI.
+
+\hs The study further uses the high-frequency price information to forecast inflation ahead of the official monthly CPI release. \texttt{RidgeCV} is employed as the forecasting model because it provides a regularized regression approach that can handle multiple potentially correlated explanatory variables while selecting the regularization parameter through cross-validation.
+
+\hs Therefore, this study focuses on using automatically collected online retail prices to reduce the information gap created by the publication lag of the official NIS CPI. By combining automated data collection, structured data processing, price-index calculation, and inflation forecasting, the study aims to provide an earlier indication of inflation conditions in Cambodia.
 
 
 \section{Problem Statement}
-\hs While online retail data offers high-frequency visibility into consumer prices, compiling it into an institutional-grade Consumer Price Index faces four fundamental barriers: a 30-to-60-day official statistical reporting lag during rapid food and fuel price shocks, noisy multilingual listings lacking uniform barcodes that trigger false product merges, complex multi-department retail catalogs susceptible to COICOP misclassifications, and mathematical upward formula drift (+1.18\% per year) caused by standard arithmetic averaging. Overcoming these hurdles requires an end-to-end architecture integrating automated daily ingestion, deterministic physical entity guardrails, Store Priority routing paired with AI-assisted classification, and axiomatic Jevons econometric nowcasting.
+\hs The official Consumer Price Index (CPI) published by the National Institute of Statistics (NIS) is an important source of information for measuring inflation in Cambodia. However, the official CPI is published on a monthly basis and becomes available only after the corresponding reference period. As a result, there is a time lag between the actual movement of consumer prices and the availability of official inflation information.
+
+\hs This publication lag creates a limitation for timely inflation monitoring. Consumer prices do not remain constant throughout a month. Prices of food, household products, fuel, and other frequently purchased goods can change because of changes in supply, demand, promotions, seasonal conditions, transportation costs, and other market factors. When such changes occur, users of official statistics may have to wait for the next official CPI release before obtaining a standardized measure of overall price movements.
+
+\hs The problem is therefore not the absence of consumer price information. Retailers and online shopping platforms already publish prices for many products on a frequent basis. The problem is that these high-frequency price observations are not automatically collected and transformed into a systematic price index that can provide an earlier indication of inflation before the official NIS CPI is released.
+
+\hs Furthermore, raw online prices cannot be directly used as an alternative to the official CPI. Products may differ across retailers, product descriptions may be inconsistent, prices may change temporarily because of promotions, and some observations may be missing or duplicated. Therefore, an automated system is required to continuously collect, organize, validate, and process the available online price data. An appropriate index methodology is also required to aggregate individual price changes into a consistent measure of consumer price movements.
+
+\hs This study therefore addresses the following central problem:
+
+\begin{center}
+\textbf{How can the time lag in the availability of official NIS CPI information be reduced by using high-frequency online retail price data to produce an earlier indication of consumer price inflation in Cambodia?}
+\end{center}
+
+\hs To address this problem, the study develops an automated system that collects online retail prices on a daily basis, stores and processes the structured price data, applies the Jevons and Laspeyres index approaches to calculate price indices, and uses \texttt{RidgeCV} to forecast inflation ahead of the official monthly CPI release.
 
 
 \section{Project Goal and Research Objectives}
 \subsection{Project Goal}
-\hs The main goal of this project is to develop an automated system that collects consumer price data from online sources in Cambodia on a daily basis and uses the collected data to support Consumer Price Index (CPI) estimation, price trend monitoring, and machine learning-assisted real-time inflation nowcasting.
+\hs The goal of this project is to close the gap between how quickly consumer prices actually change in Cambodia and how slowly the official statistical system currently measures them, by using automated, daily online price data to support faster inflation monitoring.
 
 \subsection{General Objective}
-\hs The objective of this project is to design and implement an end-to-end data platform for collecting, storing, processing, monitoring, and analyzing price data related to selected COICOP basket categories. The system supports web-based data collection, structured Medallion data storage, query processing, data quality monitoring, visualization, and econometric nowcasting models for CPI estimation and inflation analysis.
+\hs To achieve this goal, the project designs and builds an end-to-end system that collects, stores, processes, and analyzes online consumer price data, and uses it to estimate consumer price inflation on a daily basis.
 
-\subsection{Specific Technical Objectives}
-\hs To achieve this goal, the research is organized around four specific operational objectives:
+\subsection{Specific Objectives}
 \begin{enumerate}
-    \item \textbf{Build an Automated Data Infrastructure and Monitoring System:} Set up an automated data pipeline and database to collect, store, and continuously monitor price scrape data from online retail sources.
-    \item \textbf{Visualize the Scraped Raw Price Data:} Create clear visual charts and graphs to display the raw price and expenditure data across all consumer categories to prepare for CPI calculation.
-    \item \textbf{Formulate Machine Learning-Assisted Real-Time Inflation Nowcasting:} Apply axiomatic micro-econometric index aggregation (Jevons) to compile daily price relatives, formulate an intra-month nowcasting engine to eliminate official statistical reporting delays, and project unobserved month-end prices using a \textbf{Two-Stage Hybrid Ridge Disaggregated Architecture} with 9-dimensional indicator feature engineering, Leave-One-Out Cross-Validation (\texttt{RidgeCV}), and Empirical Bayes shrinkage to deliver robust predictions with dynamic uncertainty decay modeling.
-    \item \textbf{Build an Interactive Decision-Support Dashboard:} Develop interactive executive dashboards to display real-time CPI metrics, high-frequency nowcasted inflation, official benchmark chain-linking, and drill-down category analytics.
+    \item \textbf{Build an automated data collection and monitoring system:} Set up a pipeline that continuously collects and stores price data from online retail sources, and monitors it for completeness and quality.
+    \item \textbf{Calculate the price index and forecast inflation:} Apply an established economic formula to compute daily price relatives, and use \texttt{RidgeCV}-based modeling to forecast inflation ahead of the official monthly release.
+    \item \textbf{Build a decision-support dashboard:} Develop an interactive dashboard that presents daily CPI results and forecasted inflation for easy monitoring.
 \end{enumerate}
 
 

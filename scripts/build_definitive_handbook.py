@@ -176,35 +176,32 @@ Out-of-Sample Accuracy: \textbf{+0.0181 pp error vs. official NIS ground truth}
 \section{Why Cambodia Needs a Daily Price Tracker}
 % =============================================================================
 
-\subsection{Cambodia Uses Two Currencies at the Same Time}
-Cambodia is unique because people use two currencies every day: the United States Dollar (USD) and the Cambodian Riel (KHR).
+\subsection{Inflation and the 30-Day Policy Blind Spot}
+The \textbf{Consumer Price Index (CPI)} measures how fast the cost of living rises and purchasing power erodes. In Cambodia, where families spend \textbf{44.8\%} of their income on Food and \textbf{12.2\%} on Transport, price spikes directly threaten household welfare.
+
+Yet for decades, official CPI has relied on manual field surveys: enumerators visiting physical stores with clipboards once a month. This creates a crippling \textbf{30-to-60-day reporting lag}. By the time an official inflation report is published, the data reflects past history rather than active market realities. Policymakers are left steering national economic policy through the rearview mirror.
+
+\subsection{The Reality: Prices Move in Hours, Not Months}
+The fatal flaw of monthly point-in-time checks is that \textbf{prices do not wait for the end of the month to change}. In today's economy, three volatile forces trigger rapid shelf-price shocks:
 \begin{itemize}
-    \item \textbf{Where Dollars are used:} In modern supermarkets (like AEON and Lucky), phone shops, electronics stores, restaurant chains, and online shopping apps, prices are almost always shown in US Dollars.
-    \item \textbf{Where Riel is used:} In traditional open markets, street food stalls, local tuk-tuks, and for government utility bills (like your home electricity and clean tap water), prices are quoted in Cambodian Riel.
+    \item \textbf{Dual-Currency Swings (USD \& KHR):} Modern supermarkets and electronics retailers price in USD, while wages and wet markets run on KHR. Daily exchange rate fluctuations shift shelf costs overnight.
+    \item \textbf{Flash Commodity Shocks:} Weather anomalies, floods, and border frictions spike the prices of staple foods (pork, rice, vegetables) and fuel within 48 hours.
+    \item \textbf{Dynamic E-Commerce Pricing:} Online supermarkets constantly launch flash sales, algorithmic price tweaks, and subtle shrinkflation that monthly visits completely miss.
 \end{itemize}
-Because both currencies are used side by side, when the exchange rate moves, prices in shops can change quickly. For example, if a family earns their living in Riel, but buys groceries in a supermarket priced in Dollars, any drop in the value of the Riel means their groceries immediately cost more money.
 
-\subsection{What Cambodian Families Spend Most of Their Money On}
-According to official household surveys from the government's National Institute of Statistics (NIS), Cambodian families spend almost all of their monthly budget on three basic things:
-\begin{enumerate}
-    \item \textbf{Food and Non-Alcoholic Drinks (44.8\%):} Nearly half of every dollar spent goes directly to eating and drinking (rice, pork, fish, cooking oil, and vegetables). For poorer families, food can take more than 55\% of their budget!
-    \item \textbf{Housing, Water, Electricity, and Gas (17.1\%):} Paying for rent, home power, cooking gas, and water.
-    \item \textbf{Transport and Fuel (12.2\%):} Gasoline for motorbikes, diesel for trucks, and bus tickets.
-\end{enumerate}
-Together, these three categories make up \textbf{74\% of all household spending}. That means when global fuel prices go up, or when meat and rice prices rise, regular families feel the squeeze immediately.
+\subsection{The Solution: Modernizing Price Tracking with Data Disciplines}
+To overcome this critical information delay, modern \textbf{Data Engineering and Data Science} provide the opportunity to revolutionize inflation monitoring:
+\begin{itemize}
+    \item \textbf{Data Engineering} automates the regular extraction, cleaning, and storage of large-scale price data from digital retail channels, eliminating manual clipboard bottlenecks and ensuring reliable, continuous data feeds.
+    \item \textbf{Data Science} enables intelligent product harmonization, consistent index calculation according to international standards, and real-time modeling of price trends as they happen.
+\end{itemize}
 
-\subsection{Why the Traditional Monthly Survey is Too Slow}
-In the past, the only way to measure inflation was through official monthly surveys. Government workers would walk into physical markets with clipboards once a month, write down prices by hand, and take them back to the office to calculate.
-
-While this traditional method is thorough, it has three big problems:
-\begin{enumerate}
-    \item \textbf{It is 3 to 4 weeks late:} The official report for January is usually not published until late February. If food or gasoline prices jump today, leaders at the Central Bank and government ministries do not see the official numbers until a month later.
-    \item \textbf{It only checks prices once a month:} If inspectors visit a store on the 10th day of the month, they completely miss sales, discounts, or price jumps that happen on the 20th or 28th.
-    \item \textbf{It takes a lot of time and people:} Walking to hundreds of stalls in heavy traffic is slow, expensive, and easy to make mistakes when copying numbers.
-\end{enumerate}
-
-\subsection{Our Daily Solution: Automated Web Intelligence}
-Our automated system solves this problem. Every single morning at 2:00 AM, while the city is asleep, our software automatically visits 25 online store catalogs, fuel company websites, utility regulators, phone providers, vehicle retailers, and bus portals. It collects over 45,000 real prices every day, cleans them, and calculates today's true inflation rate. Government leaders and researchers can see price changes right now, rather than waiting a whole month.
+\begin{tcolorbox}[colback=white,colframe=NavyBlue,title=\bfseries Core Impact: Modernizing Price Measurement]
+\centering
+\textbf{Traditional Method:} Monthly manual surveys $\cdot$ 30-to-60-day reporting delay $\cdot$ Retrospective post-mortem \\
+$\Downarrow$ \\
+\textbf{Modern Approach:} Continuous digital collection $\cdot$ Timely price intelligence $\cdot$ Real-time economic radar
+\end{tcolorbox}
 
 \newpage
 

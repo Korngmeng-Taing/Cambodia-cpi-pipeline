@@ -378,7 +378,7 @@ and verifying whether actual inflation fell within the estimated 95\% confidence
 
 \hs Airflow enforces a strict, dependency-validated Directed Acyclic Graph (DAG) execution topology:
 \begin{enumerate}
-    \item \textbf{Master Fan-Out (\texttt{cpi\_master\_dag}):} Triggers all 25 scraper feeds concurrently at 02:00 Phnom Penh time using asynchronous deferrable operators, enforcing Bronze quality gates before triggering downstream layers.
+    \item \textbf{Master Fan-Out (\texttt{cpi\_master\_dag}):} Triggers all 25 scraper feeds concurrently at 08:00 AM Phnom Penh time (08:00 ICT) using asynchronous deferrable operators, enforcing Bronze quality gates before triggering downstream layers.
     \item \textbf{Silver Layer Dependency (\texttt{silver\_dag}):} Enforces the verified sequence:
     \begin{equation*}
         \text{Item Matching} \longrightarrow \text{AI Review} \longrightarrow \text{COICOP AI Cache} \longrightarrow \text{dbt Seed/Run} \longrightarrow \text{Hedonic Regression} \longrightarrow \text{dbt Tests}

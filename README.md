@@ -194,7 +194,7 @@ CPI PIPELINE/
 ## 4. DAG Orchestration Flow
 
 ```
-cpi_master_dag (Daily 02:00 ICT)
+cpi_master_dag (Daily 08:00 ICT)
     │
     ├──► [25 Scraper DAGs] ──── bronze_complete
     │         │

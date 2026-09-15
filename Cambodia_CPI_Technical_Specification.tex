@@ -171,7 +171,7 @@ The entire platform runs in an isolated containerized environment:
     \item \textbf{Database Engine:} PostgreSQL 16 Alpine with optimized B-Tree and GIN indexes.
     \item \textbf{Workflow Orchestrator:} Apache Airflow 2.9.3 scheduling three sequential DAGs:
         \begin{enumerate}
-            \item \texttt{cpi\_master\_dag} (02:00 Phnom Penh Time): Triggers 23 scrapers concurrently.
+            \item \texttt{cpi\_master\_dag} (08:00 Phnom Penh Time): Triggers 23 scrapers concurrently.
             \item \texttt{silver\_dag}: Executes Bronze validation, entity resolution, and COICOP classification.
             \item \texttt{gold\_cpi\_dag}: Executes imputation, hedonics, Jevons index, Laspeyres aggregation, and nowcasting.
         \end{enumerate}

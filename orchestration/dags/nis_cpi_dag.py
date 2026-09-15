@@ -80,7 +80,7 @@ def _refresh_nis_dbt_models() -> None:
 with DAG(
     dag_id=DAG_ID,
     description="Weekly automated ingestion of official NIS Cambodia monthly CPI releases",
-    schedule="0 6 * * 1",  # Every Monday at 06:00 AM ICT
+    schedule="0 8 * * 1",  # Every Monday at 08:00 AM ICT
     start_date=pendulum.datetime(2026, 1, 1, tz=local_tz),
     catchup=False,
     default_args=DEFAULT_ARGS,

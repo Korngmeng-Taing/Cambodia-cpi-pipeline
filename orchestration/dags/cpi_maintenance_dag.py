@@ -3,7 +3,7 @@ orchestration/dags/cpi_maintenance_dag.py
 ─────────────────────────────────────────
 Dedicated Maintenance & Partitioning Orchestration DAG for Cambodia CPI Pipeline.
 
-Scheduled weekly (Sundays at 01:00 AM Phnom Penh time) or on manual trigger:
+Scheduled weekly (Sundays at 08:00 AM Phnom Penh time) or on manual trigger:
   1. Executes `ops.maintain_monthly_partitions(3)` to proactively ensure upcoming
      monthly partitions exist for bronze.raw_prices and silver.clean_store_prices.
   2. Runs table statistics updates (ANALYZE) on high-frequency tables.
@@ -95,7 +95,7 @@ with DAG(
     dag_id=DAG_ID,
     description="Weekly Database & Table Partitioning Maintenance for Cambodia CPI Warehouse",
     start_date=pendulum.datetime(2024, 1, 1, tz=local_tz),
-    schedule="0 1 * * 0",  # Every Sunday at 01:00 AM Phnom Penh time
+    schedule="0 8 * * 0",  # Every Sunday at 08:00 AM Phnom Penh time
     catchup=False,
     default_args=DEFAULT_ARGS,
     tags=["cpi", "maintenance", "partitioning", "postgres", "vacuum", "metabase"],

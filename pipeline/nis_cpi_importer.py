@@ -459,8 +459,8 @@ def main() -> None:
     parser.add_argument("--month", type=str, help="CPI month (YYYY-MM-01)")
     parser.add_argument("--headline", type=float, help="Headline CPI index number")
     parser.add_argument("--core", type=float, default=None, help="Core CPI index number")
-    parser.add_argument("--mom", type=float, default=None, help="MoM inflation %")
-    parser.add_argument("--yoy", type=float, default=None, help="YoY inflation %")
+    parser.add_argument("--mom", type=float, default=None, help="MoM inflation %%")
+    parser.add_argument("--yoy", type=float, default=None, help="YoY inflation %%")
     parser.add_argument("--date", type=str, default=None, help="Release date (YYYY-MM-DD)")
     parser.add_argument("--notes", type=str, default="NIS Cambodia Official CPI Report", help="Provenance note")
 

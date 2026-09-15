@@ -143,6 +143,20 @@ class TestSplitNew:
         assert stats["rule_approved"] == 1
         assert stats["ai_split"] == 0
 
+    def test_existing_name_size_routes_to_approved(self):
+        reviewer = _make_reviewer()
+        conn, cur = _mock_conn()
+        existing_id = uuid.uuid4()
+        cur.fetchall.return_value = [("CELLCARD AO MOBILE", "", existing_id)]
+        row = _row(review_id=22, raw_price_id=302, raw_desc="CELLCARD AO MOBILE")
+        pair_decisions = {1: {"decision": "SPLIT_NEW", "confidence": 0.85,
+                              "reason": "Variant", "method": "gemini_ai", "rows": [row]}}
+        stats = _stats()
+        reviewer._apply_decisions(conn, pair_decisions, stats)
+        assert stats["rule_approved"] == 1
+        assert stats["ai_split"] == 0
+
+
 
 # ── T1d: Batch-scoped barcode lookup ─────────────────────────────────────────
 

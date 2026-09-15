@@ -569,7 +569,7 @@ class ItemMatcher:
             if name_upper and name_upper in self.exact_name_cache:
                 item_id = self.exact_name_cache[name_upper]
                 cand_size = getattr(self, "item_size_cache", {}).get(item_id)
-                raw_size = rec.get("package_size") or rec.get("quantity")
+                raw_size = package_size
                 if is_size_compatible(raw_size, cand_size):
                     match_logs.append((raw_price_id, str(item_id), "exact_text", 1.0))
                     totals["matched_fuzzy"] += 1

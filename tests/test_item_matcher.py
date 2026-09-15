@@ -154,6 +154,20 @@ class TestItemMatcher(unittest.TestCase):
         self.assertFalse(is_valid_barcode(""))
         self.assertFalse(is_valid_barcode("abc"))
 
+    def test_process_batch_exact_name_match(self):
+        existing_item_id = uuid.uuid4()
+        self.cursor.fetchall.side_effect = [
+            [(existing_item_id, "COCA COLA 330ML", None, "330ml")],  # canonical_items cache
+            [],  # sku cache
+            [
+                (1, "COCA COLA 330ML", None, None, "aeon", "Coca Cola", "330ml"),  # exact name match
+            ],
+        ]
+        self.matcher.use_vector_matcher = False
+        stats = self.matcher.process_batch(self.conn)
+        self.assertEqual(stats["matched_fuzzy"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
+

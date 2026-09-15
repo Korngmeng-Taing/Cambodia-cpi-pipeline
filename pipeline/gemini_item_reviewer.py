@@ -378,6 +378,29 @@ class GeminiItemReviewer:
                 )
                 existing_barcodes = {b.strip(): iid for b, iid in cur.fetchall() if b}
 
+            batch_titles = list({
+                (
+                    clean_name_for_matching(dec_info["rows"][0]["item_description_raw"]).strip().upper(),
+                    (dec_info["rows"][0].get("size_norm") or "").strip().upper()
+                )
+                for dec_info in pair_decisions.values()
+                if dec_info["decision"] != "APPROVE_MATCH" and dec_info.get("rows")
+            })
+            existing_name_sizes: dict[tuple[str, str], uuid.UUID] = {}
+            if batch_titles:
+                cur.execute(
+                    """
+                    SELECT
+                        upper(TRIM(BOTH FROM regexp_replace(canonical_name, '\\s+'::text, ' '::text, 'g'::text))),
+                        upper(COALESCE(size_norm, ''::text)),
+                        item_id
+                    FROM silver.canonical_items
+                    WHERE (upper(TRIM(BOTH FROM regexp_replace(canonical_name, '\\s+'::text, ' '::text, 'g'::text))), upper(COALESCE(size_norm, ''::text))) IN %s;
+                    """,
+                    (tuple(batch_titles),),
+                )
+                existing_name_sizes = {(r[0], r[1]): r[2] for r in cur.fetchall() if len(r) == 3}
+
         seen_new_barcodes: set[str] = set()
 
         for dec_info in pair_decisions.values():
@@ -421,13 +444,30 @@ class GeminiItemReviewer:
                     stats["rule_approved"] += len(rows)
                     continue
 
+                clean_title = clean_name_for_matching(first_row["item_description_raw"])
+                raw_size = (first_row.get("size_norm") or "").strip().upper()
+                title_key = (clean_title.strip().upper(), raw_size)
+
+                if title_key in existing_name_sizes:
+                    matched_item_id = existing_name_sizes[title_key]
+                    for r in rows:
+                        approved_matches.append((
+                            r["raw_price_id"],
+                            matched_item_id,
+                            "exact_text",
+                            1.0,
+                        ))
+                        approved_review_ids.append(r["review_id"])
+                    stats["rule_approved"] += len(rows)
+                    continue
+
                 clean_barcode = barcode if (barcode and barcode not in seen_new_barcodes) else None
                 if clean_barcode:
                     seen_new_barcodes.add(clean_barcode)
 
                 # Create one unique canonical item per unique raw title
                 new_item_id = uuid.uuid4()
-                clean_title = clean_name_for_matching(first_row["item_description_raw"])
+                existing_name_sizes[title_key] = new_item_id
                 item_brand = next((r.get("brand") for r in rows if r.get("brand")), None)
                 coicop_div, coicop_code = None, None
                 try:
@@ -468,7 +508,7 @@ class GeminiItemReviewer:
                     """
                     INSERT INTO silver.canonical_items (item_id, canonical_name, brand, barcode, size_norm, coicop_division, coicop_code)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (item_id) DO NOTHING;
+                    ON CONFLICT DO NOTHING;
                     """,
                     new_canonical_items,
                     page_size=500,

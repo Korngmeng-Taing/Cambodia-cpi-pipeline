@@ -417,6 +417,19 @@ Think of a physical supermarket where similar items live in the same aisle:
     \item A phrase like \textit{"Motorbike Engine Oil"} is mapped to a completely different neighborhood far away.
 \end{itemize}
 
+\subsection{How Does the AI Know Khmer Words Match English Without Translation?}
+A common question is: \textit{Does the system run full machine translation from Khmer to English before embedding?}
+
+The answer is \textbf{no}. The AI model connects Khmer words like \textit{"\khmer{សាច់គោ}"} to English terms like \textit{"Beef"} without running a translation step, through two complementary mechanisms:
+
+\begin{enumerate}
+    \item \textbf{Direct Multilingual Pre-Training (Distributional Semantics):}\\
+    During pre-training on billions of bilingual web pages (news, Wikipedia, UN documents), the AI played a massive \textit{"fill-in-the-blank"} game. It observed that the English sentence \textit{"I bought fresh \textbf{beef} at the market"} and the Khmer sentence \textit{"\khmer{ខ្ញុំបានទិញ\textbf{សាច់គោ}ស្រស់នៅផ្សារ}"} use \textbf{beef} and \textit{"\khmer{សាច់គោ}"} in identical surrounding contexts. As a result, the model's neural network automatically maps both words to virtually the exact same coordinates in 768-dimensional space.
+    
+    \item \textbf{Domain Keyword Augmentation:}\\
+    To ensure 100\% reliability for Cambodian market items, our pre-processor (\texttt{pipeline/text\_clean.py}) also maintains a domain-specific dictionary for core Khmer retail terms (\textit{"\khmer{សាច់គោ}"} $\rightarrow$ \texttt{BEEF}, \textit{"\khmer{អង្ករ}"} $\rightarrow$ \texttt{RICE}, \textit{"\khmer{សាំង}"} $\rightarrow$ \texttt{GASOLINE}). It appends canonical English labels alongside the original Khmer text, boosting recall without replacing or losing the raw Khmer script.
+\end{enumerate}
+
 \subsection{Part 1: Semantic Product Matching (Connecting Scraped Names to Catalog)}
 Every morning, scrapers collect thousands of product listings. To track an item's price over time, we must match today's scraped name against our master catalog of known products (\texttt{silver.dim\_canonical\_items}).
 

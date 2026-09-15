@@ -65,15 +65,8 @@
 
 
 \section{Problem Statement}
-\hs The Consumer Price Index (CPI) is essential for monitoring inflation and the cost of living in Cambodia. However, traditional manual price collection is slow, resource-intensive, and released only monthly, meaning rapid intra-month and daily price changes go undetected by policymakers. Meanwhile, many businesses and e-commerce platforms publish prices online, but this data is scattered across platforms and fluctuates daily, making manual tracking impractical.
+\hs While online retail data offers high-frequency visibility into consumer prices, compiling it into an institutional-grade Consumer Price Index faces four fundamental barriers: a 30-to-60-day official statistical reporting lag during rapid food and fuel price shocks, noisy multilingual listings lacking uniform barcodes that trigger false product merges, complex multi-department retail catalogs susceptible to COICOP misclassifications, and mathematical upward formula drift (+1.18\% per year) caused by standard arithmetic averaging. Overcoming these hurdles requires an end-to-end architecture integrating automated daily ingestion, deterministic physical entity guardrails, Store Priority routing paired with AI-assisted classification, and axiomatic Jevons econometric nowcasting.
 
-Although web-scraped retail data offers high frequency and granular visibility, transforming raw web listings into a reliable daily Consumer Price Index poses four core operational challenges:
-\begin{enumerate}[label=\textbf{Problem \arabic*:}, leftmargin=*]
-    \item \textbf{Information Lag vs. Daily Volatility:} Official monthly statistical releases have a 30 to 60-day lag, leaving institutions like the MEF and the National Bank of Cambodia (NBC) blind to high-frequency fuel and food price shocks.
-    \item \textbf{Noisy Free-Text Data and Entity Matching:} E-commerce listings lack uniform barcodes (GTINs) and have fluctuating titles, causing false merges across different pack sizes or storage specs.
-    \item \textbf{Multilingual COICOP Classification Complexity:} Categorizing thousands of multilingual retail listings (Khmer, English, French) into the 12 UN COICOP divisions is intractable via static manual rules.
-    \item \textbf{Shrinkflation and Formula Drift:} Changes in package sizes and standard arithmetic formula bias (\textbf{Carli index}) introduce artificial drift into long-term inflation tracking.
-\end{enumerate}
 
 \section{Project Goal and Research Objectives}
 \subsection{Project Goal}

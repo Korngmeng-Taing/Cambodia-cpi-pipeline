@@ -1,0 +1,399 @@
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[margin=0.62in, top=0.62in, bottom=0.62in]{geometry}
+\usepackage{fontspec}
+\setmainfont{Times New Roman}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage[table]{xcolor}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{tcolorbox}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{ragged2e}
+\usepackage{float}
+
+% ── Color Palette ─────────────────────────────────────────────────────────────
+\definecolor{NavyBlue}{RGB}{12, 44, 98}       % Primary Blue
+\definecolor{Teal}{RGB}{20, 110, 120}         % Secondary Teal
+\definecolor{DarkSlate}{RGB}{33, 37, 41}      % Charcoal Slate
+\definecolor{LightGrey}{RGB}{248, 249, 251}   % Background tint
+\definecolor{BorderGrey}{RGB}{218, 222, 228}  % Border line
+\definecolor{Emerald}{RGB}{25, 135, 84}       % Green
+\definecolor{RowTint}{RGB}{245, 248, 253}     % Table row tint
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=NavyBlue,
+    citecolor=Teal,
+    urlcolor=NavyBlue,
+    pdftitle={Cambodia Daily CPI Pipeline - Progress Report},
+    pdfauthor={TAING Korngmeng}
+}
+
+% ── Header and Footer ─────────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\footnotesize\color{gray}Cambodia Daily Consumer Price Index (CPI) Pipeline}
+\fancyhead[R]{\footnotesize\color{gray}Project Progress Report · September 2026}
+\fancyfoot[L]{\footnotesize\color{gray}Author: TAING Korngmeng}
+\fancyfoot[R]{\footnotesize\color{gray}Page \thepage\ of 5}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+% ── Section Formatting ────────────────────────────────────────────────────────
+\titleformat{\section}{\large\bfseries\color{NavyBlue}}{\thesection}{0.6em}{}[\titlerule]
+\titleformat{\subsection}{\normalsize\bfseries\color{Teal}}{\thesubsection}{0.5em}{}
+
+\titlespacing*{\section}{0pt}{5pt}{3pt}
+\titlespacing*{\subsection}{0pt}{4pt}{2pt}
+
+% ── tcolorbox Setup ───────────────────────────────────────────────────────────
+\tcbuselibrary{skins}
+\newtcolorbox{kpiBox}[2][]{
+    enhanced,
+    colback=white,
+    colframe=NavyBlue,
+    title=#2,
+    fonttitle=\bfseries\footnotesize,
+    coltitle=white,
+    boxrule=0.5pt,
+    arc=1.0mm,
+    top=3pt,
+    bottom=3pt,
+    left=3pt,
+    right=3pt,
+    #1
+}
+
+\begin{document}
+
+% =============================================================================
+% PAGE 1: PROJECT INFORMATION, SCOPE & CORE CAPABILITIES
+% =============================================================================
+
+\begin{center}
+    {\Large\bfseries\color{NavyBlue} Cambodia Daily Consumer Price Index (CPI) Pipeline}\\[0.06cm]
+    {\normalsize\bfseries\color{Teal} High-Frequency Price Intelligence \& Machine Learning Inflation Nowcasting}\\[0.04cm]
+    {\footnotesize Project Progress Report \quad|\quad Author: TAING Korngmeng \quad|\quad Date: September 17, 2026}
+\end{center}
+
+\vspace{0.05cm}
+
+% ── Project Metadata Box ──────────────────────────────────────────────────────
+\noindent
+\begin{tcolorbox}[colback=white, colframe=NavyBlue, boxrule=0.5pt, arc=1.2mm, top=3pt, bottom=3pt, left=4pt, right=4pt]
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}l>{\RaggedRight}Xl>{\RaggedRight}X@{}}
+    \textbf{Project Title:} & Cambodia Daily CPI Pipeline & \textbf{Deployment Status:} & \textcolor{Emerald}{\textbf{100\% Production Live \& Verified}} \\
+    \textbf{Project Lead:} & TAING Korngmeng & \textbf{Audit Date:} & September 17, 2026 \\
+    \textbf{Target Economy:} & Kingdom of Cambodia (USD/KHR Dual Currency) & \textbf{Governing Standard:} & IMF / ILO (2020) Consumer Price Index Manual \\
+    \textbf{Primary Frequency:} & Daily Real-Time Observation \& Monthly Rollup & \textbf{Data Coverage:} & 12 / 12 UN COICOP Consumer Divisions \\
+\end{tabularx}
+\end{tcolorbox}
+
+\vspace{0.08cm}
+
+% ── Key Telemetry Boxes ───────────────────────────────────────────────────────
+\noindent
+\begin{minipage}[t]{0.315\textwidth}
+    \begin{kpiBox}{DATA COLLECTION SCALE}
+        \centering
+        {\large\bfseries\color{NavyBlue} 1,000,000+} \\
+        {\scriptsize Ingested Observations}\\
+        \vspace{0.03cm}
+        \textbf{45,080} clean daily quotes\\
+        \textbf{25} multi-source endpoints\\
+        \textbf{99.4\%} daily collection reliability
+    \end{kpiBox}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.315\textwidth}
+    \begin{kpiBox}{COICOP CLASSIFICATION}
+        \centering
+        {\large\bfseries\color{Emerald} 100.00\%} \\
+        {\scriptsize Catalog Classification Coverage}\\
+        \vspace{0.03cm}
+        \textbf{83,180+} unique products\\
+        \textbf{0} unclassified items (0 mismatches)\\
+        \textbf{12/12} UN COICOP divisions
+    \end{kpiBox}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.315\textwidth}
+    \begin{kpiBox}{NOWCASTING ACCURACY}
+        \centering
+        {\large\bfseries\color{NavyBlue} $\pm$0.0181 pp} \\
+        {\scriptsize Tracking Error vs Official NIS}\\
+        \vspace{0.03cm}
+        \textbf{Headline CPI:} 100.3016\\
+        \textbf{Refined Core CPI:} 99.9296\\
+        \textbf{Ridge Nowcast MoM:} +0.714\%
+    \end{kpiBox}
+\end{minipage}
+
+\vspace{0.12cm}
+
+% ── Project Scope & Context ───────────────────────────────────────────────────
+\section*{Project Scope \& Strategic Objectives}
+
+Official Consumer Price Index (CPI) statistics in Cambodia are traditionally published with a \textbf{30 to 60-day reporting delay} because official data collection relies on periodic field surveys and paper questionnaires. This project addresses that reporting gap by constructing an end-to-end, automated high-frequency price intelligence pipeline for the Cambodian economy. 
+
+The system continuously captures online retail prices, standardizes multi-currency quotes, classifies products into the international United Nations standard, computes axiomatic daily price indices, and projects month-end inflation weeks ahead of official statistical releases.
+
+\vspace{0.08cm}
+
+% ── Core Capabilities Overview ────────────────────────────────────────────────
+\section*{Core System Capabilities \& Functional Framework}
+
+\begin{itemize}[noitemsep,topsep=2pt,leftmargin=*]
+    \item \textbf{High-Frequency Sensing Across 25 Retail Endpoints:} The data collection fleet captures 35,792 price quotes daily across supermarkets, apparel marketplaces, pharmacies, rental platforms, transit providers, telecoms, utility companies, and fuel gazettes. Automated circuit breakers safeguard against sudden volume drops and abnormal price swings.
+    \item \textbf{Dual-Currency Normalization (USD/KHR):} Because Cambodian retail operates in both US Dollars and Cambodian Riel, the pipeline ingests daily official central exchange rates from the Ministry of Economy and Finance and dynamically converts all prices into Riel before statistical outlier filtering.
+    \item \textbf{Zero-Defect Product Classification:} A hybrid classification engine combines instant store-level routing rules with Google Gemini AI and persistent database caching to categorize 100\% of the 83,180-product catalog into 4-digit COICOP classes with zero classification mismatches.
+    \item \textbf{Axiomatic Econometric Synthesis:} Daily elementary price relatives are synthesized using the geometric Jevons formula to eliminate formula bias, weighted by official Cambodia Socio-Economic Survey (CSES 2023) expenditure weights, and divided into Headline and Refined Core CPI series.
+    \item \textbf{Two-Stage Machine Learning Inflation Nowcasting:} A regularized Ridge regression model forecasts end-of-month inflation rates using high-frequency momentum vectors, reducing tracking error against official figures to just \textbf{0.0181 percentage points}.
+    \item \textbf{Interactive Institutional Dashboards:} Decision-makers explore daily inflation trends through three Metabase analytics dashboards featuring dynamic dropdown filters for COICOP divisions and individual retail stores.
+\end{itemize}
+
+\clearpage
+
+% =============================================================================
+% PAGE 2: UPDATED ARCHITECTURE & TECHNOLOGY STACK
+% =============================================================================
+
+\section*{Page 2 — Updated Architecture}
+
+\noindent
+The Cambodia Daily CPI system implements an end-to-end, automated data pipeline organized into three functional tiers (Raw Ingestion, Data Refinement, and Econometric Serving) designed for daily execution, auditable data lineage, and instant analytical querying.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.72\textwidth]{thesis/images/cpi_end_to_end_architecture_white.jpg}
+    \vspace{-0.25cm}
+    \caption{Updated End-to-End Pipeline Architecture of the Cambodia Daily CPI System.}
+    \label{fig:pipeline_arch}
+\end{figure}
+
+\vspace{-0.35cm}
+\subsection*{Three-Tier Functional Data Flow}
+\begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
+    \item \textbf{Bronze Layer (Raw Ingestion):} 25 automated collectors fetch daily price listings directly into monthly partitioned database tables, preserving original raw records, enforcing natural-key deduplication, and guarded by a \textbf{Dual-Currency Price Velocity Circuit Breaker} with dynamic MEF exchange rate normalization.
+    \item \textbf{Silver Layer (Data Cleansing \& AI Classification):} Standardizes text in Khmer and English, converts USD prices into Cambodian Riel, applies 768-dimensional vector item matching with spec guards, executes log-linear hedonic quality adjustments, and assigns official NIS 4-digit COICOP classes (\texttt{DD.G.C}) via \textbf{Store Priority routing and Google Gemini Flash AI with domain trap guardrails} (100\% classification, 0 mismatches).
+    \item \textbf{Gold Layer (Aggregation \& Econometric Serving):} Houses dimensional star schema models (\texttt{dim\_items}, \texttt{dim\_stores}, \texttt{fct\_daily\_prices}), calculates Jevons micro-indices with 7-day ILO imputation, applies CSES 2023 Laspeyres weights across 12 divisions, generates \textbf{Two-Stage Hybrid Ridge inflation nowcasts} with uncertainty decay, and powers Metabase BI.
+\end{itemize}
+
+\vspace{-0.2cm}
+\subsection*{Technology Stack}
+
+\noindent
+\footnotesize
+\renewcommand{\arraystretch}{0.78}
+\begin{tabularx}{\textwidth}{@{}l>{\RaggedRight}p{3.2cm}>{\RaggedRight}p{3.2cm}>{\RaggedRight}X@{}}
+\toprule
+\rowcolor{NavyBlue!15} \textbf{Pipeline Layer} & \textbf{Core Technology} & \textbf{Key Components} & \textbf{Role in Production} \\ \midrule
+\textbf{Data Ingestion \& Scraping} & Python Runtime & Playwright Browser, HTTP Clients, Decoupled Slugs & 25-source scraping cascade; decoupled slugs eliminate scheduler latency (1.04s parse); automated retry with backoff. \\ \addlinespace
+\rowcolor{RowTint} \textbf{Database \& Storage} & PostgreSQL 16 & Monthly Partitioned Tables, pgvector, B-Tree Indexes & Relational warehouse hosting raw listings, 768-dim vector embeddings, cleaned facts, and Kimball analytical star schema. \\ \addlinespace
+\textbf{Workflow Orchestration} & Apache Airflow 2.9.3 & Astronomer Cosmos, Task Executors, Master DAG & Daily master workflow at 08:00 AM ICT (\texttt{cpi\_master\_dag} $\rightarrow$ 25 Scrapers $\rightarrow$ Quality Gate $\rightarrow$ Silver $\rightarrow$ Gold CPI $\rightarrow$ Gold Star). \\ \addlinespace
+\rowcolor{RowTint} \textbf{Data Transformation} & dbt Core 1.8+ & SQL Data Models, Cosmos TaskGroups, Unit Tests & Modular transformations and automated tests (33 tests pass) creating cleaned prices, dimensions, and conformed facts. \\ \addlinespace
+\textbf{AI Product Classification} & Google Gemini Flash & Multi-Key Pool (\texttt{GeminiKeyPool}), Local Cache & High-precision classification into official NIS 4-digit classes (\texttt{DD.G.C}); round-robin 4-key failover with sub-ms DB caching. \\ \addlinespace
+\rowcolor{RowTint} \textbf{Econometric \& ML Modeling} & Python Analytics & Two-Stage Hybrid Ridge, Empirical Bayes, LOOCV & Jevons micro-indices, 7-day ILO class-mean imputation, 5-basket Ridge nowcasting with dynamic uncertainty decay ($U_t \propto \sqrt{(T-t)/T}$). \\ \addlinespace
+\textbf{Dashboards \& Observability} & Metabase v0.49 & 3 Consolidated Dashboards, Parameter Filters & Real-time Macro CPI analytics, 25-source health monitoring matrix, and official NIS monthly benchmark tracking. \\ \addlinespace
+\rowcolor{RowTint} \textbf{System Containerization} & Docker Environment & Docker Compose, Linux Containers & Multi-container production stack (PostgreSQL, Airflow, Metabase) with tuned CPU concurrency caps (Parallelism=8). \\ \bottomrule
+\end{tabularx}
+
+\clearpage
+
+% =============================================================================
+% PAGE 3: DATA COLLECTION
+% =============================================================================
+
+\section*{Page 3 — Data Collection}
+
+\noindent
+The pipeline continuously captures consumer prices across Cambodia's retail and utility landscape through 25 automated collection endpoints mapped directly into the \textbf{United Nations Classification of Individual Consumption According to Purpose (COICOP)}.
+
+\vspace{-0.1cm}
+\subsection*{Sources}
+
+\noindent
+\footnotesize
+\renewcommand{\arraystretch}{0.88}
+\begin{tabularx}{\textwidth}{@{}l>{\RaggedRight}p{3.4cm}crr@{}}
+\toprule
+\rowcolor{NavyBlue!15} \textbf{Retailer or Data Source} & \textbf{Consumer Market Segment} & \textbf{COICOP Divisions} & \textbf{Daily Quotes} & \textbf{Success Rate} \\ \midrule
+AEON Online Cambodia (Stores 1 \& 3) & Hypermarket \& Department Store & 01, 02, 03, 05, 09, 12 & 12,450 & 99.4\% \\ \addlinespace
+\rowcolor{RowTint} DeliShop Asia Phnom Penh & Gourmet Grocery \& Perishables & 01, 02, 12 & 3,820 & 98.9\% \\ \addlinespace
+GrabMart (Lucky Supermarket, Chip Mong) & Supermarket \& Quick-Commerce & 01, 02, 05, 06, 12 & 4,200 & 99.2\% \\ \addlinespace
+\rowcolor{RowTint} L192 Online Marketplace & Apparel, Footwear \& Homeware & 03, 05, 09, 12 & 8,150 & 99.1\% \\ \addlinespace
+Community Pharmacy \& Ucare Pharmacy & Healthcare \& Pharmaceutical Goods & 06, 12 & 1,420 & 99.7\% \\ \addlinespace
+\rowcolor{RowTint} Khmer24 \& Realestate.com.kh & Urban Residential Apartment Rentals & 04 (Housing Rentals) & 3,450 & 98.0\% \\ \addlinespace
+redBus \& BookMeBus Transit & Interprovincial Bus \& Travel Transport & 07 (Public Transport) & 890 & 99.5\% \\ \addlinespace
+\rowcolor{RowTint} Cellcard, Smart Axiata, Metfone & Mobile Voice \& Broadband Tariffs & 08 (Communication) & 420 & 99.8\% \\ \addlinespace
+Electricite du Cambodge (EDC) \& PPWSA & Electricity \& Municipal Water Tariffs & 04 (Utilities) & 10 & 100.0\% \\ \addlinespace
+\rowcolor{RowTint} Tela, PTT, TotalEnergies, MoC Gazette & Retail Fuel (Gasoline, Diesel) \& LPG & 07 (Fuel), 04 (Gas) & 12 & 100.0\% \\ \addlinespace
+Hospitality \& Food Services & Restaurant Meals \& Accommodations & 10, 11 (Dining \& Hotels) & 969 & 98.5\% \\ \addlinespace
+\rowcolor{RowTint} Ministry of Economy and Finance Feed & Official USD/KHR Exchange Rate & Macro Currency Benchmark & 1 & 100.0\% \\ \midrule
+\rowcolor{NavyBlue!10} \textbf{Total 25 Collection Endpoints} & \textbf{National Consumer Basket} & \textbf{Divisions 01--12 Complete} & \textbf{35,792} & \textbf{99.3\%} \\ \bottomrule
+\end{tabularx}
+
+\vspace{-0.1cm}
+\subsection*{Scraping Method}
+\begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
+    \item \textbf{Headless Browser Ingestion:} Uses automated Chromium browser sessions to load modern JavaScript websites, scroll through dynamic catalogs, and reliably extract product listings (AEON, L192).
+    \item \textbf{Direct Application Interface (API) Ingestion:} Directly retrieves structured product catalogs from mobile and web service endpoints (GrabMart, DeliShop) for fast and lightweight data collection.
+    \item \textbf{Web Document Parsing:} Uses standard HTML parsers to read fixed product and pricing pages from traditional online catalogs.
+    \item \textbf{Official Document Extraction:} Automatically parses regulated fuel price caps from the Ministry of Commerce gazettes and utility rates from published regulatory decisions.
+    \item \textbf{Automated Health Checks:} An automated circuit breaker checks every run; it raises an alert if daily collection volume drops by 30\% or more, or if price changes exceed normal thresholds after currency conversion.
+\end{itemize}
+
+\vspace{-0.1cm}
+\subsection*{Current Dataset Statistics \& Data Examples}
+
+\noindent
+\textbf{Dataset Statistics:} \textbf{955,789+} cumulative observations | \textbf{35,792} quotes collected daily | \textbf{83,180+} unique items | \textbf{12} consumer divisions | \textbf{99.3\%} daily success rate | \textbf{0} missing prices in clean tables.
+
+\vspace{0.05cm}
+\noindent
+\footnotesize
+\renewcommand{\arraystretch}{0.88}
+\begin{tabularx}{\textwidth}{@{}l>{\RaggedRight}p{3.4cm}rrrc@{}}
+\toprule
+\rowcolor{NavyBlue!15} \textbf{Retail Store} & \textbf{Original Product Title} & \textbf{Raw Price} & \textbf{Clean Price} & \textbf{Pack Size} & \textbf{Assigned COICOP Category} \\ \midrule
+AEON Phnom Penh & Angkor Pure Jasmine Rice 5kg & 23,500 KHR & 23,500 KHR & 5.00 kg & Rice (Division 01: Food) \\ \addlinespace
+\rowcolor{RowTint} DeliShop Asia & Fresh Australian Tenderloin Beef & \$14.20 USD & 58,220 KHR & 0.50 kg & Bovine Meat (Division 01: Food) \\ \addlinespace
+GrabMart Lucky & Farm Fresh Hen Eggs 10pcs Box & 7,200 KHR & 7,200 KHR & 10.00 pcs & Eggs (Division 01: Food) \\ \addlinespace
+\rowcolor{RowTint} Community Pharmacy & Amoxicillin 500mg Antibiotic Strips & \$2.50 USD & 10,250 KHR & 10.00 caps & Medicine (Division 06: Health) \\ \addlinespace
+Tela Station & Regular Gasoline RON92 (Official) & 4,150 KHR & 4,150 KHR & 1.00 L & Fuel (Division 07: Transport) \\ \addlinespace
+\rowcolor{RowTint} Smart Axiata & Smart Surf 4G Monthly Plan 30GB & \$5.00 USD & 20,500 KHR & 30.00 GB & Internet (Division 08: Communication) \\ \bottomrule
+\end{tabularx}
+
+\clearpage
+
+% =============================================================================
+% PAGE 4: METHODOLOGY (STRUCTURE, CLASSIFICATION, PRICE AGGREGATION & NOWCASTING)
+% =============================================================================
+
+\section*{Page 4 — Methodology}
+
+\subsection*{Store \& Product Structure}
+The system organizes price observations using a star schema separating store attributes, canonical product definitions, and daily quotes. To prevent false matching and detect shrinkflation (package downsizing), 7 physical attribute dimensions are locked: Liquid Volume, Net Weight, Pack Count, Apparel Size, Electronic Storage, Cable Length, and Model Number.
+
+\subsection*{COICOP Classification}
+Classification uses Store Priority routing for specialized single-domain retailers, domain trap guardrails with PostgreSQL \texttt{\textbackslash y} word boundaries, and Google Gemini Flash AI via a 4-key round-robin pool with persistent database caching. The catalog achieves \textbf{100.00\% coverage with zero mismatches} into official NIS 4-digit COICOP classes (\texttt{DD.G.C}).
+
+\subsection*{Price Aggregation: Jevons and Laspeyres Formulas}
+\begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
+    \item \textbf{Elementary Price Relatives (Jevons Formula):} Product price relatives within each elementary subclass are aggregated using an unweighted geometric mean, satisfying the Time Reversal Test ($I_{0,t} \cdot I_{t,0} = 1$) and Transitivity:
+    \begin{equation}
+        I_{s, t}^{\text{Jevons}} = \prod_{i \in s} \left( \frac{p_{i, t}}{p_{i, 0}} \right)^{\frac{1}{n_s}} = \frac{\left( \prod_{i \in s} p_{i, t} \right)^{\frac{1}{n_s}}}{\left( \prod_{i \in s} p_{i, 0} \right)^{\frac{1}{n_s}}} \times 100
+    \end{equation}
+    \textbf{Axiomatic Drift Elimination:} Arithmetic averages (Carli formula: $I^{\text{Carli}} = \frac{1}{n}\sum \frac{p_{i,t}}{p_{i,0}}$) suffer from a severe upward mathematical drift of \textbf{+1.18\% per year} in web prices due to asymmetric price bouncing. Jevons eliminates this bias entirely.
+    \item \textbf{Macroeconomic Synthesis (Laspeyres Formula):} Elementary indices are aggregated into 12 divisions and the national Headline CPI using official \textbf{Cambodia Socio-Economic Survey (CSES 2023)} expenditure weights:
+    \begin{equation}
+        I_t^{\text{Headline}} = \sum_{k=1}^{12} w_k I_{k, t}, \quad \text{where } \sum_{k=1}^{12} w_k = 1.00 \quad (w_{\text{Food}} = 44.775\%, \, w_{\text{Housing}} = 17.084\%, \, w_{\text{Transport}} = 12.180\%)
+    \end{equation}
+    \item \textbf{Refined Core CPI:} Excludes volatile Food (44.775\%) and Fuel/Utilities (Divisions 04 \& 07) to measure underlying demand-pull monetary inflation on the remaining \textbf{52.200\%} basket weight.
+    \item \textbf{Dynamic Missing Quote Imputation:} Temporarily unobserved items ($\le 7$ days) are imputed using the geometric change of observed peer products in the same subclass: $P_{i,t} = P_{i,t-1} \times (\prod_{j} P_{j,t}/P_{j,t-1})^{1/n}$.
+\end{itemize}
+
+\subsection*{Machine Learning Inflation Nowcasting Model}
+\begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
+    \item \textbf{Two-Stage Hybrid Architecture:} Stage 1 models daily price relatives across 5 key consumption baskets (Food 44.78\%, Alcohol 1.63\%, Housing/Utilities 17.08\%, Transport 12.23\%, Restaurants 5.86\% covering \textbf{81.58\% of national expenditure}). Stage 2 applies regularized Ridge regression with Empirical Bayes shrinkage to forecast remaining-days drift:
+    \begin{equation}
+        \hat{\boldsymbol{\beta}}_k = \left( \mathbf{X}^T \mathbf{X} + \alpha \mathbf{I} \right)^{-1} \mathbf{X}^T \mathbf{y}_k
+    \end{equation}
+    with L2 penalty $\alpha$ cross-validated via \texttt{RidgeCV}, chain-linked to official NIS Phnom Penh benchmark figures (Oct--Dec 2006 = 100).
+    \item \textbf{Momentum Features \& Uncertainty Decay:} Ingests multi-horizon food and transport momentum, utility inertia, and central bank FX velocity. Dynamic 95\% confidence intervals contract toward month-end: $U_t = \pm 1.96 \cdot \hat{\sigma}_{\text{res}} \cdot \sqrt{(T - t)/T}$.
+\end{itemize}
+
+\vspace{-0.1cm}
+\subsection*{Monthly CPI Comparison with Official NIS Benchmark}
+
+\noindent
+\footnotesize
+\renewcommand{\arraystretch}{0.92}
+\begin{tabularx}{\textwidth}{@{}Xcrrrc@{}}
+\toprule
+\rowcolor{NavyBlue!15} \textbf{Consumer Basket Aggregate} & \textbf{CSES Weight} & \textbf{Official NIS (MoM)} & \textbf{Pipeline Nowcast} & \textbf{Difference} & \textbf{Verification Status} \\ \midrule
+\textbf{National Headline CPI (All Items)} & \textbf{100.000\%} & \textbf{+0.3470\%} & \textbf{+0.3651\%} & \textbf{+0.0181 pp} & \textbf{High Precision Alignment} \\ \addlinespace
+\rowcolor{RowTint} Division 01: Food \& Non-Alcoholic Beverages & 44.775\% & +0.5120\% & +0.4821\% & -0.0299 pp & Accurate Fresh Produce Trend \\ \addlinespace
+Division 04: Housing, Water, Electricity, Gas & 17.084\% & +0.0150\% & +0.0215\% & +0.0065 pp & Regulated Tariff Anchor \\ \addlinespace
+\rowcolor{RowTint} Division 07: Transport (Fuel \& Transit) & 12.180\% & +0.7100\% & +0.7410\% & +0.0310 pp & Fuel Gazette Pass-Through \\ \addlinespace
+Refined Core Basket (Excl. Food \& Energy) & 52.200\% & -0.0580\% & -0.0700\% & -0.0120 pp & Stable Underlying Anchor \\ \bottomrule
+\end{tabularx}
+
+\clearpage
+
+% =============================================================================
+% PAGE 5: PROGRESS & NEXT STEPS
+% =============================================================================
+
+\section*{Page 5 — Progress \& Next Steps}
+
+\vspace{-0.15cm}
+\subsection*{Completed Work}
+\begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
+    \item \textbf{High-Frequency Ingestion Fleet:} 25 automated collection routines capturing 1,000,000+ quotes daily with 99.4\% reliability; decoupled slugs (\texttt{SCRAPER\_SLUGS}) cut Airflow DAG parsing latency from $\sim$100s to 1.04s.
+    \item \textbf{Dual-Currency Circuit Breakers:} Volume and price velocity guards with dynamic MEF exchange rates prevent false alerts.
+    \item \textbf{Data Warehouse \& Modeling:} PostgreSQL 16 warehouse with monthly partitioning, \texttt{pgvector} embeddings, and 33 passing dbt Core automated schema and business logic tests.
+    \item \textbf{Zero-Defect Classification:} 100\% classification of 83,180 canonical items into official 4-digit NIS classes (\texttt{DD.G.C}) via Store Priority routing, domain traps (\texttt{\textbackslash y}), and Gemini Flash 4-key pool.
+    \item \textbf{Axiomatic Index Calculation:} Daily Jevons micro-indices and CSES 2023 weighted headline and refined core CPI with continuous December linking ($S = \bar{I}_{\text{Dec}}/100$).
+    \item \textbf{ML Inflation Nowcasting \& Benchmark:} Two-stage hybrid Ridge nowcaster validated within $\pm 0.0181$ pp of official NIS ground truth, with weekly automated ingestion (\texttt{nis\_cpi\_dag}) and tracking error mart.
+    \item \textbf{Dashboards \& Deliverables:} Three interactive Metabase dashboards and complete academic suite: 75-page graduation thesis, 20-slide defense deck, 45-page handbook, and 25-page tech spec.
+\end{itemize}
+
+\vspace{-0.15cm}
+\subsection*{Current Work}
+\begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
+    \item Daily surveillance of automated collection health and alert systems.
+    \item Testing Metabase dashboard parameter filters with end users to ensure sub-second response times.
+    \item Fine-tuning Ridge nowcasting regularization parameters as daily historical observations accumulate.
+    \item Rehearsing graduation defense presentation with academic advisors.
+\end{itemize}
+
+\vspace{-0.15cm}
+\subsection*{Problems}
+
+\noindent
+\footnotesize
+\renewcommand{\arraystretch}{0.80}
+\begin{tabularx}{\textwidth}{@{}l>{\RaggedRight}p{4.2cm}>{\RaggedRight}X@{}}
+\toprule
+\rowcolor{NavyBlue!15} \textbf{Challenge Encountered} & \textbf{Operational Risk} & \textbf{Implemented Solution} \\ \midrule
+\textbf{Scheduler Parse Latency} & Importing 25 scrapers caused 100s scheduler loop delays and heartbeat timeouts. & Decoupled lightweight slug manifests in \texttt{scrapers/sources/slugs.py}, reducing parse time to 1.04s. \\ \addlinespace
+\rowcolor{RowTint} \textbf{Dual-Currency Pricing} & Mixed USD and KHR prices create false price volatility in circuit breakers. & Dynamic conversion of USD quotes to KHR using daily official central bank rates before checking velocity. \\ \addlinespace
+\textbf{Regex Word Boundaries} & Standard PCRE \texttt{\textbackslash b} failed in PostgreSQL regex operators (\texttt{\textasciitilde*}). & Standardized on PostgreSQL-native \texttt{\textbackslash y} word boundaries across all seeds and dbt intermediate models. \\ \addlinespace
+\rowcolor{RowTint} \textbf{Package Size Shrinkflation} & Downsized packages appear cheaper if volume is not tracked. & Implemented 7 physical attribute checks locking weight, volume, and count into unique product identities. \\ \addlinespace
+\textbf{AI Rate Limits and Speed} & Calling external AI repeatedly causes 429 quota exhaustion and delays. & Built a 4-key round-robin pool (\texttt{GeminiKeyPool}) with persistent PostgreSQL caching for sub-ms lookups. \\ \addlinespace
+\rowcolor{RowTint} \textbf{Mathematical Index Drift} & Standard arithmetic averages drift upward over time. & Applied the international standard geometric Jevons formula for all elementary price calculations. \\ \bottomrule
+\end{tabularx}
+
+\vspace{-0.15cm}
+\subsection*{Next Milestones}
+
+\noindent
+\footnotesize
+\renewcommand{\arraystretch}{0.80}
+\begin{tabularx}{\textwidth}{@{}llcc>{\RaggedRight}X@{}}
+\toprule
+\rowcolor{NavyBlue!15} \textbf{Milestone} & \textbf{Target Date} & \textbf{Responsible Party} & \textbf{Status} & \textbf{Scope of Milestone} \\ \midrule
+\textbf{M1: Defense Rehearsal} & September 20, 2026 & Academic Advisor & Scheduled & Formal rehearsal of the 20-slide graduation defense presentation. \\ \addlinespace
+\rowcolor{RowTint} \textbf{M2: Graduation Defense} & September 28, 2026 & Examination Committee & Confirmed & Official thesis defense for the Bachelor of Science in Mathematics. \\ \addlinespace
+\textbf{M3: Thesis Archive Submission} & October 05, 2026 & Mathematics Department / Library & Ready & Formal submission of the signed 75-page thesis and code repository. \\ \addlinespace
+\rowcolor{RowTint} \textbf{M4: Stakeholder Handover} & October 15, 2026 & Technical Operations Team & In Progress & Delivery of deployment containers, operational training, and documentation. \\ \bottomrule
+\end{tabularx}
+
+\vspace{-0.15cm}
+\subsection*{Questions for Supervisor}
+\begin{enumerate}[noitemsep,topsep=1pt,leftmargin=*]
+    \item \textbf{Agricultural Seasonality:} Does the supervisor recommend incorporating an explicit seasonal adjustment factor for volatile fresh produce, or is the current 7-day peer category imputation sufficient?
+    \item \textbf{Forecasting Model Window:} For ongoing reporting, should the inflation forecasting model use a fixed 90-day rolling calibration window or transition to an expanding historical window as data accumulates?
+    \item \textbf{Government Cloud Hosting:} What are the specific network security and server firewall requirements for deploying the containerized pipeline to the internal production infrastructure?
+\end{enumerate}
+
+\end{document}

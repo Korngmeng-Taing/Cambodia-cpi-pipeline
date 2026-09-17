@@ -226,6 +226,48 @@ class NISBenchmarkImporter:
             "record": record,
         }
 
+    def sync_all_from_seed(self) -> int:
+        """Reads all records from the dbt seed CSV file and upserts them into gold.dim_nis_official_cpi."""
+        if not os.path.exists(self.seed_file_path):
+            log.warning("Seed file %s does not exist.", self.seed_file_path)
+            return 0
+
+        count = 0
+        with open(self.seed_file_path, mode="r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                cpi_month = row["cpi_month"]
+                headline_cpi = float(row["headline_cpi"]) if row.get("headline_cpi") else None
+                if headline_cpi is None:
+                    continue
+                core_cpi = float(row["core_cpi"]) if row.get("core_cpi") else None
+                mom = float(row["mom_inflation_pct"]) if row.get("mom_inflation_pct") else None
+                yoy = float(row["yoy_inflation_pct"]) if row.get("yoy_inflation_pct") else None
+                div_indices = {}
+                for d in range(1, 13):
+                    key = f"cpi_division_{d:02d}"
+                    if row.get(key):
+                        try:
+                            div_indices[f"{d:02d}"] = float(row[key])
+                        except (ValueError, TypeError):
+                            pass
+                rel_date = row.get("release_date")
+                notes = row.get("source_notes") or "NIS Cambodia Official CPI Historical Series"
+                self.ingest_record(
+                    cpi_month=cpi_month,
+                    headline_cpi=headline_cpi,
+                    core_cpi=core_cpi,
+                    mom_inflation_pct=mom,
+                    yoy_inflation_pct=yoy,
+                    division_indices=div_indices,
+                    release_date=rel_date,
+                    source_notes=notes,
+                    sync_seed=False,
+                )
+                count += 1
+        log.info("Synced %d records from seed to gold.dim_nis_official_cpi.", count)
+        return count
+
     def sync_to_seed_csv(self, record: dict[str, Any]) -> None:
         """Reads, upserts, and re-writes the dbt seed CSV file chronologically."""
         fieldnames = [
@@ -456,6 +498,7 @@ def main() -> None:
     """CLI interface for NIS CPI Benchmark Importer."""
     parser = argparse.ArgumentParser(description="Official NIS Monthly CPI Benchmark Ingestion")
     parser.add_argument("--fetch", action="store_true", help="Fetch latest available release from portal")
+    parser.add_argument("--sync-seed", action="store_true", help="Sync all records from dbt/seeds/nis_official_cpi.csv into gold.dim_nis_official_cpi")
     parser.add_argument("--month", type=str, help="CPI month (YYYY-MM-01)")
     parser.add_argument("--headline", type=float, help="Headline CPI index number")
     parser.add_argument("--core", type=float, default=None, help="Core CPI index number")
@@ -469,7 +512,10 @@ def main() -> None:
 
     importer = NISBenchmarkImporter()
 
-    if args.month and args.headline is not None:
+    if args.sync_seed:
+        count = importer.sync_all_from_seed()
+        print(f"[OK] Synced {count} records from seed to gold.dim_nis_official_cpi.")
+    elif args.month and args.headline is not None:
         res = importer.ingest_record(
             cpi_month=args.month,
             headline_cpi=args.headline,

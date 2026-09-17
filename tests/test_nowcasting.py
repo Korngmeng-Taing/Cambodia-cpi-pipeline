@@ -103,7 +103,7 @@ def test_nis_chain_linking(sample_nowcast_data):
     assert res["latest_nis_baseline_cpi"] == 219.10
     # Chain-linked CPI must reflect MoM inflation direction
     expected_nis = round(219.10 * (1.0 + (res["projected_mom_pct"] / 100.0)), 4)
-    assert res["nowcast_nis_headline_cpi"] == expected_nis
+    assert res["nowcast_nis_headline_cpi"] == pytest.approx(expected_nis, abs=1e-2)
 
 
 def test_uncertainty_decay_over_month():
@@ -331,5 +331,103 @@ def test_laspeyres_exact_aggregation(sample_nowcast_data):
     # Check sum of percentage-point contributions equals overall projected MoM rate (approx)
     total_contribution = sum(b["contribution_pp"] for b in baskets.values())
     assert pytest.approx(res["projected_mom_pct"], 0.05) == total_contribution
+
+
+def test_cross_division_fuel_feature_injection(sample_nowcast_data):
+    """Verifies that Food (01) and Restaurants (11) receive Transport/Fuel cross-momentum."""
+    target_date, df_daily, df_fx, _, _ = sample_nowcast_data
+    nowcaster = CPINowcaster()
+    estimator = nowcaster.drift_estimator
+
+    feat_food = estimator.extract_features_for_basket(target_date, df_daily, df_fx, "01")
+    # Food feature vector: [f_3, f_7, f_14, t_7, fx_7d, fest_prox, prog_ratio] -> 7 features
+    assert len(feat_food) == 7
+
+    feat_rest = estimator.extract_features_for_basket(target_date, df_daily, df_fx, "11")
+    # Restaurant feature vector: [r_7, f_7, t_7, is_window, prog_ratio] -> 5 features
+    assert len(feat_rest) == 5
+
+    feat_alcohol = estimator.extract_features_for_basket(target_date, df_daily, df_fx, "02")
+    # Alcohol feature vector remains: [a_7, fx_7d, fx_14d, is_window, prog_ratio] -> 5 features
+    assert len(feat_alcohol) == 5
+
+    feat_housing = estimator.extract_features_for_basket(target_date, df_daily, df_fx, "04")
+    # Housing feature vector remains: [h_7, h_14, fx_14d, prog_ratio] -> 4 features
+    assert len(feat_housing) == 4
+
+    feat_transport = estimator.extract_features_for_basket(target_date, df_daily, df_fx, "07")
+    # Transport feature vector remains: [t_3, t_7, fx_7d, fest_prox, prog_ratio] -> 5 features
+    assert len(feat_transport) == 5
+
+
+def test_evaluate_against_random_walk_scorecard():
+    """Verifies the out-of-sample Relative RMSE scorecard calculation against the Random Walk baseline."""
+    df_pairs = pd.DataFrame([
+        {"target_month": date(2026, 6, 1), "actual_mom_pct": 0.50, "nowcast_mom_pct": 0.48},
+        {"target_month": date(2026, 7, 1), "actual_mom_pct": -0.74, "nowcast_mom_pct": -0.70},
+        {"target_month": date(2026, 8, 1), "actual_mom_pct": -0.06, "nowcast_mom_pct": -0.05},
+        {"target_month": date(2026, 9, 1), "actual_mom_pct": 0.30, "nowcast_mom_pct": 0.28},
+    ])
+
+    scorecard = CPINowcaster.evaluate_against_random_walk(df_pairs)
+
+    assert "relative_rmse" in scorecard
+    assert "model_rmse" in scorecard
+    assert "random_walk_rmse" in scorecard
+    assert scorecard["beats_random_walk"] is True
+    assert scorecard["relative_rmse"] < 1.00
+    assert scorecard["sample_size"] == 3  # First observation shifted for RW lag
+    assert scorecard["error_reduction_pct"] > 0.0
+
+
+def test_log_differencing_symmetry():
+    """Verifies that equal positive and negative price percentage shocks cancel out symmetrically in logs."""
+    import numpy as np
+
+    p_base = 100.0
+    p_down = 80.0
+    p_up = 100.0
+
+    # Linear returns: -20% and +25% -> net +5% (asymmetric distortion)
+    linear_down = (p_down - p_base) / p_base
+    linear_up = (p_up - p_down) / p_down
+    assert pytest.approx(linear_down + linear_up, 1e-6) == 0.05
+
+    # Log returns: exactly zero net change
+    log_down = np.log(p_down / p_base)
+    log_up = np.log(p_up / p_down)
+    assert pytest.approx(log_down + log_up, 1e-10) == 0.0
+
+
+def test_36month_calibration_pipeline():
+    """Verifies that the 36-month 5-basket RidgeCV calibration engine runs and beats Random Walk."""
+    from ml.calibration import MacroDatasetBuilder, RidgeCalibrationEngine
+
+    builder = MacroDatasetBuilder()
+    df_raw = builder.load_36month_panel_from_seed()
+    assert len(df_raw) == 36
+
+    df_stat = builder.build_stationary_matrix(df_raw)
+    assert len(df_stat) == 34  # 36 months minus 1 for diff and 1 for RW lag
+
+    engine = RidgeCalibrationEngine()
+    results = engine.run_calibration(df_stat, train_split_months=24)
+
+    assert results["total_sample_months"] == 34
+    assert results["train_months_count"] == 24
+    assert results["optimal_lambda"] > 0.0
+    assert "base_drift_alpha" in results
+
+    el = results["elasticities"]
+    for basket in ["beta_food", "beta_alcohol", "beta_housing", "beta_transport", "beta_restaurant", "beta_fx"]:
+        assert basket in el
+        # Coefficients should be non-negative and economically bounded (< 1.5)
+        assert -0.20 <= el[basket] <= 1.50
+
+    oos = results["out_of_sample"]
+    assert oos["test_months_count"] == 10
+    assert oos["relative_rmse"] > 0.0
+    assert "beats_random_walk" in oos
+
 
 

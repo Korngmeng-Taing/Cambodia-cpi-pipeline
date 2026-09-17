@@ -109,8 +109,18 @@ dbt seed --select nis_official_cpi
 dbt run --select fct_cpi_nis_comparison
 ```
 
-### Metabase Dashboard Diagnostics
-Run the diagnostic audit script to verify all dashboard query cards:
+### Metabase Dashboard Provisioning & Diagnostics
+To provision or refresh all 3 canonical Metabase dashboards with interactive filters and latest cards:
+```bash
+python scripts/setup_metabase_dashboards.py
+```
+
+Run the unit tests verifying dashboard parameters and template tag mappings:
+```bash
+pytest tests/test_setup_metabase_dashboards.py -v
+```
+
+Run the live database diagnostic audit script to verify all dashboard query cards against PostgreSQL:
 ```bash
 python scripts/test_metabase_cards.py
 ```

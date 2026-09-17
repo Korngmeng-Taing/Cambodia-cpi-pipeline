@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -61,7 +62,9 @@ def main():
                 continue
 
             try:
-                cur_cpi.execute(sql)
+                # Strip Metabase optional template clauses [[ ... ]] so test evaluates base query
+                clean_sql = re.sub(r'\[\[.*?\]\]', '', sql, flags=re.DOTALL)
+                cur_cpi.execute(clean_sql)
                 rows = cur_cpi.fetchall()
                 conn_cpi.rollback()  # BUG FIX: Always rollback to clear transaction state
                 row_cnt = len(rows)

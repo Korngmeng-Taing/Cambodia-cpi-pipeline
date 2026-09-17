@@ -65,8 +65,13 @@ class RidgeBasketDriftEstimator:
     with empirical Bayesian prior shrinkage for small samples.
     """
 
-    def __init__(self, alphas: list[float] | None = None):
+    def __init__(
+        self,
+        alphas: list[float] | None = None,
+        calibrated_priors: dict[str, float] | None = None,
+    ):
         self.alphas = alphas or RIDGE_ALPHAS
+        self.calibrated_priors = calibrated_priors or {}
 
     @staticmethod
     def _extract_holiday_features(eval_date: date) -> tuple[float, float]:
@@ -90,7 +95,7 @@ class RidgeBasketDriftEstimator:
 
     @staticmethod
     def _extract_fx_features(eval_date: date, df_fx: pd.DataFrame | None) -> tuple[float, float]:
-        """Returns (fx_momentum_7d, fx_momentum_14d)."""
+        """Returns (fx_momentum_7d, fx_momentum_14d) using stationary log-returns."""
         if df_fx is None or df_fx.empty or "rate" not in df_fx.columns:
             return 0.0, 0.0
         sub = df_fx[pd.to_datetime(df_fx["execution_date"]).dt.date <= eval_date].sort_values("execution_date")
@@ -100,15 +105,15 @@ class RidgeBasketDriftEstimator:
         r_now = rates[-1]
         r_7 = rates[-7] if len(rates) >= 7 else rates[0]
         r_14 = rates[-14] if len(rates) >= 14 else rates[0]
-        mom_7d = float((r_now - r_7) / r_7) if r_7 > 0 else 0.0
-        mom_14d = float((r_now - r_14) / r_14) if r_14 > 0 else 0.0
+        mom_7d = float(np.log(r_now / r_7)) if (r_now > 0 and r_7 > 0) else 0.0
+        mom_14d = float(np.log(r_now / r_14)) if (r_now > 0 and r_14 > 0) else 0.0
         return mom_7d, mom_14d
 
     @staticmethod
     def _get_division_momentum(
         eval_date: date, df_daily: pd.DataFrame | None, div_code: str
     ) -> tuple[float, float, float]:
-        """Returns (mom_3d, mom_7d, mom_14d) for a given COICOP division."""
+        """Returns (mom_3d, mom_7d, mom_14d) for a given COICOP division using stationary log-returns."""
         if df_daily is None or df_daily.empty or "coicop_division" not in df_daily.columns:
             return 0.0, 0.0, 0.0
         sub = df_daily[
@@ -126,9 +131,9 @@ class RidgeBasketDriftEstimator:
         v_7 = vals[-7] if len(vals) >= 7 else vals[0]
         v_14 = vals[-14] if len(vals) >= 14 else vals[0]
 
-        m_3 = float((v_now - v_3) / v_3) if v_3 > 0 else 0.0
-        m_7 = float((v_now - v_7) / v_7) if v_7 > 0 else 0.0
-        m_14 = float((v_now - v_14) / v_14) if v_14 > 0 else 0.0
+        m_3 = float(np.log(v_now / v_3)) if (v_now > 0 and v_3 > 0) else 0.0
+        m_7 = float(np.log(v_now / v_7)) if (v_now > 0 and v_7 > 0) else 0.0
+        m_14 = float(np.log(v_now / v_14)) if (v_now > 0 and v_14 > 0) else 0.0
         return m_3, m_7, m_14
 
     def extract_features_for_basket(
@@ -147,8 +152,8 @@ class RidgeBasketDriftEstimator:
         f_3, f_7, f_14 = self._get_division_momentum(eval_date, df_daily, "01")
         t_3, t_7, _ = self._get_division_momentum(eval_date, df_daily, "07")
 
-        if div_code == "01":  # Food
-            return np.array([f_3, f_7, f_14, fx_7d, fest_prox, prog_ratio], dtype=float)
+        if div_code == "01":  # Food (injects Transport/Fuel t_7 for indirect logistics pass-through)
+            return np.array([f_3, f_7, f_14, t_7, fx_7d, fest_prox, prog_ratio], dtype=float)
         elif div_code == "02":  # Alcohol & Tobacco
             _, a_7, _ = self._get_division_momentum(eval_date, df_daily, "02")
             return np.array([a_7, fx_7d, fx_14d, is_window, prog_ratio], dtype=float)
@@ -157,9 +162,9 @@ class RidgeBasketDriftEstimator:
             return np.array([h_7, h_14, fx_14d, prog_ratio], dtype=float)
         elif div_code == "07":  # Transport
             return np.array([t_3, t_7, fx_7d, fest_prox, prog_ratio], dtype=float)
-        elif div_code == "11":  # Restaurants & Hotels
+        elif div_code == "11":  # Restaurants & Hotels (injects Food f_7 and Transport/Fuel t_7 for commercial food/logistics costs)
             _, r_7, _ = self._get_division_momentum(eval_date, df_daily, "11")
-            return np.array([r_7, f_7, is_window, prog_ratio], dtype=float)
+            return np.array([r_7, f_7, t_7, is_window, prog_ratio], dtype=float)
         else:
             _, d_7, _ = self._get_division_momentum(eval_date, df_daily, div_code)
             return np.array([d_7, fx_7d, prog_ratio], dtype=float)
@@ -175,10 +180,16 @@ class RidgeBasketDriftEstimator:
         _, is_window = self._extract_holiday_features(eval_date)
         fx_7d, fx_14d = self._extract_fx_features(eval_date, df_fx)
         f_3, f_7, f_14 = self._get_division_momentum(eval_date, df_daily, "01")
+        t_3, t_7, _ = self._get_division_momentum(eval_date, df_daily, "07")
         fest_shock = 0.0012 if is_window > 0 else 0.0
 
-        if div_code == "01":  # Food
-            return float((f_7 / 7.0) + (fest_shock * 0.5) + (0.15 * fx_7d / 7.0))
+        cp = self.calibrated_priors
+        b_fx = float(cp.get("beta_fx", 0.15))
+        b_trans = float(cp.get("beta_transport", 0.072))
+
+        if div_code == "01":  # Food (includes calibrated freight pass-through from transport)
+            trans_pass = float(cp.get("beta_food_transport", 0.048)) if "beta_food_transport" in cp else (0.048 * (b_trans / 0.072))
+            return float((f_7 / 7.0) + (trans_pass * t_7 / 7.0) + (fest_shock * 0.5) + (b_fx * fx_7d / 7.0))
         elif div_code == "02":  # Alcohol & Tobacco
             _, a_7, _ = self._get_division_momentum(eval_date, df_daily, "02")
             return float((a_7 / 7.0) + (0.20 * fx_7d / 7.0) + (fest_shock * 0.25))
@@ -186,11 +197,10 @@ class RidgeBasketDriftEstimator:
             _, h_7, h_14 = self._get_division_momentum(eval_date, df_daily, "04")
             return float((h_14 / 14.0) * 0.5 + (0.10 * fx_14d / 14.0))
         elif div_code == "07":  # Transport
-            t_3, t_7, _ = self._get_division_momentum(eval_date, df_daily, "07")
             return float((t_7 / 7.0) + (0.35 * fx_7d / 7.0) + (fest_shock * 0.5))
-        elif div_code == "11":  # Restaurants & Hotels
+        elif div_code == "11":  # Restaurants & Hotels (includes raw food and transport freight)
             _, r_7, _ = self._get_division_momentum(eval_date, df_daily, "11")
-            return float((r_7 / 7.0) + (0.30 * f_7 / 7.0) + (fest_shock * 0.25))
+            return float((r_7 / 7.0) + (0.30 * f_7 / 7.0) + (0.05 * t_7 / 7.0) + (fest_shock * 0.25))
         else:
             _, d_7, _ = self._get_division_momentum(eval_date, df_daily, div_code)
             return float((d_7 / 14.0) * 0.3)
@@ -246,8 +256,11 @@ class RidgeBasketDriftEstimator:
                 if idx_now <= 0:
                     continue
                 mean_rem = float(sub_rem["division_index"].mean())
-
-                implied_drift = (mean_rem - idx_now) / (idx_now * (rem_days + 1) / 2.0)
+                implied_drift = (
+                    float(np.log(mean_rem / idx_now)) / ((rem_days + 1) / 2.0)
+                    if (mean_rem > 0 and idx_now > 0)
+                    else 0.0
+                )
                 feat = self.extract_features_for_basket(d, df_daily_clean, df_fx, div_code)
                 X_train.append(feat)
                 y_train.append(implied_drift)
@@ -283,7 +296,35 @@ class CPINowcaster:
 
     def __init__(self, model_name: str = DEFAULT_NOWCAST_MODEL):
         self.model_name = model_name
-        self.drift_estimator = RidgeBasketDriftEstimator()
+        self.macro_priors = self.load_calibrated_macro_priors()
+        self.drift_estimator = RidgeBasketDriftEstimator(calibrated_priors=self.macro_priors)
+
+    @staticmethod
+    def load_calibrated_macro_priors() -> dict[str, float]:
+        """Loads latest empirically estimated 5-basket macro elasticities from gold.nowcast_calibrated_parameters."""
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT alpha_drift, lambda_penalty,
+                           beta_food, beta_alcohol, beta_housing, beta_transport, beta_restaurant, beta_fx
+                    FROM gold.nowcast_calibrated_parameters
+                    ORDER BY calibration_date DESC
+                    LIMIT 1;
+                    """
+                )
+                row = cur.fetchone()
+                if row:
+                    cols = [desc[0] for desc in cur.description]
+                    res = dict(zip(cols, [float(v) if v is not None else 0.0 for v in row]))
+                    log.info("Loaded calibrated macro elasticities: beta_food=%.4f, beta_transport=%.4f", res.get("beta_food", 0), res.get("beta_transport", 0))
+                    conn.close()
+                    return res
+            conn.close()
+        except Exception as e:
+            log.debug("Calibrated parameters query skipped or table absent: %s", e)
+        return {}
 
     def fetch_training_data(
         self, target_date: date
@@ -457,7 +498,7 @@ class CPINowcaster:
             # 2. Projected remaining index for this division
             div_drift = float(drift_map.get(div_code, 0.0))
             if days_remaining > 0:
-                projected_div = latest_div * (1.0 + (div_drift * (days_remaining + 1) / 2.0))
+                projected_div = latest_div * float(np.exp(div_drift * (days_remaining + 1) / 2.0))
             else:
                 projected_div = realized_div
 
@@ -474,7 +515,13 @@ class CPINowcaster:
                 if not sub_prior.empty:
                     prior_div = float(sub_prior.sort_values("calculation_date")["division_index"].iloc[-1])
 
-            div_mom_pct = round(((nowcast_div - prior_div) / prior_div) * 100.0, 4) if prior_div > 0 else 0.0
+            if prior_div > 0 and nowcast_div > 0:
+                div_delta_log = float(np.log(nowcast_div / prior_div))
+                div_mom_pct = round((np.exp(div_delta_log) - 1.0) * 100.0, 4)
+            else:
+                div_delta_log = 0.0
+                div_mom_pct = 0.0
+
             contribution_pp = round(weight * div_mom_pct, 4)
             price_relative = round(nowcast_div / prior_div, 6) if prior_div > 0 else 1.0
 
@@ -487,6 +534,7 @@ class CPINowcaster:
                 "nowcast": nowcast_div,
                 "prior": round(prior_div, 4),
                 "mom_pct": div_mom_pct,
+                "delta_log": round(div_delta_log, 6),
                 "contribution_pp": contribution_pp,
                 "price_relative": price_relative,
                 "drift_daily": round(div_drift, 6),
@@ -511,15 +559,21 @@ class CPINowcaster:
             prior_month_cpi = round(prior_headline_from_divisions, 4)
         else:
             prior_month_cpi = round(prior_month_cpi, 4)
-        projected_mom_pct = round(((nowcast_headline_cpi - prior_month_cpi) / prior_month_cpi) * 100.0, 4)
 
-        # Chain-linking to official NIS benchmark
+        if prior_month_cpi > 0 and nowcast_headline_cpi > 0:
+            delta_log_headline = float(np.log(nowcast_headline_cpi / prior_month_cpi))
+            projected_mom_pct = round((np.exp(delta_log_headline) - 1.0) * 100.0, 4)
+        else:
+            delta_log_headline = 0.0
+            projected_mom_pct = 0.0
+
+        # Chain-linking to official NIS benchmark via exponential compounding (CAPRED Slide 25)
         nowcast_nis_headline_cpi = None
         latest_nis_cpi = None
         if df_nis is not None and not df_nis.empty:
             latest_nis_row = df_nis.iloc[0]
             latest_nis_cpi = float(latest_nis_row["headline_cpi"])
-            nowcast_nis_headline_cpi = round(latest_nis_cpi * (1.0 + (projected_mom_pct / 100.0)), 4)
+            nowcast_nis_headline_cpi = round(latest_nis_cpi * float(np.exp(delta_log_headline)), 4)
 
         # Dynamic uncertainty & 95% CI
         daily_series = df_month.drop_duplicates(subset=["calculation_date"]) if not df_month.empty else pd.DataFrame()
@@ -552,6 +606,7 @@ class CPINowcaster:
             "realized_cpi_so_far": round(float(realized_cpi), 4),
             "projected_remaining_cpi": round(float(projected_avg_cpi), 4),
             "projected_mom_pct": projected_mom_pct,
+            "delta_log_cpi": round(delta_log_headline, 6),
             "nowcast_headline_cpi": nowcast_headline_cpi,
             "nowcast_nis_headline_cpi": nowcast_nis_headline_cpi,
             "nowcast_core_cpi": nowcast_core_cpi,
@@ -746,6 +801,60 @@ class CPINowcaster:
         )
         return df
 
+    @staticmethod
+    def evaluate_against_random_walk(df_pairs: pd.DataFrame) -> dict[str, Any]:
+        """
+        Evaluates out-of-sample nowcasting performance against the Atkeson-Ohanian (2001) / CAPRED
+        Random Walk baseline (\\hat{\\pi}_t = \\pi_{t-1}) using Relative RMSE:
+            Relative RMSE = RMSE(model) / RMSE(random_walk)
+        Values < 1.00 indicate the model beats the naive benchmark (CAPRED 34-month benchmark = 0.71).
+        """
+        if df_pairs.empty or len(df_pairs) < 2:
+            return {
+                "model_rmse": 0.0,
+                "random_walk_rmse": 0.0,
+                "relative_rmse": 1.0,
+                "beats_random_walk": False,
+                "sample_size": len(df_pairs),
+                "error_reduction_pct": 0.0,
+            }
+
+        df = df_pairs.copy().sort_values("target_month")
+        for col in ["actual_mom_pct", "nowcast_mom_pct"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        # Random Walk forecast is previous month's actual inflation: \hat{\pi}_t = \pi_{t-1}
+        df["rw_forecast_mom_pct"] = df["actual_mom_pct"].shift(1)
+        eval_df = df.dropna(subset=["actual_mom_pct", "nowcast_mom_pct", "rw_forecast_mom_pct"])
+
+        if eval_df.empty:
+            return {
+                "model_rmse": 0.0,
+                "random_walk_rmse": 0.0,
+                "relative_rmse": 1.0,
+                "beats_random_walk": False,
+                "sample_size": 0,
+                "error_reduction_pct": 0.0,
+            }
+
+        model_err = eval_df["nowcast_mom_pct"] - eval_df["actual_mom_pct"]
+        rw_err = eval_df["rw_forecast_mom_pct"] - eval_df["actual_mom_pct"]
+
+        model_rmse = float(np.sqrt(np.mean(model_err ** 2)))
+        rw_rmse = float(np.sqrt(np.mean(rw_err ** 2)))
+
+        rel_rmse = float(model_rmse / rw_rmse) if rw_rmse > 0 else 1.0
+
+        return {
+            "model_rmse": round(model_rmse, 4),
+            "random_walk_rmse": round(rw_rmse, 4),
+            "relative_rmse": round(rel_rmse, 4),
+            "beats_random_walk": rel_rmse < 1.0,
+            "sample_size": len(eval_df),
+            "error_reduction_pct": round((1.0 - rel_rmse) * 100.0, 2) if rel_rmse < 1.0 else 0.0,
+        }
+
     def persist_performance_metrics(self, target_date: date | None = None) -> list[dict[str, Any]]:
         """
         Evaluates historical nowcasts against official NIS and monthly CPI actuals,
@@ -776,9 +885,18 @@ class CPINowcaster:
                         directional_hit BOOLEAN,
                         rolling_rmse_3m NUMERIC(8, 4),
                         rolling_mae_3m NUMERIC(8, 4),
+                        relative_rmse NUMERIC(6, 4),
+                        random_walk_rmse NUMERIC(8, 4),
                         updated_at TIMESTAMPTZ DEFAULT NOW(),
                         PRIMARY KEY (evaluation_date, target_month, model_name)
                     );
+                    """
+                )
+                cur.execute(
+                    """
+                    ALTER TABLE gold.nowcast_performance_metrics
+                    ADD COLUMN IF NOT EXISTS relative_rmse NUMERIC(6, 4),
+                    ADD COLUMN IF NOT EXISTS random_walk_rmse NUMERIC(8, 4);
                     """
                 )
                 cur.execute(
@@ -822,6 +940,17 @@ class CPINowcaster:
 
                 df_pairs = pd.DataFrame(rows, columns=cols)
                 df_metrics = self.compute_evaluation_metrics_dataframe(df_pairs)
+                scorecard = self.evaluate_against_random_walk(df_pairs)
+
+                if scorecard["sample_size"] > 0:
+                    log.info(
+                        "📊 Benchmark Scorecard vs Random Walk: Relative RMSE = %s | Model RMSE = %s | RW RMSE = %s | Beats RW: %s (Error reduction: %s%%)",
+                        scorecard["relative_rmse"],
+                        scorecard["model_rmse"],
+                        scorecard["random_walk_rmse"],
+                        scorecard["beats_random_walk"],
+                        scorecard["error_reduction_pct"],
+                    )
 
                 for _, row in df_metrics.iterrows():
                     rec = {
@@ -839,6 +968,8 @@ class CPINowcaster:
                         "directional_hit": bool(row["directional_hit"]) if pd.notna(row["directional_hit"]) else None,
                         "rolling_rmse_3m": float(row["rolling_rmse_3m"]) if pd.notna(row["rolling_rmse_3m"]) else None,
                         "rolling_mae_3m": float(row["rolling_mae_3m"]) if pd.notna(row["rolling_mae_3m"]) else None,
+                        "relative_rmse": float(scorecard["relative_rmse"]) if scorecard["sample_size"] > 0 else None,
+                        "random_walk_rmse": float(scorecard["random_walk_rmse"]) if scorecard["sample_size"] > 0 else None,
                     }
                     records.append(rec)
                     cur.execute(
@@ -848,13 +979,15 @@ class CPINowcaster:
                             nowcast_mom_pct, actual_mom_pct, mom_error,
                             nowcast_headline_cpi, actual_headline_cpi,
                             cpi_absolute_error, cpi_pct_error, directional_hit,
-                            rolling_rmse_3m, rolling_mae_3m
+                            rolling_rmse_3m, rolling_mae_3m,
+                            relative_rmse, random_walk_rmse
                         ) VALUES (
                             %(evaluation_date)s, %(target_month)s, %(model_name)s, %(days_observed)s,
                             %(nowcast_mom_pct)s, %(actual_mom_pct)s, %(mom_error)s,
                             %(nowcast_headline_cpi)s, %(actual_headline_cpi)s,
                             %(cpi_absolute_error)s, %(cpi_pct_error)s, %(directional_hit)s,
-                            %(rolling_rmse_3m)s, %(rolling_mae_3m)s
+                            %(rolling_rmse_3m)s, %(rolling_mae_3m)s,
+                            %(relative_rmse)s, %(random_walk_rmse)s
                         )
                         ON CONFLICT (evaluation_date, target_month, model_name) DO UPDATE
                         SET days_observed = EXCLUDED.days_observed,
@@ -868,6 +1001,8 @@ class CPINowcaster:
                             directional_hit = EXCLUDED.directional_hit,
                             rolling_rmse_3m = EXCLUDED.rolling_rmse_3m,
                             rolling_mae_3m = EXCLUDED.rolling_mae_3m,
+                            relative_rmse = EXCLUDED.relative_rmse,
+                            random_walk_rmse = EXCLUDED.random_walk_rmse,
                             updated_at = NOW();
                         """,
                         rec,
@@ -1115,7 +1250,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cambodia CPI Daily Inflation Nowcaster")
     parser.add_argument("--date", type=str, default=None, help="Target date (YYYY-MM-DD)")
     parser.add_argument("--backtest", action="store_true", help="Run historical backtesting evaluation")
+    parser.add_argument("--calibrate", action="store_true", help="Run 36-month 5-basket RidgeCV calibration")
     args = parser.parse_args()
+
+    if args.calibrate:
+        from ml.calibration import run_macro_calibration
+        res = run_macro_calibration()
+        print(f"\n[OK] 36-Month Macro Calibration Complete!")
+        print(f"  Optimal Lambda (λ):        {res['optimal_lambda']}")
+        print(f"  Base Drift Intercept (α):  {res['base_drift_alpha']}")
+        print(f"  Elasticities:              {res['elasticities']}")
+        oos = res.get("out_of_sample", {})
+        if oos:
+            print(f"  OOS Relative RMSE vs RW:   {oos.get('relative_rmse')} (Beats RW: {oos.get('beats_random_walk')}, Reduction: {oos.get('error_reduction_pct')}%)")
+        sys.exit(0)
 
     nowcaster = CPINowcaster()
     if args.backtest:

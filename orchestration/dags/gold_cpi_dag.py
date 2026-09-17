@@ -107,6 +107,19 @@ def execute_monthly_cpi_calculation(**context):
     engine.save_monthly_cpi(df_monthly)
     log.info("Monthly CPI calculation and persistence complete!")
 
+def execute_macro_calibration_task(**context):
+    """Syncs 36-month NIS official benchmarks and trains 5-basket RidgeCV calibrated priors."""
+    from pipeline.nis_cpi_importer import NISBenchmarkImporter
+    from ml.calibration import run_macro_calibration
+
+    importer = NISBenchmarkImporter()
+    synced = importer.sync_all_from_seed()
+    log.info("Synchronized %d official benchmark records from seed.", synced)
+
+    calib_res = run_macro_calibration()
+    log.info("Completed Macro RidgeCV Calibration. Optimal lambda: %s, Intercept: %s", calib_res.get("optimal_lambda"), calib_res.get("base_drift_alpha"))
+    return calib_res
+
 def execute_nowcasting_task(**context):
     """Executes the daily high-frequency inflation nowcasting pipeline.
     
@@ -256,6 +269,11 @@ with DAG(
         python_callable=execute_monthly_cpi_calculation,
     )
 
+    calibrate_macro_task = PythonOperator(
+        task_id="calibrate_macro_parameters",
+        python_callable=execute_macro_calibration_task,
+    )
+
     nowcast_cpi_task = PythonOperator(
         task_id="nowcast_daily_inflation",
         python_callable=execute_nowcasting_task,
@@ -268,5 +286,5 @@ with DAG(
 
     # BUG-04 FIX: Rebase must run BEFORE daily CPI calculation so the
     # first day of a new year uses the updated base period.
-    annual_rebase_task >> calculate_cpi_task >> calculate_monthly_cpi_task >> nowcast_cpi_task
+    annual_rebase_task >> calculate_cpi_task >> calculate_monthly_cpi_task >> calibrate_macro_task >> nowcast_cpi_task
 

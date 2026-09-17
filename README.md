@@ -275,14 +275,16 @@ cpi_pipeline_success
   - Queries filtering by `scrape_date` prune inactive months automatically (e.g. `WHERE scrape_date = '2026-08-25'` touches only `clean_store_prices_part_2026_08`).
   - Automated weekly proactive maintenance via `cpi_maintenance_dag.py` and `ops.maintain_monthly_partitions(3)`.
 
-### Modernized & Consolidated Metabase Dashboards (2026-09-07)
-- **Files**: `scripts/setup_metabase_dashboards.py`, `scripts/test_metabase_cards.py`
-- **Consolidation into 3 Canonical Dashboards**:
-  - Consolidated legacy split collections into 3 unified analytical dashboards:
-    1. **`01 - Macro CPI & Inflation Analytics`** (ID 88, 11 cards): Headline & Core CPI, 12-Division table, top movers, ML Nowcast & 95% CI.
-    2. **`02 - Operations & 23-Source Telemetry`** (ID 89, 10 cards): Real-time Airflow DAG states, MEF USD/KHR rate, 23-store scraper progress, 14-day ingestion matrix, and field completeness audits.
-    3. **`03 - Silver Data Quality Screener`** (ID 90, 10 cards): Pre-CPI quality gate status, 100% COICOP division coverage, classification method breakdown (`gemini_ai`, exact overrides, vector cosine), Hadi/Tukey log-price relative distribution, and missingness imputation rates.
-  - 100% automated test verification (`scripts/test_metabase_cards.py`): 31/31 cards returning `[OK]` with live rows.
+### Modernized & Consolidated Metabase Dashboards with Interactive Filtering (2026-09-16)
+- **Files**: `scripts/setup_metabase_dashboards.py`, `scripts/test_metabase_cards.py`, `tests/test_setup_metabase_dashboards.py`
+- **Interactive Filtering & Granular Macro Analytics**:
+  - Upgraded all 3 canonical analytical dashboards with native interactive parameters via Metabase template tags (`[[ AND ... = {{variable}} ]]`):
+    1. **`01 - Macro CPI & Inflation Analytics`** (13 cards): Headline & Core CPI, 12-Division table, 4-Digit COICOP class drill-down, top weighted inflation contributors ($w_i \times \Delta P_i$), top price movers, ML Nowcast & 95% CI, with global **COICOP Division** interactive filter.
+    2. **`02 - Operations & 25-Source Telemetry`** (10 cards): Real-time Airflow DAG states, MEF USD/KHR rate, 25-store scraper progress, 14-day ingestion matrix, and field completeness audits, with global **Store Selector** interactive filter.
+    3. **`03 - Silver Data Quality Screener`** (10 cards): Pre-CPI quality gate status, COICOP division coverage, classification method breakdown (`gemini_ai`, exact overrides, vector cosine), Hadi/Tukey log-price relative distribution, missingness imputation rates, and review queues, with global **COICOP Division** and **Store Selector** interactive filters.
+  - Automated test verification:
+    - `scripts/test_metabase_cards.py`: Strips optional template clauses (`[[ ... ]]`) for clean PostgreSQL execution validation.
+    - `tests/test_setup_metabase_dashboards.py`: Pytest suite verifying dashboard parameter specifications, card template tags, parameter mappings, and end-to-end dashboard provisioning.
 
 ### Econometric & Pipeline Hardening (2026-09-05)
 - **Files**: `pipeline/cpi_calculator.py`, `orchestration/dags/cpi_master_dag.py`, `orchestration/dags/silver_dag.py`, `orchestration/dags/gold_cpi_dag.py`, `dbt/models/silver/clean_store_prices.sql`, `dbt/models/gold/fct_cpi_monthly.sql`

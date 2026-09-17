@@ -58,13 +58,13 @@ def get_or_create_collection(cur, name, description, color="#509EE3"):
     """, (name, description, slug, entity_id, now))
     return cur.fetchone()[0]
 
-def create_or_update_card(cur, name, description, display, query_sql, viz_settings, collection_id, db_id=2, creator_id=1):
+def create_or_update_card(cur, name, description, display, query_sql, viz_settings, collection_id, db_id=2, creator_id=1, template_tags=None):
     dataset_query = {
         "database": db_id,
         "type": "native",
         "native": {
             "query": query_sql.strip(),
-            "template-tags": {}
+            "template-tags": template_tags or {}
         }
     }
     now = datetime.now(timezone.utc)
@@ -92,17 +92,18 @@ def create_or_update_card(cur, name, description, display, query_sql, viz_settin
         """, (now, now, name, description, display, json.dumps(dataset_query), json.dumps(viz_settings), creator_id, db_id, collection_id, entity_id))
         return cur.fetchone()[0]
 
-def create_or_update_dashboard(cur, name, description, collection_id, creator_id=1):
+def create_or_update_dashboard(cur, name, description, collection_id, creator_id=1, parameters=None):
     now = datetime.now(timezone.utc)
+    params_json = json.dumps(parameters or [])
     cur.execute("SELECT id FROM report_dashboard WHERE name = %s AND collection_id = %s AND archived = false", (name, collection_id))
     row = cur.fetchone()
     if row:
         dash_id = row[0]
         cur.execute("""
             UPDATE report_dashboard 
-            SET description = %s, updated_at = %s
+            SET description = %s, parameters = %s, updated_at = %s
             WHERE id = %s;
-        """, (description, now, dash_id))
+        """, (description, params_json, now, dash_id))
         return dash_id
     else:
         entity_id = generate_entity_id()
@@ -112,12 +113,12 @@ def create_or_update_dashboard(cur, name, description, collection_id, creator_id
                 parameters, archived, collection_id, width, enable_embedding,
                 entity_id, collection_position, auto_apply_filters
             )
-            VALUES (%s, %s, %s, %s, %s, '[]', false, %s, 'fixed', false, %s, 1, true)
+            VALUES (%s, %s, %s, %s, %s, %s, false, %s, 'fixed', false, %s, 1, true)
             RETURNING id;
-        """, (now, now, name, description, creator_id, collection_id, entity_id))
+        """, (now, now, name, description, creator_id, params_json, collection_id, entity_id))
         return cur.fetchone()[0]
 
-def place_card_on_dashboard(cur, dashboard_id, card_id, col, row, size_x, size_y, viz_settings):
+def place_card_on_dashboard(cur, dashboard_id, card_id, col, row, size_x, size_y, viz_settings, parameter_mappings=None):
     cur.execute("""
         SELECT id FROM report_dashboardcard 
         WHERE dashboard_id = %s AND card_id = %s;
@@ -125,20 +126,21 @@ def place_card_on_dashboard(cur, dashboard_id, card_id, col, row, size_x, size_y
     r = cur.fetchone()
     now = datetime.now(timezone.utc)
     entity_id = generate_entity_id()
+    mappings_json = json.dumps(parameter_mappings or [])
     if r:
         cur.execute("""
             UPDATE report_dashboardcard
-            SET col = %s, row = %s, size_x = %s, size_y = %s, visualization_settings = %s, updated_at = %s
+            SET col = %s, row = %s, size_x = %s, size_y = %s, visualization_settings = %s, parameter_mappings = %s, updated_at = %s
             WHERE id = %s;
-        """, (col, row, size_x, size_y, json.dumps(viz_settings), now, r[0]))
+        """, (col, row, size_x, size_y, json.dumps(viz_settings), mappings_json, now, r[0]))
     else:
         cur.execute("""
             INSERT INTO report_dashboardcard (
                 created_at, updated_at, dashboard_id, card_id, row, col,
                 size_x, size_y, parameter_mappings, visualization_settings, entity_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, '[]', %s, %s);
-        """, (now, now, dashboard_id, card_id, row, col, size_x, size_y, json.dumps(viz_settings), entity_id))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+        """, (now, now, dashboard_id, card_id, row, col, size_x, size_y, mappings_json, json.dumps(viz_settings), entity_id))
 
 def get_metabase_cpi_db_id(cur):
     cur.execute("SELECT id FROM metabase_database WHERE name = 'CPI' OR name = 'cpi_db' ORDER BY id DESC LIMIT 1;")
@@ -179,11 +181,22 @@ def provision_all():
         "#008080"
     )
 
+    dash_1_params = [
+        {
+            "id": "param_div",
+            "name": "COICOP Division",
+            "slug": "coicop_division",
+            "type": "category",
+            "sectionId": "string"
+        }
+    ]
+
     d_cpi_id = create_or_update_dashboard(
         cur,
         dash_name_1,
-        "Executive inflation overview: Daily and Monthly Headline CPI, Core CPI, 12-division COICOP index matrix, and Month-End Nowcasting.",
-        c_cpi
+        "Executive inflation overview: Daily and Monthly Headline CPI, Core CPI, 12-division COICOP index matrix, 4-digit class drill-down, weighted contributors, and Month-End Nowcasting.",
+        c_cpi,
+        parameters=dash_1_params
     )
 
     cpi_cards = [
@@ -270,10 +283,63 @@ def provision_all():
                     total_observations AS "Monthly Observations"
                 FROM gold.v_cpi_monthly_divisions
                 WHERE cpi_month = (SELECT MAX(cpi_month) FROM gold.v_cpi_monthly_divisions)
+                [[ AND coicop_division = {{coicop_division}} ]]
                 ORDER BY coicop_division ASC;
             """,
             "viz": {"table.pivot_column": None},
-            "grid": (0, 11, 14, 8)
+            "template_tags": {
+                "coicop_division": {
+                    "id": "tt_cpi_matrix_div",
+                    "name": "coicop_division",
+                    "display-name": "COICOP Division",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_div",
+                    "target": ["variable", ["template-tag", "coicop_division"]]
+                }
+            ],
+            "grid": (0, 11, 12, 8)
+        },
+        {
+            "name": "4-Digit COICOP Class Breakdown & MoM Rates",
+            "desc": "Detailed 4-digit subclass index movements (e.g. Bread & Cereals, Meat, Fuel, Electricity) showing granular inflationary pressure.",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    c.coicop_code AS "Class Code",
+                    COALESCE(w.coicop_name, c.coicop_code) AS "Class Name",
+                    COALESCE(w.coicop_name_kh, '') AS "ឈ្មោះជាភាសាខ្មែរ",
+                    c.coicop_division AS "Div",
+                    ROUND(COALESCE(w.weight_pct, 0.0), 3) AS "Weight (%)",
+                    c.class_index AS "Class Index",
+                    c.dod_class_change_pct AS "DoD Change (%)",
+                    c.item_count AS "Active Items",
+                    c.imputed_item_count AS "Imputed Items"
+                FROM gold.v_coicop_class_breakdown c
+                LEFT JOIN gold.cambodia_cpi_coicop_weights_breakdown w ON w.coicop_code = c.coicop_code
+                WHERE c.calculation_date = (SELECT MAX(calculation_date) FROM gold.v_coicop_class_breakdown)
+                [[ AND c.coicop_division = {{coicop_division}} ]]
+                ORDER BY COALESCE(w.weight_pct, 0.0) DESC, c.coicop_code ASC;
+            """,
+            "viz": {"table.pivot_column": None},
+            "template_tags": {
+                "coicop_division": {
+                    "id": "tt_class_breakdown_div",
+                    "name": "coicop_division",
+                    "display-name": "COICOP Division",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_div",
+                    "target": ["variable", ["template-tag", "coicop_division"]]
+                }
+            ],
+            "grid": (12, 11, 12, 8)
         },
         {
             "name": "Top Basket Price Movers (Largest Price Changes)",
@@ -290,11 +356,79 @@ def provision_all():
                 FROM gold.fct_elementary_indices e
                 JOIN silver.canonical_items i ON i.item_id = e.item_id::uuid
                 WHERE e.calculation_date = (SELECT MAX(calculation_date) FROM gold.fct_elementary_indices)
+                [[ AND e.coicop_division = {{coicop_division}} ]]
                 ORDER BY ABS(e.price_ratio - 1.0) DESC
                 LIMIT 20;
             """,
             "viz": {"table.pivot_column": None},
-            "grid": (14, 11, 10, 8)
+            "template_tags": {
+                "coicop_division": {
+                    "id": "tt_movers_div",
+                    "name": "coicop_division",
+                    "display-name": "COICOP Division",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_div",
+                    "target": ["variable", ["template-tag", "coicop_division"]]
+                }
+            ],
+            "grid": (0, 19, 12, 8)
+        },
+        {
+            "name": "Top Weighted Inflation Contributors (CPI Impact)",
+            "desc": "Top individual basket products driving national inflation ranked by true weighted impact on Headline CPI (wi * dPi).",
+            "display": "table",
+            "sql": """
+                WITH latest_date AS (
+                    SELECT MAX(calculation_date) AS max_date FROM gold.fct_elementary_indices
+                ),
+                div_counts AS (
+                    SELECT coicop_division, COUNT(*) AS cnt
+                    FROM gold.fct_elementary_indices, latest_date
+                    WHERE calculation_date = latest_date.max_date
+                    GROUP BY coicop_division
+                )
+                SELECT 
+                    i.canonical_name AS "Product Name",
+                    e.coicop_division AS "Div",
+                    w.division_name AS "COICOP Division",
+                    ROUND(e.current_price_khr, 0) AS "Current Price (KHR)",
+                    ROUND((e.price_ratio - 1.0) * 100.0, 1) AS "Price Change (%)",
+                    ROUND(((e.price_ratio - 1.0) * (w.weight_pct / NULLIF(dc.cnt, 0)))::numeric, 4) AS "CPI Contribution (pp)",
+                    CASE 
+                        WHEN ((e.price_ratio - 1.0) * (w.weight_pct / NULLIF(dc.cnt, 0))) > 0 THEN '📈 UPWARD PRESSURE'
+                        WHEN ((e.price_ratio - 1.0) * (w.weight_pct / NULLIF(dc.cnt, 0))) < 0 THEN '📉 DOWNWARD DRAG'
+                        ELSE '⚖️ NEUTRAL'
+                    END AS "Inflation Pressure"
+                FROM gold.fct_elementary_indices e
+                CROSS JOIN latest_date ld
+                JOIN silver.canonical_items i ON i.item_id = e.item_id::uuid
+                JOIN gold.coicop_weights w ON w.coicop_division = e.coicop_division
+                JOIN div_counts dc ON dc.coicop_division = e.coicop_division
+                WHERE e.calculation_date = ld.max_date
+                [[ AND e.coicop_division = {{coicop_division}} ]]
+                ORDER BY ABS((e.price_ratio - 1.0) * (w.weight_pct / NULLIF(dc.cnt, 0))) DESC
+                LIMIT 25;
+            """,
+            "viz": {"table.pivot_column": None},
+            "template_tags": {
+                "coicop_division": {
+                    "id": "tt_weighted_contrib_div",
+                    "name": "coicop_division",
+                    "display-name": "COICOP Division",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_div",
+                    "target": ["variable", ["template-tag", "coicop_division"]]
+                }
+            ],
+            "grid": (12, 19, 12, 8)
         },
         {
             "name": "Official UN COICOP 2018 Expenditure Weight Breakdown",
@@ -310,10 +444,25 @@ def provision_all():
                     parent_division AS "Division"
                 FROM gold.cambodia_cpi_coicop_weights_breakdown
                 WHERE coicop_level <> 'Summary'
+                [[ AND parent_division = {{coicop_division}} ]]
                 ORDER BY coicop_code ASC;
             """,
             "viz": {"table.pivot_column": None},
-            "grid": (0, 19, 24, 8)
+            "template_tags": {
+                "coicop_division": {
+                    "id": "tt_weights_div",
+                    "name": "coicop_division",
+                    "display-name": "COICOP Division",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_div",
+                    "target": ["variable", ["template-tag", "coicop_division"]]
+                }
+            ],
+            "grid": (0, 27, 24, 8)
         },
         {
             "name": "Current Month Inflation Nowcast (MoM %)",
@@ -328,7 +477,7 @@ def provision_all():
                 LIMIT 1;
             """,
             "viz": {},
-            "grid": (0, 27, 8, 3)
+            "grid": (0, 35, 8, 3)
         },
         {
             "name": "Chain-Linked Official NIS CPI Estimate",
@@ -343,7 +492,7 @@ def provision_all():
                 LIMIT 1;
             """,
             "viz": {},
-            "grid": (8, 27, 8, 3)
+            "grid": (8, 35, 8, 3)
         },
         {
             "name": "Nowcast Uncertainty & 95% Confidence Interval",
@@ -358,7 +507,7 @@ def provision_all():
                 LIMIT 1;
             """,
             "viz": {},
-            "grid": (16, 27, 8, 3)
+            "grid": (16, 35, 8, 3)
         },
         {
             "name": "Official NIS vs. Pipeline MoM Inflation Tracking (%)",
@@ -378,7 +527,7 @@ def provision_all():
                 "graph.dimensions": ["Month"],
                 "graph.metrics": ["Pipeline MoM (%)", "Official NIS MoM (%)"]
             },
-            "grid": (0, 30, 12, 8)
+            "grid": (0, 38, 12, 8)
         },
         {
             "name": "Official NIS 12-Division Benchmark Comparison Table",
@@ -400,7 +549,7 @@ def provision_all():
                 ORDER BY cpi_month DESC;
             """,
             "viz": {"table.pivot_column": None},
-            "grid": (12, 30, 12, 8)
+            "grid": (12, 38, 12, 8)
         },
         {
             "name": "5-Basket Nowcast Trajectory & MoM Inflation (%)",
@@ -430,7 +579,7 @@ def provision_all():
                     "Alcohol (02) MoM (%)"
                 ]
             },
-            "grid": (0, 38, 14, 8)
+            "grid": (0, 46, 14, 8)
         },
         {
             "name": "5-Basket Price Relatives & Contribution Breakdown",
@@ -452,7 +601,7 @@ def provision_all():
                 LIMIT 15;
             """,
             "viz": {"table.pivot_column": None},
-            "grid": (14, 38, 10, 8)
+            "grid": (14, 46, 10, 8)
         },
         {
             "name": "ML Nowcaster Rolling 3-Month Error Trend (RMSE & MAE)",
@@ -471,7 +620,7 @@ def provision_all():
                 "graph.dimensions": ["Target Month"],
                 "graph.metrics": ["Rolling RMSE (3M)", "Rolling MAE (3M)"]
             },
-            "grid": (0, 46, 12, 7)
+            "grid": (0, 54, 12, 7)
         },
         {
             "name": "ML Nowcaster Directional Accuracy Rate (%)",
@@ -484,7 +633,7 @@ def provision_all():
                 WHERE directional_hit IS NOT NULL;
             """,
             "viz": {},
-            "grid": (12, 46, 4, 7)
+            "grid": (12, 54, 4, 7)
         },
         {
             "name": "ML Nowcaster Point-in-Time Error Audit Table",
@@ -505,14 +654,59 @@ def provision_all():
                 ORDER BY evaluation_date DESC, days_observed DESC;
             """,
             "viz": {"table.pivot_column": None},
-            "grid": (16, 46, 8, 7)
+            "grid": (16, 54, 8, 7)
+        },
+        {
+            "name": "36-Month Calibrated 5-Basket Ridge Elasticities",
+            "desc": "Empirical pass-through elasticities (beta) estimated via 36-month expanding RidgeCV across 5 core consumer baskets.",
+            "display": "table",
+            "sql": """
+                SELECT 
+                    sample_months AS "Sample Months",
+                    ROUND(alpha_drift::numeric, 6) AS "Alpha Drift",
+                    ROUND(lambda_penalty::numeric, 4) AS "Optimal Lambda",
+                    ROUND(beta_food::numeric, 4) AS "Food (01)",
+                    ROUND(beta_transport::numeric, 4) AS "Transport (07)",
+                    ROUND(beta_restaurant::numeric, 4) AS "Restaurants (11)",
+                    ROUND(beta_housing::numeric, 4) AS "Housing (04)",
+                    ROUND(beta_alcohol::numeric, 4) AS "Alcohol (02)",
+                    ROUND(beta_fx::numeric, 4) AS "FX (USD/KHR)",
+                    ROUND(oos_relative_rmse::numeric, 4) AS "OOS Rel RMSE vs RW"
+                FROM gold.nowcast_calibrated_parameters
+                ORDER BY calibration_date DESC
+                LIMIT 1;
+            """,
+            "viz": {"table.pivot_column": None},
+            "grid": (0, 61, 14, 6)
+        },
+        {
+            "name": "Random Walk Benchmark Scorecard (Relative RMSE)",
+            "desc": "Out-of-sample performance scorecard against the canonical Atkeson-Ohanian Random Walk benchmark (score < 1.00 beats benchmark).",
+            "display": "scalar",
+            "sql": """
+                SELECT 
+                    CONCAT('Rel RMSE: ', ROUND(oos_relative_rmse::numeric, 4), ' (', ROUND((1.0 - oos_relative_rmse::numeric) * 100.0, 1), '% Beats RW)') AS "Benchmark Scorecard"
+                FROM gold.nowcast_calibrated_parameters
+                ORDER BY calibration_date DESC
+                LIMIT 1;
+            """,
+            "viz": {},
+            "grid": (14, 61, 10, 6)
         }
     ]
 
     for item in cpi_cards:
-        cid = create_or_update_card(cur, item["name"], item["desc"], item["display"], item["sql"], item["viz"], c_cpi, db_id=db_id)
+        cid = create_or_update_card(
+            cur, item["name"], item["desc"], item["display"], item["sql"], item["viz"], c_cpi,
+            db_id=db_id, template_tags=item.get("template_tags")
+        )
         col, row, sx, sy = item["grid"]
-        place_card_on_dashboard(cur, d_cpi_id, cid, col, row, sx, sy, item["viz"])
+        mappings = []
+        for m in item.get("mappings") or []:
+            cm = dict(m)
+            cm["card_id"] = cid
+            mappings.append(cm)
+        place_card_on_dashboard(cur, d_cpi_id, cid, col, row, sx, sy, item["viz"], parameter_mappings=mappings)
 
 
 
@@ -530,11 +724,22 @@ def provision_all():
         "#2E5BFF"
     )
 
+    dash_2_params = [
+        {
+            "id": "param_store",
+            "name": "Store Selector",
+            "slug": "store_slug",
+            "type": "category",
+            "sectionId": "string"
+        }
+    ]
+
     d_ops_id = create_or_update_dashboard(
         cur,
         dash_name_2,
         "Live real-time monitoring of Airflow DAG runs, all 25 store scrapers ingestion progress, failure alerts, and warehouse SLAs.",
-        c_ops
+        c_ops,
+        parameters=dash_2_params
     )
 
     ops_cards = [
@@ -582,7 +787,6 @@ def provision_all():
             "viz": {},
             "grid": (12, 0, 6, 3)
         },
-
         {
             "name": "Official MEF USD/KHR Rate Today",
             "desc": "Official daily exchange rate from Ministry of Economy and Finance (MEF API).",
@@ -632,9 +836,24 @@ def provision_all():
                 LEFT JOIN latest_scrape ls ON ls.store_slug = s.store_slug
                 LEFT JOIN dag_states d ON d.store_key = s.store_slug
                 WHERE s.is_active = TRUE
+                [[ AND s.store_slug = {{store_slug}} ]]
                 ORDER BY "Raw Records Today" DESC;
             """,
             "viz": {"table.pivot_column": None},
+            "template_tags": {
+                "store_slug": {
+                    "id": "tt_ops_store_progress",
+                    "name": "store_slug",
+                    "display-name": "Store Selector",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_store",
+                    "target": ["variable", ["template-tag", "store_slug"]]
+                }
+            ],
             "grid": (0, 3, 24, 8)
         },
         {
@@ -684,10 +903,26 @@ def provision_all():
                         ELSE '🔴 STALE (>48h)'
                     END AS "Freshness SLA"
                 FROM bronze.raw_prices
+                WHERE 1=1
+                [[ AND source_name = {{store_slug}} ]]
                 GROUP BY source_name
                 ORDER BY "Lag (Hours)" ASC;
             """,
             "viz": {"table.pivot_column": None},
+            "template_tags": {
+                "store_slug": {
+                    "id": "tt_ops_store_sla",
+                    "name": "store_slug",
+                    "display-name": "Store Selector",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_store",
+                    "target": ["variable", ["template-tag", "store_slug"]]
+                }
+            ],
             "grid": (14, 11, 10, 8)
         },
         {
@@ -701,6 +936,7 @@ def provision_all():
                     COUNT(*) AS "Records Scraped"
                 FROM silver.clean_store_prices
                 WHERE scrape_date >= (SELECT MAX(scrape_date) - INTERVAL '30 days' FROM silver.clean_store_prices)
+                [[ AND store_slug = {{store_slug}} ]]
                 GROUP BY scrape_date, store_slug
                 ORDER BY scrape_date ASC, "Records Scraped" DESC;
             """,
@@ -709,6 +945,20 @@ def provision_all():
                 "graph.metrics": ["Records Scraped"],
                 "stackable.stack_type": "stacked"
             },
+            "template_tags": {
+                "store_slug": {
+                    "id": "tt_ops_store_vol",
+                    "name": "store_slug",
+                    "display-name": "Store Selector",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_store",
+                    "target": ["variable", ["template-tag", "store_slug"]]
+                }
+            ],
             "grid": (0, 19, 24, 8)
         },
         {
@@ -734,10 +984,25 @@ def provision_all():
                 CROSS JOIN date_bounds
                 LEFT JOIN gold.dim_stores st ON st.store_slug = c.store_slug
                 WHERE c.scrape_date >= max_d - INTERVAL '14 days'
+                [[ AND c.store_slug = {{store_slug}} ]]
                 GROUP BY st.store_name, c.store_slug
                 ORDER BY "Latest" DESC;
             """,
             "viz": {"table.pivot_column": None},
+            "template_tags": {
+                "store_slug": {
+                    "id": "tt_ops_store_matrix",
+                    "name": "store_slug",
+                    "display-name": "Store Selector",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_store",
+                    "target": ["variable", ["template-tag", "store_slug"]]
+                }
+            ],
             "grid": (0, 27, 12, 8)
         },
         {
@@ -757,18 +1022,41 @@ def provision_all():
                 FROM silver.clean_store_prices c
                 LEFT JOIN gold.dim_stores st ON st.store_slug = c.store_slug
                 WHERE c.scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                [[ AND c.store_slug = {{store_slug}} ]]
                 GROUP BY st.store_name, c.store_slug
                 ORDER BY "Total Items" DESC;
             """,
             "viz": {"table.pivot_column": None},
+            "template_tags": {
+                "store_slug": {
+                    "id": "tt_ops_store_extract",
+                    "name": "store_slug",
+                    "display-name": "Store Selector",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_store",
+                    "target": ["variable", ["template-tag", "store_slug"]]
+                }
+            ],
             "grid": (12, 27, 12, 8)
         }
     ]
 
     for item in ops_cards:
-        cid = create_or_update_card(cur, item["name"], item["desc"], item["display"], item["sql"], item["viz"], c_ops, db_id=db_id)
+        cid = create_or_update_card(
+            cur, item["name"], item["desc"], item["display"], item["sql"], item["viz"], c_ops,
+            db_id=db_id, template_tags=item.get("template_tags")
+        )
         col, row, sx, sy = item["grid"]
-        place_card_on_dashboard(cur, d_ops_id, cid, col, row, sx, sy, item["viz"])
+        mappings = []
+        for m in item.get("mappings") or []:
+            cm = dict(m)
+            cm["card_id"] = cid
+            mappings.append(cm)
+        place_card_on_dashboard(cur, d_ops_id, cid, col, row, sx, sy, item["viz"], parameter_mappings=mappings)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # 3. 🛡️ DASHBOARD 3: SILVER DATA QUALITY SCREENER
@@ -784,11 +1072,29 @@ def provision_all():
         "#9B59B6"
     )
 
+    dash_3_params = [
+        {
+            "id": "param_div",
+            "name": "COICOP Division",
+            "slug": "coicop_division",
+            "type": "category",
+            "sectionId": "string"
+        },
+        {
+            "id": "param_store",
+            "name": "Store Selector",
+            "slug": "store_slug",
+            "type": "category",
+            "sectionId": "string"
+        }
+    ]
+
     d_class_id = create_or_update_dashboard(
         cur,
         dash_name_3,
         "Silver layer quality control: Pre-CPI Quality Gate, COICOP coverage & method breakdown, price outliers, imputation rates, and review queue.",
-        c_class
+        c_class,
+        parameters=dash_3_params
     )
 
     class_cards = [
@@ -804,9 +1110,24 @@ def provision_all():
                         ELSE '✅ PASS: SAFE FOR JEVONS'
                     END AS "Pre-CPI Quality Gate"
                 FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                [[ AND store_slug = {{store_slug}} ]];
             """,
             "viz": {},
+            "template_tags": {
+                "store_slug": {
+                    "id": "tt_class_qg_store",
+                    "name": "store_slug",
+                    "display-name": "Store Selector",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_store",
+                    "target": ["variable", ["template-tag", "store_slug"]]
+                }
+            ],
             "grid": (0, 0, 6, 3)
         },
         {
@@ -817,9 +1138,24 @@ def provision_all():
                 SELECT 
                     ROUND((COUNT(*) FILTER (WHERE coicop_division IS NOT NULL AND coicop_division <> 'UNCLASSIFIED') * 100.0 / NULLIF(COUNT(*), 0))::numeric, 2) AS "Classification Coverage (%)"
                 FROM silver.clean_store_prices
-                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices);
+                WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                [[ AND store_slug = {{store_slug}} ]];
             """,
             "viz": {},
+            "template_tags": {
+                "store_slug": {
+                    "id": "tt_class_cov_store",
+                    "name": "store_slug",
+                    "display-name": "Store Selector",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_store",
+                    "target": ["variable", ["template-tag", "store_slug"]]
+                }
+            ],
             "grid": (6, 0, 6, 3)
         },
         {
@@ -857,6 +1193,8 @@ def provision_all():
                     COUNT(*) AS "Product Count"
                 FROM silver.clean_store_prices
                 WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                [[ AND coicop_division = {{coicop_division}} ]]
+                [[ AND store_slug = {{store_slug}} ]]
                 GROUP BY coicop_division
                 ORDER BY "Product Count" DESC;
             """,
@@ -864,6 +1202,30 @@ def provision_all():
                 "graph.dimensions": ["COICOP Division"],
                 "graph.metrics": ["Product Count"]
             },
+            "template_tags": {
+                "coicop_division": {
+                    "id": "tt_class_dist_div",
+                    "name": "coicop_division",
+                    "display-name": "COICOP Division",
+                    "type": "text"
+                },
+                "store_slug": {
+                    "id": "tt_class_dist_store",
+                    "name": "store_slug",
+                    "display-name": "Store Selector",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_div",
+                    "target": ["variable", ["template-tag", "coicop_division"]]
+                },
+                {
+                    "parameter_id": "param_store",
+                    "target": ["variable", ["template-tag", "store_slug"]]
+                }
+            ],
             "grid": (0, 3, 12, 8)
         },
         {
@@ -876,6 +1238,7 @@ def provision_all():
                     COUNT(*) AS "Item Count"
                 FROM silver.clean_store_prices
                 WHERE scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
+                [[ AND store_slug = {{store_slug}} ]]
                 GROUP BY coicop_method
                 ORDER BY "Item Count" DESC;
             """,
@@ -883,6 +1246,20 @@ def provision_all():
                 "graph.dimensions": ["Classification Method"],
                 "graph.metrics": ["Item Count"]
             },
+            "template_tags": {
+                "store_slug": {
+                    "id": "tt_class_method_store",
+                    "name": "store_slug",
+                    "display-name": "Store Selector",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_store",
+                    "target": ["variable", ["template-tag", "store_slug"]]
+                }
+            ],
             "grid": (12, 3, 12, 8)
         },
         {
@@ -934,6 +1311,7 @@ def provision_all():
                     ROUND((COUNT(*) FILTER (WHERE is_imputed = TRUE) * 100.0 / NULLIF(COUNT(*), 0))::numeric, 1) AS "Imputation Rate (%)"
                 FROM gold.fct_elementary_indices
                 WHERE calculation_date = (SELECT MAX(calculation_date) FROM gold.fct_elementary_indices)
+                [[ AND coicop_division = {{coicop_division}} ]]
                 GROUP BY coicop_division
                 ORDER BY coicop_division ASC;
             """,
@@ -941,6 +1319,20 @@ def provision_all():
                 "graph.dimensions": ["Division Code"],
                 "graph.metrics": ["Imputation Rate (%)"]
             },
+            "template_tags": {
+                "coicop_division": {
+                    "id": "tt_class_imp_div",
+                    "name": "coicop_division",
+                    "display-name": "COICOP Division",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_div",
+                    "target": ["variable", ["template-tag", "coicop_division"]]
+                }
+            ],
             "grid": (12, 11, 12, 8)
         },
         {
@@ -962,10 +1354,36 @@ def provision_all():
                 LEFT JOIN gold.dim_stores st ON st.store_slug = c.store_slug
                 WHERE c.scrape_date = (SELECT MAX(scrape_date) FROM silver.clean_store_prices)
                   AND (c.is_outlier = TRUE OR c.is_fallback = TRUE)
+                [[ AND c.coicop_division = {{coicop_division}} ]]
+                [[ AND c.store_slug = {{store_slug}} ]]
                 ORDER BY c.is_outlier DESC, c.price_khr DESC
                 LIMIT 30;
             """,
             "viz": {"table.pivot_column": None},
+            "template_tags": {
+                "coicop_division": {
+                    "id": "tt_class_outliers_div",
+                    "name": "coicop_division",
+                    "display-name": "COICOP Division",
+                    "type": "text"
+                },
+                "store_slug": {
+                    "id": "tt_class_outliers_store",
+                    "name": "store_slug",
+                    "display-name": "Store Selector",
+                    "type": "text"
+                }
+            },
+            "mappings": [
+                {
+                    "parameter_id": "param_div",
+                    "target": ["variable", ["template-tag", "coicop_division"]]
+                },
+                {
+                    "parameter_id": "param_store",
+                    "target": ["variable", ["template-tag", "store_slug"]]
+                }
+            ],
             "grid": (0, 19, 14, 8)
         },
         {
@@ -990,9 +1408,17 @@ def provision_all():
     ]
 
     for item in class_cards:
-        cid = create_or_update_card(cur, item["name"], item["desc"], item["display"], item["sql"], item["viz"], c_class, db_id=db_id)
+        cid = create_or_update_card(
+            cur, item["name"], item["desc"], item["display"], item["sql"], item["viz"], c_class,
+            db_id=db_id, template_tags=item.get("template_tags")
+        )
         col, row, sx, sy = item["grid"]
-        place_card_on_dashboard(cur, d_class_id, cid, col, row, sx, sy, item["viz"])
+        mappings = []
+        for m in item.get("mappings") or []:
+            cm = dict(m)
+            cm["card_id"] = cid
+            mappings.append(cm)
+        place_card_on_dashboard(cur, d_class_id, cid, col, row, sx, sy, item["viz"], parameter_mappings=mappings)
 
     cur.execute("DELETE FROM query_cache;")
     conn.commit()

@@ -71,7 +71,7 @@
 
 \hs In this study, daily online retail prices collected from selected Cambodian sources are organized according to the relevant CPI expenditure categories. The Jevons price index is applied at the elementary aggregation level to measure price changes among comparable products, while a Laspeyres-type weighted aggregation is applied to combine the resulting indices using expenditure weights and obtain the CPI measure at a higher level. The resulting daily price information provides a higher-frequency view of consumer price movements than the official monthly CPI.
 
-\hs The study further uses the high-frequency price information to forecast inflation ahead of the official monthly CPI release. \texttt{RidgeCV} is employed as the forecasting model because it provides a regularized regression approach that can handle multiple potentially correlated explanatory variables while selecting the regularization parameter through cross-validation.
+\hs The study further uses the high-frequency price information to forecast inflation ahead of the official monthly CPI release. Regularized Ridge regression with cross-validation is employed as the forecasting model because it provides a penalized estimation approach that can handle multiple correlated explanatory variables without matrix instability while selecting the optimal shrinkage parameter autonomously.
 
 \hs Therefore, this study focuses on using automatically collected online retail prices to reduce the information gap created by the publication lag of the official NIS CPI. By combining automated data collection, structured data processing, price-index calculation, and inflation forecasting, the study aims to provide an earlier indication of inflation conditions in Cambodia.
 
@@ -91,7 +91,7 @@
 \textbf{How can the time lag in the availability of official NIS CPI information be reduced by using high-frequency online retail price data to produce an earlier indication of consumer price inflation in Cambodia?}
 \end{center}
 
-\hs To address this problem, the study develops an automated system that collects online retail prices on a daily basis, stores and processes the structured price data, applies the Jevons and Laspeyres index approaches to calculate price indices, and uses \texttt{RidgeCV} to forecast inflation ahead of the official monthly CPI release.
+\hs To address this problem, the study develops an automated system that collects online retail prices on a daily basis, stores and processes the structured price data, applies the Jevons and Laspeyres index approaches to calculate price indices, and uses regularized Ridge regression to forecast inflation ahead of the official monthly CPI release.
 
 
 \section{Project Goal and Research Objectives}
@@ -104,7 +104,7 @@
 \subsection{Specific Objectives}
 \begin{enumerate}
     \item \textbf{Build an automated data collection and monitoring system:} Set up a pipeline that continuously collects and stores price data from online retail sources, and monitors it for completeness and quality.
-    \item \textbf{Calculate the price index and forecast inflation:} Apply an established economic formula to compute daily price relatives, and use \texttt{RidgeCV}-based modeling to forecast inflation ahead of the official monthly release.
+    \item \textbf{Calculate the price index and forecast inflation:} Apply an established economic formula to compute daily price relatives, and use regularized Ridge regression modeling to forecast inflation ahead of the official monthly release.
     \item \textbf{Build a decision-support dashboard:} Develop an interactive dashboard that presents daily CPI results and forecasted inflation for easy monitoring.
 \end{enumerate}
 
@@ -182,6 +182,6 @@
 \begin{itemize}
     \item \textbf{Chapter II (Literature Review):} Reviews the academic, central banking, and international statistical literature on high-frequency web scraping, natural language processing for product classification, axiomatic index number theory, and real-time inflation nowcasting.
     \item \textbf{Chapter III (Methodology):} Details the end-to-end Medallion data engineering architecture, the 25 market data sources, data cleaning and unit standardization procedures, Store Priority routing and Gemini AI classification for new products with domain trap guardrails, axiomatic Jevons aggregation, and the high-frequency inflation nowcasting model.
-    \item \textbf{Chapter IV (Results and Discussion):} Presents the empirical findings, data ingestion reliability metrics, classification accuracy benchmarks across 955k observations, formula drift analysis, category volatility findings, real-time inflation nowcasting convergence performance, and real-world policy case studies.
+    \item \textbf{Chapter IV (Results and Discussion):} Presents the empirical findings, data ingestion reliability metrics, classification accuracy benchmarks across over 1.27 million observations, formula drift analysis, category volatility findings, real-time inflation nowcasting convergence performance, and real-world policy case studies.
     \item \textbf{Chapter V (Conclusions and Recommendations):} Synthesizes the core contributions of the research, provides strategic policy roadmaps for the National Institute of Statistics, Ministry of Economy and Finance, and National Bank of Cambodia, and identifies directions for future research.
 \end{itemize}

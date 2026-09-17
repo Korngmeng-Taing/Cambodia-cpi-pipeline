@@ -68,7 +68,7 @@ flowchart TD
     end
 
     subgraph ServingLayer["4. Downstream Analytics & Executive Dashboards"]
-        M1["Metabase Dashboard (Port 3001)<br>• 01: Monthly & Daily CPI Dashboard<br>• 02: Pipeline Monitoring Dashboard"]
+        M1["Metabase Dashboards (Port 3001)<br>• 01: Macro CPI & Inflation Analytics (Filters & 4-Digit Class Breakdown)<br>• 02: Operations & 25-Source Telemetry<br>• 03: Silver Data Quality Screener"]
         M2["Power BI DirectQuery<br>• Executive Inflation & Category Elasticity"]
         V_MON["gold.v_cpi_monthly_summary<br>gold.v_cpi_monthly_divisions<br>MoM % & YoY % Inflation Views"]
 

@@ -628,6 +628,114 @@ To demonstrate the practical value of high-frequency nowcasting, we compare the 
 \end{itemize}
 
 % ==============================================================================
+\section{Complete Operational Blueprint: Method, Model, Architecture, Formulas, Steps, and Example}
+\label{sec:operational_blueprint}
+% ==============================================================================
+This section synthesizes the entire operational methodology into a structured, self-contained reference blueprint detailing the methodology, econometric model, execution workflow, mathematical equations, step-by-step procedure, and a complete numerical walkthrough.
+
+\subsection{Method: Two-Tier Hybrid Temporal Integration}
+\begin{itemize}[noitemsep]
+    \item \textbf{Institutional Problem}: Sovereign Consumer Price Index bulletins released by the National Institute of Statistics (NIS) arrive with a 30-to-60 day reporting lag.
+    \item \textbf{Core Methodology}: The engine bifurcates the ongoing calendar month of $D$ days into:
+    \begin{enumerate}[noitemsep]
+        \item \textbf{Observed Information Set ($\tau = 1, \dots, d$)}: Purely factual, axiomatic daily micro-indices compiled from live retail scraping.
+        \item \textbf{Unobserved Horizon ($\tau = d+1, \dots, D$)}: Projected trajectory driven by an econometric forward drift rate $\mu_{\text{daily}}$.
+    \end{enumerate}
+    \item \textbf{Convergence Property}: As time advances ($d \to D$), the forecast weight $\frac{D-d}{D} \to 0$, causing the nowcast to converge deterministically onto 100\% factual national accounting statistics.
+\end{itemize}
+
+\subsection{Model: Disaggregated Regularized Ridge Regression ($L_2$)}
+\begin{itemize}[noitemsep]
+    \item \textbf{Multicollinearity Mitigation}: High collinearity between short-run (7-day) and medium-run (30-day) momentum regressors renders Ordinary Least Squares (OLS) unstable. Tikhonov $L_2$ regularization ($\lambda^* = 0.0100$) shifts eigenvalues strictly positive, guaranteeing numerical invertibility.
+    \item \textbf{Selective Cross-Division Freight Transmission}: Diesel and gasoline momentum ($t_{7\text{d}}$) is injected exclusively into \textbf{Food (01)} and \textbf{Restaurants (11)}, while strictly insulating sticky non-freight goods (Clothing, Health, Utilities).
+    \item \textbf{Cultural Holiday Proximity Kernel}: Transitory price spikes during major Cambodian celebrations (\textit{Khmer New Year}, \textit{Pchum Ben}, \textit{Water Festival}) are filtered using an exponential decay kernel ($\tau = 7\text{ days}$) to prevent temporary holiday surges from biasing forward structural drift.
+\end{itemize}
+
+\subsection{How We Do It: Operational Architecture}
+Executed autonomously every morning at 03:30 AM (ICT):
+\begin{enumerate}[noitemsep]
+    \item \textbf{Scraping Layer}: Ingests $\approx 41,500$ raw retail listings daily across 20+ sources.
+    \item \textbf{Silver Layer}: Standardizes dual currencies (USD/KHR), extracts package units (price/liter or price/kg), links items via a 5-tier matching waterfall, and assigns 4-digit NIS COICOP codes via Google Gemini AI.
+    \item \textbf{Gold Layer}: Compiles Jevons elementary geometric indices with 7-day missing price imputation.
+    \item \textbf{Nowcasting Layer}: Executes \texttt{ml/nowcaster.py}, computing daily velocities, projecting remaining unobserved days via the Gauss Midpoint Integral, synthesizing Headline and Core CPI via CSES expenditure weights, and splicing the rate onto the official NIS Phnom Penh benchmark ($154.200$).
+\end{enumerate}
+
+\subsection{Mathematical Formulas}
+\begin{enumerate}
+    \item \textbf{Temporal Baseline Disaggregation}:
+    \begin{equation}
+        \alpha_{\text{daily}} = \frac{\alpha_{\text{monthly}}}{D} = \frac{+0.001899}{30} = \mathbf{+0.0000633 \text{ / day}}
+    \end{equation}
+    \item \textbf{Total Forward Daily Velocity}:
+    \begin{equation}
+        \mu_{j, \text{daily}} = \alpha_{\text{daily}} + \beta_{j, \text{food}} \left(\frac{f_{7\text{d}}}{7.0}\right) + \beta_{j, \text{trans}} \left(\frac{t_{7\text{d}}}{7.0}\right) + \beta_{j, \text{fx}} \left(\frac{fx_{7\text{d}}}{7.0}\right) + \text{fest}_{\text{shock}}
+    \end{equation}
+    \item \textbf{Gauss Midpoint Integral Forward Projection ($N = D - d$ remaining days)}:
+    \begin{equation}
+        I_{j, \text{projected}}(d) = P_{j, d} \times \exp\left( \mu_{j, \text{daily}} \cdot \frac{N + 1}{2} \right)
+    \end{equation}
+    \item \textbf{Time-Weighted Horizon Blending}:
+    \begin{equation}
+        I_{j, M}(d) = \left( \frac{d}{D} \right) \left[ \frac{1}{d}\sum_{\tau=1}^d P_{j, \tau} \right] + \left( \frac{D - d}{D} \right) I_{j, \text{projected}}(d)
+    \end{equation}
+    \item \textbf{Axiomatic Laspeyres Synthesis}:
+    \begin{equation}
+        \text{Headline CPI}_M(d) = \sum_{j=1}^{12} w_j \cdot I_{j, M}(d), \quad \text{Core CPI}_M(d) = \frac{\sum_{j \notin \{01, 04\}} w_j \cdot I_{j, M}(d)}{\sum_{j \notin \{01, 04\}} w_j}
+    \end{equation}
+    \item \textbf{Official NIS Benchmark Chain-Linking}:
+    \begin{equation}
+        \widehat{\text{CPI}}_{\text{NIS}, M}(d) = \text{CPI}_{\text{NIS}, M-1} \times \exp\left( \Delta \ln \text{Headline CPI}_M(d) \right)
+    \end{equation}
+    \item \textbf{Dynamic 95\% Confidence Interval Cone}:
+    \begin{equation}
+        \text{MoE}_{95\%}(d) = 1.95996 \cdot \sigma_{\text{daily}} \cdot \sqrt{\frac{D - d}{D}}, \quad \text{CI}_{95\%}(d) = \left[ \widehat{\text{CPI}}_M(d) \pm \text{MoE}_{95\%}(d) \right]
+    \end{equation}
+\end{enumerate}
+
+\subsection{Sequential Step-by-Step Procedure}
+\begin{itemize}[noitemsep]
+    \item \textbf{Step 1 (Macro Calibration)}: Fit RidgeCV on the 36-month official NIS historical panel to extract baseline structural drift $\alpha_{\text{monthly}} = +0.001899$.
+    \item \textbf{Step 2 (Temporal Disaggregation)}: Divide $\alpha_{\text{monthly}}$ by 30 and divide 7-day rolling momentum by 7 to yield instantaneous daily velocities.
+    \item \textbf{Step 3 (Horizon Splitting)}: On day $d$, calculate factual realized average $I_{\text{realized}}$ and set remaining unobserved days $N = D - d$.
+    \item \textbf{Step 4 (Gauss Midpoint Projection)}: Project unobserved days to their forward trajectory midpoint $k^* = \frac{N+1}{2}$.
+    \item \textbf{Step 5 (Horizon Blending)}: Combine past and future via weights $\frac{d}{D}$ and $\frac{D-d}{D}$.
+    \item \textbf{Step 6 (Laspeyres Aggregation)}: Synthesize Headline and Core CPI using CSES national expenditure weights.
+    \item \textbf{Step 7 (NIS Chain-Linking \& Uncertainty Cone)}: Chain-link onto the official NIS Phnom Penh benchmark ($154.200$) and compute the 95\% confidence interval envelope.
+\end{itemize}
+
+\subsection{Concrete Numerical Walkthrough (September 18, 2026)}
+\textbf{Parameters}: $D = 30$, $d = 18$, remaining days $N = 12$. Realized weight: $\frac{18}{30} = 0.60$; Projected weight: $\frac{12}{30} = 0.40$. Current price $P_{18} = 100.100$, observed realized average $I_{\text{realized}} = 99.850$, prior baseline $M-1 = 100.000$, and latest official NIS baseline $\text{CPI}_{\text{NIS}, M-1} = 154.200$.
+\begin{enumerate}[noitemsep]
+    \item \textbf{Daily Drift Rate}:
+    \begin{align*}
+        \mu_{\text{daily}} &= \frac{+0.001899}{30} + \frac{+0.0035}{7} + 0.048 \left(\frac{+0.0021}{7}\right) \\
+        &= 0.0000633 + 0.0005000 + 0.0000144 = \mathbf{+0.0005777 \text{ / day}}
+    \end{align*}
+    \item \textbf{Forward Midpoint Projection ($k^* = \frac{12+1}{2} = 6.5\text{ days}$)}:
+    \begin{equation*}
+        I_{\text{projected}} = 100.100 \times \exp(0.0005777 \times 6.5) = 100.100 \times 1.003762 = \mathbf{100.477}
+    \end{equation*}
+    \item \textbf{Time-Weighted Blending}:
+    \begin{equation*}
+        I_{\text{month}} = (0.60 \times 99.850) + (0.40 \times 100.477) = 59.910 + 40.191 = \mathbf{100.101}
+    \end{equation*}
+    \item \textbf{Projected Month-over-Month Inflation}:
+    \begin{align*}
+        \Delta \ln \text{CPI} &= \ln(100.101 / 100.000) = \mathbf{+0.001009} \\
+        \widehat{\pi}_{\text{MoM}} &= (\exp(+0.001009) - 1) \times 100 = \mathbf{+0.10\%}
+    \end{align*}
+    \item \textbf{Official Sovereign NIS Chain-Linking}:
+    \begin{equation*}
+        \widehat{\text{CPI}}_{\text{NIS}} = 154.200 \times \exp(+0.001009) = \mathbf{154.3557}
+    \end{equation*}
+    \item \textbf{Dynamic 95\% Confidence Interval ($\sigma = 0.25$)}:
+    \begin{align*}
+        \text{MoE} &= 1.96 \times 0.25 \times \sqrt{\frac{12}{30}} = \mathbf{\pm 0.310} \\
+        \text{CI}_{95\%} &= [100.101 \pm 0.310] = \mathbf{[99.791, \; 100.411]}
+    \end{align*}
+\end{enumerate}
+
+% ==============================================================================
 \section{Conclusion}
 % ==============================================================================
 The Cambodia CPI Nowcasting Engine bridges the gap between high-frequency big data and formal institutional econometrics. By anchoring the baseline aggregation in official NIS Laspeyres weights, filtering price volatility via RidgeCV regularization, and selectively modeling fuel pass-through, the system achieves an empirically verified \textbf{17.68\% error reduction over the canonical Atkeson--Ohanian Random Walk benchmark}. The resulting pipeline equips Cambodian policymakers with daily, real-time macroeconomic visibility while maintaining strict alignment with international statistical standards.

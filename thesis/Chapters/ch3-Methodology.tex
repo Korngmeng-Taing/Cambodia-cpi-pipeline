@@ -286,21 +286,32 @@ The shrinkage weight $\lambda_{\text{shrink}, k} \in [0, 1]$ is determined by th
 \end{equation}
 When the feature vector strongly explains division variation ($R_k^2 \to 1$), shrinkage is minimal ($\lambda_{\text{shrink}} \to 0$); conversely, if historical correlation is weak ($R_k^2 \le 0.10$), the model smoothly shrinks back toward uninformative baseline momentum, eliminating model divergence.
 
-\subsection{Gauss Midpoint Triangular Price Aggregation}
-\hs Using the shrunk coefficient vector $\hat{\boldsymbol{\beta}}_k^{\text{shrink}}$, the estimated daily price drift rate $\hat{\delta}_{k, t}$ for division $k$ is given by:
+\subsection{Temporal Disaggregation and Gauss Midpoint Price Aggregation}
+\hs A fundamental econometric challenge in high-frequency inflation nowcasting is \textbf{temporal disaggregation}: macroeconometric parameters ($\hat{\alpha}_{\text{monthly}}$, $\hat{\boldsymbol{\beta}}$) are conventionally calibrated on monthly log-differences ($\Delta \ln \text{CPI}_{\text{month}}$), yet the operational engine must project price trajectories on an intra-month, day-by-day basis over the remaining $N = T - t$ unobserved days.
+
+\hs Under continuous compounding, monthly log-returns are the exact integral of instantaneous daily returns: $\Delta \ln P_{\text{month}} = \int_0^T \delta(\tau) d\tau$. Consequently, the macro baseline structural drift scales down linearly into a daily velocity:
+\begin{equation}
+    \alpha_{\text{daily}} = \frac{\hat{\alpha}_{\text{monthly}}}{T}
+\end{equation}
+Similarly, multi-day momentum regressors (such as 7-day food momentum $f_{7d}$ and transport fuel momentum $t_{7d}$) are converted into daily velocities by dividing by their rolling duration ($f_{7d} / 7.0$). Using the shrunk coefficient vector $\hat{\boldsymbol{\beta}}_k^{\text{shrink}}$, the operational daily price drift rate $\hat{\delta}_{k, t}$ for division $k$ is given by:
 \begin{equation}
     \hat{\delta}_{k, t} = \mathbf{x}_t^T \hat{\boldsymbol{\beta}}_k^{\text{shrink}} + \psi_t
 \end{equation}
 where $\psi_t$ incorporates seasonal festival demand shocks during major Cambodian cultural celebrations (Khmer New Year, Pchum Ben, and Water Festival).
 
-\hs For the remaining $N = T - t$ unobserved calendar days in the month, daily prices advance progressively from the latest observed quote $P_{k, t}$ subject to cumulative drift $\hat{\delta}_{k, t}$. Rather than compounding or treating each unobserved day as an identical month-end endpoint, the expected average price index across the remainder of the month corresponds to the linear midpoint trajectory expectation:
+\hs To train the high-frequency Ridge mapping directly against forward price paths, the historical training engine examines each observation day $t$ with $N = T - t$ remaining days and extracts the implied forward drift rate:
 \begin{equation}
-    E[P_{\text{remaining}, k}] = P_{k, t} \times \left( 1.0 + \hat{\delta}_{k, t} \cdot \frac{N + 1}{2} \right)
+    \hat{\delta}_{k, t}^* = \frac{\ln\left( \bar{P}_{\text{rem}, k} / P_{k, t} \right)}{\frac{N + 1}{2}}, \quad \text{where } \bar{P}_{\text{rem}, k} = \frac{1}{N} \sum_{\tau=t+1}^T P_{k, \tau}
+\end{equation}
+For future unobserved calendar days in an active month, daily prices advance progressively from the latest observed quote $P_{k, t}$ subject to cumulative drift $\hat{\delta}_{k, t}$. Rather than treating each unobserved day as an identical month-end endpoint, the expected average price index across the remainder of the month corresponds to the continuous midpoint trajectory expectation:
+\begin{equation}
+    E[P_{\text{remaining}, k}] = P_{k, t} \times \exp\left( \hat{\delta}_{k, t} \cdot \frac{N + 1}{2} \right)
 \end{equation}
 The overall projected full-month division index $\bar{I}_{k, M}(t)$ represents the exact temporal integral of realized daily quotes and unobserved remaining days:
 \begin{equation}
-    \bar{I}_{k, M}(t) = \frac{\sum_{\tau=1}^t I_{k, \tau} + N \times E[P_{\text{remaining}, k}]}{T}
+    \bar{I}_{k, M}(t) = \left( \frac{t}{T} \right) \left[ \frac{1}{t}\sum_{\tau=1}^t I_{k, \tau} \right] + \left( \frac{T - t}{T} \right) E[P_{\text{remaining}, k}]
 \end{equation}
+As $t \to T$, the forecast weight $\frac{T-t}{T} \to 0$, ensuring smooth asymptotic convergence onto official national accounting realities.
 
 \subsection{Laspeyres Macroeconomic Synthesis and Dual-Index Chain-Linking}
 \hs Once all 12 division indices $\bar{I}_{k, M}(t)$ are projected, the National Headline CPI nowcast $\widehat{\text{CPI}}_M(t)$ is synthesized via official National Institute of Statistics (NIS) CSES 2023 Laspeyres expenditure weights $w_k$:

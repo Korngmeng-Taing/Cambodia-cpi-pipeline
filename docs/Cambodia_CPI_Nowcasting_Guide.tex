@@ -266,6 +266,49 @@ USD/KHR Foreign Exchange & $\hat{\beta}_{\text{fx}}$ & --- & \textbf{+0.0000} & 
 \label{tab:params}
 \end{table}
 
+\subsection{Temporal Disaggregation: Bridging Monthly Parameters to Daily Forward Drift}
+\label{sec:temporal_disaggregation}
+A critical econometric challenge in high-frequency nowcasting is \textbf{temporal disaggregation}: parameters $\hat{\alpha}_{\text{monthly}}$ and $\hat{\boldsymbol{\beta}}$ are estimated on \textbf{monthly log-differences} ($\Delta \ln \text{CPI}_{\text{month}}$), yet the operational nowcaster must project forward trajectory on an \textbf{intra-month day-by-day basis} for the remaining $D - d$ unobserved calendar days.
+
+\subsubsection{Continuous Compounding and Additive Log-Returns}
+Under continuous compounding, the full monthly log-return is the exact integral of instantaneous daily returns $\delta(t)$:
+\begin{equation}
+    \Delta \ln P_{\text{month}} = \ln\left(\frac{P_D}{P_0}\right) = \sum_{t=1}^D \Delta \ln P_t = \int_0^D \delta(t) \, dt
+\end{equation}
+Consequently, the structural monthly drift $\hat{\alpha}_{\text{monthly}} = +0.001899$ scales down linearly into a daily velocity:
+\begin{equation}
+    \alpha_{\text{daily}} = \frac{\hat{\alpha}_{\text{monthly}}}{D} \approx \frac{+0.001899}{30} = +0.0000633 \text{ per day}
+\end{equation}
+Similarly, high-frequency rolling momentum vectors (such as 7-day food momentum $f_{7\text{d}}$ and 7-day transport fuel momentum $t_{7\text{d}}$) represent cumulative percentage price adjustments across a 7-day window. In code (\texttt{ml/nowcaster.py}, lines 182--206), the engine converts these into daily velocities by dividing by the rolling duration:
+\begin{equation}
+    \mu_{\text{food, daily}} = \frac{f_{7\text{d}}}{7.0}, \quad \mu_{\text{trans, daily}} = \frac{t_{7\text{d}}}{7.0}, \quad \mu_{\text{fx, daily}} = \frac{fx_{7\text{d}}}{7.0}
+\end{equation}
+
+\subsubsection{High-Frequency Ridge Calibration on Intra-Month Realizations}
+To map rolling microdata signals directly into forward daily drift, the intra-month training loop (\texttt{ml/nowcaster.py}, lines 233--265) observes each historical day $d$ with $D - d$ remaining days and computes the realized forward path:
+\begin{equation}
+    \bar{P}_{\text{rem}} = \frac{1}{D - d} \sum_{\tau=d+1}^D P_\tau
+\end{equation}
+The implied constant daily drift rate $\mu_j^*$ that would project the current observed price $P_{j, d}$ to the average remaining price $\bar{P}_{j, \text{rem}}$ satisfies the Gauss midpoint integral:
+\begin{equation}
+    \bar{P}_{j, \text{rem}} = P_{j, d} \cdot \exp\left( \mu_j^* \cdot \frac{(D - d) + 1}{2} \right) \implies \mu_j^* = \frac{\ln\left( \bar{P}_{j, \text{rem}} / P_{j, d} \right)}{\frac{(D - d) + 1}{2}}
+\end{equation}
+The cross-validated Ridge regression then learns the mapping:
+\begin{equation}
+    \mu_j(d) = \text{RidgeCV}\left( \mathbf{x}_j(d) \right) \approx \alpha_{j, \text{daily}} + \beta_{j, 1} \frac{f_{7\text{d}}}{7.0} + \beta_{j, 4} \frac{t_{7\text{d}}}{7.0} + \dots
+\end{equation}
+
+\subsubsection{Forward Midpoint Projection and Horizon Blending}
+Once the daily drift $\mu_j(d)$ is estimated for division $j$, the projected price index level for the unobserved remainder of the month is evaluated at the midpoint of the unobserved horizon:
+\begin{equation}
+    I_{j, \text{projected}}(d) = P_{j, d} \times \exp\left( \mu_j(d) \times \frac{(D - d) + 1}{2} \right)
+\end{equation}
+The blended monthly nowcast index $I_{j, M}(d)$ is then synthesized by weighting the realized daily average against the projected midpoint expectation:
+\begin{equation}
+    I_{j, M}(d) = \left( \frac{d}{D} \right) \underbrace{\left[ \frac{1}{d} \sum_{\tau=1}^d P_{j, \tau} \right]}_{I_{j, \text{realized}}(d)} + \left( \frac{D - d}{D} \right) \underbrace{\left[ P_{j, d} \cdot e^{\mu_j(d) \frac{D-d+1}{2}} \right]}_{I_{j, \text{projected}}(d)}
+\end{equation}
+As calendar time progresses ($d \to D$), the weight on the econometric projection $\left(\frac{D-d}{D}\right) \to 0$, causing the nowcast to converge deterministically onto purely realized axiomatic statistics.
+
 \subsection{Cross-Sector Logistics Momentum Injection}
 In Cambodia, fuel price shocks propagate rapidly into food delivery and restaurant catering. The pipeline enforces a structural restriction: fuel 7-day momentum ($t_7$) is injected into the feature vectors of Food ($01$) and Restaurants ($11$):
 \begin{align}

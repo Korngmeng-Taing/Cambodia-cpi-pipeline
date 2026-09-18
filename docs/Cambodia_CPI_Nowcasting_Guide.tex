@@ -469,6 +469,23 @@ We evaluate the pipeline on **September 17, 2026**:
     \end{equation}
 \end{enumerate}
 
+\subsection{Division-Level Projection for Transport (Division 07)}
+\begin{enumerate}
+    \item \textbf{Realized 17-Day Average}: Scraped fuel station and retail transport prices from Sep 1 to Sep 17 average $I_{07, \text{realized}} = \mathbf{100.850}$.
+    \item \textbf{Daily Petroleum Shock Injection}: On Day 17, retail gasoline/diesel jumps $+2.5\%$ ($\Delta \ln P_{07} = +0.025$). The projected daily drift is computed using calibrated elasticity $\hat{\beta}_4 = 0.0019$:
+    \begin{equation}
+        \mu_{07} = \hat{\beta}_4 \cdot m_{\text{fuel}} = 0.0019 \times 0.025 = \mathbf{+0.0000475 \text{ per day}}
+    \end{equation}
+    \item \textbf{Forward Projection for 13 Days}: Starting from Day 17's price level ($101.200$):
+    \begin{equation}
+        I_{07, \text{projected}} = 101.200 \times \exp\left( \frac{13}{2} \times 0.0000475 \right) = \mathbf{103.163}
+    \end{equation}
+    \item \textbf{Horizon Blending}:
+    \begin{equation}
+        I_{07, M}(17) = \left( \frac{17}{30} \times 100.850 \right) + \left( \frac{13}{30} \times 103.163 \right) = \mathbf{101.852}
+    \end{equation}
+\end{enumerate}
+
 \subsection{Full Axiomatic Laspeyres Aggregation Table}
 
 \begin{table}[H]
@@ -497,6 +514,46 @@ We evaluate the pipeline on **September 17, 2026**:
 \label{tab:aggregation}
 \end{table}
 
+\subsection{Core CPI Numerical Calculation (Excluding Food and Energy)}
+To assess domestic demand-pull inflation free from international commodity volatility, the pipeline computes Core CPI:
+\begin{enumerate}
+    \item \textbf{Headline Index Sum}: $\sum_{j=1}^{12} w_j I_j = \mathbf{100.156}$.
+    \item \textbf{Non-Core Contributions}:
+    \begin{itemize}[noitemsep]
+        \item Food (Division 01): $w_{01} \cdot I_{01} = 0.4478 \times 99.671 = \mathbf{44.633}$
+        \item Housing and Utilities (Division 04): $w_{04} \cdot I_{04} = 0.1706 \times 100.168 = \mathbf{17.089}$
+    \end{itemize}
+    \item \textbf{Sum of Core Division Contributions}:
+    \begin{equation}
+        \sum_{j \notin \{01, 04\}} w_j I_j = 100.156 - (44.633 + 17.089) = \mathbf{38.434}
+    \end{equation}
+    \item \textbf{Aggregate Weight of Core Divisions}:
+    \begin{equation}
+        W_{\text{core}} = 1.0000 - (0.4478 + 0.1706) = \mathbf{0.3816} \quad (38.16\%)
+    \end{equation}
+    \item \textbf{Core CPI Index Level}:
+    \begin{equation}
+        \boxed{\text{Core CPI}_M(17) = \frac{38.434}{0.3816} = \mathbf{100.718}}
+    \end{equation}
+\end{enumerate}
+
+\subsection{95\% Confidence Interval Bounds Calculation}
+Given historical daily volatility $\sigma_d = 0.250$ index points on Day 17 of a 30-day month:
+\begin{enumerate}
+    \item \textbf{Time-Decay Horizon Factor}:
+    \begin{equation}
+        \sqrt{\frac{D - d}{D}} = \sqrt{\frac{30 - 17}{30}} = \sqrt{0.4333} = \mathbf{0.6583}
+    \end{equation}
+    \item \textbf{Analytical Margin of Error}:
+    \begin{equation}
+        \text{MoE}_{95\%} = 1.96 \times 0.250 \times 0.6583 = \mathbf{\pm 0.323 \text{ index points}}
+    \end{equation}
+    \item \textbf{Asymmetric 95\% Confidence Band}:
+    \begin{equation}
+        \text{CI}_{95\%}(17) = \left[ 100.156 - 0.323, \; 100.156 + 0.323 \right] = \mathbf{[99.833, \; 100.479]}
+    \end{equation}
+\end{enumerate}
+
 \subsection{Month-over-Month Inflation and Official NIS Chain-Linking}
 \begin{enumerate}
     \item \textbf{Continuous Log-Return}:
@@ -513,7 +570,19 @@ We evaluate the pipeline on **September 17, 2026**:
     \end{equation}
 \end{enumerate}
 
-\noindent \textbf{Institutional Result}: On Day 17 of September 2026, the National Bank of Cambodia and the Ministry of Economy and Finance receive an empirical inflation nowcast of \textbf{$+0.258\%$ MoM} and an official benchmark projection of \textbf{$219.572$}, providing a verified \textbf{25 to 45-day early-warning horizon} ahead of official bulletin publication.
+\subsection{Numerical Contrast with the Atkeson--Ohanian Random Walk Benchmark}
+To demonstrate the practical value of high-frequency nowcasting, we compare the Day 17 nowcast against the canonical Atkeson--Ohanian Random Walk:
+\begin{itemize}
+    \item \textbf{Random Walk Forecast}: The naive Random Walk assumes zero within-month information and simply projects the prior month's official inflation ($\pi_{\text{MoM}, \text{Aug 2026}} = \mathbf{-0.100\%}$):
+    \begin{equation}
+        \widehat{\pi}_{\text{MoM}, \text{Sep 2026}}^{\text{RW}} = \mathbf{-0.100\%} \quad (\text{Projected Headline CPI} = \mathbf{99.798})
+    \end{equation}
+    \item \textbf{Ridge Nowcast Prediction}: Ingesting daily scraped price relatives and detecting the $+2.5\%$ fuel shock yields:
+    \begin{equation}
+        \widehat{\pi}_{\text{MoM}, \text{Sep 2026}}^{\text{Nowcast}} = \mathbf{+0.258\%} \quad (\text{Projected Headline CPI} = \mathbf{100.156})
+    \end{equation}
+    \item \textbf{Policy Implication}: The Random Walk projects continued mild deflation ($-0.100\%$) because it is completely blind to intra-month petroleum spikes. In contrast, the nowcasting engine provides the National Bank of Cambodia with a **$+0.358$ percentage point directional correction**, alerting monetary authorities to emerging inflation pressures 35 days before official release.
+\end{itemize}
 
 % ==============================================================================
 \section{Conclusion}

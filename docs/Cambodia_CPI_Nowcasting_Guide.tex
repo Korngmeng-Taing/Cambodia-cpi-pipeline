@@ -155,8 +155,16 @@ The nowcasting engine avoids the pitfalls of purely statistical black-box foreca
 \label{fig:hybrid_workflow}
 \end{figure}
 
-\subsection{Layer 1: Fixed-Weight Axiomatic Aggregation}
-Official national CPI construction relies on the Laspeyres index framework fixed by the Cambodia Socio-Economic Survey (CSES 2019/2020). The 12 COICOP divisions carry fixed consumption basket weights $w_j$ such that $\sum_{j=1}^{12} w_j = 1.00$. Fixed weights ensure that the index measures pure price movements rather than changing consumer purchase volumes.
+\subsection{Layer 1: Fixed-Weight Axiomatic Aggregation and Core CPI}
+Official national CPI construction relies on the Laspeyres index framework fixed by the Cambodia Socio-Economic Survey (CSES 2019/2020). The 12 COICOP divisions carry fixed consumption basket weights $w_j$ such that $\sum_{j=1}^{12} w_j = 1.00$. Fixed weights ensure that the index measures pure price movements rather than changing consumer purchase volumes:
+\begin{equation}
+    \text{Headline CPI}_M(d) = \sum_{j=1}^{12} w_j \cdot I_{j, M}(d)
+\end{equation}
+For central bank monetary policy at the National Bank of Cambodia (NBC), headline inflation is often distorted by transitory supply shocks in volatile food and fuel markets. The pipeline therefore computes official \textbf{Core CPI} by excluding Food and Non-Alcoholic Beverages (Division 01, weight $44.775\%$) and Housing and Utilities (Division 04, weight $17.062\%$):
+\begin{equation}
+    \boxed{\text{Core CPI}_M(d) = \frac{\sum_{j \notin \{01, 04\}} w_j \cdot I_{j, M}(d)}{\sum_{j \notin \{01, 04\}} w_j}}
+\end{equation}
+The core basket isolates the remaining **$38.163\%$** of the consumption basket, providing monetary authorities with an undistorted measure of underlying demand-pull domestic price pressures.
 
 \subsection{Layer 2: Disaggregated Dynamic Ridge Drift Projection}
 For the remaining $D - d$ days, prices do not stand still. We compute high-frequency price velocity (momentum) and combine it with regularized Ridge pass-through elasticities to estimate the daily drift $\mu_j(d)$ for each division.
@@ -266,6 +274,15 @@ In Cambodia, fuel price shocks propagate rapidly into food delivery and restaura
 \end{align}
 Non-logistics sectors (Clothing, Furnishings, Healthcare, Education) are strictly insulated from fuel momentum, preventing spurious inflation contagion.
 
+\subsection{Khmer Cultural Festival and Lunar Holiday Demand Shocks}
+Cambodia experiences substantial seasonal demand surges during traditional cultural celebrations, particularly \textbf{Khmer New Year} (\textit{Choul Chhnam Thmey}, solar calendar in mid-April), \textbf{Pchum Ben} (\textit{Ancestors' Day}, 15-day lunar observance in September/October), and the \textbf{Water Festival} (\textit{Bon Om Touk}, lunar November). During these festival windows, temporary wholesale price surges occur for ritual foods (sticky rice, fruits, whole poultry) and regional inter-provincial passenger transport.
+
+To prevent the nowcaster from misinterpreting these temporary, mean-reverting festive demand shocks as permanent structural inflation innovations, the feature engineering engine computes an asymptotic exponential proximity decay kernel:
+\begin{equation}
+    \text{fest}_{\text{prox}}(d) = \exp\left( -\frac{\min_{h \in \mathcal{H}} |\text{date}(d) - \text{date}(h)|}{\tau_{\text{fest}}} \right)
+\end{equation}
+where $\mathcal{H}$ represents the official calendar of Cambodian national holidays and $\tau_{\text{fest}} = 7\text{ days}$ is the half-life relaxation parameter. Additionally, a binary festival window indicator $\mathbb{I}_{\text{fest}}(d) \in \{0, 1\}$ flags days within a $\pm 3$-day active celebration band. This calendar conditioning dampens forward momentum projections during holidays, ensuring that transient celebration markups naturally decay back to baseline without distorting the month-end nowcast.
+
 % ==============================================================================
 \section{The Benchmark Model: Atkeson--Ohanian Random Walk}
 % ==============================================================================
@@ -353,6 +370,74 @@ Uncertainty is time-dependent. On Day 1, almost the entire month is unknown; by 
     \text{CI}_{95\%}(d) = \left[ \widehat{\text{CPI}}_M(d) - \text{MoE}_{95\%}(d), \; \widehat{\text{CPI}}_M(d) + \text{MoE}_{95\%}(d) \right]
 \end{equation}
 As $d \to D$, the ratio $\frac{D-d}{D} \to 0$, causing the margin of error to collapse deterministically to zero at month-end.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.95]
+    % Background shading for uncertainty fan
+    \fill[blue!15, opacity=0.7] 
+        (0, 3.8) .. controls (2.5, 3.5) and (5.67, 3.1) .. (5.67, 2.90)
+        -- (5.67, 2.90) .. controls (7.5, 2.75) and (9.5, 2.52) .. (10, 2.50)
+        -- (10, 2.50) .. controls (9.5, 2.48) and (7.5, 2.25) .. (5.67, 2.10)
+        -- (5.67, 2.10) .. controls (5.67, 2.10) and (2.5, 1.5) .. (0, 1.2) -- cycle;
+
+    % Axes
+    \draw[->, thick, color=gray!70!black] (-0.3, 0) -- (10.8, 0) node[right] {\small Calendar Day ($d$)};
+    \draw[->, thick, color=gray!70!black] (0, -0.2) -- (0, 4.5) node[above] {\small Headline CPI Index};
+
+    % Day ticks
+    \draw (0, 0.1) -- (0, -0.1) node[below] {\footnotesize Day 1};
+    \draw (5.67, 0.1) -- (5.67, -0.1) node[below] {\footnotesize Day 17 (Today)};
+    \draw (10, 0.1) -- (10, -0.1) node[below] {\footnotesize Day 30};
+
+    % Upper and lower bound curves
+    \draw[dashed, color=primaryblue!80, thick] (0, 3.8) .. controls (2.5, 3.5) and (5.67, 3.1) .. (5.67, 2.90) .. controls (7.5, 2.75) and (9.5, 2.52) .. (10, 2.50);
+    \draw[dashed, color=primaryblue!80, thick] (0, 1.2) .. controls (2.5, 1.5) and (5.67, 2.1) .. (5.67, 2.10) .. controls (7.5, 2.25) and (9.5, 2.48) .. (10, 2.50);
+
+    % Realized path (Day 1 to 17)
+    \draw[very thick, color=primaryblue] (0, 2.38) .. controls (1.5, 2.44) and (3.0, 2.41) .. (4.2, 2.46) .. controls (4.8, 2.49) and (5.2, 2.48) .. (5.67, 2.50);
+    \fill[primaryblue] (5.67, 2.50) circle (3pt) node[above right] {\small \textbf{Realized: 100.145}};
+
+    % Projected forward path (Day 17 to 30)
+    \draw[thick, dashed, color=accentgreen] (5.67, 2.50) -- (10, 2.50);
+    \fill[accentgreen] (10, 2.50) circle (3pt) node[right] {\small \textbf{Nowcast: 100.156}};
+
+    % Vertical separator at d=17
+    \draw[dashdotted, thick, red!80!black] (5.67, 0) -- (5.67, 4.2) node[above] {\small \textbf{Evaluation Horizon} ($d=17$)};
+
+    % Annotations
+    \node[anchor=west, text=primaryblue] at (0.8, 1.7) {\footnotesize $\longleftarrow$ Realized Scraped Prices ($d \le 17$)};
+    \node[anchor=west, text=accentgreen] at (6.0, 3.4) {\footnotesize Projected Ridge Horizon $\longrightarrow$};
+    \node[anchor=west, text=primaryblue!80] at (0.4, 4.1) {\footnotesize \textbf{95\% Confidence Interval}: $\pm 1.96 \sigma_d \sqrt{\frac{D-d}{D}}$};
+\end{tikzpicture}
+\caption{The Intra-Month Uncertainty Cone: Asymptotic Collapse of Projection Variance as $d \to D$.}
+\label{fig:uncertainty_cone}
+\end{figure}
+
+\subsection{Production Code Architecture and Mathematical Mapping}
+To ensure reproducibility and operational auditability across government ministries, Table~\ref{tab:code_mapping} maps each theoretical equation directly to its production Python implementation and database table:
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{|l|l|l|X|}
+\hline
+\rowcolor{primaryblue!15}
+\textbf{Symbol / Equation} & \textbf{Mathematical Concept} & \textbf{Python Class \& Method} & \textbf{PostgreSQL Target} \\ \hline
+$\Delta \ln P_{j, t}$ & Stationary Log-Return & \makecell[l]{\texttt{MacroDatasetBuilder.}\\ \texttt{build\_stationary\_matrix}} & \makecell[l]{\texttt{gold.dim\_nis\_}\\ \texttt{official\_cpi}} \\ \hline
+$\hat{\boldsymbol{\beta}}(\lambda), \hat{\alpha}$ & Ridge Estimator & \makecell[l]{\texttt{RidgeCalibrationEngine.}\\ \texttt{run\_calibration}} & \makecell[l]{\texttt{gold.nowcast\_}\\ \texttt{calibrated\_params}} \\ \hline
+$\lambda^* = 0.01$ & 5-Fold Cross-Validation & \texttt{RidgeCV(cv=5)} & \makecell[l]{\texttt{gold.nowcast\_}\\ \texttt{calibrated\_params}} \\ \hline
+$\mathbf{x}_{01}(d), \mathbf{x}_{11}(d)$ & Fuel Logistics Injection & \makecell[l]{\texttt{RidgeBasketDriftEstimator.}\\ \texttt{extract\_features}} & \texttt{ml/nowcaster.py} \\ \hline
+$\text{fest}_{\text{prox}}(d)$ & Lunar Holiday Decay & \makecell[l]{\texttt{MacroDatasetBuilder.}\\ \texttt{is\_major\_festival}} & \texttt{ml/config.py} \\ \hline
+$I_{j, M}(d)$ & Time-Weighted Blending & \makecell[l]{\texttt{HybridNowcaster.}\\ \texttt{\_blend\_division\_index}} & \texttt{gold.fct\_cpi\_nowcast} \\ \hline
+$\text{Headline CPI}$ & Fixed Laspeyres Synthesis & \makecell[l]{\texttt{HybridNowcaster.}\\ \texttt{execute\_daily\_nowcast}} & \texttt{gold.fct\_cpi\_nowcast} \\ \hline
+$\text{Core CPI}$ & Basket Excl. Food \& Energy & \makecell[l]{\texttt{HybridNowcaster.}\\ \texttt{execute\_daily\_nowcast}} & \texttt{gold.fct\_cpi\_nowcast} \\ \hline
+$\widehat{\text{CPI}}_{\text{NIS}}$ & Exponential Chain-Link & \makecell[l]{\texttt{HybridNowcaster.}\\ \texttt{execute\_daily\_nowcast}} & \texttt{gold.fct\_cpi\_nowcast} \\ \hline
+$\text{RelRMSE} = 0.8232$ & Random Walk Benchmark & \makecell[l]{\texttt{RidgeCalibrationEngine.}\\ \texttt{run\_calibration}} & \makecell[l]{\texttt{gold.nowcast\_}\\ \texttt{performance\_metrics}} \\ \hline
+\end{tabularx}
+\caption{Mathematical Formulation to Production Code and Database Schema Mapping.}
+\label{tab:code_mapping}
+\end{table}
 
 % ==============================================================================
 \section{Complete Numerical Walkthrough (Real Case Study)}

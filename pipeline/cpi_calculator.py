@@ -248,7 +248,7 @@ class CPICalculationEngine:
                 s.store_slug,
                 s.name_clean,
                 COALESCE(h.hedonic_adjusted_price_khr, s.unit_price_khr) AS unit_price_khr,
-                s.price_khr,
+                COALESCE(h.hedonic_adjusted_price_khr, s.price_khr) AS price_khr,
                 s.original_price_khr,
                 s.on_promo,
                 s.discount_pct,

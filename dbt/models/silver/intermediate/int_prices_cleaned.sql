@@ -44,6 +44,10 @@ raw as (
             when lower(coalesce(rp.raw_payload ->> 'on_promo', 'false')) in ('true', 't', '1', 'yes') then true
             else false
         end as raw_on_promo,
+        case
+            when lower(coalesce(rp.raw_payload ->> 'cpi_eligible', 'true')) in ('false', 'f', '0', 'no') then false
+            else true
+        end as raw_cpi_eligible,
         (rp.raw_payload ->> 'original_price')::numeric as original_price_curr,
         rp.price as price_original_curr,
         rp.currency,
@@ -208,7 +212,8 @@ select
         else false
     end as is_outlier,
     (
-        p.price_khr > 0 
+        coalesce(p.raw_cpi_eligible, true)
+        and p.price_khr > 0 
         and p.price_khr <= 100000000
         and not (p.store_slug in ('khmer24', 'realestate') and p.category_native ilike '%Land For Rent%')
     ) as cpi_eligible,

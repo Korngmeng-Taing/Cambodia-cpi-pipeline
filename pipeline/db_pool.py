@@ -145,6 +145,8 @@ class ConnectionPoolManager:
                 )
                 try:
                     pool = ThreadedConnectionPool(minconn, maxconn, alt_dsn, connect_timeout=3)
+                    # Cache under original requested DSN as well as alt_dsn to avoid reconnect delays
+                    self._pools[dsn] = pool
                     dsn = alt_dsn
                 except psycopg2.OperationalError:
                     raise primary_err

@@ -9,17 +9,17 @@
 ) }}
 
 with pipeline_monthly as (
-    select distinct on (cpi_month)
+    select
         cpi_month,
-        monthly_headline_cpi as pipeline_headline_cpi,
-        monthly_core_cpi as pipeline_core_cpi,
-        headline_mom_inflation_pct as pipeline_mom_pct,
-        headline_yoy_inflation_pct as pipeline_yoy_pct,
-        active_days_in_month,
-        item_count as total_basket_items,
-        observation_count as total_observations
+        max(monthly_headline_cpi) as pipeline_headline_cpi,
+        max(monthly_core_cpi) as pipeline_core_cpi,
+        max(headline_mom_inflation_pct) as pipeline_mom_pct,
+        max(headline_yoy_inflation_pct) as pipeline_yoy_pct,
+        max(active_days_in_month) as active_days_in_month,
+        sum(item_count) as total_basket_items,
+        sum(observation_count) as total_observations
     from {{ source('gold', 'fct_cpi_monthly') }}
-    order by cpi_month, created_at desc
+    group by cpi_month
 ),
 nis_benchmark as (
     select

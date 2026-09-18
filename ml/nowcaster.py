@@ -692,9 +692,16 @@ class CPINowcaster:
                     """
                 )
 
-                payload = dict(nowcast_res)
-                if "baskets_detail" in payload and isinstance(payload["baskets_detail"], (dict, list)):
-                    payload["baskets_detail"] = json.dumps(payload["baskets_detail"])
+                payload = {}
+                for k, v in nowcast_res.items():
+                    if isinstance(v, (np.floating, float)):
+                        payload[k] = None if np.isnan(v) else float(v)
+                    elif isinstance(v, (np.integer, int)):
+                        payload[k] = int(v)
+                    elif isinstance(v, (dict, list)):
+                        payload[k] = json.dumps(v)
+                    else:
+                        payload[k] = v
 
                 cur.execute(
                     """

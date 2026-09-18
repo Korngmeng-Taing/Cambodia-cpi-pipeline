@@ -233,38 +233,49 @@ class NISBenchmarkImporter:
             return 0
 
         count = 0
-        with open(self.seed_file_path, mode="r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                cpi_month = row["cpi_month"]
-                headline_cpi = float(row["headline_cpi"]) if row.get("headline_cpi") else None
-                if headline_cpi is None:
-                    continue
-                core_cpi = float(row["core_cpi"]) if row.get("core_cpi") else None
-                mom = float(row["mom_inflation_pct"]) if row.get("mom_inflation_pct") else None
-                yoy = float(row["yoy_inflation_pct"]) if row.get("yoy_inflation_pct") else None
-                div_indices = {}
-                for d in range(1, 13):
-                    key = f"cpi_division_{d:02d}"
-                    if row.get(key):
-                        try:
-                            div_indices[f"{d:02d}"] = float(row[key])
-                        except (ValueError, TypeError):
-                            pass
-                rel_date = row.get("release_date")
-                notes = row.get("source_notes") or "NIS Cambodia Official CPI Historical Series"
-                self.ingest_record(
-                    cpi_month=cpi_month,
-                    headline_cpi=headline_cpi,
-                    core_cpi=core_cpi,
-                    mom_inflation_pct=mom,
-                    yoy_inflation_pct=yoy,
-                    division_indices=div_indices,
-                    release_date=rel_date,
-                    source_notes=notes,
-                    sync_seed=False,
-                )
-                count += 1
+        conn = None
+        try:
+            conn = get_db_connection()
+        except Exception as e:
+            log.warning("Could not obtain DB connection for bulk sync: %s", e)
+
+        try:
+            with open(self.seed_file_path, mode="r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    cpi_month = row["cpi_month"]
+                    headline_cpi = float(row["headline_cpi"]) if row.get("headline_cpi") else None
+                    if headline_cpi is None:
+                        continue
+                    core_cpi = float(row["core_cpi"]) if row.get("core_cpi") else None
+                    mom = float(row["mom_inflation_pct"]) if row.get("mom_inflation_pct") else None
+                    yoy = float(row["yoy_inflation_pct"]) if row.get("yoy_inflation_pct") else None
+                    div_indices = {}
+                    for d in range(1, 13):
+                        key = f"cpi_division_{d:02d}"
+                        if row.get(key):
+                            try:
+                                div_indices[f"{d:02d}"] = float(row[key])
+                            except (ValueError, TypeError):
+                                pass
+                    rel_date = row.get("release_date")
+                    notes = row.get("source_notes") or "NIS Cambodia Official CPI Historical Series"
+                    self.ingest_record(
+                        cpi_month=cpi_month,
+                        headline_cpi=headline_cpi,
+                        core_cpi=core_cpi,
+                        mom_inflation_pct=mom,
+                        yoy_inflation_pct=yoy,
+                        division_indices=div_indices,
+                        release_date=rel_date,
+                        source_notes=notes,
+                        conn=conn,
+                        sync_seed=False,
+                    )
+                    count += 1
+        finally:
+            if conn is not None:
+                conn.close()
         log.info("Synced %d records from seed to gold.dim_nis_official_cpi.", count)
         return count
 

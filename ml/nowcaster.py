@@ -495,10 +495,13 @@ class CPINowcaster:
                 realized_div = 100.0
                 latest_div = 100.0
 
-            # 2. Projected remaining index for this division
+            # 2. Projected remaining index for this division via Exact Discrete Arithmetic Mean
             div_drift = float(drift_map.get(div_code, 0.0))
             if days_remaining > 0:
-                projected_div = latest_div * float(np.exp(div_drift * (days_remaining + 1) / 2.0))
+                # Exact discrete arithmetic mean across all unobserved future calendar days:
+                # (1 / N) * sum_{k=1}^N [ latest_div * exp(div_drift * k) ]
+                future_days = np.arange(1, days_remaining + 1, dtype=float)
+                projected_div = float(np.mean(latest_div * np.exp(div_drift * future_days)))
             else:
                 projected_div = realized_div
 

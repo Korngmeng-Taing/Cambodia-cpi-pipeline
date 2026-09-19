@@ -264,11 +264,11 @@ class GeminiCOICOPClassifier:
 
         try:
             with conn.cursor() as cur:
+                limit_clause = f"LIMIT {int(limit)}" if (limit and limit > 0) else "LIMIT 2000"
                 if scrape_date:
-                    limit_clause = f"LIMIT {int(limit)}" if (limit and limit > 0) else ""
                     cur.execute(
                         f"""
-                        SELECT DISTINCT ci.item_id, ci.canonical_name, ci.brand
+                        SELECT ci.item_id, ci.canonical_name, ci.brand
                         FROM silver.canonical_items ci
                         LEFT JOIN silver.item_match_log iml ON ci.item_id = iml.item_id
                         WHERE (
@@ -278,12 +278,15 @@ class GeminiCOICOPClassifier:
                             OR ci.coicop_division IS NULL
                             OR array_length(string_to_array(ci.coicop_code, '.'), 1) < 3
                         )
+                        GROUP BY ci.item_id, ci.canonical_name, ci.brand
+                        ORDER BY 
+                            MIN(CASE WHEN iml.matched_at::date = %s::date THEN 0 ELSE 1 END),
+                            ci.item_id
                         {limit_clause};
                         """,
-                        (scrape_date,),
+                        (scrape_date, scrape_date),
                     )
                 else:
-                    limit_clause = f"LIMIT {int(limit)}" if (limit and limit > 0) else "LIMIT 2000"
                     cur.execute(
                         f"""
                         SELECT item_id, canonical_name, brand
@@ -292,6 +295,7 @@ class GeminiCOICOPClassifier:
                            OR coicop_division IS NULL
                            OR coicop_code LIKE '%%.unclassified'
                            OR array_length(string_to_array(coicop_code, '.'), 1) < 3
+                        ORDER BY item_id
                         {limit_clause};
                         """
                     )

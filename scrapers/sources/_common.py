@@ -113,6 +113,19 @@ def _cffi_post(url: str, **kwargs: Any) -> requests.Response:
     return _default_cffi_post(url, **kwargs)
 
 
+async def _cffi_get_async(url: str, **kwargs: Any) -> Any:
+    """Asynchronous GET with Chrome TLS impersonation when curl_cffi is available, otherwise non-blocking thread."""
+    timeout = kwargs.pop("timeout", 30)
+    if HAS_CURL_CFFI:
+        try:
+            async with cffi_requests.AsyncSession(impersonate="chrome") as s:
+                return await s.get(url, timeout=timeout, **kwargs)
+        except Exception:
+            pass
+    import asyncio
+    return await asyncio.to_thread(_cffi_get, url, timeout=timeout, **kwargs)
+
+
 def build_canonical_record(
     source_slug: str,
     source_type: str,

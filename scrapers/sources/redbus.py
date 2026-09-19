@@ -781,3 +781,93 @@ class RedBusKhScraper(BaseScraper):
             )
 
         return records
+
+    async def fetch_records_async(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
+        """Concurrent asynchronous operator fare querying with deduplicated operator tasks."""
+        import asyncio
+        from scrapers.sources._common import _cffi_get_async
+
+        ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
+        op_fare_cache: dict[str, float] = {}
+
+        unique_op_slugs = {
+            item.get("op_slug") for item in REDBUS_OPERATOR_TRIPS if item.get("op_slug")
+        }
+        semaphore = asyncio.Semaphore(6)
+
+        async def _fetch_op_fare(op_slug: str):
+            op_url = f"{REDBUS_OPERATOR_BASE_URL}/{op_slug}"
+            async with semaphore:
+                try:
+                    resp = await _cffi_get_async(op_url, timeout=10)
+                    status = getattr(resp, "status_code", None)
+                    if status == 200:
+                        text = getattr(resp, "text", "")
+                        parsed = self._parse_operator_page(text)
+                        if parsed.get("price_usd") and parsed["price_usd"] > 0:
+                            return op_slug, parsed["price_usd"]
+                except Exception:
+                    pass
+            return op_slug, None
+
+        results = await asyncio.gather(*[_fetch_op_fare(slug) for slug in unique_op_slugs])
+        for op_slug, fare in results:
+            if fare:
+                op_fare_cache[op_slug] = fare
+
+        records: list[dict[str, Any]] = []
+        for item in REDBUS_OPERATOR_TRIPS:
+            dest = item["dest"]
+            slug = item["slug"]
+            operator = item["operator"]
+            bus_type = item["bus_type"]
+            op_slug = item.get("op_slug")
+            price = item["price"]
+            dep_time = item["dep"]
+            arr_time = item["arr"]
+            duration = item["dur"]
+            url = f"{REDBUS_BASE_URL}/{slug}"
+            is_fallback = False
+            fallback_reason = None
+
+            if op_slug and op_slug in op_fare_cache:
+                live_base = op_fare_cache[op_slug]
+                if live_base > 0:
+                    log.debug(
+                        "redBus operator %s: baseline price=%.2f, operator_starting_fare=%.2f",
+                        op_slug, price, live_base
+                    )
+            else:
+                is_fallback = True
+                fallback_reason = "redBus static route baseline tariff (operator fetch unavailable)"
+
+            records.append(
+                build_canonical_record(
+                    source_slug="redbus",
+                    source_type="transport",
+                    store_name="redBus Cambodia",
+                    item_id=item["id"],
+                    name=f"Bus Ticket: Phnom Penh to {dest} ({operator} {bus_type})",
+                    price=price,
+                    currency="USD",
+                    category_native="Intercity Bus > Passenger Transport by Road",
+                    url=url,
+                    scrape_date=ds,
+                    is_fallback=is_fallback,
+                    fallback_reason=fallback_reason,
+                    attrs={
+                        "origin": "Phnom Penh",
+                        "destination": dest,
+                        "operator": operator,
+                        "bus_type": bus_type,
+                        "departure_time": dep_time,
+                        "arrival_time": arr_time,
+                        "expected_hours": duration,
+                        "daily_services": "Active Daily Service",
+                    },
+                )
+            )
+
+        return records

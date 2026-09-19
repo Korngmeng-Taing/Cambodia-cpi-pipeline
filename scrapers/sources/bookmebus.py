@@ -939,3 +939,110 @@ class BookMeBusScraper(BaseScraper):
                 )
 
         return records
+
+    async def fetch_records_async(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
+        """Concurrent asynchronous route querying with bounded semaphore to maximize throughput."""
+        import asyncio
+
+        ds_date = (
+            pendulum.parse(str(scrape_date)).date()
+            if scrape_date
+            else pendulum.today("Asia/Phnom_Penh").date()
+        )
+        ds = ds_date.format("YYYY-MM-DD")
+        target_date = ds_date.add(days=2).format("DD-MM-YYYY")
+
+        html_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+
+        destinations = self._fetch_destinations()
+        recorded_dest_slugs: set[str] = set()
+        records: list[dict[str, Any]] = []
+        semaphore = asyncio.Semaphore(5)
+
+        async def _fetch_one_route(dest_info: dict[str, Any]):
+            dest_name = dest_info["name"]
+            slug = dest_info["slug"]
+            url = f"https://bookmebus.com/en/search/bus/phnom-penh/{slug}?on_date={target_date}"
+            async with semaphore:
+                try:
+                    resp = await _cffi_get_async(url, headers=html_headers, timeout=8)
+                    status = getattr(resp, "status_code", None)
+                    if status == 200:
+                        text = getattr(resp, "text", "")
+                        trips = self._parse_search_html(text, "Phnom Penh", dest_name)
+                        return slug, dest_name, url, trips
+                except Exception as exc:
+                    log.debug("Async BookMeBus route %s query notice (%s)", slug, exc)
+            return slug, dest_name, url, []
+
+        results = await asyncio.gather(*[_fetch_one_route(d) for d in destinations])
+        for slug, dest_name, url, trips in results:
+            if trips:
+                recorded_dest_slugs.add(slug)
+                for idx, trip in enumerate(trips):
+                    operator_clean = trip["operator"]
+                    bus_type_clean = trip["bus_type"]
+                    dep_slug = re.sub(r"[^a-zA-Z0-9]", "", str(trip.get("departure_time", ""))).lower() or str(idx)
+                    item_id = f"bmb_{slug}_{re.sub(r'[^a-zA-Z0-9]', '_', operator_clean).lower()}_{dep_slug}"
+
+                    records.append(
+                        build_canonical_record(
+                            source_slug="bookmebus",
+                            source_type="transport",
+                            store_name="BookMeBus Cambodia",
+                            item_id=item_id,
+                            name=f"Bus Ticket: Phnom Penh - {dest_name} ({operator_clean} {bus_type_clean})",
+                            price=trip["price_usd"],
+                            currency="USD",
+                            category_native="Intercity Bus > Passenger Transport by Road",
+                            url=url,
+                            scrape_date=ds,
+                            is_fallback=False,
+                            attrs={
+                                "origin": "Phnom Penh",
+                                "destination": dest_name,
+                                "operator": operator_clean,
+                                "bus_type": bus_type_clean,
+                                "departure_time": trip["departure_time"],
+                                "arrival_time": trip["arrival_time"],
+                                "expected_hours": trip["expected_hours"],
+                                "booking_url": url,
+                            },
+                        )
+                    )
+
+        # Baseline fallback for unreturned routes
+        for route in BOOKMEBUS_BASELINE_ROUTES:
+            if route["slug"] not in recorded_dest_slugs:
+                records.append(
+                    build_canonical_record(
+                        source_slug="bookmebus",
+                        source_type="transport",
+                        store_name="BookMeBus Cambodia",
+                        item_id=route["id"],
+                        name=f"Bus Ticket: Phnom Penh - {route['dest']} ({route['operator']} {route['bus_type']})",
+                        price=route["price"],
+                        currency="USD",
+                        category_native="Intercity Bus > Passenger Transport by Road",
+                        url=f"https://bookmebus.com/en/search/bus/phnom-penh/{route['slug']}?on_date={target_date}",
+                        scrape_date=ds,
+                        is_fallback=True,
+                        attrs={
+                            "origin": "Phnom Penh",
+                            "destination": route["dest"],
+                            "operator": route["operator"],
+                            "bus_type": route["bus_type"],
+                            "departure_time": route["dep"],
+                            "arrival_time": route["arr"],
+                            "expected_hours": route["dur"],
+                        },
+                    )
+                )
+
+        return records

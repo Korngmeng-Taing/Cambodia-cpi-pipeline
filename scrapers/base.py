@@ -44,6 +44,17 @@ class BaseScraper(ABC):
         """
         raise NotImplementedError
 
+    async def fetch_records_async(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> list[dict[str, Any]]:
+        """
+        Asynchronously extracts raw product and price records.
+        Defaults to running synchronous fetch_records in a threadpool executor.
+        Subclasses can override for native async I/O with concurrency semaphores.
+        """
+        import asyncio
+        return await asyncio.to_thread(self.fetch_records, scrape_date=scrape_date)
+
     def scrape(self, scrape_date: pendulum.Date | None = None) -> dict[str, Any]:
         """
         Executes scrape and packages the payload with metadata for Bronze staging upsert.
@@ -53,6 +64,33 @@ class BaseScraper(ABC):
 
         ds = self._scrape_date_str(scrape_date)
         records = self.fetch_records(scrape_date=scrape_date)
+
+        if not records and self.on_empty is OnEmpty.RAISE:
+            raise RuntimeError(
+                f"{self.store_slug}: 0 records scraped on {ds} (on_empty=RAISE)"
+            )
+
+        stamped = [self._stamp(r) for r in records]
+        return {
+            "store_slug": self.store_slug,
+            "source_type": self.source_type,
+            "scrape_date": ds,
+            "schema_version": SCRAPER_SCHEMA_VERSION,
+            "record_count": len(stamped),
+            "records": stamped,
+        }
+
+    async def scrape_async(
+        self, scrape_date: pendulum.Date | None = None
+    ) -> dict[str, Any]:
+        """
+        Asynchronously executes scrape and packages payload.
+        """
+        if scrape_date is None:
+            scrape_date = pendulum.today("Asia/Phnom_Penh").date()
+
+        ds = self._scrape_date_str(scrape_date)
+        records = await self.fetch_records_async(scrape_date=scrape_date)
 
         if not records and self.on_empty is OnEmpty.RAISE:
             raise RuntimeError(

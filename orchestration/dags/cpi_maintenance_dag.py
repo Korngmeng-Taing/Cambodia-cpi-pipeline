@@ -67,10 +67,13 @@ def _run_table_vacuum_analyze(**context) -> None:
     from pipeline.config import get_db_connection
 
     tables_to_analyze = [
+        "staging.raw_scrapes",
         "bronze.raw_prices",
         "silver.clean_store_prices",
         "silver.canonical_items",
+        "silver.dim_canonical_products",
         "silver.dim_coicop_ai_cache",
+        "gold.dim_item_base_prices",
         "gold.fct_daily_prices",
         "gold.fct_elementary_indices",
         "gold.fct_cpi_daily",

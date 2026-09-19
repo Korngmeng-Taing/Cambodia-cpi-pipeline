@@ -148,6 +148,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_canonical_items_barcode ON silver.canonica
 CREATE INDEX IF NOT EXISTS idx_canonical_items_name ON silver.canonical_items(canonical_name);
 CREATE INDEX IF NOT EXISTS idx_canonical_items_lower_trim ON silver.canonical_items (lower(trim(canonical_name)));
 CREATE INDEX IF NOT EXISTS idx_canonical_name_trgm ON silver.canonical_items USING gin (canonical_name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_canonical_items_active ON silver.canonical_items(item_id, coicop_division);
 
 -- Item matching audit log
 CREATE TABLE IF NOT EXISTS silver.item_match_log (

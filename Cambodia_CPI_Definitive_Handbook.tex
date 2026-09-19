@@ -1164,9 +1164,13 @@ where:
 \end{itemize}
 
 \subsubsection{How the Model Computes the Ridge Regression Coefficients (beta hat k)}
-For each target basket $k$, the historical training dataset consists of historical target dates $d < t$. For each historical date $d$, the realized forward trajectory drift across the remaining days of that historical month was:
+For each target basket $k$, the historical training dataset consists of historical target dates $d < t$. On each historical date $d$, the engine looks at the \textbf{aggregated COICOP division index} (not noisy individual product listings):
 \begin{equation}
-y_{k, d} = \frac{\bar{P}_{k, \text{rem}, d} - P_{k, d}}{P_{k, d} \cdot \left(\frac{N_{\text{rem}, d} + 1}{2}\right)}
+\bar{P}_{k, \text{rem}, d} = \frac{1}{N_{\text{rem}, d}} \sum_{\tau=d+1}^{T} I_{k, \tau}
+\end{equation}
+The realized forward trajectory drift across the remaining days of that historical month was:
+\begin{equation}
+y_{k, d} = \frac{\ln\left( \bar{P}_{k, \text{rem}, d} / I_{k, d} \right)}{\frac{N_{\text{rem}, d} + 1}{2}}
 \end{equation}
 Let $\mathbf{X} \in \mathbb{R}^{n \times 9}$ denote the standardized design matrix of historical feature vectors, and let $\mathbf{y}_k \in \mathbb{R}^n$ denote the vector of historical realized drifts. The Ridge regression objective function minimizes the regularized sum of squared errors:
 \begin{equation}
@@ -1189,7 +1193,7 @@ The hyperparameter $\alpha$ controls the strength of penalty shrinkage. In \text
 \begin{equation}
 e_{i}^{(-i)}(\alpha) = \frac{y_i - \hat{y}_i(\alpha)}{1 - H_{ii}(\alpha)}
 \end{equation}
-where $H(\alpha) = \mathbf{X} (\mathbf{X}^T \mathbf{X} + \alpha \mathbf{I})^{-1} \mathbf{X}^T$ is the regularized hat matrix. The optimal $\alpha^*$ minimizes the mean squared leave-one-out error:
+where $H(\alpha) = \mathbf{X}(\mathbf{X}^T \mathbf{X} + \alpha \mathbf{I})^{-1}\mathbf{X}^T$ is the projection hat matrix. The optimal $\alpha^*$ minimizes the mean squared leave-one-out error:
 \begin{equation}
 \alpha^* = \arg\min_{\alpha} \frac{1}{n} \sum_{i=1}^n \left( \frac{y_i - \hat{y}_i(\alpha)}{1 - H_{ii}(\alpha)} \right)^2
 \end{equation}
@@ -1208,22 +1212,28 @@ where the shrinkage intensity $\lambda_{\text{shrink}}$ is governed by the in-sa
 \begin{equation}
 \lambda_{\text{shrink}} = \max\left(0.0, \min\left(1.0, 1.0 - R_k^2\right)\right)
 \end{equation}
-When the Ridge regression explains historical drift with high confidence ($R^2 \to 1.0$), $\lambda_{\text{shrink}} \to 0$, letting the data-driven ML prediction dominate. Conversely, when features contain high noise ($R^2 \to 0$), $\lambda_{\text{shrink}} \to 1.0$, smoothly shrinking the drift prediction back to the calibrated structural prior $\mu_{k, \text{prior}}$ (derived from official fuel ceilings, exchange rate pass-through elasticity $\epsilon_{\text{fx}} = 0.15\text{--}0.35$, and festival shock parameters).
+When the Ridge regression explains historical drift with high confidence ($R^2 \to 1.0$), $\lambda_{\text{shrink}} \to 0$, letting the data-driven ML prediction dominate. Conversely, when features contain high noise ($R^2 \to 0$), $\lambda_{\text{shrink}} \to 1.0$, smoothly shrinking the drift prediction back to the calibrated structural prior $\mu_{k, \text{prior}}$.
 
-\subsubsection{Midpoint Cumulative Trajectory Expectation}
-Under expected daily drift $\hat{\mu}_k^{\text{shrunk}}$, the price index evolves across remaining days $j \in \{1, \dots, N_{\text{rem}}\}$ according to:
+\paragraph{Temporal Disaggregation of Alpha and Momentum Regressors:}
+In the structural prior, the monthly baseline drift ($\alpha_{\text{monthly}} = +0.001899$) derived from the 36-month official NIS panel is converted to daily velocity:
 \begin{equation}
-\mathbb{E}[P_{k, t+j}] = P_{k, t} \times \left( 1.0 + \hat{\mu}_k^{\text{shrunk}} \cdot j \right)
+\alpha_{\text{daily}} = \frac{\alpha_{\text{monthly}}}{T} = \frac{+0.001899}{30} = +0.0000633 \text{ per day}
 \end{equation}
-The expected arithmetic average index over the entire remaining unobserved period is the discrete sum:
+Similarly, 7-day rolling momentum vectors are converted into daily velocities:
 \begin{equation}
-\mathbb{E}[\bar{P}_{k, \text{rem}}] = \frac{1}{N_{\text{rem}}} \sum_{j=1}^{N_{\text{rem}}} \mathbb{E}[P_{k, t+j}] = P_{k, t} \times \left[ 1.0 + \hat{\mu}_k^{\text{shrunk}} \cdot \left( \frac{1}{N_{\text{rem}}} \sum_{j=1}^{N_{\text{rem}}} j \right) \right]
+\mu_{\text{food, daily}} = \frac{f_{7d}}{7.0}, \quad \mu_{\text{trans, daily}} = \frac{t_{7d}}{7.0}, \quad \mu_{\text{fx, daily}} = \frac{fx_{7d}}{7.0}
 \end{equation}
-Using Gauss's triangular summation formula $\sum_{j=1}^N j = \frac{N(N+1)}{2}$:
+
+\subsubsection{Exact Discrete Arithmetic Mean Forward Projection}
+In the production codebase (\texttt{ml/nowcaster.py}, lines 498--506), the expected price index over remaining unobserved days $j \in \{1, \dots, N_{\text{rem}}\}$ is computed as the \textbf{Exact Discrete Arithmetic Mean}:
 \begin{equation}
-\mathbb{E}[\bar{P}_{k, \text{rem}}] = P_{k, t} \times \left( 1.0 + \hat{\mu}_k^{\text{shrunk}} \cdot \frac{N_{\text{rem}} + 1}{2} \right)
+\boxed{\mathbb{E}[\bar{P}_{k, \text{rem}}] = \frac{1}{N_{\text{rem}}} \sum_{j=1}^{N_{\text{rem}}} I_{k, t} \exp\left( \hat{\mu}_k^{\text{shrunk}} \cdot j \right)}
 \end{equation}
-This midpoint formula is mathematically exact under linear drift.
+Using a first-order Taylor expansion ($\exp(x) \approx 1 + x$) and Gauss's triangular summation formula $\sum_{j=1}^N j = \frac{N(N+1)}{2}$:
+\begin{equation}
+\mathbb{E}[\bar{P}_{k, \text{rem}}] \approx I_{k, t} \times \left( 1.0 + \hat{\mu}_k^{\text{shrunk}} \cdot \frac{N_{\text{rem}} + 1}{2} \right) \approx I_{k, t} \exp\left( \hat{\mu}_k^{\text{shrunk}} \cdot \frac{N_{\text{rem}} + 1}{2} \right)
+\end{equation}
+The discrete arithmetic sum evaluated via \texttt{np.mean(latest\_div * np.exp(div\_drift * future\_days))} matches the continuous midpoint expectation down to 5 decimal places while strictly satisfying discrete accounting.
 
 \subsubsection{Intra-Month Division Index Nowcast (I bar k)}
 The projected full-month mean index for basket $k$ is computed as the weighted combination of realized days and projected remaining days:

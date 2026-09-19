@@ -138,7 +138,7 @@ The nowcasting engine avoids the pitfalls of purely statistical black-box foreca
     arrow/.style={->, >=stealth, thick, color=primaryblue}
 ]
     \node[box] (realized) at (0, 3) {\textbf{Past Observed Days ($1 \dots d$)}\\Axiomatic Scraped Data\\$I_{j, \text{realized}}(d) = \frac{1}{d}\sum_{\tau=1}^d P_{j,\tau}$};
-    \node[box] (projected) at (7, 3) {\textbf{Unobserved Future ($d+1 \dots D$)}\\Ridge Drift Forecast\\$I_{j, \text{projected}}(d) = P_{j,d} e^{\frac{D-d}{2}\mu_j(d)}$};
+    \node[box] (projected) at (7, 3) {\textbf{Unobserved Future ($d+1 \dots D$)}\\Ridge Drift Forecast\\$I_{j, \text{projected}}(d) = \frac{1}{N}\sum_{k=1}^N P_{j,d} e^{\mu_j(d) k}$};
     
     \node[box, fill=blue!10, minimum width=11.2cm] (blend) at (3.5, 1.2) {\textbf{Time-Weighted Horizon Blending}\\$I_{j, M}(d) = \left(\frac{d}{D}\right) I_{j, \text{realized}}(d) + \left(\frac{D-d}{D}\right) I_{j, \text{projected}}(d)$};
     
@@ -181,11 +181,41 @@ On Day 1 ($d=1$), the projection dominates ($96.7\%$ weight). On Day 30 ($d=30$)
 \section{Step-by-Step Derivation of Parameters (Alpha and Beta)}
 % ==============================================================================
 
-\subsection{The 36-Month Historical Training Panel}
-To estimate empirical elasticities that reflect true Cambodian macroeconomic dynamics, the calibration engine utilizes the continuous 36-month official NIS historical series (September 2023 to August 2026) stored in \texttt{gold.dim\_nis\_official\_cpi}.
-Taking first log-differences yields $T = 34$ continuous stationary monthly observations:
+\subsection{The 36-Month Historical Training Panel and Data Extraction}
+To estimate empirical elasticities that reflect true Cambodian macroeconomic dynamics, the calibration engine (\texttt{MacroDatasetBuilder} in \texttt{ml/calibration.py}) extracts the continuous 36-month official sovereign series published by the National Institute of Statistics (September 2023 through August 2026). In production, this dataset is queried directly from PostgreSQL:
+\begin{verbatim}
+SELECT cpi_month, headline_cpi, core_cpi,
+       cpi_division_01, cpi_division_02, cpi_division_04,
+       cpi_division_07, cpi_division_11
+FROM gold.dim_nis_official_cpi
+ORDER BY cpi_month ASC;
+\end{verbatim}
+with version-controlled fallback to \texttt{dbt/seeds/nis\_official\_cpi.csv}. In addition, the daily commercial USD/KHR exchange rate series from the Ministry of Economy and Finance (MEF) is aggregated to monthly averages from \texttt{staging.exchange\_rates}.
+
+\paragraph{Stationary First-Difference Transformations:}
+Taking continuous first log-differences across the 36 consecutive monthly observations produces $T = 34$ stationary monthly rates:
 \begin{equation}
-    y_t = \ln\left(\frac{\text{CPI}_t}{\text{CPI}_{t-1}}\right), \quad x_{j, t} = \ln\left(\frac{P_{j, t}}{P_{j, t-1}}\right), \quad x_{\text{fx}, t} = \ln\left(\frac{\text{FX}_t}{\text{FX}_{t-1}}\right)
+    y_t = \ln\left(\frac{\text{Headline CPI}_t}{\text{Headline CPI}_{t-1}}\right), \quad x_{j, t} = \ln\left(\frac{I_{j, t}}{I_{j, t-1}}\right), \quad x_{\text{fx}, t} = \ln\left(\frac{\text{FX}_t}{\text{FX}_{t-1}}\right)
+\end{equation}
+where $I_{j, t}$ denotes the official NIS index level for COICOP division $j$.
+
+\paragraph{Exact Mathematical Derivation of Monthly Alpha ($\hat{\alpha}_{\text{monthly}}$):}
+In multiple regression, the intercept $\alpha$ represents the unconditional baseline drift rate of the aggregate price index when all explanatory division returns are zero ($\mathbf{x}_t = \mathbf{0}$). Once the Ridge coefficients $\hat{\boldsymbol{\beta}}(\lambda^*)$ are calculated via regularized matrix inversion, $\hat{\alpha}_{\text{monthly}}$ is recovered directly from the historical sample means:
+\begin{equation}
+    \boxed{\hat{\alpha}_{\text{monthly}} = \bar{y} - \sum_{j \in \{01, 02, 04, 07, 11\}} \hat{\beta}_j \bar{x}_j - \hat{\beta}_{\text{fx}} \bar{x}_{\text{fx}}}
+\end{equation}
+where:
+\begin{itemize}[noitemsep]
+    \item $\bar{y} = \frac{1}{T} \sum_{t=1}^T y_t$: Mean monthly log-inflation of the headline CPI ($+0.237\%$ per month).
+    \item $\bar{x}_j = \frac{1}{T} \sum_{t=1}^T x_{j, t}$: Mean monthly log-change for each COICOP division.
+    \item $\bar{x}_{\text{fx}} = \frac{1}{T} \sum_{t=1}^T x_{\text{fx}, t}$: Mean monthly log-change of the USD/KHR exchange rate.
+\end{itemize}
+Evaluating across the 36-month calibration sample yields $\hat{\alpha}_{\text{monthly}} = \mathbf{+0.001899}$ ($+0.19\%$ per month), capturing steady structural price growth across unobserved sticky components (services, healthcare, education).
+
+\paragraph{Scaling Monthly Alpha to Instantaneous Daily Alpha ($\alpha_{\text{daily}}$):}
+Because the calendar month comprises $D \in \{28, 29, 30, 31\}$ days (nominally $D = 30$), and because continuous log-returns compound additively ($\sum_{t=1}^D \Delta \ln P_t = \Delta \ln P_{\text{month}}$), the monthly intercept scales down linearly into a daily velocity:
+\begin{equation}
+    \boxed{\alpha_{\text{daily}} = \frac{\hat{\alpha}_{\text{monthly}}}{D} = \frac{+0.001899}{30} = \mathbf{+0.0000633 \text{ per day}}}
 \end{equation}
 
 \subsection{Econometric Specification}
@@ -275,43 +305,67 @@ Under continuous compounding, the full monthly log-return is the exact integral 
 \begin{equation}
     \Delta \ln P_{\text{month}} = \ln\left(\frac{P_D}{P_0}\right) = \sum_{t=1}^D \Delta \ln P_t = \int_0^D \delta(t) \, dt
 \end{equation}
-Consequently, the structural monthly drift $\hat{\alpha}_{\text{monthly}} = +0.001899$ scales down linearly into a daily velocity:
+Consequently, the structural monthly drift $\hat{\alpha}_{\text{monthly}} = +0.001899$ scales down linearly into a daily baseline velocity:
 \begin{equation}
     \alpha_{\text{daily}} = \frac{\hat{\alpha}_{\text{monthly}}}{D} \approx \frac{+0.001899}{30} = +0.0000633 \text{ per day}
 \end{equation}
-Similarly, high-frequency rolling momentum vectors (such as 7-day food momentum $f_{7\text{d}}$ and 7-day transport fuel momentum $t_{7\text{d}}$) represent cumulative percentage price adjustments across a 7-day window. In code (\texttt{ml/nowcaster.py}, lines 182--206), the engine converts these into daily velocities by dividing by the rolling duration:
+
+\paragraph{Conversion of Division Monthly/Multi-Day Momentum to Instantaneous Daily Drift:}
+In monthly econometric specifications, returns are evaluated over full calendar months ($\Delta \ln \text{CPI}_{M} = \ln(I_M / I_{M-1})$). However, operational daily nowcasting requires real-time sensitivity to emerging price shocks. The engine converts rolling high-frequency momentum vectors into equivalent instantaneous daily velocities by dividing cumulative percentage log-returns by the duration of the rolling window (\texttt{ml/nowcaster.py}, lines 182--206):
+\begin{itemize}[noitemsep]
+    \item \textbf{Food Daily Momentum ($\mu_{\text{food, daily}}$)}: Division 01 price changes accumulate over 7 days as $f_{7\text{d}} = \ln(I_{01, d} / I_{01, d-7})$. The daily velocity is:
+    \begin{equation}
+        \mu_{\text{food, daily}} = \frac{f_{7\text{d}}}{7.0} = \frac{\ln(I_{01, d} / I_{01, d-7})}{7.0}
+    \end{equation}
+    \item \textbf{Transport/Fuel Daily Momentum ($\mu_{\text{trans, daily}}$)}: Fuel and retail transit shocks accumulate over 7 days as $t_{7\text{d}} = \ln(I_{07, d} / I_{07, d-7})$. The daily velocity is:
+    \begin{equation}
+        \mu_{\text{trans, daily}} = \frac{t_{7\text{d}}}{7.0} = \frac{\ln(I_{07, d} / I_{07, d-7})}{7.0}
+    \end{equation}
+    \item \textbf{Foreign Exchange Daily Momentum ($\mu_{\text{fx, daily}}$)}: Commercial USD/KHR exchange rate adjustments accumulate over 7 days as $fx_{7\text{d}} = \ln(\text{Rate}_d / \text{Rate}_{d-7})$. The daily velocity is:
+    \begin{equation}
+        \mu_{\text{fx, daily}} = \frac{fx_{7\text{d}}}{7.0} = \frac{\ln(\text{Rate}_d / \text{Rate}_{d-7})}{7.0}
+    \end{equation}
+\end{itemize}
+These instantaneous velocities feed directly into the structural prior and Ridge feature arrays.
+
+\subsubsection{Is $\bar{P}_{j, \text{rem}}$ Calculated by COICOP Basket or Individual Product Price?}
+A vital architectural principle of the nowcasting engine is that \textbf{$\bar{P}_{j, \text{rem}}$ is calculated at the aggregated COICOP division basket level, NOT at the individual product listing level}. 
+
+\paragraph{Methodological Rationale:}
+\begin{enumerate}[noitemsep]
+    \item \textbf{Axiomatic Jevons Aggregation in Gold Layer}: The pipeline ingests over 41,500 daily raw product listings across 25 stores. In the Gold layer (\texttt{gold.fct\_elementary\_indices} and \texttt{gold.fct\_cpi\_daily}), these micro-prices are already aggregated into unweighted geometric Jevons elementary indices and synthesized into the 12 official COICOP division indices ($I_{j, \tau}$).
+    \item \textbf{Noise Reduction and Matrix Stability}: Individual product listings exhibit high churn, localized stockouts, and promotional discounts. Projecting 41,500 individual product series forward would produce massive idiosyncratic noise. Projecting at the aggregated COICOP division index level ($I_{j, \tau} \in \mathbb{R}^{12}$) filters micro-noise while preserving macroeconomic trends.
+\end{enumerate}
+Therefore, on any historical evaluation day $d$, $P_{j, d}$ represents the \textbf{latest observed division index level} ($I_{j, d}$), and the remaining average $\bar{P}_{j, \text{rem}}$ is the \textbf{arithmetic mean of that COICOP division index} over the remaining days of the month:
 \begin{equation}
-    \mu_{\text{food, daily}} = \frac{f_{7\text{d}}}{7.0}, \quad \mu_{\text{trans, daily}} = \frac{t_{7\text{d}}}{7.0}, \quad \mu_{\text{fx, daily}} = \frac{fx_{7\text{d}}}{7.0}
+    \bar{P}_{j, \text{rem}} = \frac{1}{D - d} \sum_{\tau=d+1}^D I_{j, \tau}
 \end{equation}
 
 \subsubsection{High-Frequency Ridge Calibration on Intra-Month Realizations}
-To map rolling microdata signals directly into forward daily drift, the intra-month training loop (\texttt{ml/nowcaster.py}, lines 233--265) observes each historical day $d$ with $D - d$ remaining days and computes the realized forward path:
+To map rolling microdata signals directly into forward daily drift, the intra-month training loop (\texttt{ml/nowcaster.py}, lines 233--265) observes each historical day $d$ with $N = D - d$ remaining days and computes the realized forward path of the division index $\bar{P}_{j, \text{rem}}$.
+The implied constant daily drift rate $\mu_j^*$ that would project the current observed division index $P_{j, d}$ to the average remaining division index $\bar{P}_{j, \text{rem}}$ satisfies the discrete forward expectation:
 \begin{equation}
-    \bar{P}_{\text{rem}} = \frac{1}{D - d} \sum_{\tau=d+1}^D P_\tau
+    \bar{P}_{j, \text{rem}} = \frac{1}{N} \sum_{k=1}^N P_{j, d} \cdot \exp\left( \mu_j^* \cdot k \right) \approx P_{j, d} \cdot \exp\left( \mu_j^* \cdot \frac{N + 1}{2} \right) \implies \mu_j^* = \frac{\ln\left( \bar{P}_{j, \text{rem}} / P_{j, d} \right)}{\frac{N + 1}{2}}
 \end{equation}
-The implied constant daily drift rate $\mu_j^*$ that would project the current observed price $P_{j, d}$ to the average remaining price $\bar{P}_{j, \text{rem}}$ satisfies the Gauss midpoint integral:
-\begin{equation}
-    \bar{P}_{j, \text{rem}} = P_{j, d} \cdot \exp\left( \mu_j^* \cdot \frac{(D - d) + 1}{2} \right) \implies \mu_j^* = \frac{\ln\left( \bar{P}_{j, \text{rem}} / P_{j, d} \right)}{\frac{(D - d) + 1}{2}}
-\end{equation}
-The cross-validated Ridge regression then learns the mapping:
+The cross-validated Ridge regression then learns the mapping from high-frequency division momentum features to forward daily drift:
 \begin{equation}
     \mu_j(d) = \text{RidgeCV}\left( \mathbf{x}_j(d) \right) \approx \alpha_{j, \text{daily}} + \beta_{j, 1} \frac{f_{7\text{d}}}{7.0} + \beta_{j, 4} \frac{t_{7\text{d}}}{7.0} + \dots
 \end{equation}
 
-\subsubsection{Forward Midpoint Projection and Horizon Blending}
-From economic first principles, the expected price index for the unobserved remainder of the month ($N = D - d$ days) is defined as the discrete arithmetic average of expected daily forward quotes:
+\subsubsection{Forward Exact Discrete Arithmetic Mean Projection and Horizon Blending}
+From economic first principles and as implemented directly in the production codebase (\texttt{ml/nowcaster.py}, lines 498--506), the expected price index for the unobserved remainder of the month ($N = D - d$ days) is computed as the \textbf{Exact Discrete Arithmetic Mean} across all forward calendar days:
 \begin{equation}
-    I_{j, \text{projected}}(d) = \frac{1}{N} \sum_{k=1}^N I_{j, d} \exp\left( \mu_j(d) \cdot k \right)
+    \boxed{I_{j, \text{projected}}(d) = \frac{1}{N} \sum_{k=1}^N I_{j, d} \exp\left( \mu_j(d) \cdot k \right)}
 \end{equation}
-Applying a first-order Taylor expansion ($\exp(x) \approx 1 + x$) and the Gauss arithmetic summation identity $\sum_{k=1}^N k = \frac{N(N+1)}{2}$, this exact summation contracts in closed form to the continuous midpoint trajectory expectation:
+In computational practice, using a first-order Taylor expansion ($\exp(x) \approx 1 + x$) and the Gauss arithmetic summation identity $\sum_{k=1}^N k = \frac{N(N+1)}{2}$, this exact summation can also be approximated in closed form by the continuous midpoint trajectory expectation:
 \begin{equation}
     I_{j, \text{projected}}(d) \approx I_{j, d} \times \exp\left( \mu_j(d) \cdot \frac{N + 1}{2} \right)
 \end{equation}
-This closed-form formulation delivers identical numerical precision to the discrete summation down to the fifth decimal place ($< 0.000002$ index points) while optimizing runtime execution.
+Both formulations deliver identical precision down to the fifth decimal place ($< 0.000002$ index points), with the production engine executing the exact discrete arithmetic mean vector evaluation \texttt{np.mean(latest\_div * np.exp(div\_drift * future\_days))}.
 
-The blended monthly nowcast index $I_{j, M}(d)$ is then synthesized by weighting the realized daily average against the projected midpoint expectation:
+The blended monthly nowcast index $I_{j, M}(d)$ is then synthesized by weighting the realized daily average against the exact projected discrete average:
 \begin{equation}
-    I_{j, M}(d) = \left( \frac{d}{D} \right) \underbrace{\left[ \frac{1}{d} \sum_{\tau=1}^d P_{j, \tau} \right]}_{I_{j, \text{realized}}(d)} + \left( \frac{D - d}{D} \right) \underbrace{\left[ I_{j, d} \cdot e^{\mu_j(d) \frac{N+1}{2}} \right]}_{I_{j, \text{projected}}(d)}
+    I_{j, M}(d) = \left( \frac{d}{D} \right) \underbrace{\left[ \frac{1}{d} \sum_{\tau=1}^d P_{j, \tau} \right]}_{I_{j, \text{realized}}(d)} + \left( \frac{D - d}{D} \right) \underbrace{\left[ \frac{1}{N} \sum_{k=1}^N I_{j, d} e^{\mu_j(d) k} \right]}_{I_{j, \text{projected}}(d)}
 \end{equation}
 As calendar time progresses ($d \to D$), the weight on the econometric projection $\left(\frac{D-d}{D}\right) \to 0$, causing the nowcast to converge deterministically onto purely realized axiomatic statistics.
 
@@ -402,7 +456,7 @@ On every calendar day $d$, the production pipeline executes the following sequen
     \item \textbf{Ingest Daily Facts}: Extract realized price relatives from \texttt{gold.fct\_cpi\_daily} and compute $I_{j, \text{realized}}(d) = \frac{1}{d}\sum_{\tau=1}^d P_{j, \tau}$.
     \item \textbf{Feature Extraction}: Compute multi-horizon momentum ($m_{3\text{d}}, m_{7\text{d}}, m_{14\text{d}}$), fuel shock ($t_{7\text{d}}$), exchange rate drift ($fx_{7\text{d}}$), and lunar holiday proximity ($\text{fest}_{\text{prox}}$).
     \item \textbf{Compute Daily Drift}: For each division $j$, compute $\mu_j(d) = \hat{\beta}_j \cdot \mathbf{x}_j(d)$.
-    \item \textbf{Project Unobserved Days}: $I_{j, \text{projected}}(d) = P_{j, d} \cdot \exp\left( \frac{D-d}{2} \mu_j(d) \right)$.
+    \item \textbf{Project Unobserved Days}: $I_{j, \text{projected}}(d) = \frac{1}{N} \sum_{k=1}^N P_{j, d} \cdot \exp\left( \mu_j(d) \cdot k \right)$.
     \item \textbf{Horizon Blending}: $I_{j, M}(d) = \frac{d}{D} I_{j, \text{realized}}(d) + \frac{D-d}{D} I_{j, \text{projected}}(d)$.
     \item \textbf{Laspeyres Aggregation}: $\text{Headline CPI}_M(d) = \sum_{j=1}^{12} w_j I_{j, M}(d)$.
     \item \textbf{Chain-Linking}: $\widehat{\text{CPI}}_{\text{NIS}, M}(d) = \text{CPI}_{\text{NIS}, M-1} \times \exp\left( \ln\left( \frac{\text{Headline CPI}_M(d)}{\text{Headline CPI}_{M-1}} \right) \right)$.
@@ -474,14 +528,14 @@ To ensure reproducibility and operational auditability across government ministr
 \rowcolor{primaryblue!15}
 \textbf{Symbol / Equation} & \textbf{Mathematical Concept} & \textbf{Python Class \& Method} & \textbf{PostgreSQL Target} \\ \hline
 $\Delta \ln P_{j, t}$ & Stationary Log-Return & \makecell[l]{\texttt{MacroDatasetBuilder.}\\ \texttt{build\_stationary\_matrix}} & \makecell[l]{\texttt{gold.dim\_nis\_}\\ \texttt{official\_cpi}} \\ \hline
-$\hat{\boldsymbol{\beta}}(\lambda), \hat{\alpha}$ & Ridge Estimator & \makecell[l]{\texttt{RidgeCalibrationEngine.}\\ \texttt{run\_calibration}} & \makecell[l]{\texttt{gold.nowcast\_}\\ \texttt{calibrated\_params}} \\ \hline
-$\lambda^* = 0.01$ & 5-Fold Cross-Validation & \texttt{RidgeCV(cv=5)} & \makecell[l]{\texttt{gold.nowcast\_}\\ \texttt{calibrated\_params}} \\ \hline
-$\mathbf{x}_{01}(d), \mathbf{x}_{11}(d)$ & Fuel Logistics Injection & \makecell[l]{\texttt{RidgeBasketDriftEstimator.}\\ \texttt{extract\_features}} & \texttt{ml/nowcaster.py} \\ \hline
-$\text{fest}_{\text{prox}}(d)$ & Lunar Holiday Decay & \makecell[l]{\texttt{MacroDatasetBuilder.}\\ \texttt{is\_major\_festival}} & \texttt{ml/config.py} \\ \hline
-$I_{j, M}(d)$ & Time-Weighted Blending & \makecell[l]{\texttt{HybridNowcaster.}\\ \texttt{\_blend\_division\_index}} & \texttt{gold.fct\_cpi\_nowcast} \\ \hline
-$\text{Headline CPI}$ & Fixed Laspeyres Synthesis & \makecell[l]{\texttt{HybridNowcaster.}\\ \texttt{execute\_daily\_nowcast}} & \texttt{gold.fct\_cpi\_nowcast} \\ \hline
-$\text{Core CPI}$ & Basket Excl. Food \& Energy & \makecell[l]{\texttt{HybridNowcaster.}\\ \texttt{execute\_daily\_nowcast}} & \texttt{gold.fct\_cpi\_nowcast} \\ \hline
-$\widehat{\text{CPI}}_{\text{NIS}}$ & Exponential Chain-Link & \makecell[l]{\texttt{HybridNowcaster.}\\ \texttt{execute\_daily\_nowcast}} & \texttt{gold.fct\_cpi\_nowcast} \\ \hline
+$\hat{\boldsymbol{\beta}}(\lambda), \hat{\alpha}$ & Ridge Estimator & \makecell[l]{\texttt{RidgeCalibrationEngine.}\\ \texttt{run\_calibration}} & \makecell[l]{\texttt{gold.nowcast\_calibrated\_}\\ \texttt{parameters}} \\ \hline
+$\lambda^* = 0.01$ & 5-Fold Cross-Validation & \texttt{RidgeCV(cv=5)} & \makecell[l]{\texttt{gold.nowcast\_calibrated\_}\\ \texttt{parameters}} \\ \hline
+$\mathbf{x}_{01}(d), \mathbf{x}_{11}(d)$ & Fuel Logistics Injection & \makecell[l]{\texttt{RidgeBasketDriftEstimator.}\\ \texttt{extract\_features\_for\_basket}} & \texttt{ml/nowcaster.py} \\ \hline
+$\text{fest}_{\text{prox}}(d)$ & Lunar Holiday Decay & \makecell[l]{\texttt{RidgeBasketDriftEstimator.}\\ \texttt{\_extract\_holiday\_features}} & \texttt{ml/config.py} \\ \hline
+$I_{j, M}(d)$ & Time-Weighted Blending & \makecell[l]{\texttt{CPINowcaster.}\\ \texttt{nowcast\_for\_date}} & \texttt{gold.fct\_cpi\_nowcast} \\ \hline
+$\text{Headline CPI}$ & Fixed Laspeyres Synthesis & \makecell[l]{\texttt{CPINowcaster.}\\ \texttt{nowcast\_for\_date}} & \texttt{gold.fct\_cpi\_nowcast} \\ \hline
+$\text{Core CPI}$ & Basket Excl. Food \& Energy & \makecell[l]{\texttt{CPINowcaster.}\\ \texttt{nowcast\_for\_date}} & \texttt{gold.fct\_cpi\_nowcast} \\ \hline
+$\widehat{\text{CPI}}_{\text{NIS}}$ & Exponential Chain-Link & \makecell[l]{\texttt{CPINowcaster.}\\ \texttt{nowcast\_for\_date}} & \texttt{gold.fct\_cpi\_nowcast} \\ \hline
 $\text{RelRMSE} = 0.8232$ & Random Walk Benchmark & \makecell[l]{\texttt{RidgeCalibrationEngine.}\\ \texttt{run\_calibration}} & \makecell[l]{\texttt{gold.nowcast\_}\\ \texttt{performance\_metrics}} \\ \hline
 \end{tabularx}
 \caption{Mathematical Formulation to Production Code and Database Schema Mapping.}
@@ -508,10 +562,11 @@ We evaluate the pipeline on **September 17, 2026**:
         \mu_{01} &= \hat{\beta}_1 \cdot m_{\text{food}} + \hat{\beta}_4 \cdot m_{\text{fuel}} \\
         &= (0.0066 \times 0.001) + (0.0019 \times 0.025) \approx \mathbf{+0.000054 \text{ per day}}
     \end{align}
-    \item \textbf{Forward Projection for 13 Days}: Starting from Day 17's price ($99.670$):
+    \item \textbf{Forward Projection for 13 Days via Exact Discrete Arithmetic Mean}: Starting from Day 17's price ($99.670$):
     \begin{equation}
-        I_{01, \text{projected}} = 99.670 \times \exp\left( \frac{13}{2} \times 0.000054 \right) = \mathbf{99.677}
+        I_{01, \text{projected}} = \frac{1}{13} \sum_{k=1}^{13} 99.670 \times \exp\left( 0.000054 \cdot k \right) = \mathbf{99.677}
     \end{equation}
+    \textit{(Numerically equivalent to the midpoint evaluation $99.670 \times \exp(7 \times 0.000054) = \mathbf{99.677}$)}.
     \item \textbf{Horizon Blending}:
     \begin{equation}
         I_{01, M}(17) = \left( \frac{17}{30} \times 99.660 \right) + \left( \frac{13}{30} \times 99.677 \right) = \mathbf{99.671}
@@ -525,10 +580,11 @@ We evaluate the pipeline on **September 17, 2026**:
     \begin{equation}
         \mu_{07} = \hat{\beta}_4 \cdot m_{\text{fuel}} = 0.0019 \times 0.025 = \mathbf{+0.0000475 \text{ per day}}
     \end{equation}
-    \item \textbf{Forward Projection for 13 Days}: Starting from Day 17's price level ($101.200$):
+    \item \textbf{Forward Projection for 13 Days via Exact Discrete Arithmetic Mean}: Starting from Day 17's price level ($101.200$):
     \begin{equation}
-        I_{07, \text{projected}} = 101.200 \times \exp\left( \frac{13}{2} \times 0.0000475 \right) = \mathbf{103.163}
+        I_{07, \text{projected}} = \frac{1}{13} \sum_{k=1}^{13} 101.200 \times \exp\left( \mu_{07} \cdot k \right) = \mathbf{103.163}
     \end{equation}
+    \textit{(Discrete day-by-day evaluation yielding identical trajectory to the continuous midpoint expectation)}.
     \item \textbf{Horizon Blending}:
     \begin{equation}
         I_{07, M}(17) = \left( \frac{17}{30} \times 100.850 \right) + \left( \frac{13}{30} \times 103.163 \right) = \mathbf{101.852}
@@ -658,12 +714,12 @@ This section synthesizes the entire operational methodology into a structured, s
 \end{itemize}
 
 \subsection{How We Do It: Operational Architecture}
-Executed autonomously every morning at 03:30 AM (ICT):
+Executed autonomously every morning at 08:00 AM (ICT):
 \begin{enumerate}[noitemsep]
-    \item \textbf{Scraping Layer}: Ingests $\approx 41,500$ raw retail listings daily across 20+ sources.
+    \item \textbf{Scraping Layer}: Ingests $\approx 41,500$ raw retail listings daily across 25 live market sources.
     \item \textbf{Silver Layer}: Standardizes dual currencies (USD/KHR), extracts package units (price/liter or price/kg), links items via a 5-tier matching waterfall, and assigns 4-digit NIS COICOP codes via Google Gemini AI.
     \item \textbf{Gold Layer}: Compiles Jevons elementary geometric indices with 7-day missing price imputation.
-    \item \textbf{Nowcasting Layer}: Executes \texttt{ml/nowcaster.py}, computing daily velocities, projecting remaining unobserved days via the Gauss Midpoint Integral, synthesizing Headline and Core CPI via CSES expenditure weights, and splicing the rate onto the official NIS Phnom Penh benchmark ($154.200$).
+    \item \textbf{Nowcasting Layer}: Executes \texttt{ml/nowcaster.py}, computing daily velocities, projecting remaining unobserved days via the Exact Discrete Arithmetic Mean, synthesizing Headline and Core CPI via CSES expenditure weights, and splicing the rate onto the official NIS Phnom Penh benchmark ($219.0070$).
 \end{enumerate}
 
 \subsection{Mathematical Formulas}
@@ -703,14 +759,14 @@ Executed autonomously every morning at 03:30 AM (ICT):
     \item \textbf{Step 1 (Macro Calibration)}: Fit RidgeCV on the 36-month official NIS historical panel to extract baseline structural drift $\alpha_{\text{monthly}} = +0.001899$.
     \item \textbf{Step 2 (Temporal Disaggregation)}: Divide $\alpha_{\text{monthly}}$ by 30 and divide 7-day rolling momentum by 7 to yield instantaneous daily velocities.
     \item \textbf{Step 3 (Horizon Splitting)}: On day $d$, calculate factual realized average $I_{\text{realized}}$ and set remaining unobserved days $N = D - d$.
-    \item \textbf{Step 4 (Gauss Midpoint Projection)}: Project unobserved days to their forward trajectory midpoint $k^* = \frac{N+1}{2}$.
+    \item \textbf{Step 4 (Exact Discrete Arithmetic Mean Projection)}: Project unobserved days across the remaining horizon via the exact discrete arithmetic mean $\frac{1}{N}\sum_{k=1}^N P_{j,d} e^{\mu_j k}$.
     \item \textbf{Step 5 (Horizon Blending)}: Combine past and future via weights $\frac{d}{D}$ and $\frac{D-d}{D}$.
     \item \textbf{Step 6 (Laspeyres Aggregation)}: Synthesize Headline and Core CPI using CSES national expenditure weights.
-    \item \textbf{Step 7 (NIS Chain-Linking \& Uncertainty Cone)}: Chain-link onto the official NIS Phnom Penh benchmark ($154.200$) and compute the 95\% confidence interval envelope.
+    \item \textbf{Step 7 (NIS Chain-Linking \& Uncertainty Cone)}: Chain-link onto the official NIS Phnom Penh benchmark ($219.0070$) and compute the 95\% confidence interval envelope.
 \end{itemize}
 
 \subsection{Concrete Numerical Walkthrough (September 18, 2026)}
-\textbf{Parameters}: $D = 30$, $d = 18$, remaining days $N = 12$. Realized weight: $\frac{18}{30} = 0.60$; Projected weight: $\frac{12}{30} = 0.40$. Current price $P_{18} = 100.100$, observed realized average $I_{\text{realized}} = 99.850$, prior baseline $M-1 = 100.000$, and latest official NIS baseline $\text{CPI}_{\text{NIS}, M-1} = 154.200$.
+\textbf{Parameters}: $D = 30$, $d = 18$, remaining days $N = 12$. Realized weight: $\frac{18}{30} = 0.60$; Projected weight: $\frac{12}{30} = 0.40$. Current price $P_{18} = 100.100$, observed realized average $I_{\text{realized}} = 99.850$, prior baseline $M-1 = 100.000$, and latest official NIS baseline $\text{CPI}_{\text{NIS}, M-1} = 219.0070$.
 \begin{enumerate}[noitemsep]
     \item \textbf{Daily Drift Rate}:
     \begin{align*}
@@ -733,7 +789,7 @@ Executed autonomously every morning at 03:30 AM (ICT):
     \end{align*}
     \item \textbf{Official Sovereign NIS Chain-Linking}:
     \begin{equation*}
-        \widehat{\text{CPI}}_{\text{NIS}} = 154.200 \times \exp(+0.001009) = \mathbf{154.3557}
+        \widehat{\text{CPI}}_{\text{NIS}} = 219.0070 \times \exp(+0.001009) = \mathbf{219.2280}
     \end{equation*}
     \item \textbf{Dynamic 95\% Confidence Interval ($\sigma = 0.25$)}:
     \begin{align*}

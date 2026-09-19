@@ -286,38 +286,50 @@ The shrinkage weight $\lambda_{\text{shrink}, k} \in [0, 1]$ is determined by th
 \end{equation}
 When the feature vector strongly explains division variation ($R_k^2 \to 1$), shrinkage is minimal ($\lambda_{\text{shrink}} \to 0$); conversely, if historical correlation is weak ($R_k^2 \le 0.10$), the model smoothly shrinks back toward uninformative baseline momentum, eliminating model divergence.
 
-\subsection{Temporal Disaggregation and Gauss Midpoint Price Aggregation}
+\subsection{Temporal Disaggregation and Exact Discrete Arithmetic Mean Forward Projection}
 \hs A fundamental econometric challenge in high-frequency inflation nowcasting is \textbf{temporal disaggregation}: macroeconometric parameters ($\hat{\alpha}_{\text{monthly}}$, $\hat{\boldsymbol{\beta}}$) are conventionally calibrated on monthly log-differences ($\Delta \ln \text{CPI}_{\text{month}}$), yet the operational engine must project price trajectories on an intra-month, day-by-day basis over the remaining $N = T - t$ unobserved days.
 
-\hs Under continuous compounding, monthly log-returns are the exact integral of instantaneous daily returns: $\Delta \ln P_{\text{month}} = \int_0^T \delta(\tau) d\tau$. Consequently, the macro baseline structural drift scales down linearly into a daily velocity:
+\hs Under continuous compounding, monthly log-returns represent the exact integral of instantaneous daily returns: $\Delta \ln P_{\text{month}} = \int_0^T \delta(\tau) d\tau$. Recovering the monthly structural intercept $\hat{\alpha}_{\text{monthly}}$ from sample means after regularized Ridge estimation:
 \begin{equation}
-    \alpha_{\text{daily}} = \frac{\hat{\alpha}_{\text{monthly}}}{T}
+    \hat{\alpha}_{\text{monthly}} = \bar{y} - \sum_{j \in \{01, 02, 04, 07, 11\}} \hat{\beta}_j \bar{x}_j - \hat{\beta}_{\text{fx}} \bar{x}_{\text{fx}} = +0.001899 \text{ per month}
 \end{equation}
-Similarly, multi-day momentum regressors (such as 7-day food momentum $f_{7d}$ and transport fuel momentum $t_{7d}$) are converted into daily velocities by dividing by their rolling duration ($f_{7d} / 7.0$). Using the shrunk coefficient vector $\hat{\boldsymbol{\beta}}_k^{\text{shrink}}$, the operational daily price drift rate $\hat{\delta}_{k, t}$ for division $k$ is given by:
+this baseline drift scales down linearly into an instantaneous daily velocity across nominal $T = 30$ calendar days:
+\begin{equation}
+    \alpha_{\text{daily}} = \frac{\hat{\alpha}_{\text{monthly}}}{T} = \frac{+0.001899}{30} = +0.0000633 \text{ per day}
+\end{equation}
+
+\hs In parallel, multi-day rolling momentum vectors (7-day food momentum $f_{7d} = \ln(I_{01, t} / I_{01, t-7})$, 7-day transport fuel momentum $t_{7d} = \ln(I_{07, t} / I_{07, t-7})$, and USD/KHR exchange rate momentum $fx_{7d} = \ln(\text{Rate}_t / \text{Rate}_{t-7})$) are converted into instantaneous daily velocities by dividing by their window duration:
+\begin{equation}
+    \mu_{\text{food, daily}} = \frac{f_{7d}}{7.0}, \quad \mu_{\text{trans, daily}} = \frac{t_{7d}}{7.0}, \quad \mu_{\text{fx, daily}} = \frac{fx_{7d}}{7.0}
+\end{equation}
+Combining these with cross-sector freight injection (diesel momentum $t_{7d}$ injected into Food and Restaurants) and festive holiday shocks ($\psi_t$), the operational daily drift rate $\hat{\delta}_{k, t}$ for division $k$ is estimated via RidgeCV with Empirical Bayes shrinkage:
 \begin{equation}
     \hat{\delta}_{k, t} = \mathbf{x}_t^T \hat{\boldsymbol{\beta}}_k^{\text{shrink}} + \psi_t
 \end{equation}
-where $\psi_t$ incorporates seasonal festival demand shocks during major Cambodian cultural celebrations (Khmer New Year, Pchum Ben, and Water Festival).
 
-\hs To project price levels across the unobserved remainder of the active month ($N = T - t$ days), economic first principles dictate that the projected category price index equals the discrete arithmetic average of expected daily quotes:
+\paragraph{Exact Discrete Arithmetic Mean Projection for Remaining Unobserved Days:}
+To project price levels across the unobserved remainder of the active month ($N = T - t$ days), economic first principles and production code (\texttt{ml/nowcaster.py}, lines 498--506) dictate that the projected category price index equals the \textbf{Exact Discrete Arithmetic Mean} of expected daily forward quotes:
 \begin{equation}
-    I_{k, \text{projected}}(t) = \frac{1}{N} \sum_{\tau=1}^N I_{k, t} \exp\left( \hat{\delta}_{k, t} \cdot \tau \right)
+    \boxed{I_{k, \text{projected}}(t) = \frac{1}{N} \sum_{\tau=1}^N I_{k, t} \exp\left( \hat{\delta}_{k, t} \cdot \tau \right)}
 \end{equation}
-Applying a first-order Taylor expansion ($\exp(x) \approx 1 + x$) and the Gauss arithmetic summation identity $\sum_{\tau=1}^N \tau = \frac{N(N+1)}{2}$, the exact discrete sum contracts in closed form to the continuous midpoint trajectory expectation:
+Applying a first-order Taylor expansion ($\exp(x) \approx 1 + x$) and the Gauss arithmetic summation identity $\sum_{\tau=1}^N \tau = \frac{N(N+1)}{2}$, this exact discrete sum contracts in closed form to the continuous midpoint trajectory expectation:
 \begin{equation}
     I_{k, \text{projected}}(t) \approx I_{k, t} \times \exp\left( \hat{\delta}_{k, t} \cdot \frac{N + 1}{2} \right)
 \end{equation}
-This closed-form formulation delivers identical numerical precision to the discrete summation down to the fifth decimal place while eliminating repetitive loop evaluations.
+delivering identical numerical precision down to the fifth decimal place while maintaining consistency with discrete daily accounting.
 
-\hs To train the high-frequency Ridge mapping directly against forward price paths, the historical training engine examines each observation day $t$ with $N = T - t$ remaining days and extracts the implied forward drift rate:
+\paragraph{Aggregation Level of Projected Realizations ($\bar{I}_{\text{rem}, k}$):}
+It is critical to emphasize that the forward path $\bar{I}_{\text{rem}, k}$ and latest spot index $I_{k, t}$ are \textbf{calculated strictly at the aggregated COICOP division index level}, rather than at the individual product listing level. Because 41,500 raw item quotes are synthesized each morning into unweighted Jevons elementary indices in the Gold layer (\texttt{gold.fct\_elementary\_indices} and \texttt{gold.fct\_cpi\_daily}), division-level modeling filters out retail shelf stockout noise and item churn while capturing structural macroeconomic shifts.
+
+\hs To train the high-frequency Ridge mapping directly against forward price paths, the historical training engine observes each historical day $t$ with $N = T - t$ remaining days and extracts the implied forward drift rate:
 \begin{equation}
     \hat{\delta}_{k, t}^* = \frac{\ln\left( \bar{I}_{\text{rem}, k} / I_{k, t} \right)}{\frac{N + 1}{2}}, \quad \text{where } \bar{I}_{\text{rem}, k} = \frac{1}{N} \sum_{\tau=t+1}^T I_{k, \tau}
 \end{equation}
-The overall projected full-month division index $\bar{I}_{k, M}(t)$ represents the exact temporal integral of realized daily quotes and unobserved remaining days:
+The blended full-month division index $\bar{I}_{k, M}(t)$ represents the time-weighted integral of realized daily quotes and unobserved remaining days:
 \begin{equation}
-    \bar{I}_{k, M}(t) = \left( \frac{t}{T} \right) \left[ \frac{1}{t}\sum_{\tau=1}^t I_{k, \tau} \right] + \left( \frac{T - t}{T} \right) E[P_{\text{remaining}, k}]
+    \bar{I}_{k, M}(t) = \left( \frac{t}{T} \right) \left[ \frac{1}{t}\sum_{\tau=1}^t I_{k, \tau} \right] + \left( \frac{T - t}{T} \right) \left[ \frac{1}{N} \sum_{\tau=1}^N I_{k, t} e^{\hat{\delta}_{k, t} \tau} \right]
 \end{equation}
-As $t \to T$, the forecast weight $\frac{T-t}{T} \to 0$, ensuring smooth asymptotic convergence onto official national accounting realities.
+As $t \to T$, the forecast weight $\frac{T-t}{T} \to 0$, ensuring smooth deterministic convergence onto official national accounting statistics.
 
 \subsection{Laspeyres Macroeconomic Synthesis and Dual-Index Chain-Linking}
 \hs Once all 12 division indices $\bar{I}_{k, M}(t)$ are projected, the National Headline CPI nowcast $\widehat{\text{CPI}}_M(t)$ is synthesized via official National Institute of Statistics (NIS) CSES 2023 Laspeyres expenditure weights $w_k$:

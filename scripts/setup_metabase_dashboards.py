@@ -558,7 +558,7 @@ def provision_all():
             "sql": """
                 SELECT 
                     nowcast_date AS "Nowcast Date",
-                    projected_mom_pct AS "Headline MoM (%)",
+                    nowcasted_mom_pct AS "Headline MoM (%)",
                     projected_food_mom_pct AS "Food (01) MoM (%)",
                     projected_transport_mom_pct AS "Transport (07) MoM (%)",
                     projected_housing_mom_pct AS "Housing/Energy (04) MoM (%)",
@@ -1427,7 +1427,7 @@ def provision_all():
     print("\n=============================================================================")
     print("SUCCESS: 3 Canonical Metabase Dashboards fully provisioned!")
     print(f"  [1] Macro CPI & Inflation Analytics ID: {d_cpi_id} | Collection: {col_name_1}")
-    print(f"  [2] Operations & 23-Source Telemetry ID: {d_ops_id} | Collection: {col_name_2}")
+    print(f"  [2] Operations & 25-Source Telemetry ID: {d_ops_id} | Collection: {col_name_2}")
     print(f"  [3] Silver Data Quality Screener ID: {d_class_id} | Collection: {col_name_3}")
     print("  Metabase URL: http://localhost:3001 (or :3000)")
     print("=============================================================================")

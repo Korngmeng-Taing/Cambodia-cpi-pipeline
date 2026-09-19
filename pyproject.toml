@@ -1,6 +1,6 @@
 [project]
 name = "cambodia-cpi-pipeline"
-version = "0.1.0"
+version = "1.0.0"
 description = "Consumer Price Index (CPI) computation pipeline using a Medallion Architecture"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -37,7 +37,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "cambodia-cpi-pipeline"
-version = "0.1.0"
+version = "1.0.0"
 description = "Consumer Price Index (CPI) computation pipeline using a Medallion Architecture"
 authors = ["CPI Engineering Team <cpi@example.com>"]
 readme = "README.md"

@@ -43,7 +43,7 @@ def get_metabase_connection():
         "localhost",
         "127.0.0.1",
     ]
-    port = int(os.environ.get("POSTGRES_PORT", 5432))
+    port = int(os.environ.get("POSTGRES_PORT", "5432"))
     user = os.environ.get("MB_DB_USER", "metabase")
     password = os.environ.get("MB_DB_PASS", "metabase")
     dbname = os.environ.get("MB_DB_NAME", "metabase")

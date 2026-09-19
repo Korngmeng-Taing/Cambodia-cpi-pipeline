@@ -7,7 +7,6 @@ Queries the Airflow REST API to check:
 3. Unpauses gold_cpi_dag and triggers a validation run if requested.
 """
 import sys
-import json
 import requests
 from requests.auth import HTTPBasicAuth
 

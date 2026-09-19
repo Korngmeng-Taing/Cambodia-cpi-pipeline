@@ -10,8 +10,8 @@ def main():
 
     mb_host = os.getenv("METABASE_DB_HOST", os.getenv("POSTGRES_HOST", "localhost"))
     cpi_host = os.getenv("CPI_DB_HOST", os.getenv("POSTGRES_HOST", "localhost"))
-    mb_port = int(os.getenv("POSTGRES_PORT", 5432))
-    cpi_port = int(os.getenv("POSTGRES_PORT", 5432))
+    mb_port = int(os.getenv("POSTGRES_PORT", "5432"))
+    cpi_port = int(os.getenv("POSTGRES_PORT", "5432"))
 
     conn_mb = psycopg2.connect(f"postgresql://metabase:metabase@{mb_host}:{mb_port}/metabase")
     conn_cpi = psycopg2.connect(f"postgresql://cpi_user:cpi_pass@{cpi_host}:{cpi_port}/cpi_db")

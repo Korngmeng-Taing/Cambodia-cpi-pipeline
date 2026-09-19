@@ -12,9 +12,7 @@ import logging
 import uuid
 import time
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import psycopg2
 from psycopg2.extras import execute_values
 from psycopg2 import extensions as pg_ext
 pg_ext.register_adapter(uuid.UUID, lambda val: pg_ext.AsIs(str(val)))

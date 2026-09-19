@@ -8,15 +8,12 @@ and update the canonical item records.
 
 from __future__ import annotations
 
-import argparse
 import logging
 import os
 import sys
-from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import psycopg2
 from pipeline.config import get_db_connection
 
 logging.basicConfig(

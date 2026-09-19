@@ -42,7 +42,6 @@ sys.path.insert(0, ".")
 from dotenv import load_dotenv
 load_dotenv()
 
-import psycopg2
 from psycopg2.extras import execute_values
 from pipeline.config import get_db_connection
 from pipeline.key_pool import GeminiKeyPool

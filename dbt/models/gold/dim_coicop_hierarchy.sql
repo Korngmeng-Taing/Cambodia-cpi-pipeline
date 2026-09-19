@@ -18,8 +18,7 @@ select
         else null 
     end as group_code,
     case 
-        when length(code) > 5 then split_part(code, '.', 1) || '.' || split_part(code, '.', 2) || '.' || split_part(code, '.', 3)
-        when length(code) > 3 then split_part(code, '.', 1) || '.' || split_part(code, '.', 2) || '.' || split_part(code, '.', 3)
+        when length(code) > 5 and split_part(code, '.', 3) != '' then split_part(code, '.', 1) || '.' || split_part(code, '.', 2) || '.' || split_part(code, '.', 3)
         else null 
     end as class_code,
     case 

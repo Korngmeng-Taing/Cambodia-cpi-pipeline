@@ -22,13 +22,12 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
-import uuid
 
 import psycopg2
 from psycopg2.extras import execute_batch, register_uuid
 
 from pipeline.config import get_database_url
-from pipeline.key_pool import GeminiKeyPool
+from pipeline.key_pool import get_key_pool
 
 try:
     from google import genai
@@ -100,7 +99,7 @@ class GeminiCOICOPClassifier:
         register_uuid()
         self.db_conn_str = db_conn_str or get_database_url()
         self.model_name = model_name or DEFAULT_MODEL
-        self.key_pool = GeminiKeyPool()
+        self.key_pool = get_key_pool()
         log.info(
             "GeminiCOICOPClassifier initialized with model %s and %d keys.",
             self.model_name,
@@ -181,8 +180,14 @@ class GeminiCOICOPClassifier:
                         resp_text = re.sub(r"\s*```$", "", resp_text)
 
                     parsed = json.loads(resp_text)
-                    if isinstance(parsed, list):
-                        for obj in parsed:
+                    items_list = parsed
+                    if isinstance(parsed, dict):
+                        items_list = parsed.get("items") or parsed.get("products") or parsed.get("classifications") or list(parsed.values())[0] if parsed else []
+                    
+                    if isinstance(items_list, list):
+                        for obj in items_list:
+                            if not isinstance(obj, dict):
+                                continue
                             item_id = str(obj.get("id"))
                             raw_div = str(obj.get("coicop_division", "01")).zfill(2)
                             code = str(obj.get("coicop_code", f"{raw_div}.1.1"))
@@ -200,7 +205,8 @@ class GeminiCOICOPClassifier:
                                 "confidence": conf,
                                 "reason": obj.get("reason", "gemini_classified"),
                             }
-                    return results  # Success — return immediately
+                    if results:
+                        return results  # Success — return immediately
                 except Exception as e:
                     err_str = str(e).lower()
                     is_503 = "503" in err_str or "unavailable" in err_str

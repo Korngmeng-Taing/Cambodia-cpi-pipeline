@@ -8,16 +8,13 @@ identify recurring patterns, and proposes new Regex rules for `dbt_seeds.coicop_
 
 from __future__ import annotations
 
-import argparse
 import json
 import logging
 import os
 import sys
-from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import psycopg2
 from pipeline.config import get_db_connection
 from pipeline.key_pool import GeminiKeyPool
 

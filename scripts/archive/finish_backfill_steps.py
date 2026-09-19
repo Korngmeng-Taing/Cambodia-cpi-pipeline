@@ -6,7 +6,6 @@ Completes Step 3 and Step 4 of the historical CPI backfill:
 2. Computes conformed monthly CPI facts in gold.fct_cpi_monthly.
 """
 import sys
-import os
 import time
 from pathlib import Path
 

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -33,10 +33,7 @@ import pandas as pd
 from sklearn.linear_model import RidgeCV
 
 from ml.config import (
-    CAMBODIA_FIXED_HOLIDAYS,
     CAMBODIA_LUNAR_HOLIDAYS_BY_YEAR,
-    NIS_COICOP_WEIGHTS,
-    NOWCAST_TARGET_BASKETS,
 )
 from pipeline.config import get_db_connection
 
@@ -229,7 +226,6 @@ class RidgeCalibrationEngine:
         oos_results = {}
         if not test_df.empty:
             X_test = test_df[self.FEATURE_COLS].values
-            y_test_log = test_df["y_cpi_log"].values
             actual_mom = test_df["target_mom_pct"].values
             rw_mom = test_df["rw_forecast_mom_pct"].values
 

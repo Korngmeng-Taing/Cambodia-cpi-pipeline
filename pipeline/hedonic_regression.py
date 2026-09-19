@@ -24,7 +24,6 @@ Requires: statsmodels>=0.14, sqlalchemy, pandas
 from __future__ import annotations
 
 import logging
-import re
 import threading
 from datetime import date, timedelta
 from typing import Any
@@ -367,35 +366,56 @@ def persist_hedonic_adjusted(
         """
     )
 
-    records = []
+    records_dict: dict[tuple[str, str, str], dict[str, Any]] = {}
     for idx, row in current.iterrows():
         adj_price = float(adjusted.loc[idx])
         raw_price = float(row["raw_price"])
         ratio = round(adj_price / raw_price, 4) if raw_price > 0 else 1.0
         div = str(row.get("coicop_code") or row.get("coicop_division") or "08")
-        records.append(
-            {
-                "scrape_date": scrape_date,
-                "item_id": str(row["item_id"]),
-                "store_slug": str(row["store_slug"]),
-                "canonical_name": str(row["canonical_name"]),
-                "coicop_division": div,
-                "raw_price_khr": raw_price,
-                "ram_gb": int(row.get("RAM_GB", 0)),
-                "storage_gb": int(row.get("Storage_GB", 0)),
-                "screen_inches": float(row.get("Screen_Inches", 0.0)),
-                "camera_mp": int(row.get("Camera_MP", 0)),
-                "is_5g": int(row.get("Is_5G", 0)),
-                "hedonic_adjusted_price_khr": adj_price,
-                "adjustment_ratio": ratio,
-                "model_r2": round(float(fit["r2"]), 4),
-            }
-        )
+        
+        def _safe_int(val, default=0):
+            try:
+                return 0 if pd.isna(val) else int(val)
+            except (ValueError, TypeError):
+                return default
+
+        def _safe_float(val, default=0.0):
+            try:
+                return 0.0 if pd.isna(val) else float(val)
+            except (ValueError, TypeError):
+                return default
+
+        item_id_str = str(row["item_id"])
+        store_slug_str = str(row["store_slug"])
+        key = (scrape_date, item_id_str, store_slug_str)
+
+        records_dict[key] = {
+            "scrape_date": scrape_date,
+            "item_id": item_id_str,
+            "store_slug": store_slug_str,
+            "canonical_name": str(row["canonical_name"]),
+            "coicop_division": div,
+            "raw_price_khr": raw_price,
+            "ram_gb": _safe_int(row.get("RAM_GB", 0)),
+            "storage_gb": _safe_int(row.get("Storage_GB", 0)),
+            "screen_inches": _safe_float(row.get("Screen_Inches", 0.0)),
+            "camera_mp": _safe_int(row.get("Camera_MP", 0)),
+            "is_5g": _safe_int(row.get("Is_5G", 0)),
+            "hedonic_adjusted_price_khr": adj_price,
+            "adjustment_ratio": ratio,
+            "model_r2": round(float(fit["r2"]), 4),
+        }
+
+    records = list(records_dict.values())
+
+    if not records:
+        log.info("No records to persist to silver.hedonic_adjusted_prices for %s", scrape_date)
+        return 0
 
     with engine.begin() as conn:
         conn.execute(stmt, records)
 
-    log.info("Persisted %d hedonic-adjusted rows to silver.hedonic_adjusted_prices for %s", len(records), scrape_date)
+    log.info("Persisted %d unique hedonic-adjusted rows to silver.hedonic_adjusted_prices for %s", len(records), scrape_date)
     return len(records)
 
 

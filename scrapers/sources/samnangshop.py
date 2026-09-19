@@ -10,7 +10,6 @@ from scrapers.sources._common import (
     THROTTLE_DELAY,
     _cffi_get,
     _strip_html,
-    _to_float,
     build_canonical_record,
     log,
     parse_woocommerce_prices,

@@ -12,12 +12,9 @@ import argparse
 import logging
 import os
 import sys
-from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import psycopg2
-from psycopg2.extras import execute_batch
 
 from pipeline.config import get_db_connection
 from pipeline.vector_item_matcher import VectorItemMatcher

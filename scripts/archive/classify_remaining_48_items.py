@@ -14,7 +14,6 @@ import sys
 # Ensure project root is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import psycopg2
 from psycopg2.extras import RealDictCursor
 from pipeline.config import get_db_connection
 

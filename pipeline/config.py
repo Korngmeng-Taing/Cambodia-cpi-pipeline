@@ -140,7 +140,6 @@ def get_db_connection():
 
 from contextlib import contextmanager
 from typing import Iterator
-from pipeline.retry import retry_db_transaction
 
 
 @contextmanager

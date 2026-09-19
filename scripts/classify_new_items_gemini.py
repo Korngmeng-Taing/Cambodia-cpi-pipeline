@@ -24,7 +24,6 @@ sys.path.insert(0, ".")
 from dotenv import load_dotenv
 load_dotenv()
 
-import psycopg2
 from psycopg2.extras import execute_values
 from psycopg2 import extensions as pg_ext
 pg_ext.register_adapter(uuid.UUID, lambda val: pg_ext.AsIs(str(val)))
@@ -363,11 +362,9 @@ def commit_new_items(
                 VALUES %s
                 ON CONFLICT (item_id) DO NOTHING;
                 """,
-                [(item_id, name, "gemini_ai", div, code, conf, now_str) for item_id, name, div, code, conf, reasoning in unique_new.values()],
+                insert_data,
                 page_size=2000,
             )
-
-        conn.commit()
 
         conn.commit()
     except Exception as exc:
@@ -401,10 +398,9 @@ def run(execute: bool = False, sample_size: int | None = None, limit: int | None
 
     workers = min(max_workers, pool.get_key_count())
     batches = [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
-    log.info("Formed %d batches of up to %d items. Dispatching across %d workers with model '%s'...",
-             len(batches), batch_size, workers, model_name)
+    log.info("Processing %d items in %d batches (batch_size=%d, workers=%d, model=%s)...",
+             len(items), len(batches), batch_size, workers, model_name)
 
-    items_by_id = {it["item_id"]: it for it in items}
     classified_results: dict[str, tuple[str, str, float, str]] = {}
     pending_cache: list[tuple[str, str, float, str, str]] = []
     pending_new_items: dict[str, tuple[str, str, str, str, float, str]] = {}

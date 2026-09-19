@@ -10,12 +10,11 @@ import psycopg2
 import psycopg2.errors
 import pytest
 
-from pipeline.config import db_connection, db_cursor, get_db_connection
+from pipeline.config import db_connection, db_cursor
 from pipeline.db_pool import (
     ConnectionPoolManager,
     PooledConnection,
     close_db_pool,
-    get_pooled_connection,
 )
 from pipeline.retry import (
     calculate_backoff_delay,

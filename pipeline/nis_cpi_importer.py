@@ -356,10 +356,8 @@ class NISBenchmarkImporter:
         monthly Excel files (`CPI-12-group-*.xls` / `*.xlsx`), extracts the official
         headline index, MoM % change, and YoY % change, and synchronizes the seed/database.
         """
-        import io
         import requests
         from bs4 import BeautifulSoup
-        import pandas as pd
         import urllib3
 
         urllib3.disable_warnings()

@@ -9,9 +9,7 @@ Unit tests for scripts/setup_metabase_dashboards.py ensuring:
 """
 
 import json
-import re
 from unittest.mock import MagicMock, patch
-import pytest
 
 from scripts.setup_metabase_dashboards import (
     create_or_update_card,

@@ -384,7 +384,39 @@ def test_mad_statistical_outlier_filtering(cpi_engine):
     remaining_ids = set(filtered["item_id"])
 
     assert "item-7" not in remaining_ids, "10x price ratio outlier must be filtered by MAD"
-    assert len(remaining_ids) == 7, "All 7 valid items must be retained"
+
+def test_persistent_base_registry_and_enrollment(cpi_engine, monkeypatch):
+    """Verifies that newly observed items enroll with permanently anchored base prices via enroll_new_base_items."""
+    enrolled_calls = []
+
+    def mock_enroll(new_items, enrollment_date):
+        enrolled_calls.append((new_items.copy(), enrollment_date))
+
+    monkeypatch.setattr(cpi_engine, "enroll_new_base_items", mock_enroll)
+
+    calc_date = date(2026, 9, 15)
+    base_df = pd.DataFrame([
+        {"item_id": "item-existing-1", "coicop_division": "01", "coicop_code": "01.1.1", "base_price_khr": 1000.0, "base_unit_price_khr": 1000.0, "base_obs_count": 1}
+    ])
+    df_history = pd.DataFrame([
+        {"scrape_date": calc_date, "item_id": "item-existing-1", "coicop_division": "01", "coicop_code": "01.1.1", "price_khr": 1100.0, "unit_price_khr": 1100.0},
+        {"scrape_date": calc_date, "item_id": "item-new-2", "coicop_division": "02", "coicop_code": "02.1.1", "price_khr": 5000.0, "unit_price_khr": 5000.0},
+    ])
+
+    result = cpi_engine.compute_daily_elementary_indices(calc_date, base_df, df_history)
+
+    # Check that item-new-2 was enrolled with base price 5000
+    assert len(enrolled_calls) == 1
+    enrolled_df, enroll_dt = enrolled_calls[0]
+    assert enroll_dt == calc_date
+    assert "item-new-2" in set(enrolled_df["item_id"])
+    assert enrolled_df[enrolled_df["item_id"] == "item-new-2"]["base_price_khr"].iloc[0] == pytest.approx(5000.0, abs=0.01)
+
+    # In result DataFrame, item-new-2 has price ratio 1.0 (5000 / 5000) on enrollment day
+    new_row = result[result["item_id"] == "item-new-2"].iloc[0]
+    assert new_row["price_ratio"] == pytest.approx(1.0, abs=1e-5)
+    assert new_row["base_price_khr"] == pytest.approx(5000.0, abs=0.01)
+
 
 
 

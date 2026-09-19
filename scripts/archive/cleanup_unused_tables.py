@@ -10,7 +10,7 @@ from psycopg2.extras import RealDictCursor
 
 def get_cpi_conn():
     host = os.environ.get("POSTGRES_HOST", "127.0.0.1")
-    port = int(os.environ.get("POSTGRES_PORT", 5432))
+    port = int(os.environ.get("POSTGRES_PORT", "5432"))
     user = os.environ.get("POSTGRES_USER", "postgres")
     password = os.environ.get("POSTGRES_PASSWORD", "postgres")
     dbname = os.environ.get("CPI_DB_NAME", os.environ.get("DB_NAME", "cpi_db"))
@@ -18,7 +18,7 @@ def get_cpi_conn():
 
 def get_mb_conn():
     host = os.environ.get("POSTGRES_HOST", "127.0.0.1")
-    port = int(os.environ.get("POSTGRES_PORT", 5432))
+    port = int(os.environ.get("POSTGRES_PORT", "5432"))
     user = os.environ.get("MB_DB_USER", "metabase")
     password = os.environ.get("MB_DB_PASS", "metabase")
     return psycopg2.connect(host=host, port=port, user=user, password=password, dbname="metabase")

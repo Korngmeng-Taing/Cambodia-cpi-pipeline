@@ -4,9 +4,7 @@ tests/test_environment_validator.py
 Unit tests for the environment pre-flight validator (scripts/validate_environment.py).
 """
 
-import os
 from unittest.mock import MagicMock, patch
-import pytest
 
 from scripts.validate_environment import (
     check_api_keys,

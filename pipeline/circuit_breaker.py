@@ -18,12 +18,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from enum import Enum
 from typing import Any
 
 import numpy as np
-import pandas as pd
 from pipeline.config import get_db_connection
 from pipeline.retry import retry_db_transaction
 
@@ -156,13 +155,24 @@ class IngestionCircuitBreaker:
             )
 
         # Compute incoming median price (KHR), normalizing USD prices using fx_rate if necessary
+        def _safe_float(val: Any) -> float:
+            if val is None:
+                return 0.0
+            try:
+                if isinstance(val, (int, float)):
+                    return float(val)
+                cleaned = str(val).replace(",", "").replace("$", "").replace("KHR", "").strip()
+                return float(cleaned) if cleaned else 0.0
+            except (ValueError, TypeError):
+                return 0.0
+
         prices = []
         for r in incoming_records:
-            price_khr = float(r.get("price_khr") or 0.0)
+            price_khr = _safe_float(r.get("price_khr"))
             if price_khr > 0:
                 prices.append(price_khr)
             else:
-                raw_p = float(r.get("price") or 0.0)
+                raw_p = _safe_float(r.get("price"))
                 if raw_p > 0:
                     curr = str(r.get("currency") or "USD").strip().upper()
                     if curr == "KHR":
@@ -173,42 +183,43 @@ class IngestionCircuitBreaker:
                         prices.append(raw_p * fx_rate)
         incoming_median_price = float(np.median(prices)) if prices else 0.0
 
-        # Query 7-day rolling history for this store from silver.clean_store_prices
-        history_start = scrape_date - timedelta(days=7)
+        # Query rolling 7-day volume and median price from silver.clean_store_prices
+        rolling_counts = []
+        prior_day_median_price = 0.0
+
         conn = self._get_connection()
         should_close = self._conn is None
-
-        rolling_counts = []
-        prior_day_median_price = incoming_median_price
-
-        try:
-            with conn.cursor() as cur:
-                # Query daily counts for past 7 days
-                cur.execute("""
-                    SELECT scrape_date, COUNT(*), PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY price_khr)
-                    FROM silver.clean_store_prices
-                    WHERE store_slug = %s
-                      AND scrape_date >= %s
-                      AND scrape_date < %s
-                    GROUP BY scrape_date
-                    ORDER BY scrape_date DESC;
-                """, (store_slug, history_start, scrape_date))
-                rows = cur.fetchall()
-
-                if rows:
-                    rolling_counts = [int(r[1]) for r in rows]
-                    prior_day_median_price = float(rows[0][2] or incoming_median_price)
-        except Exception as e:
-            log.warning("Could not query historical baseline for circuit breaker: %s", e)
-        finally:
-            if should_close:
-                conn.close()
+        if conn is not None:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT scrape_date, COUNT(*),
+                               PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY price_khr)
+                        FROM silver.clean_store_prices
+                        WHERE store_slug = %s
+                          AND scrape_date BETWEEN (%s::date - INTERVAL '7 days') AND (%s::date - INTERVAL '1 day')
+                          AND price_khr > 0
+                        GROUP BY scrape_date
+                        ORDER BY scrape_date DESC;
+                        """,
+                        (store_slug, scrape_date, scrape_date),
+                    )
+                    rows = cur.fetchall()
+                    if rows:
+                        rolling_counts = [r[1] for r in rows]
+                        prior_day_median_price = float(rows[0][2] or 0.0)
+            except Exception as e:
+                log.warning("CircuitBreaker DB check failed: %s", e)
+            finally:
+                if should_close:
+                    conn.close()
 
         rolling_median_count = float(np.median(rolling_counts)) if rolling_counts else float(incoming_count)
         volume_ratio = incoming_count / max(rolling_median_count, 1.0)
 
-        # Check Gate 1: Volume Drop Gate
-        if rolling_counts and volume_ratio < self.VOLUME_DROP_THRESHOLD:
+        # Check Gate 1: Volume Drop Gate (Requires rolling_median_count >= 10 to avoid false alarms on tiny catalogs)
+        if rolling_counts and rolling_median_count >= 10 and volume_ratio < self.VOLUME_DROP_THRESHOLD:
             msg = (
                 f"VOLUME ANOMALY: {store_slug} scraped {incoming_count} items "
                 f"({volume_ratio:.1%} of 7-day rolling median {rolling_median_count:.0f}). "

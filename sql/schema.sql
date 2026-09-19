@@ -301,6 +301,21 @@ CREATE TABLE IF NOT EXISTS gold.fct_daily_prices (
     PRIMARY KEY (scrape_date, store_slug, item_id)
 );
 
+-- Gold Canonical Item Baseline Reference Prices Registry (ILO CPI Manual §6.30)
+CREATE TABLE IF NOT EXISTS gold.dim_item_base_prices (
+    item_id TEXT PRIMARY KEY,
+    coicop_division VARCHAR(10) NOT NULL,
+    coicop_code VARCHAR(20),
+    base_price_khr NUMERIC(14, 4) NOT NULL,
+    base_unit_price_khr NUMERIC(14, 4),
+    base_obs_count INTEGER DEFAULT 1,
+    first_seen_date DATE NOT NULL,
+    enrolled_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_item_base_prices_division ON gold.dim_item_base_prices(coicop_division);
+CREATE INDEX IF NOT EXISTS idx_item_base_prices_first_seen ON gold.dim_item_base_prices(first_seen_date);
+
 -- Gold Jevons Micro-Index Facts
 CREATE TABLE IF NOT EXISTS gold.fct_elementary_indices (
     calculation_date DATE NOT NULL,

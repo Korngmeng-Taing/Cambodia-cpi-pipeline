@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import date
 from pathlib import Path
 
 # Ensure project root is on sys.path

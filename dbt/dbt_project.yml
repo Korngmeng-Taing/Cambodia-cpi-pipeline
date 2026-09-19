@@ -99,16 +99,6 @@ seeds:
         priority: int
         confidence: numeric(5, 4)
         is_active: boolean
-        notes: text
-    cpi_basket_v1:
-      +schema: silver
-      +column_types:
-        coicop_class: varchar(16)
-        coicop_division: varchar(16)
-        class_name: text
-        sample_items: text
-        expected_source: text
-        weight_within_division_pct: numeric(6, 3)
     coicop_override:
       +schema: silver
       +column_types:

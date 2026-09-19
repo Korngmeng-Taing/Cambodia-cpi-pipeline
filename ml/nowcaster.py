@@ -46,8 +46,6 @@ import json
 from sklearn.linear_model import RidgeCV
 
 from ml.config import (
-    BASKET_COLUMN_MAP,
-    CAMBODIA_ANNUAL_HOLIDAYS,
     DEFAULT_NOWCAST_MODEL,
     NIS_COICOP_WEIGHTS,
     NOWCAST_TARGET_BASKETS,

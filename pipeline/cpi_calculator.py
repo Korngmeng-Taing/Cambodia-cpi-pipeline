@@ -412,14 +412,14 @@ class CPICalculationEngine:
             valid = x[x > 0].dropna()
             if len(valid) == 0:
                 return np.nan
-            if len(valid) > 1:
+            if len(valid) > 2:
                 vals = valid.to_numpy()
-                min_v = np.min(vals)
-                if np.max(vals) / min_v >= 2.5:
-                    vals = vals[vals < min_v * 2.5]
-                    if len(vals) == 0:
-                        return float(min_v)
-                    return float(np.exp(np.mean(np.log(vals))))
+                med_v = float(np.median(vals))
+                if med_v > 0:
+                    # Robust trimmed filter: exclude prices outside [0.4 * median, 2.5 * median]
+                    inliers = vals[(vals >= med_v * 0.4) & (vals <= med_v * 2.5)]
+                    if len(inliers) > 0:
+                        return float(np.exp(np.mean(np.log(inliers))))
             return float(np.exp(np.mean(np.log(valid))))
 
         grouped = base_df.groupby("item_id").agg(
@@ -432,6 +432,92 @@ class CPICalculationEngine:
         ).reset_index()
 
         return grouped[grouped["base_price_khr"] > 0]
+
+    def load_or_create_base_registry(self, base_date: date, df_base: pd.DataFrame) -> pd.DataFrame:
+        """Loads canonical baseline prices from gold.dim_item_base_prices, populating it if empty."""
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS gold.dim_item_base_prices (
+                        item_id TEXT PRIMARY KEY,
+                        coicop_division VARCHAR(10) NOT NULL,
+                        coicop_code VARCHAR(20),
+                        base_price_khr NUMERIC(14, 4) NOT NULL,
+                        base_unit_price_khr NUMERIC(14, 4),
+                        base_obs_count INTEGER DEFAULT 1,
+                        first_seen_date DATE NOT NULL,
+                        enrolled_at TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ DEFAULT NOW()
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_item_base_prices_division ON gold.dim_item_base_prices(coicop_division);
+                    CREATE INDEX IF NOT EXISTS idx_item_base_prices_first_seen ON gold.dim_item_base_prices(first_seen_date);
+                """)
+                cur.execute("SELECT item_id, coicop_division, coicop_code, base_price_khr, base_unit_price_khr, base_obs_count, first_seen_date FROM gold.dim_item_base_prices;")
+                rows = cur.fetchall()
+                if rows:
+                    cols = ["item_id", "coicop_division", "coicop_code", "base_price_khr", "base_unit_price_khr", "base_obs_count", "first_seen_date"]
+                    return pd.DataFrame(rows, columns=cols)
+
+                # Initialize registry from base period prices
+                computed = self.compute_base_prices(base_date, df_base)
+                if not computed.empty:
+                    insert_rows = [
+                        (
+                            str(r.item_id), str(r.coicop_division), str(r.coicop_code) if pd.notna(r.coicop_code) else None,
+                            float(r.base_price_khr), float(r.base_unit_price_khr) if pd.notna(r.base_unit_price_khr) else float(r.base_price_khr),
+                            int(r.base_obs_count) if hasattr(r, "base_obs_count") and pd.notna(r.base_obs_count) else 1,
+                            r.first_seen_date if pd.notna(r.first_seen_date) else base_date
+                        )
+                        for r in computed.itertuples(index=False)
+                    ]
+                    execute_batch(cur, """
+                        INSERT INTO gold.dim_item_base_prices (
+                            item_id, coicop_division, coicop_code, base_price_khr, base_unit_price_khr, base_obs_count, first_seen_date
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (item_id) DO NOTHING;
+                    """, insert_rows, page_size=1000)
+                    conn.commit()
+                return computed
+        except Exception as e:
+            log.warning("Could not interact with gold.dim_item_base_prices (%s); computing in-memory base prices.", e)
+            return self.compute_base_prices(base_date, df_base)
+        finally:
+            conn.close()
+
+    def enroll_new_base_items(self, new_items: pd.DataFrame, enrollment_date: date) -> None:
+        """Persists newly observed items into gold.dim_item_base_prices to permanently anchor their base price."""
+        if new_items.empty:
+            return
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cur:
+                rows = [
+                    (
+                        str(r["item_id"]),
+                        str(r.get("coicop_division") or "01"),
+                        str(r.get("coicop_code")) if pd.notna(r.get("coicop_code")) else None,
+                        float(r["base_price_khr"]),
+                        float(r["base_unit_price_khr"]) if pd.notna(r.get("base_unit_price_khr")) else float(r["base_price_khr"]),
+                        int(r.get("base_obs_count", 1)),
+                        enrollment_date
+                    )
+                    for _, r in new_items.iterrows()
+                    if pd.notna(r.get("base_price_khr")) and float(r["base_price_khr"]) > 0
+                ]
+                if rows:
+                    execute_batch(cur, """
+                        INSERT INTO gold.dim_item_base_prices (
+                            item_id, coicop_division, coicop_code, base_price_khr, base_unit_price_khr, base_obs_count, first_seen_date
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (item_id) DO NOTHING;
+                    """, rows, page_size=1000)
+                    conn.commit()
+                    log.info("Permanently enrolled %d new items into gold.dim_item_base_prices on %s", len(rows), enrollment_date)
+        except Exception as e:
+            log.warning("Failed to persist newly enrolled base items to DB (%s). In-memory base price used.", e)
+        finally:
+            conn.close()
 
     def compute_daily_elementary_indices(
         self, 
@@ -467,14 +553,13 @@ class CPICalculationEngine:
             valid = x[x > 0].dropna()
             if len(valid) == 0:
                 return np.nan
-            if len(valid) > 1:
+            if len(valid) > 2:
                 vals = valid.to_numpy()
-                min_v = np.min(vals)
-                if np.max(vals) / min_v >= 2.5:
-                    vals = vals[vals < min_v * 2.5]
-                    if len(vals) == 0:
-                        return float(min_v)
-                    return float(np.exp(np.mean(np.log(vals))))
+                med_v = float(np.median(vals))
+                if med_v > 0:
+                    inliers = vals[(vals >= med_v * 0.4) & (vals <= med_v * 2.5)]
+                    if len(inliers) > 0:
+                        return float(np.exp(np.mean(np.log(inliers))))
             return float(np.exp(np.mean(np.log(valid))))
 
         # Current day observations strictly per unique item_id
@@ -495,6 +580,9 @@ class CPICalculationEngine:
             new_items["base_price_khr"] = new_items["today_price_khr"]
             new_items["base_unit_price_khr"] = new_items["today_unit_price_khr"]
             new_items["base_obs_count"] = new_items["observation_count"]
+            new_items["first_seen_date"] = calc_date
+            # Persist newly enrolled items to gold.dim_item_base_prices so baseline is permanently anchored
+            self.enroll_new_base_items(new_items, calc_date)
             new_items = new_items.drop(columns=["today_price_khr", "today_unit_price_khr", "observation_count"], errors="ignore")
             base_df = pd.concat([base_df, new_items], ignore_index=True)
 
@@ -860,12 +948,13 @@ class CPICalculationEngine:
 
             log.info(f"🔧 No base_date provided; using earliest available date {base_date} as base period.")
 
-        # Load base period observations separately to compute base prices
+        # Load base period observations to compute or initialize baseline registry
         df_base = self.load_clean_prices(base_date, base_date)
-        if df_base.empty:
-            log.error(f"No clean price data available for base date {base_date}")
+        # Load or initialize persistent baseline reference prices from gold.dim_item_base_prices
+        base_df = self.load_or_create_base_registry(base_date, df_base)
+        if base_df.empty:
+            log.error(f"No baseline prices available for base date {base_date}")
             return
-        base_df = self.compute_base_prices(base_date, df_base)
 
         # Only load the trailing imputation window (target_date - 9 days to target_date)
         history_start = target_date - timedelta(days=9)

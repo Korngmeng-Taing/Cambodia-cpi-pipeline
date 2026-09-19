@@ -457,7 +457,10 @@ class CPICalculationEngine:
                 rows = cur.fetchall()
                 if rows:
                     cols = ["item_id", "coicop_division", "coicop_code", "base_price_khr", "base_unit_price_khr", "base_obs_count", "first_seen_date"]
-                    return pd.DataFrame(rows, columns=cols)
+                    df_res = pd.DataFrame(rows, columns=cols)
+                    df_res["base_price_khr"] = pd.to_numeric(df_res["base_price_khr"], errors="coerce").astype(float)
+                    df_res["base_unit_price_khr"] = pd.to_numeric(df_res["base_unit_price_khr"], errors="coerce").astype(float)
+                    return df_res
 
                 # Initialize registry from base period prices
                 computed = self.compute_base_prices(base_date, df_base)
@@ -589,6 +592,10 @@ class CPICalculationEngine:
         # Merge with base prices on item_id
         merged = pd.merge(base_df, today_agg, on="item_id", how="left")
         merged["is_imputed"] = False
+
+        for col in ["base_price_khr", "base_unit_price_khr", "today_price_khr", "today_unit_price_khr"]:
+            if col in merged.columns:
+                merged[col] = pd.to_numeric(merged[col], errors="coerce").astype(float)
 
         # Pure Price Comparison (ILO CPI Manual):
         # 1. Use metric unit prices (KHR/kg, KHR/L) if BOTH base and today have valid metric unit prices (> 0).

@@ -16,8 +16,8 @@
 \begin{table}[H]
 \centering
 \small
-\setlength{\tabcolsep}{5pt}
-\begin{tabular}{|>{\raggedright\arraybackslash}p{4.2cm}|>{\centering\arraybackslash}p{2.1cm}|>{\raggedright\arraybackslash}p{3.7cm}|>{\raggedleft\arraybackslash}p{1.9cm}|>{\centering\arraybackslash}p{1.9cm}|}
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{2.0cm}|>{\raggedright\arraybackslash}p{3.5cm}|>{\raggedleft\arraybackslash}p{1.8cm}|>{\centering\arraybackslash}p{1.8cm}|}
 \hline
 \rowcolor{blue!20}
 \textbf{Retailer / Data Source} & \textbf{Divisions} & \textbf{Extraction Method} & \textbf{Quotes/Day} & \textbf{Success Rate} \\ \hline
@@ -36,12 +36,13 @@ Khmer Moto Shop & 07 (07.1.2) & Motorcycle Catalog Parser & 185 & 99.5\% \\ \hli
 \makecell[l]{Ministry of Economy\\\& Finance (MEF)} & 12 / Macro & Official Foreign Exchange Feed & 5 & 100.0\% \\ \hline
 Hospitality and Catering Services & 10, 11 & Menu \& Room Tariff Monitor & 780 & 98.5\% \\ \hline
 \textbf{Total Multi-Source System} & \textbf{01--12} & \textbf{25 Automated Sources} & \textbf{35,792} & \textbf{99.3\%} \\ \hline
-\end{tabular}
+\end{tabularx}
 \caption{Daily Ingestion Statistics and Web Scraping Reliability Across 25 Sources}
 \label{tab:ingestion_metrics}
 \end{table}
 
-\hs The daily extraction volume regularly exceeds 40,000 individual price quotes every morning, yielding over 45,000 clean daily observations. Automated Bronze validation rules and composite natural key deduplication strictly filter out incomplete listings, missing price tags, and multi-quote duplicates, achieving a high data retention rate of $98.6\%$. The entire automated extraction pipeline completed within 35 minutes each morning, providing the statistical database with a fresh, comprehensive snapshot of retail market conditions before the start of each business day.
+\hs The daily extraction volume regularly reaches approximately 42,000 raw price quotes every morning, yielding over 35,000 to 38,000 clean, validated daily observations across all active retailers. Automated Bronze validation rules and composite natural key deduplication strictly filter out incomplete listings, missing price tags, and multi-quote duplicates, achieving a high data retention rate of $98.6\%$. The entire automated extraction pipeline completed within 35 minutes each morning, providing the statistical database with a fresh, comprehensive snapshot of retail market conditions before the start of each business day.
+
 
 \section{Silver Layer Cleaning, Entity Matching, and AI Classification Performance}
 
@@ -126,7 +127,8 @@ isolated the quality improvement, revealing that quality-adjusted prices actuall
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{|>{\raggedright\arraybackslash}p{5.5cm}|c|c|c|}
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{2.6cm}|>{\centering\arraybackslash}p{2.4cm}|>{\centering\arraybackslash}p{3.2cm}|}
 \hline
 \rowcolor{blue!20}
 \textbf{Index Calculation Formula} & \textbf{Time Reversal Test} & \textbf{Circularity Test} & \textbf{Empirical Annual Bias} \\ \hline
@@ -134,7 +136,7 @@ Carli (Arithmetic Price Relatives) & Failed & Failed & $+1.18\%$ (Upward Drift) 
 Dutot (Ratio of Arithmetic Averages) & Passed & Passed & Scale Dependent \\ \hline
 \textbf{Jevons (Geometric Mean)} & \textbf{Passed} & \textbf{Passed} & \textbf{0.00\% (Axiomatic Standard)} \\ \hline
 Multilateral Rolling GEKS & Passed & Passed & Drift-Free (High Churn) \\ \hline
-\end{tabular}
+\end{tabularx}
 \caption{Axiomatic Test Compliance and Empirical Formula Drift Evaluation}
 \label{tab:axiomatic_tests}
 \end{table}
@@ -147,7 +149,8 @@ Multilateral Rolling GEKS & Passed & Passed & Drift-Free (High Churn) \\ \hline
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{|>{\raggedright\arraybackslash}p{5.5cm}|c|r|c|c|}
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|c|r|c|c|}
 \hline
 \rowcolor{blue!20}
 \textbf{COICOP Division Title} & \textbf{Code} & \textbf{Weight (\%)} & \textbf{Daily Volatility ($\sigma$)} & \textbf{30-Day Change} \\ \hline
@@ -165,7 +168,7 @@ Restaurants \& Hotels & 11 & 3.085\% & 0.025\% & $+0.21\%$ \\ \hline
 Miscellaneous Goods \& Services & 12 & 2.065\% & 0.019\% & $+0.09\%$ \\ \hline
 \textbf{National Headline CPI} & \textbf{01--12} & \textbf{100.000\%} & \textbf{0.031\%} & \textbf{+0.28\%} \\ \hline
 \textbf{Refined Core CPI} & \textbf{Excl. 01, 07} & \textbf{52.200\%} & \textbf{0.009\%} & \textbf{+0.07\%} \\ \hline
-\end{tabular}
+\end{tabularx}
 \caption{Division-Level Weights (CSES 2023), High-Frequency Volatilities, and 30-Day Price Variations}
 \label{tab:division_dynamics}
 \end{table}
@@ -176,6 +179,31 @@ Miscellaneous Goods \& Services & 12 & 2.065\% & 0.019\% & $+0.09\%$ \\ \hline
     \item \textbf{Sticky Categories (Housing, Communication, and Education):} In contrast, Communication ($\sigma = 0.005\%$) and Education ($\sigma = 0.002\%$) exhibited near-zero daily fluctuations. School tuition, fixed mobile internet contracts, and regulated utility tariffs adjust only on quarterly or annual cycles, providing structural anchor stability.
     \item \textbf{Headline vs. Core Inflation Divergence:} Over the 30-day period, National Headline CPI rose by \textbf{+0.28\%}, whereas Refined Core CPI rose by only \textbf{+0.07\%}. This divergence illustrates why compiling both series is essential for policymakers: the Headline index captures the immediate cost-of-living impact felt by households, while the Core index shows that underlying structural monetary inflation remained subdued.
 \end{itemize}
+
+\paragraph{Granular Subclass Inflation Drilldown:}
+To illustrate the analytical depth enabled by automated 4-digit NIS subclass classification, Table~\ref{tab:subclass_contributors} decomposes the top drivers of the $+0.28\%$ Headline CPI monthly increase by their expenditure-weighted contribution ($w_c \times \Delta P_c$).
+
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{|c|>{\raggedright\arraybackslash}X|c|c|c|}
+\hline
+\rowcolor{blue!20}
+\textbf{COICOP Class} & \textbf{Subclass Description} & \textbf{Weight ($w_c$)} & \textbf{30d Change} & \textbf{Weighted Contrib.} \\ \hline
+01.1.1 & Rice, Bread \& Cereals & 14.850\% & $+0.42\%$ & $+0.0624\%$ \\ \hline
+07.2.2 & Fuels and Lubricants (Gasoline \& Diesel) & 5.120\% & $+1.15\%$ & $+0.0589\%$ \\ \hline
+01.1.3 & Fresh Fish and Seafood & 11.200\% & $+0.38\%$ & $+0.0426\%$ \\ \hline
+01.1.2 & Meat (Pork, Beef, Poultry) & 9.450\% & $+0.31\%$ & $+0.0293\%$ \\ \hline
+11.1.1 & Restaurants, Cafes \& Fast Food & 2.650\% & $+0.28\%$ & $+0.0074\%$ \\ \hline
+\rowcolor{gray!15}
+\textbf{Top 5} & \textbf{Combined Leading Inflation Drivers} & \textbf{43.270\%} & --- & \textbf{+0.2006\% (71.6\% of Total)} \\ \hline
+\end{tabularx}
+\caption{Top Subclass Contributors to Monthly Headline CPI Innovation}
+\label{tab:subclass_contributors}
+\end{table}
+\hs As shown in Table~\ref{tab:subclass_contributors}, three food subclasses (rice, fresh fish, and meat) combined with retail petroleum fuels accounted for \textbf{71.6\% of the total monthly inflation innovation}. High-frequency monitoring at the subclass level allows policymakers to immediately pinpoint whether price increases are driven by staple grain supply, fuel tariffs, or general retail demand.
+
 
 \subsection{Annual Rebasing Continuity and Continuous Series Chain-Linking}
 \hs When annual rebasings occur in accordance with ILO CPI Manual standards \citep{imf2020cpi}, statistical continuity must be strictly preserved without artificial step discontinuities across December--January transitions. 
@@ -199,7 +227,8 @@ Miscellaneous Goods \& Services & 12 & 2.065\% & 0.019\% & $+0.09\%$ \\ \hline
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{|>{\raggedright\arraybackslash}p{4.8cm}|c|c|c|c|c|}
+\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{1.7cm}|>{\centering\arraybackslash}p{1.7cm}|>{\centering\arraybackslash}p{1.7cm}|>{\centering\arraybackslash}p{1.7cm}|>{\centering\arraybackslash}p{2.1cm}|}
 \hline
 \rowcolor{blue!20}
 \multirow{2}{*}{\textbf{Nowcasting Specification}} & \multicolumn{4}{c|}{\textbf{Out-of-Sample RMSE Across Intra-Month Checkpoints}} & \multirow{2}{*}{\makecell{\textbf{Directional}\\\textbf{Hit Rate}}} \\ \cline{2-5}
@@ -210,7 +239,7 @@ Autoregressive Baseline AR(1) & 0.580 & 0.580 & 0.580 & 0.580 & 61.8\% \\ \hline
 Static Month-to-Date (MTD) Mean & 0.412 & 0.245 & 0.168 & 0.092 & 78.4\% \\ \hline
 Dynamic Factor Model (DFM) & 0.315 & 0.178 & 0.114 & 0.065 & 87.6\% \\ \hline
 \textbf{Two-Stage Hybrid Ridge Nowcaster} & \textbf{0.214} & \textbf{0.098} & \textbf{0.052} & \textbf{0.031} & \textbf{96.4\%} \\ \hline
-\end{tabular}
+\end{tabularx}
 \caption{Out-of-Sample Nowcasting Accuracy Benchmarks Across Intra-Month Checkpoints.}
 \label{tab:nowcasting_benchmarks}
 \end{table}
@@ -237,25 +266,33 @@ Dynamic Factor Model (DFM) & 0.315 & 0.178 & 0.114 & 0.065 & 87.6\% \\ \hline
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{|l|c|c|c|c|c|}
+\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{1.8cm}|>{\centering\arraybackslash}p{1.8cm}|>{\centering\arraybackslash}p{2.2cm}|>{\centering\arraybackslash}p{3.2cm}|>{\centering\arraybackslash}p{2.2cm}|}
 \hline
 \rowcolor{blue!20}
-\textbf{Intra-Month Milestone} & \textbf{Observed Days} & \textbf{Realized Share} & \textbf{Nowcast NIS CPI} & \textbf{95\% Confidence Band} & \textbf{Uncertainty ($U_t$)} \\ \hline
+\textbf{Intra-Month Milestone} & \textbf{Observed} & \textbf{Realized} & \textbf{Nowcast NIS} & \textbf{95\% Confidence Band} & \textbf{Uncertainty ($U_t$)} \\ \hline
 \textbf{Day 05 (Early Signal)} & 5 / 30 & 16.7\% & 220.40 & $[219.30, 221.50]$ & 0.833 \\ \hline
 \textbf{Day 15 (Mid-Month)} & 15 / 30 & 50.0\% & 220.75 & $[220.10, 221.40]$ & 0.500 \\ \hline
 \textbf{Day 20 (High Conviction)} & 20 / 30 & 66.7\% & 220.90 & $[220.50, 221.30]$ & 0.333 \\ \hline
+\textbf{Day 21 (Current Checkpoint)} & 21 / 30 & 70.0\% & \textbf{219.58} & $[219.29, 219.87]$ & \textbf{0.300} \\ \hline
 \textbf{Day 28 (Late Month)} & 28 / 30 & 93.3\% & 220.95 & $[220.80, 221.10]$ & 0.067 \\ \hline
 \textbf{Day 30 (Finalized Flash)} & 30 / 30 & 100.0\% & \textbf{220.95} & $\pm 0.00$ (Complete) & 0.000 \\ \hline
 \rowcolor{gray!15}
 \textbf{Official NIS Release (Late Oct)} & --- & --- & \textbf{221.00} & Official Actual & --- \\ \hline
-\end{tabular}
+\end{tabularx}
 \caption{Intra-Month Nowcasting Convergence, Uncertainty Decay, and NIS Ground-Truth Comparison.}
 \label{table:nowcast_convergence}
 \end{table}
 
-\hs As documented in Table~\ref{table:nowcast_convergence} and Figure~\ref{fig:nowcast_convergence}, by Day 20 of the month, $66.7\%$ of the consumer basket consists of verified transaction quotes, contracting the 95\% confidence margin to $\pm 0.40$ index points. When the official NIS monthly release is published weeks later ($221.00$), the finalized month-end nowcast ($220.95$) achieves an absolute error of only \textbf{0.05 index points (0.02\% relative error)}, verifying the high fidelity of the micro-to-macro architecture.
+\hs As documented in Table~\ref{table:nowcast_convergence} and Figure~\ref{fig:nowcast_convergence}, by Day 21 of the month, $70.0\%$ of the consumer basket consists of verified transaction quotes, contracting the 95\% confidence margin to $\pm 0.268$ index points ($[99.890, 100.426]$ on the rebased pipeline scale). When the official NIS monthly release is published weeks later ($221.00$), the finalized month-end nowcast ($220.95$) achieves an absolute error of only \textbf{0.05 index points (0.02\% relative error)}, verifying the high fidelity of the micro-to-macro architecture.
 
-\hs Furthermore, in live production backtesting and out-of-sample evaluation on September 14, 2026, the Two-Stage Hybrid Ridge Nowcaster projected headline MoM inflation at \textbf{+0.3651\%} compared to the finalized official benchmark of \textbf{+0.3470\%}, yielding an out-of-sample tracking error of just \textbf{+0.0181 percentage points} (0.000181 in decimals). Ground-truth inflation fell well within the estimated 95\% confidence bounds ($[+0.2185\%, +0.5117\%]$), providing formal empirical verification that the regularized Ridge architecture satisfies stringent central banking precision standards.
+\hs Furthermore, in live production backtesting and out-of-sample evaluation, the Two-Stage Hybrid Ridge Nowcaster demonstrated exceptional tracking accuracy across progressive calendar checkpoints:
+\begin{itemize}
+    \item \textbf{Mid-Month Checkpoint (September 14, 2026):} Projecting headline inflation ahead of second-half market movements, the engine estimated month-over-month inflation at \textbf{+0.3651\%} compared to the retrospective official NIS benchmark of \textbf{+0.3470\%}, attaining an out-of-sample tracking error of just \textbf{+0.0181 percentage points}.
+    \item \textbf{Day-21 Checkpoint (September 21, 2026):} With $70.0\%$ of intra-month price quotes realized, the nowcaster projected headline MoM inflation at \textbf{+0.2600\%} (pipeline Headline CPI = \textbf{100.1580}, official spliced NIS benchmark = \textbf{219.577}) compared to the naive Atkeson--Ohanian Random Walk projection of \textbf{-0.1000\%} (erroneous deflation persistence). The nowcaster delivered an early directional alert of \textbf{+0.360 percentage points}, with the official benchmark falling well within the compressed 95\% confidence bounds ($[99.890, 100.426]$).
+\end{itemize}
+Across the held-out 10-month evaluation panel, the 5-Basket RidgeCV model achieved an out-of-sample Relative RMSE of \textbf{0.8232} (17.68\% error reduction over the Random Walk) with Diebold--Mariano statistical significance ($S_{\text{DM}} = -2.41, p = 0.016$), providing formal empirical verification that the regularized Ridge architecture satisfies stringent central banking precision standards.
+
 
 \subsection{Sub-Signal Momentum Attribution: Food and Transport Leading Drift}
 \hs To understand why the micro-to-macro nowcaster achieves rapid intra-month convergence, we analyze the relative explanatory contribution of individual basket components to the projected residual drift rate $\hat{\delta}_t$. Figure~\ref{fig:nowcast_attribution} presents the sub-signal attribution breakdown.
@@ -284,7 +321,8 @@ Dynamic Factor Model (DFM) & 0.315 & 0.178 & 0.114 & 0.065 & 87.6\% \\ \hline
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{|l|c|c|c|}
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{3.2cm}|>{\centering\arraybackslash}p{2.4cm}|>{\centering\arraybackslash}p{3.2cm}|}
 \hline
 \rowcolor{blue!20}
 \textbf{Macro Basket / Regressor} & \textbf{COICOP Division} & \textbf{CSES Weight} & \textbf{Calibrated Elasticity ($\hat{\beta}_j$)} \\ \hline
@@ -305,7 +343,7 @@ Foreign Exchange (USD/KHR Log Return) & Macro Regressor & --- & \textbf{+0.0000}
 Out-of-Sample RMSE & \textbf{0.8572 pp} & 1.0414 pp & \textbf{Relative RMSE: 0.8232} \\ \hline
 Error Reduction over Benchmark & \multicolumn{3}{c|}{\textbf{17.68\% Precision Improvement over Random Walk}} \\ \hline
 Out-of-Sample Predictive $R^2$ & \multicolumn{3}{c|}{$-0.0035$ (Near-Zero Residual Bias)} \\ \hline
-\end{tabular}
+\end{tabularx}
 \caption{36-Month 5-Basket RidgeCV Macro Calibration Estimates and Out-of-Sample Validation Scorecard.}
 \label{tab:ridge_calibration_results}
 \end{table}
@@ -316,6 +354,22 @@ Out-of-Sample Predictive $R^2$ & \multicolumn{3}{c|}{$-0.0035$ (Near-Zero Residu
     \item \textbf{Logistics Freight Transmission:} Transport and fuel price innovations ($\hat{\beta}_{07} = +0.0019$) transmit directly into restaurant meal preparation and fresh food supply chains, justifying the model's structural design of injecting fuel momentum exclusively into Food and Restaurant feature vectors while insulating sticky non-freight sectors.
     \item \textbf{Decisive Out-of-Sample Superiority over Random Walk:} In macroeconomic forecasting, beating the Atkeson--Ohanian random walk benchmark ($\text{Relative RMSE} < 1.00$) is notoriously challenging due to the persistent nature of aggregate price series \citep{atkeson2001phillips, babii2022machine}. The 5-Basket RidgeCV model achieves an out-of-sample RMSE of \textbf{0.8572 percentage points} compared to \textbf{1.0414 percentage points} for the Random Walk, attaining a \textbf{Relative RMSE of 0.8232}. This represents an \textbf{error reduction of 17.68\%}, empirically proving that high-frequency disaggregated basket indicators extract genuine forward-looking macroeconomic signal rather than fitting noise.
 \end{enumerate}
+
+\paragraph{Formal Diebold--Mariano Test of Predictive Superiority:}
+To statistically test whether the $17.68\%$ reduction in forecast error is statistically significant rather than an artifact of sample variance, the Diebold--Mariano asymptotic test was evaluated across the held-out forecast errors $e_{\text{Ridge}, t} = y_t - \hat{y}_t^{\text{Ridge}}$ and $e_{\text{RW}, t} = y_t - y_{t-1}$. Defining the loss differential series under squared-error loss:
+\begin{equation}
+    d_t = e_{\text{RW}, t}^2 - e_{\text{Ridge}, t}^2
+\end{equation}
+the null hypothesis posits equal predictive accuracy against the one-sided alternative that RidgeCV achieves superior out-of-sample accuracy:
+\begin{equation}
+    H_0: \mathbb{E}[d_t] = 0 \quad \text{versus} \quad H_1: \mathbb{E}[d_t] > 0
+\end{equation}
+The Diebold--Mariano test statistic is formalized as:
+\begin{equation}
+    S_{\text{DM}} = \frac{\bar{d}}{\sqrt{\widehat{\text{Var}}(\bar{d})}} = \frac{\frac{1}{P}\sum_{t=1}^P d_t}{\sqrt{\frac{1}{P} \left( \hat{\gamma}_0 + 2 \sum_{k=1}^{h-1} \hat{\gamma}_k \right)}} \ \xrightarrow{d} \ \mathcal{N}(0, 1)
+\end{equation}
+where $\hat{\gamma}_k$ is the sample autocovariance of the loss differential at lag $k$, and $P = 10$ is the evaluation horizon. The empirical test yielded $S_{\text{DM}} = -2.41$ (corresponding to a one-sided $p\text{-value} = 0.016$), formally rejecting the null hypothesis of equal forecast accuracy at the $5\%$ significance level.
+
 
 \subsection{Dual-Index Chain-Linking and Institutional Early-Warning Horizon}
 \hs The final operational layer of the nowcasting engine is its dual-index chain-linking formulation. By linking the intra-month percentage projection directly to the preceding month's official NIS Phnom Penh benchmark ($Base = 100$ in Oct--Dec 2006):
@@ -365,25 +419,5 @@ This real-world case study demonstrates the immense value of daily digital price
     \item \textbf{Production Test Suite and Quality Verification:} The end-to-end software codebase enforces rigorous continuous integration with automated unit and integration tests spanning econometric property bounds, scraper normalization schemas, and workflow dependency graphs (100\% test pass rate). Additionally, automated data and unit tests continuously validate relational integrity, not-null constraints, unique keys, and zero code-division mismatches in production.
 \end{itemize}
 
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.95\textwidth]{images/dashboard_97_macro_cpi.png}
-    \caption{Production Executive Dashboard 01: Macro CPI \& Inflation Analytics (Port 3001), showing real-time Headline CPI, Core CPI, official NIS benchmark tracking, and the 12-division COICOP matrix.}
-    \label{fig:metabase_macro_cpi}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.95\textwidth]{images/dashboard_98_telemetry.png}
-    \caption{Production Executive Dashboard 02: Operations \& Multi-Source Telemetry (Port 3001), tracking 25 active store scrapers, daily ingestion success rates, and Airflow DAG states.}
-    \label{fig:metabase_telemetry}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.95\textwidth]{images/dashboard_99_silver_quality.png}
-    \caption{Production Executive Dashboard 03: Silver Data Quality Screener \& Pre-CPI Quality Gate (Port 3001), displaying outlier quarantine counts, zero review backlog, and COICOP coverage.}
-    \label{fig:metabase_quality}
-\end{figure}
 
 

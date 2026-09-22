@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pendulum
 
 from scrapers.base import BaseScraper
 from scrapers.sources._common import (
+    _cffi_get,
+    _to_float,
     build_canonical_record,
+    log,
 )
 
 
@@ -117,24 +121,59 @@ class SmartScraper(BaseScraper):
         ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
 
-        # 1. Mobile Plans
-        for plan in SMART_MOBILE_PLANS:
-            records.append(
-                build_canonical_record(
-                    source_slug=self.store_slug,
-                    source_type="telecom",
-                    store_name="Smart Cambodia Mobile",
-                    item_id=plan["id"],
-                    name=plan["name"],
-                    price=plan["price"],
-                    currency="USD",
-                    category_native=plan["type"],
-                    package_size=plan["data"],
-                    url="https://www.smart.com.kh/plans",
-                    scrape_date=ds,
-                    is_fallback=True,
+        # 1. Live scrape Smart Laor! plans from official portal
+        try:
+            laor_url = "https://www.smart.com.kh/plans/smart-laor"
+            resp = _cffi_get(laor_url, timeout=15)
+            if resp.status_code == 200:
+                pattern = (
+                    r"Smart Laor!\s+([A-Za-z0-9\.\s]+?)\s+plan costs\s+(\d+(?:\.\d+)?)"
+                    r"\s+USD[\s\S]*?Subscribers receive\s+(\d+\s*GB)"
                 )
-            )
+                matches = re.findall(pattern, resp.text, re.IGNORECASE)
+                for tier_name, price_str, data_size in matches:
+                    tier_clean = tier_name.strip()
+                    price = _to_float(price_str)
+                    if price and price > 0:
+                        slug_part = re.sub(r"[^a-z0-9]+", "_", tier_clean.lower()).strip("_")
+                        records.append(
+                            build_canonical_record(
+                                source_slug=self.store_slug,
+                                source_type="telecom",
+                                store_name="Smart Cambodia Mobile",
+                                item_id=f"smart_live_laor_{slug_part}",
+                                name=f"Smart Laor! {tier_clean} ({data_size})",
+                                price=price,
+                                currency="USD",
+                                category_native="Mobile Prepaid > Data Bundle",
+                                package_size=data_size,
+                                url=laor_url,
+                                scrape_date=ds,
+                                attrs={"tier": tier_clean},
+                            )
+                        )
+        except Exception as exc:
+            log.warning("Smart Mobile live scrape error: %s", exc)
+
+        # If live scrape failed, fall back to full baseline mobile plans
+        if not records:
+            for plan in SMART_MOBILE_PLANS:
+                records.append(
+                    build_canonical_record(
+                        source_slug=self.store_slug,
+                        source_type="telecom",
+                        store_name="Smart Cambodia Mobile",
+                        item_id=plan["id"],
+                        name=plan["name"],
+                        price=plan["price"],
+                        currency="USD",
+                        category_native=plan["type"],
+                        package_size=plan["data"],
+                        url="https://www.smart.com.kh/plans",
+                        scrape_date=ds,
+                        is_fallback=True,
+                    )
+                )
 
         # 2. Home Internet / WiFi Plans
         for plan in SMART_WIFI_PLANS:

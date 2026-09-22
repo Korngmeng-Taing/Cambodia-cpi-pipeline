@@ -15,6 +15,7 @@ except ImportError:
 from scrapers.base import BaseScraper
 from scrapers.sources._common import (
     _cffi_get,
+    _cffi_post,
     _to_float,
     build_canonical_record,
     log,
@@ -144,45 +145,59 @@ class MetfoneScraper(BaseScraper):
         ds = str(scrape_date or pendulum.today("Asia/Phnom_Penh").date())
         records: list[dict[str, Any]] = []
 
-        # 1. Attempt live scrape of Next.js hydration props for Metfone Mobile
+        # 1. Live scrape via Metfone Next.js Proxy API (REST JSON)
         try:
-            resp = _cffi_get(METFONE_MOBILE_URL, timeout=15)
-            if resp.status_code == 200 and HAS_BS4:
-                soup = BeautifulSoup(resp.text, "html.parser")
-                script = soup.find("script", id="__NEXT_DATA__")
-                if script and script.string:
-                    next_data = json.loads(script.string)
-                    props = (next_data.get("props") or {}).get("pageProps") or {}
-                    for key in ("plans", "packages", "items", "data"):
-                        plans = props.get(key)
-                        if isinstance(plans, list) and plans:
-                            for idx, plan in enumerate(plans):
-                                name = plan.get("name") or plan.get("title") or ""
-                                price = _to_float(
-                                    plan.get("price") or plan.get("fee") or plan.get("cost")
-                                )
-                                if price and name:
-                                    records.append(
-                                        build_canonical_record(
-                                            source_slug=self.store_slug,
-                                            source_type="telecom",
-                                            store_name="Metfone Cambodia Mobile",
-                                            item_id=str(plan.get("id", f"met_mob_{idx}")),
-                                            name=name,
-                                            price=price,
-                                            currency="USD",
-                                            category_native=plan.get("type") or "Mobile Prepaid",
-                                            package_size=plan.get("data") or plan.get("capacity"),
-                                            url=METFONE_MOBILE_URL,
-                                            scrape_date=ds,
-                                        )
+            api_url = "https://metfone.com.kh/api/proxy/packages/config-des-packages"
+            payload = {
+                "wsCode": "getConfigDesPackages",
+                "wsRequest": {
+                    "servicePackagesCode": "MOBILE_CODE",
+                    "type": 2,
+                    "language": "en",
+                    "role": "",
+                },
+            }
+            resp = _cffi_post(api_url, json=payload, timeout=15)
+            if resp.status_code == 200:
+                data = resp.json()
+                for root in data.get("wsResponse") or []:
+                    for child in root.get("listChildConfigDes") or []:
+                        for pkg in child.get("listPackage") or []:
+                            name = pkg.get("name")
+                            price = _to_float(pkg.get("price"))
+                            if name and price:
+                                pkg_id = str(pkg.get("id") or name.lower().replace(" ", "_"))
+                                data_size = f"{pkg.get('numberPackages', '')} {pkg.get('unitPackage', '')}".strip() or None
+                                validity = f"{pkg.get('numberDateApplicable', '')}{pkg.get('unitDateApplicable', '')}".strip()
+                                records.append(
+                                    build_canonical_record(
+                                        source_slug=self.store_slug,
+                                        source_type="telecom",
+                                        store_name="Metfone Cambodia Mobile",
+                                        item_id=f"met_live_{pkg_id}",
+                                        name=f"Metfone {name} ({validity})" if validity else f"Metfone {name}",
+                                        price=price,
+                                        currency="USD",
+                                        category_native="Mobile Prepaid > Weekly/Monthly Bundle",
+                                        package_size=data_size,
+                                        url=METFONE_MOBILE_URL,
+                                        scrape_date=ds,
+                                        attrs={
+                                            "days_applicable": pkg.get("numberDateApplicable"),
+                                            "dial_code": pkg.get("toSubscribeDial") or pkg.get("guideRegister"),
+                                        },
                                     )
+                                )
         except Exception as exc:
-            log.warning("Metfone Mobile live scrape error: %s", exc)
+            log.warning("Metfone Mobile live proxy API error: %s", exc)
 
-        # If live scrape didn't populate mobile records, use the verified tariff catalog
-        if not records:
-            for plan in METFONE_MOBILE_PLANS:
+        # Supplement live records with any baseline mobile plans not covered by live scrape
+        live_names = {r["name"].lower() for r in records}
+        for plan in METFONE_MOBILE_PLANS:
+            plan_name = plan["name"]
+            # Check if plan is already represented by live scrape
+            p_core = plan_name.lower().replace("metfone", "").strip()
+            if not any(p_core in ln or ln in p_core for ln in live_names):
                 records.append(
                     build_canonical_record(
                         source_slug=self.store_slug,

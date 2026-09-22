@@ -83,7 +83,7 @@
 
 \author{\textbf{National Institute of Statistics (NIS) \& National Bank of Cambodia (NBC) Research Collaboration}\\[2pt]
 \small High-Frequency Economic Nowcasting Laboratory $\cdot$ Big Data Econometrics Engineering Unit}
-\date{\small Version 3.4 -- September 2026}
+\date{\small Version 3.4 -- September 21, 2026}
 
 \begin{document}
 
@@ -432,7 +432,7 @@ where $P_{i, s, t}$ is the clean KHR price of item $i$ in store $s$ on day $t$, 
 \midrule
 \texttt{cpi\_month} & \texttt{DATE} & $\checkmark$ & No & \texttt{date\_trunc('month', date)} & First calendar day of the index month (\texttt{YYYY-MM-01}). \\
 \texttt{coicop\_division} & \texttt{CHAR(2)} & $\checkmark$ & No & Division code & 2-digit UN COICOP Division (\texttt{'01'} to \texttt{'12'}). \\
-\texttt{division\_name} & \texttt{VARCHAR(100)} & & No & \texttt{gold.coicop\_weights.name} & Official UN division classification title. \\
+\texttt{division\_name} & \texttt{VARCHAR(100)} & & No & \makecell[l]{\texttt{gold.coicop\_}\\\texttt{weights.name}} & Official UN division classification title. \\
 \texttt{weight} & \texttt{NUMERIC(6,4)} & & No & Official NIS 2018 basket weight & Division expenditure weight $w_j$ ($\sum w_j = 1.0000$). \\
 \texttt{monthly\_division\_index} & \texttt{NUMERIC(10,4)} & & No & $\exp\left( \frac{1}{K_j} \sum \ln R_{i, j} \right) \times 100$ & Aggregated monthly index level for division $j$ ($2026=100$). \\
 \texttt{monthly\_headline\_cpi} & \texttt{NUMERIC(10,4)} & & No & $\sum_{j=1}^{12} w_j \cdot I_{j, \text{month}}$ & \textbf{National Headline CPI} aggregated across all 12 divisions. \\
@@ -500,27 +500,28 @@ implemented as \texttt{np.mean(latest\_div * np.exp(div\_drift * future\_days))}
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{l p{2.5cm} c c p{4.2cm} X}
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{@{}l p{2.4cm} c c >{\raggedright\arraybackslash}p{4.0cm} >{\raggedright\arraybackslash}X@{}}
 \toprule
 \textbf{Target Column} & \textbf{Data Type} & \textbf{PK} & \textbf{Null?} & \textbf{Source Column / Expr} & \textbf{Business Definition \& Logic} \\
 \midrule
-\texttt{nowcast\_date} & \texttt{DATE} & $\checkmark$ & No & Run date & Date the nowcast was generated (daily at 08:00 ICT). \\
-\texttt{target\_month} & \texttt{DATE} & $\checkmark$ & No & First day of forecast month & Month being nowcasted (\texttt{YYYY-MM-01}). \\
-\texttt{model\_name} & \texttt{VARCHAR(50)} & $\checkmark$ & No & Constant tag & Econometric model version: \texttt{'hybrid\_ridge\_5basket\_v1'}. \\
-\texttt{days\_observed} & \texttt{INTEGER} & & No & Day of month ($t$) & Number of realized elapsed calendar days with observed scraped prices. \\
-\texttt{days\_remaining} & \texttt{INTEGER} & & No & $N = T - t$ & Unobserved future days remaining until month-end. \\
-\texttt{days\_in\_month} & \texttt{INTEGER} & & No & Month length ($T$) & Total calendar days in target month ($28, 29, 30, \text{ or } 31$). \\
-\texttt{realized\_cpi\_so\_far} & \texttt{NUMERIC(10,4)} & & No & $\frac{1}{t}\sum_{d=1}^t I_{\text{head}, d}$ & Arithmetic average of realized daily headline CPI up to day $t$. \\
-\texttt{projected\_remaining\_cpi} & \texttt{NUMERIC(10,4)} & & No & Exact discrete mean & Projected average index for remaining unobserved days $d \in [t+1, T]$. \\
-\texttt{projected\_mom\_pct} & \texttt{NUMERIC(8,4)} & & No & $\frac{\hat{I}_T - I_{m-1}}{I_{m-1}} \times 100\%$ & \textbf{Core Business Indicator}: Projected full Month-over-Month inflation rate. \\
-\texttt{nowcast\_headline\_cpi} & \texttt{NUMERIC(10,4)} & & No & Final synthesized index & Projected final Month-End Headline CPI ($2026=100$). \\
-\texttt{nowcast\_nis\_headline\_cpi} & \texttt{NUMERIC(10,4)} & & No & Dual-index chain-link & Estimated official NIS index level rebased to Oct--Dec $2006=100$. \\
-\texttt{ci\_lower\_95} & \texttt{NUMERIC(10,4)} & & No & $\hat{I} - 1.96 \cdot \hat{\sigma}\sqrt{\frac{T-t}{T}}$ & Dynamic 95\% confidence interval lower bound. \\
-\texttt{ci\_upper\_95} & \texttt{NUMERIC(10,4)} & & No & $\hat{I} + 1.96 \cdot \hat{\sigma}\sqrt{\frac{T-t}{T}}$ & Dynamic 95\% confidence interval upper bound. \\
-\texttt{nowcast\_food\_cpi} & \texttt{NUMERIC(10,4)} & & Yes & Disaggregated food projection & Projected month-end index for Division 01 (Food). \\
-\texttt{projected\_food\_mom\_pct} & \texttt{NUMERIC(8,4)} & & Yes & Food MoM \% & Projected Month-over-Month inflation for Division 01 (Food). \\
-\texttt{nowcast\_transport\_cpi} & \texttt{NUMERIC(10,4)} & & Yes & Transport projection & Projected month-end index for Division 07 (Transport). \\
-\texttt{projected\_transport\_mom\_pct} & \texttt{NUMERIC(8,4)} & & Yes & Transport MoM \% & Projected Month-over-Month inflation for Division 07 (Transport). \\
+\texttt{nowcast\_date} & \texttt{DATE} & $\checkmark$ & No & Run date & Date nowcast generated (08:00 ICT). \\
+\texttt{target\_month} & \texttt{DATE} & $\checkmark$ & No & First day of month & Target month (\texttt{YYYY-MM-01}). \\
+\texttt{model\_name} & \texttt{VARCHAR(50)} & $\checkmark$ & No & Model tag & \makecell[l]{\texttt{hybrid\_ridge\_}\\\texttt{5basket\_v1}} \\
+\texttt{days\_observed} & \texttt{INTEGER} & & No & Realized day ($t$) & Elapsed calendar days with prices. \\
+\texttt{days\_remaining} & \texttt{INTEGER} & & No & $N = T - t$ & Remaining unobserved days. \\
+\texttt{days\_in\_month} & \texttt{INTEGER} & & No & Length ($T$) & Calendar days in month (28--31). \\
+\texttt{realized\_cpi\_so\_far} & \texttt{NUMERIC(10,4)} & & No & $\frac{1}{t}\sum_{d=1}^t I_{\text{head}, d}$ & Realized headline mean through day $t$. \\
+\texttt{projected\_remaining\_cpi} & \texttt{NUMERIC(10,4)} & & No & Discrete mean & Projected index for days $d \in [t+1, T]$. \\
+\texttt{projected\_mom\_pct} & \texttt{NUMERIC(8,4)} & & No & $\frac{\hat{I}_T - I_{m-1}}{I_{m-1}} \times 100\%$ & \textbf{Core Business Indicator}: Projected full Month-over-Month inflation. \\
+\texttt{nowcast\_headline\_cpi} & \texttt{NUMERIC(10,4)} & & No & Synthesized index & Month-End Headline CPI ($2026=100$). \\
+\texttt{nowcast\_nis\_headline\_cpi} & \texttt{NUMERIC(10,4)} & & No & Dual chain-link & Rebased official NIS level ($2006=100$). \\
+\texttt{ci\_lower\_95} & \texttt{NUMERIC(10,4)} & & No & $\hat{I} - 1.96 \hat{\sigma}\sqrt{\frac{T-t}{T}}$ & Dynamic 95\% confidence lower bound. \\
+\texttt{ci\_upper\_95} & \texttt{NUMERIC(10,4)} & & No & $\hat{I} + 1.96 \hat{\sigma}\sqrt{\frac{T-t}{T}}$ & Dynamic 95\% confidence upper bound. \\
+\texttt{nowcast\_food\_cpi} & \texttt{NUMERIC(10,4)} & & Yes & Food projection & Month-end index for Division 01. \\
+\texttt{projected\_food\_mom\_pct} & \texttt{NUMERIC(8,4)} & & Yes & Food MoM \% & Projected MoM for Division 01 (Food). \\
+\texttt{nowcast\_transport\_cpi} & \texttt{NUMERIC(10,4)} & & Yes & Transport projection & Month-end index for Division 07. \\
+\texttt{projected\_transport\_mom\_pct} & \texttt{NUMERIC(8,4)} & & Yes & Transport MoM \% & Projected MoM for Division 07 (Transport). \\
 \bottomrule
 \end{tabularx}
 \caption{Detailed Column Lineage for \texttt{gold.fct\_cpi\_nowcast}.}
@@ -535,38 +536,47 @@ The following master matrix cross-references every active warehouse column with 
 
 \begin{table}[H]
 \centering
-\scriptsize
-\begin{tabularx}{\textwidth}{l l l l p{3.8cm} X}
+\tiny
+\setlength{\tabcolsep}{2.5pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{@{}
+>{\raggedright\arraybackslash}p{2.8cm}
+>{\raggedright\arraybackslash}p{2.6cm}
+>{\raggedright\arraybackslash}p{2.2cm}
+>{\raggedright\arraybackslash}p{2.2cm}
+>{\raggedright\arraybackslash}p{3.2cm}
+>{\raggedright\arraybackslash}X
+@{}}
 \toprule
 \textbf{Target Table} & \textbf{Target Column} & \textbf{Upstream Source} & \textbf{Source Column} & \textbf{Transformation / Rule} & \textbf{Economic / Functional Role} \\
 \midrule
 \texttt{staging.raw\_scrapes} & \texttt{payload} & Retail Scraper & HTTP Response & Raw JSON string parsing & Raw scraped catalog state \\
 \texttt{staging.exchange\_rates} & \texttt{rate} & MEF Realtime API & API JSON & Value parse with NBC fallback & Dual-currency conversion factor \\
-\texttt{ops.circuit\_breaker\_events} & \texttt{price\_velocity\_delta\_pct} & \texttt{clean\_store\_prices} & \texttt{price\_khr} & $(\text{Med}_t - \text{Med}_{7d}) / \text{Med}_{7d}$ & Outlier ingestion barrier \\
-\texttt{silver.canonical\_items} & \texttt{canonical\_name} & \texttt{staging.raw\_scrapes} & \texttt{payload->>'title'} & \texttt{pipeline/text\_clean.py} & Deterministic master variety \\
-\texttt{silver.canonical\_items} & \texttt{match\_confidence} & \texttt{gemini-embedding-2} & Text Vector & $1 - \text{CosineDistance}(v_1, v_2)$ & Product deduplication score \\
-\texttt{silver.int\_coicop\_classified} & \texttt{coicop\_division} & Multiple Seeds / AI & Keyword / Vector & 5-Tier SQL Precedence Cascade & UN COICOP Division assignment \\
-\texttt{silver.clean\_store\_prices} & \texttt{price\_khr} & \texttt{staging.raw\_scrapes} & \texttt{price\_raw, currency} & $P_{\text{raw}} \cdot \text{Rate}_{\text{USD/KHR}}$ if USD & Clean price in Khmer Riel \\
-\texttt{silver.clean\_store\_prices} & \texttt{unit\_price\_khr} & \texttt{clean\_store\_prices} & \texttt{price\_khr, unit\_value} & $P_{\text{khr}} / \text{unit\_value}$ & Standardized quantity unit price \\
+\texttt{ops.circuit\_breaker} & \texttt{price\_velocity\_delta} & \texttt{clean\_store\_prices} & \texttt{price\_khr} & $(\text{Med}_t - \text{Med}_{7d}) / \text{Med}_{7d}$ & Outlier ingestion barrier \\
+\texttt{silver.canonical\_items} & \texttt{canonical\_name} & \texttt{staging.raw\_scrapes} & \texttt{payload->>'title'} & \texttt{text\_clean.py} & Master product variety \\
+\texttt{silver.canonical\_items} & \texttt{match\_confidence} & \texttt{gemini-embed-2} & Text Vector & $1 - \text{CosineDist}(v_1, v_2)$ & Product deduplication score \\
+\texttt{silver.int\_coicop} & \texttt{coicop\_division} & Seeds / AI & Keyword / Vector & 5-Tier SQL Precedence Cascade & UN COICOP Division code \\
+\texttt{silver.clean\_store\_prices} & \texttt{price\_khr} & \texttt{staging.raw\_scrapes} & \texttt{price\_raw, curr} & $P_{\text{raw}} \cdot \text{Rate}_{\text{USD/KHR}}$ if USD & Clean price in Khmer Riel \\
+\texttt{silver.clean\_store\_prices} & \texttt{unit\_price\_khr} & \texttt{clean\_store\_prices} & \texttt{price\_khr, unit} & $P_{\text{khr}} / \text{unit\_value}$ & Standardized unit price \\
 \texttt{silver.clean\_store\_prices} & \texttt{discount\_pct} & \texttt{clean\_store\_prices} & \texttt{orig\_khr, price\_khr} & $\text{clamp}((P_0 - P)/P_0 \cdot 100, 0, 95)$ & Promotional discount rate \\
 \texttt{silver.clean\_store\_prices} & \texttt{is\_outlier} & \texttt{clean\_store\_prices} & \texttt{price\_khr} & Hadi / Tukey IQR $(>3.0\times\text{IQR})$ & Quality assurance filter \\
 \texttt{gold.fct\_daily\_prices} & \texttt{price\_khr} & \texttt{clean\_store\_prices} & \texttt{price\_khr} & $\exp\left(\frac{1}{N}\sum\ln P_{\text{khr}}\right)$ & Cross-store geometric mean \\
-\texttt{gold.fct\_elementary\_indices} & \texttt{price\_ratio} & \texttt{clean\_store\_prices} & \texttt{price\_khr} & $P_{i, t} / P_{i, 0}$ & \textbf{Jevons Elementary Relative} \\
-\texttt{gold.fct\_elementary\_indices} & \texttt{is\_imputed} & \texttt{clean\_store\_prices} & Scrape status & Missing check $\to$ Division drift & Carry-forward / drift imputation \\
-\texttt{gold.fct\_cpi\_daily} & \texttt{division\_index} & \texttt{fct\_elementary\_indices} & \texttt{price\_ratio} & $\exp\left(\frac{1}{K}\sum\ln R\right) \times 100$ & Division-level Jevons index \\
+\texttt{gold.fct\_elem\_indices} & \texttt{price\_ratio} & \texttt{clean\_store\_prices} & \texttt{price\_khr} & $P_{i, t} / P_{i, 0}$ & \textbf{Jevons Elementary Relative} \\
+\texttt{gold.fct\_elem\_indices} & \texttt{is\_imputed} & \texttt{clean\_store\_prices} & Scrape status & Missing check $\to$ Division drift & Carry-forward / drift imputation \\
+\texttt{gold.fct\_cpi\_daily} & \texttt{division\_index} & \texttt{fct\_elem\_indices} & \texttt{price\_ratio} & $\exp\left(\frac{1}{K}\sum\ln R\right) \times 100$ & Division-level Jevons index \\
 \texttt{gold.fct\_cpi\_daily} & \texttt{headline\_cpi} & \texttt{fct\_cpi\_daily} & \texttt{division\_index} & $\sum_{j=1}^{12} w_j I_{j, t}$ & \textbf{National Headline Index} \\
 \texttt{gold.fct\_cpi\_daily} & \texttt{core\_cpi} & \texttt{fct\_cpi\_daily} & \texttt{division\_index} & $\sum_{j \notin \{1,4,7\}} w_j I_j / \sum w$ & National Core Index \\
 \texttt{gold.fct\_cpi\_monthly} & \texttt{mom\_inflation\_pct} & \texttt{fct\_cpi\_monthly} & \texttt{division\_index} & $(I_m - I_{m-1})/I_{m-1} \times 100$ & Division MoM Inflation Rate \\
-\texttt{gold.fct\_cpi\_monthly} & \texttt{headline\_mom\_inflation\_pct} & \texttt{fct\_cpi\_monthly} & \texttt{headline\_cpi} & $(H_m - H_{m-1})/H_{m-1} \times 100$ & National Headline MoM \% \\
-\texttt{gold.fct\_cpi\_nis\_comparison} & \texttt{mom\_diff\_pct\_points} & \makecell[l]{\texttt{fct\_cpi\_monthly}\\\texttt{dim\_nis\_official}} & \makecell[l]{\texttt{headline\_mom}\\\texttt{nis\_mom}} & $\pi_{\text{pipeline}} - \pi_{\text{NIS}}$ & Official Tracking Error (pp) \\
-\texttt{gold.nowcast\_calibrated\_parameters} & \texttt{alpha\_drift} & \texttt{dim\_nis\_official} & Historical $\Delta \ln I$ & RidgeCV intercept $\hat{\alpha}$ & Unobserved empirical base drift \\
-\texttt{gold.nowcast\_calibrated\_parameters} & \texttt{lambda\_penalty} & Multiple features & Stationary log returns & LOOCV minimization & $L_2$ Ridge shrinkage weight \\
-\texttt{gold.nowcast\_calibrated\_parameters} & \texttt{beta\_food} & \texttt{fct\_cpi\_monthly} & Division 01 index & Ridge coefficient $\beta_1$ & Food pass-through elasticity \\
-\texttt{gold.fct\_cpi\_nowcast} & \texttt{projected\_remaining\_cpi} & \texttt{fct\_cpi\_daily} & \texttt{division\_index} & $\frac{1}{N}\sum_{k=1}^N I_{t} e^{\mu k}$ & Exact discrete future projection \\
-\texttt{gold.fct\_cpi\_nowcast} & \texttt{projected\_mom\_pct} & \makecell[l]{\texttt{fct\_cpi\_daily}\\\texttt{nowcast\_parameters}} & \makecell[l]{\texttt{division\_index}\\\texttt{beta, alpha}} & Two-stage hybrid Ridge projection & \textbf{Real-Time Nowcast Inflation} \\
-\texttt{gold.fct\_cpi\_nowcast} & \texttt{nowcast\_nis\_headline\_cpi} & \texttt{fct\_cpi\_nowcast} & \texttt{nowcast\_headline\_cpi} & $I_{\text{NIS}, 0} \cdot (\hat{I}_t / I_0)$ & Chain-linked official NIS estimate \\
-\texttt{gold.fct\_cpi\_nowcast} & \texttt{ci\_lower\_95} & \texttt{fct\_cpi\_daily} & Headline volatility & $\hat{I} - 1.96 \cdot \hat{\sigma}\sqrt{(T-t)/T}$ & Dynamic 95\% lower error bound \\
-\texttt{gold.fct\_cpi\_nowcast} & \texttt{ci\_upper\_95} & \texttt{fct\_cpi\_daily} & Headline volatility & $\hat{I} + 1.96 \cdot \hat{\sigma}\sqrt{(T-t)/T}$ & Dynamic 95\% upper error bound \\
+\texttt{gold.fct\_cpi\_monthly} & \texttt{headline\_mom\_pct} & \texttt{fct\_cpi\_monthly} & \texttt{headline\_cpi} & $(H_m - H_{m-1})/H_{m-1} \times 100$ & National Headline MoM \% \\
+\texttt{gold.fct\_cpi\_nis\_comp} & \texttt{mom\_diff\_pp} & \makecell[l]{\texttt{fct\_monthly}\\\texttt{dim\_nis}} & \makecell[l]{\texttt{headline}\\\texttt{nis\_mom}} & $\pi_{\text{pipeline}} - \pi_{\text{NIS}}$ & Official Tracking Error (pp) \\
+\texttt{gold.nowcast\_params} & \texttt{alpha\_drift} & \texttt{dim\_nis\_official} & Hist $\Delta \ln I$ & RidgeCV intercept $\hat{\alpha}$ & Empirical base drift \\
+\texttt{gold.nowcast\_params} & \texttt{lambda\_penalty} & Multi-feature & Stat log return & LOOCV minimization & $L_2$ Ridge shrinkage weight \\
+\texttt{gold.nowcast\_params} & \texttt{beta\_food} & \texttt{fct\_cpi\_monthly} & Div 01 index & Ridge coefficient $\beta_1$ & Food pass-through elasticity \\
+\texttt{gold.fct\_cpi\_nowcast} & \texttt{projected\_rem\_cpi} & \texttt{fct\_cpi\_daily} & \texttt{division\_index} & $\frac{1}{N}\sum_{k=1}^N I_{t} e^{\mu k}$ & Exact discrete projection \\
+\texttt{gold.fct\_cpi\_nowcast} & \texttt{projected\_mom\_pct} & \makecell[l]{\texttt{fct\_daily}\\\texttt{nowcast\_params}} & \makecell[l]{\texttt{div\_index}\\\texttt{beta, alpha}} & Two-stage hybrid Ridge & \textbf{Real-Time Nowcast MoM} \\
+\texttt{gold.fct\_cpi\_nowcast} & \texttt{nowcast\_nis\_cpi} & \texttt{fct\_cpi\_nowcast} & \texttt{nowcast\_cpi} & $I_{\text{NIS}, 0} \cdot (\hat{I}_t / I_0)$ & Dual-index chain-link \\
+\texttt{gold.fct\_cpi\_nowcast} & \texttt{ci\_lower\_95} & \texttt{fct\_cpi\_daily} & Headline vol & $\hat{I} - 1.96 \cdot \hat{\sigma}\sqrt{(T-t)/T}$ & Dynamic 95\% lower bound \\
+\texttt{gold.fct\_cpi\_nowcast} & \texttt{ci\_upper\_95} & \texttt{fct\_cpi\_daily} & Headline vol & $\hat{I} + 1.96 \cdot \hat{\sigma}\sqrt{(T-t)/T}$ & Dynamic 95\% upper bound \\
 \bottomrule
 \end{tabularx}
 \caption{Consolidated Master Data Lineage Matrix: Column-to-Column Provenance Across All Medallion Layers.}
@@ -580,16 +590,16 @@ The following master matrix cross-references every active warehouse column with 
 \subsection{dbt Test Suites and Invariant Assertions}
 To preserve data integrity across the lineage chain, the repository executes automated dbt tests on every pipeline cycle:
 \begin{itemize}[leftmargin=*]
-    \item \textbf{Uniqueness \& Non-Null Invariants}: All surrogate primary keys (\texttt{item\_id}, \texttt{scrape\_id}, \texttt{raw\_price\_id}) and partition dates (\texttt{scrape\_date}, \texttt{calculation\_date}, \texttt{cpi\_month}) strictly assert \texttt{not\_null} and \texttt{unique}.
-    \item \textbf{Axiomatic Weight Closure}: The expenditure weights in \texttt{gold.cambodia\_cpi\_coicop\_weights\_breakdown} and \texttt{gold.coicop\_weights} assert $\sum w_j = 1.0000 \pm 0.0001$.
-    \item \textbf{Positive Price Invariant}: All prices assert $P_{\text{khr}} > 0$. Zero or negative values are automatically quarantined in \texttt{silver.needs\_review}.
-    \item \textbf{Classification Completeness Invariant}: The count of items with \texttt{coicop\_division IS NULL} or \texttt{coicop\_code LIKE '\%.unclassified'} in \texttt{silver.canonical\_items} must strictly equal $0$.
+    \item \textbf{Uniqueness \& Non-Null Invariants}: All surrogate primary keys (\texttt{item\_id}, \texttt{scrape\_id}, \texttt{raw\_price\_id}) and partition dates strictly assert \texttt{not\_null} and \texttt{unique}.
+    \item \textbf{Axiomatic Weight Closure}: Expenditure weights in COICOP breakdown tables assert $\sum w_j = 1.0000 \pm 0.0001$.
+    \item \textbf{Positive Price Invariant}: All conformed prices assert $P_{\text{khr}} > 0$. Zero or negative values are automatically diverted into quarantine (\texttt{silver.needs\_review}).
+    \item \textbf{Classification Completeness Invariant}: The count of items with unclassified COICOP codes in master item catalogs must strictly equal zero before publication.
 \end{itemize}
 
 \subsection{Data Freshness SLAs}
 \begin{itemize}[leftmargin=*]
-    \item \textbf{Bronze Freshness}: Warn after 24 hours, error after 48 hours for \texttt{staging.raw\_scrapes} and \texttt{staging.exchange\_rates}.
-    \item \textbf{Gold Macro SLA}: \texttt{gold.fct\_cpi\_daily} and \texttt{gold.fct\_cpi\_nowcast} must complete publication by 08:30 AM ICT daily to provide timely economic signals for open-market operations at the National Bank of Cambodia.
+    \item \textbf{Bronze Freshness}: Warning after 24 hours, error after 48 hours for raw ingestion tables in \texttt{staging}.
+    \item \textbf{Gold Macro SLA}: Tables \texttt{gold.fct\_cpi\_daily} and \texttt{gold.fct\_cpi\_nowcast} must complete daily publication by 08:30 AM ICT for open-market operations at NBC.
 \end{itemize}
 
 \vspace{1.0cm}

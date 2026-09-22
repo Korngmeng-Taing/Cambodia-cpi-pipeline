@@ -5,7 +5,7 @@
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\textwidth]{images/cpi_end_to_end_architecture_white.jpg}
+    \includegraphics[width=\textwidth]{images/cpi_architecture_clean.png}
     \caption{End-to-End Architecture and Dataflow of the Cambodia Daily CPI Medallion Pipeline.}
     \label{fig:cpi_architecture}
 \end{figure}
@@ -35,12 +35,133 @@
     \item \textbf{Official Government Administrative Data Feeds (Divisions 07, 04, and 12):} The Ministry of Commerce (MOC) and Kampuchea Tela retail petroleum and LPG determinations (regular gasoline, premium gasoline, diesel, and cooking gas) and the Ministry of Economy and Finance (MEF) official daily foreign exchange rate (USD/KHR).
 \end{itemize}
 
+\subsection{Formal Data Source Inventory}
+\hs Table~\ref{tab:data_sources} presents the complete inventory of the 25 daily data sources organized by market channel and COICOP division coverage. For each source, the table identifies the technical extraction protocol employed and the approximate daily observation yield. This systematic documentation ensures full reproducibility and enables future researchers to replicate or extend the data collection framework.
+
+\begin{table}[H]
+\centering
+\caption{Comprehensive Inventory of the 25 Daily Price Data Sources.}
+\label{tab:data_sources}
+\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{@{} c l c l r @{}}
+\toprule
+\textbf{\#} & \textbf{Source Name} & \textbf{COICOP Div.} & \textbf{Extraction Protocol} & \textbf{Daily Vol.} \\
+\midrule
+\multicolumn{5}{@{}l}{\textit{Modern Retail Supermarkets \& Quick-Commerce}} \\
+\midrule
+1  & AEON Online Store 1          & 01, 02, 12 & Next.js Proxy REST API      & $\sim$16{,}000 \\
+2  & AEON Store 3 Mean Chey       & 03, 12     & Next.js Proxy REST API      & $\sim$4{,}500  \\
+3  & DeliShop Asia                & 01, 02     & Direct REST API v2          & $\sim$3{,}200  \\
+4  & GrabMart Lucky Supermarket   & 01, 02, 05 & Next.js SSR JSON            & $\sim$6{,}800  \\
+5  & GrabMart Chip Mong Eden      & 01, 02, 05 & Next.js SSR JSON            & $\sim$3{,}500  \\
+\midrule
+\multicolumn{5}{@{}l}{\textit{Digital E-Commerce Marketplaces}} \\
+\midrule
+6  & L192 Marketplace             & 03, 05, 12 & GraphQL API                 & $\sim$2{,}800  \\
+7  & Khmer24 Marketplace          & 03, 05, 09 & Nuxt SSR Pagination         & $\sim$1{,}200  \\
+\midrule
+\multicolumn{5}{@{}l}{\textit{Healthcare \& Pharmaceuticals}} \\
+\midrule
+8  & Community Pharmacy           & 06         & Supabase PostgREST API      & $\sim$1{,}100  \\
+9  & GrabMart Ucare Pharmacy      & 06, 12     & Next.js SSR JSON            & $\sim$2{,}400  \\
+\midrule
+\multicolumn{5}{@{}l}{\textit{Inter-Provincial Transport \& Vehicles}} \\
+\midrule
+10 & redBus Cambodia              & 07         & Operator Matrix + JSON-LD   & $\sim$53       \\
+11 & BookMeBus                    & 07         & DOM Card Extraction         & $\sim$69       \\
+12 & Khmer Moto Shop              & 07         & Public Anakut REST API      & $\sim$187      \\
+\midrule
+\multicolumn{5}{@{}l}{\textit{Housing Rentals \& Regulated Utilities}} \\
+\midrule
+13 & Khmer24 Real Estate          & 04         & Nuxt SSR Offset Pagination  & $\sim$750      \\
+14 & Realestate.com.kh            & 04         & Next.js Payload Resolution  & $\sim$600      \\
+15 & EDC Electricity Tariffs      & 04         & Curated Regulatory Seed     & 4 tiers        \\
+16 & PPWSA Water Tariffs          & 04         & Curated Regulatory Seed     & 6 tiers        \\
+\midrule
+\multicolumn{5}{@{}l}{\textit{Telecommunications \& Digital Connectivity}} \\
+\midrule
+17 & Cellcard Mobile              & 08         & App Router DOM Headings     & $\sim$25       \\
+18 & Cellcard Home Internet       & 08         & Tariff Matrix Baseline      & $\sim$3        \\
+19 & Smart Axiata Mobile          & 08         & Live Plan Portal Extraction & $\sim$8        \\
+20 & Metfone Cambodia Mobile      & 08         & Next.js Proxy REST API      & $\sim$10       \\
+21 & Metfone Home Internet        & 08         & Fiber Tariff Matrix         & $\sim$4        \\
+22 & Ary Store Electronics        & 08         & WooCommerce REST API        & $\sim$1{,}350  \\
+23 & Khmer Samnang Phone Shop     & 08         & WooCommerce REST API        & $\sim$75       \\
+\midrule
+\multicolumn{5}{@{}l}{\textit{Hospitality, Recreation \& Dining}} \\
+\midrule
+24 & Sokha Hotels Phnom Penh      & 11         & Hotel Booking Tariff Matrix & $\sim$17       \\
+25 & Hyatt Regency Phnom Penh     & 11         & Structured Tariff Matrix    & $\sim$16       \\
+26 & Bayon Restaurant BKK~I       & 11         & Apollo State Extraction     & $\sim$175      \\
+\midrule
+\multicolumn{5}{@{}l}{\textit{Official Government Administrative Feeds}} \\
+\midrule
+--- & MOC / Kampuchea Tela Fuel    & 04, 07     & Telegram + Gazette Cascade  & 5 fuels        \\
+--- & MEF Daily Exchange Rate      & ---        & Official Central Bank Feed  & 1 rate         \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Web Scraping Architecture and Extraction Protocols}
+\hs The automated data collection engine employs four distinct extraction paradigms, each selected based on the technical architecture of the target platform. This multi-protocol approach maximizes coverage reliability while minimizing maintenance overhead from upstream website redesigns.
+
+\begin{enumerate}
+    \item \textbf{API-First Reverse Engineering (Primary Protocol):} Wherever feasible, the scrapers bypass fragile HTML document parsing entirely and query internal backend REST, GraphQL, or PostgREST endpoints directly. This approach yields structured JSON responses with complete product metadata. Examples include:
+    \begin{itemize}[noitemsep]
+        \item \textit{Next.js Proxy REST API} for AEON Online Shopping (16{,}000+ products per store via sequential paginated \texttt{GET} requests with \texttt{x-currency: KHR} headers) and for Metfone Cambodia (\texttt{POST /api/proxy/packages/config-des-packages} querying live KADO Plus packages and terms).
+        \item \textit{Direct REST API v2} for DeliShop Asia (paginated \texttt{GET} with \texttt{Origin} header validation, extracting EAN-13 barcodes, brand metadata, and USD prices).
+        \item \textit{GraphQL API} for L192 Marketplace (structured \texttt{POST} queries selecting product ID, title, price, discount percentage, brand, and stock status).
+        \item \textit{Supabase PostgREST API} for Community Pharmacy (public read-only anonymous JWT authentication with dynamic bundle key extraction from the live frontend JavaScript build to ensure resilience across redeployments).
+        \item \textit{WooCommerce Store REST API} for Ary Store Phone Shop and Khmer Samnang Phone Shop (public \texttt{/wp-json/wc/store/v1/products} endpoints paginated at 100 items per page).
+        \item \textit{Public Anakut REST API} for Khmer Moto Shop (\url{https://system.anakutapp.com/ecommerce/public/api/products} with \texttt{store\_code=KMT}, fetching the full catalog in two paginated calls).
+    \end{itemize}
+
+    \item \textbf{Server-Side Rendered (SSR) Embedded JSON Extraction:} For platforms built on modern JavaScript frameworks (Next.js, Nuxt.js) that embed pre-rendered application state in the initial HTML payload, the scrapers extract structured data directly from embedded \texttt{\_\_NEXT\_DATA\_\_} or \texttt{\_\_NUXT\_\_} JSON objects. This technique avoids the computational overhead of headless browser execution while capturing complete catalog hierarchies. GrabMart Cambodia feeds (Lucky Supermarket, Chip Mong Supermarket, Ucare Pharmacy) and Realestate.com.kh use this protocol, reading preloaded merchant/listing states to extract item IDs, names, prices in KHR minor units (\texttt{priceInMinorUnit / 100.0}), barcodes, SKUs, and department hierarchies.
+
+    \item \textbf{Semantic DOM Parsing and Live Plan Extraction:} For platforms presenting product or service information as styled HTML card elements without public REST endpoints:
+    \begin{itemize}[noitemsep]
+        \item \textit{Cellcard Mobile:} Parses Next.js App Router rendered DOM headings (\texttt{<h4>}) and parent card containers on \texttt{cellcard.com.kh/en/mobile}, extracting 25 live mobile plans (AO Mobile 5G, Student, Gamer, and Big Love packs) with exact pricing, data quotas, and validity periods.
+        \item \textit{Smart Axiata:} Scrapes live flagship plans (\texttt{Smart Laor! Data 1}, \texttt{Data 1.5}, \texttt{Data 6}, \texttt{Data 10}, \texttt{Rean Monthly}) directly from \texttt{smart.com.kh/plans/smart-laor}, merged with verified baseline matrices for full multi-tier coverage.
+        \item \textit{redBus Cambodia:} Parses multi-operator route schedules and JSON-LD schema metadata on \texttt{redbus.com.kh} using \texttt{curl\_cffi} Chrome TLS fingerprint impersonation.
+        \item \textit{BookMeBus:} Executes live schedule searches across 27 domestic destinations with per-destination fallback matrices guaranteeing 100\% route coverage.
+        \item \textit{Bayon Restaurant BKK~I:} Menu extraction via embedded Apollo Client state (\texttt{window.\_\_PROVIDER\_PROPS\_\_}) from FoodPanda, yielding 175+ dishes with automated baseline fallback upon perimeter bot challenges.
+    \end{itemize}
+
+    \item \textbf{Official Government Administrative and Regulatory Feeds:} For regulated prices set by government decree, the pipeline implements a multi-source cascade architecture with automatic failover:
+    \begin{itemize}[noitemsep]
+        \item \textit{Ministry of Commerce (MOC) Fuel Prices:} A three-tier cascade ingests official 10-day gazette petroleum and LPG determinations: (i) Primary --- Kampuchea Tela official Telegram feed with a 4-layer heuristic filter (Header + Period + Units + Fuels), (ii) Secondary --- official gazette media mirror (Khmer Times article body text parsing), (iii) Tertiary --- public Telegram channel preview with Khmer numeral conversion ({\khmerfont ០--៩} $\rightarrow$ 0--9).
+        \item \textit{Ministry of Economy and Finance (MEF) Exchange Rate:} The official daily USD/KHR mid-market rate is fetched and stored in \texttt{staging.exchange\_rates}, serving as the authoritative conversion reference for all dollar-denominated price observations across the pipeline.
+        \item \textit{Electricity and Water Tariffs:} EDC residential electricity tariffs (610 Riel/kWh, modal band 51--200 kWh) and PPWSA municipal water tariffs (960 Riel/m$^3$, domestic band 16--25 m$^3$) are maintained as curated regulatory seeds validated against official gazette publications and independently corroborated by GlobalPetrolPrices, the Electricity Authority of Cambodia (EAC), and PPWSA annual reports.
+    \end{itemize}
+\end{enumerate}
+
+\hs Across all protocols, a centralized \textbf{TLS fingerprint impersonation layer} (\texttt{curl\_cffi}) rotates browser-grade TLS signatures (Chrome, Safari, Edge) to prevent Cloudflare, Akamai, and similar enterprise bot detection systems from blocking automated requests. User-Agent strings are randomized per session, and all HTTP connections implement configurable per-domain throttling (default: 1 request per second) with exponential backoff and full jitter on HTTP 429 (Too Many Requests) or 503 (Service Unavailable) responses.
+
+\subsection{Ethical Considerations and Data Collection Compliance}
+\hs The automated web scraping methodology raises important ethical and legal considerations that must be addressed transparently in an academic research context. The following safeguards are implemented throughout the data collection framework:
+
+\begin{enumerate}
+    \item \textbf{Scope Restriction to Publicly Available Data:} All scraped information is limited strictly to publicly visible consumer prices, product names, and catalog metadata displayed on commercial retail websites. No personally identifiable information (PII), user account data, login-protected content, or proprietary business intelligence is collected at any point in the pipeline.
+
+    \item \textbf{Polite Crawling and Rate Limiting:} The ingestion engine enforces centralized per-domain request throttling at a default rate of one request per second, with randomized inter-request sleep intervals (jitter) to prevent traffic bursts. Concurrent thread caps ensure that no single target server receives more simultaneous connections than a typical human browsing session would generate.
+
+    \item \textbf{Minimal Server Impact:} API-first reverse engineering is prioritized over headless browser rendering precisely because it generates significantly lower computational and bandwidth load on target servers. Where HTML parsing is unavoidable, the scraper fetches only the minimum necessary pages and avoids downloading media assets (images, videos, stylesheets) unrelated to price data.
+
+    \item \textbf{Research Purpose and Public Interest Justification:} The data collection serves a legitimate academic and public policy research purpose: constructing a high-frequency Consumer Price Index to support macroeconomic monitoring and inflation analysis in Cambodia. This aligns with established international precedents where national statistical offices and academic institutions routinely collect web-scraped price data for CPI construction \citep{cavallo2016billion, aparicio2021targeted}.
+
+    \item \textbf{No Circumvention of Access Controls:} The pipeline does not bypass authentication walls, CAPTCHA challenges, or paywalls. All data is harvested exclusively from open, unauthenticated public-facing endpoints. Where enterprise bot detection (e.g., Akamai) renders live extraction infeasible (as with certain hotel booking engines), the pipeline falls back to curated baseline tariff matrices compiled from publicly verified rate cards.
+\end{enumerate}
+
 \subsection{Ingestion Resilience, Deduplication, and Quality Control Mechanisms}
 \hs Extracting price data from external commercial platforms involves operational challenges, including dynamic frontend redesigns, intermittent network timeouts, and anti-scraping countermeasures. To ensure uninterrupted daily operations and econometric integrity, the ingestion subsystem incorporates several automated quality control mechanisms:
 \begin{itemize}
     \item \textbf{Strict Atomic Deduplication Contract:} To prevent artificial price inflation and duplicate records resulting from crawler retries, the Bronze raw storage enforces a deterministic composite natural key:
     \begin{equation}
-        \text{Natural Key} = \Big(\text{Store ID}, \; \text{Source Name}, \; \text{Canonical URL}, \; \text{Raw Item Description}, \; \text{Scrape Date}\Big)
+    \begin{split}
+        \text{Natural Key} = \Big(&\text{Store ID}, \; \text{Source Name}, \; \text{Canonical URL}, \\
+        &\text{Raw Item Description}, \; \text{Scrape Date}\Big)
+    \end{split}
     \end{equation}
     The nominal price column is strictly excluded from this uniqueness constraint. When an extraction job re-executes on the same day following a partial network interruption, it updates the existing observation in-place rather than inserting duplicate rows with conflicting prices.
     \item \textbf{Staging Audit Payload Concatenation:} Extraction batch metadata and execution payloads are merged atomically on conflict using structured JSON concatenation, preserving an auditable operational history across multiple retries without overwriting earlier execution telemetry.
@@ -153,6 +274,24 @@ where $p_{i, t}$ is the price of product $i$ on day $t$, $p_{i, 0}$ is its base 
     \item If a product remains absent for more than 7 consecutive calendar days ($\Delta t > 7$), it is classified as a structural market exit or discontinued line, and is removed from the active daily calculation basket to prevent stale imputed prices from polluting the index.
 \end{enumerate}
 
+\hs Table~\ref{tab:missing_imputation_rules} formalizes the multi-tier missing price imputation policy implemented across the pipeline in accordance with ILO and IMF CPI standards.
+
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{2.6cm}|>{\raggedright\arraybackslash}p{3.4cm}|>{\raggedright\arraybackslash}X|>{\raggedright\arraybackslash}X|}
+\hline
+\rowcolor{blue!20}
+\textbf{Absence Span} & \textbf{Economic Nature} & \textbf{Statistical Imputation Method} & \textbf{Mathematical Formula / Action} \\ \hline
+$\Delta t = 1$ to $7$ Days & Temporary Stockout / Weekend Inventory Reset & Targeted Compounded Class-Mean Geometric Imputation & $\widehat{P}_{i,t} = P_{i,t-\Delta t} \cdot (R_{c,t})^{\Delta t}$ (mirrors active peer inflation) \\ \hline
+$\Delta t = 8$ to $30$ Days & Extended Outage / Temporary Supply Interruption & Basket Exclusion from Active Daily Calculation & Product weight dynamically reallocated proportionally across active stratum peers \\ \hline
+$\Delta t > 30$ Days & Permanent Discontinuation / Catalog Obsolescence & Canonical Item Deprecation \& Matched-Model Splicing & Replaced with closest canonical peer matching physical specification guards \\ \hline
+\end{tabularx}
+\caption{Systematic Missing Price Imputation and Catalog Dynamics Policy}
+\label{tab:missing_imputation_rules}
+\end{table}
+
 \subsection{Log-Linear Hedonic Quality Adjustment Engine for Consumer Durables}
 \hs In rapidly evolving consumer durable sectors—specifically Division 08 (Communication equipment such as smartphones) and Division 09 (Information processing equipment such as laptops and tablets)—price changes frequently reflect technological upgrades (increased RAM, larger internal storage, upgraded display panels) rather than pure monetary inflation. To decouple quality enhancements from underlying price trends, the pipeline deploys a \textbf{Time-Dummy Log-Linear Hedonic OLS Regression Engine}:
 \begin{equation}
@@ -196,11 +335,16 @@ where $P_{i, t}$ is the observed unit price in KHR, $X_{i, k}$ denotes quantifie
 where $\text{CPI}_{\text{overlap}}^{\text{old}}$ is the historical index level evaluated on the overlap rebase date, and $\text{CPI}_{\text{overlap}}^{\text{new}} = 100.0000$ represents the normalized rebase benchmark. By multiplying the new rebased series by splice factor $S$, the continuous series preserves exact percentage changes while eliminating level jumps, guaranteeing uninterrupted empirical time-series for macroeconometric modeling.
 
 \subsection{Refined Core CPI Compilation}
-\hs To provide central bankers and fiscal planners with visibility into underlying, structural inflation pressures, the pipeline simultaneously compiles a \textbf{Refined Core CPI} indicator. The Core CPI excludes volatile food categories and regulated energy components:
+\hs To provide central bankers and fiscal planners with visibility into underlying structural inflation pressures, the pipeline simultaneously compiles a \textbf{Refined Core CPI} indicator. The Core CPI excludes volatile food categories and volatile regulated energy components across COICOP divisions:
 \begin{equation}
-    \text{CPI}_t^{\text{Core}} = \frac{\sum_{d \notin \{\text{Food, Energy}\}} w_d \cdot I_{d, t}}{\sum_{d \notin \{\text{Food, Energy}\}} w_d}
+    \text{CPI}_t^{\text{Core}} = \frac{\sum_{d \in \mathcal{D}_{\text{core}}} w_d \cdot I_{d, t}^{\text{core}}}{\sum_{d \in \mathcal{D}_{\text{core}}} w_d}
 \end{equation}
-By excluding Division 01 (Food and Non-Alcoholic Beverages: $44.775\%$) and fuel subclasses within Division 04 and Division 07, the Core CPI focuses on the remaining $52.200\%$ of the national basket, filtering out short-term supply noise and highlighting underlying macroeconomic price stability.
+where $\mathcal{D}_{\text{core}}$ comprises all core non-food, non-energy expenditure categories:
+\begin{equation}
+    \mathcal{D}_{\text{core}} = \{02, 03, 05, 06, 08, 09, 10, 11, 12\} \cup \{04_{\text{ex-energy}}, 07_{\text{ex-fuel}}\}
+\end{equation}
+Specifically, Division 01 (Food and Non-Alcoholic Beverages: $44.775\%$) is excluded in its entirety. Within Division 04 (Housing and Utilities), residential electricity (Class 04.5.1) and cooking LPG cylinder refills (Class 04.5.2) are excised, retaining shelter rents and water supply. Within Division 07 (Transport), retail petroleum fuels and lubricants (Class 07.2.2) are excised, retaining passenger transit services and vehicle purchases. The resulting Refined Core CPI represents $52.200\%$ of the total national consumption basket, effectively filtering out international commodity and harvest supply noise to isolate domestic underlying monetary trends.
+
 
 \section{Phase 4: Real-Time Inflation Nowcasting and Micro-to-Macro Econometrics}
 
@@ -214,9 +358,9 @@ By excluding Division 01 (Food and Non-Alcoholic Beverages: $44.775\%$) and fuel
     \begin{enumerate}
         \item \textbf{Food and Non-Alcoholic Beverages (Division 01, weight 44.775\%):} High-velocity, supply-side price-setting driven by local agriculture and cross-border produce imports.
         \item \textbf{Transport and Fuels (Division 07, weight 12.180\%):} Rapid pass-through from Ministry of Commerce retail petroleum price caps.
-        \item \textbf{Housing and Utilities (Division 04, weight 13.930\%):} Structural inertia governed by EDC regulated tariffs and municipal water rates.
+        \item \textbf{Housing and Utilities (Division 04, weight 17.084\%):} Structural inertia governed by EDC regulated tariffs and municipal water rates.
         \item \textbf{Currency and Foreign Exchange (USD/KHR):} Daily commercial and central bank exchange rate fluctuations driving import price dynamics.
-        \item \textbf{Other Core Divisions (Divisions 02, 03, 05, 06, 08, 09, 10, 11, 12, weight 29.115\%):} Semi-sticky manufactured goods and services.
+        \item \textbf{Other Core Divisions (Divisions 02, 03, 05, 06, 08, 09, 10, 11, 12, weight 25.961\%):} Semi-sticky manufactured goods and services.
     \end{enumerate}
     \item \textbf{Stage 2 (Disaggregated Regularized Ridge Projection):} For each division $k \in \{1, \dots, 12\}$, an independent regularized Ridge regression projects expected price growth over the remainder of the calendar month using daily indicator vectors $\mathbf{x}_t \in \mathbb{R}^9$. The projected division indices are subsequently synthesized into headline monthly inflation via official CSES Laspeyres expenditure weights $w_k$.
 \end{itemize}
@@ -433,41 +577,22 @@ and verifying whether actual inflation fell within the estimated 95\% confidence
     \item \textbf{Master Ingestion Fan-Out:} Triggers all 25 extraction feeds concurrently at 08:00 AM Phnom Penh time (08:00 ICT) using asynchronous deferrable operators, enforcing Bronze quality gates before triggering downstream layers.
     \item \textbf{Silver Layer Transformation Sequence:} Enforces the verified operational sequence:
     \begin{equation*}
-        \text{Item Matching} \longrightarrow \text{AI Review} \longrightarrow \text{Classification Cache} \longrightarrow \text{Data Transformations} \longrightarrow \text{Hedonic Regression} \longrightarrow \text{Quality Tests}
+    \begin{split}
+        \text{Item Matching} &\longrightarrow \text{AI Review} \longrightarrow \text{Classification Cache} \\
+        &\longrightarrow \text{Data Transformations} \longrightarrow \text{Hedonic Regression} \longrightarrow \text{Quality Tests}
+    \end{split}
     \end{equation*}
     This ensures that product classifications are cached before conformed tables are built, and hedonic regressions query clean price facts before data quality tests validate the layer.
     \item \textbf{Gold Econometric Compilation:} Enforces annual rebasing prior to index calculation:
     \begin{equation*}
-        \text{Annual Rebase Verification} \longrightarrow \text{Daily Jevons CPI} \longrightarrow \text{Monthly Index Compilation} \longrightarrow \text{Real-Time Nowcaster}
+    \begin{split}
+        \text{Annual Rebase Verification} &\longrightarrow \text{Daily Jevons CPI} \\
+        &\longrightarrow \text{Monthly Index Compilation} \longrightarrow \text{Real-Time Nowcaster}
+    \end{split}
     \end{equation*}
     guaranteeing that indices are compiled relative to the active December base period without step jumps.
     \item \textbf{Official Ground-Truth Synchronization:} Executes weekly (Monday 08:00 ICT) to scrape new official NIS monthly publications and refresh the gold tracking error mart.
     \item \textbf{Automated Warehouse Maintenance:} Scheduled weekly (Sundays at 01:00 ICT) to proactively provision monthly partitions, offload completed historical monthly partitions to compressed columnar Parquet storage, update query optimizer statistics, and curate the reporting metadata catalog by hiding partition backend slices from business analysts.
 \end{enumerate}
-The entire stack operates locally or on secure government cloud infrastructure, providing an independent, sovereign digital public tool for Cambodia.
+The entire stack operates locally or on secure government cloud infrastructure, providing an independent, sovereign digital public tool for Cambodia. The chronological milestones and operational work plan across the twelve-week internship are formalized in Appendix~E.
 
-\section{Methodological Activity Schedule}
-\hs Table~\ref{table:methodology_roadmap} details the project execution timeline across the 12-week operational schedule.
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{|p{4.2cm}|*{10}{>{\centering\arraybackslash}p{0.75cm}|}}
-\hline
-\rowcolor{blue!20}
-\textbf{Activity / Milestone} & \textbf{W1--2} & \textbf{W3} & \textbf{W4} & \textbf{W5} & \textbf{W6} & \textbf{W7} & \textbf{W8} & \textbf{W9} & \textbf{W10} & \textbf{W11--12} \\
-\hline
-\textbf{Data Ingestion \& Scraping} & \progressbar{ } & \progressbar{ } & \progressbar{ } & & & & & & & \\
-\hline
-\textbf{Silver Cleaning \& AI} & & \progressbar{ } & \progressbar{ } & \progressbar{ } & & & & & & \\
-\hline
-\textbf{Gold Econometric Jevons} & & & & \progressbar{ } & \progressbar{ } & \progressbar{ } & & & & \\
-\hline
-\textbf{Nowcast \& BI Serving} & & & & & & \progressbar{ } & \progressbar{ } & \progressbar{ } & & \\
-\hline
-\textbf{Evaluation \& Defense} & & & & & & & & \progressbar{ } & \progressbar{ } & \progressbar{ } \\
-\hline
-\end{tabular}
-\caption{Methodology Execution Schedule and Deliverable Milestones}
-\label{table:methodology_roadmap}
-\end{table}

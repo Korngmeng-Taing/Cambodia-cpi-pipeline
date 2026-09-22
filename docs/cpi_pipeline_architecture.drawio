@@ -1,0 +1,295 @@
+<mxfile host="Electron" modified="2026-09-21T14:15:00.000Z" agent="Antigravity" version="24.0.0" type="device">
+  
+  <!-- ========================================================================================= -->
+  <!-- PAGE 1: REPLICATING USER ARCHITECTURE IMAGE (100% PURE WHITE BACKGROUND)                  -->
+  <!-- ========================================================================================= -->
+  <diagram id="cpi_medallion_white" name="Cambodia CPI Pipeline (Pure White)">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1650" pageHeight="920" background="#FFFFFF" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Master Title -->
+        <mxCell id="main_title" value="&lt;b style=&quot;font-size: 26px; color: #0F172A; font-family: Inter, Helvetica, Arial;&quot;&gt;Cambodia National Consumer Price Index (CPI) Medallion Pipeline&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="50" y="20" width="1540" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- ================================================================================= -->
+        <!-- COLUMN 1: SOURCES & BRONZE INGESTION (PURE WHITE)                                 -->
+        <!-- ================================================================================= -->
+        <mxCell id="col1_bg" value="&lt;b style=&quot;font-size: 15px; color: #0F172A;&quot;&gt;Sources &amp;amp; Bronze Ingestion&lt;/b&gt;" style="swimlane;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#94A3B8;strokeWidth=2;fontColor=#0F172A;startSize=35;rounded=1;arcSize=4;" vertex="1" parent="1">
+          <mxGeometry x="50" y="75" width="410" height="625" as="geometry" />
+        </mxCell>
+
+        <!-- Col 1 Left: 25 Sources List -->
+        <mxCell id="col1_left_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;arcSize=6;" vertex="1" parent="col1_bg">
+          <mxGeometry x="15" y="45" width="200" height="565" as="geometry" />
+        </mxCell>
+        <mxCell id="src_cat_retail" value="&lt;b style=&quot;color:#0F172A; font-size:11px;&quot;&gt;25 Supermarkets &amp;amp; Online&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#475569; line-height:1.4;&quot;&gt;• AEON 1 &amp;amp; AEON 3 (Hyper)&lt;br&gt;• Delishop &amp;amp; Grab Mart&lt;br&gt;• Chip Mong Mart &amp;amp; Lucky&lt;/span&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;" vertex="1" parent="col1_left_box">
+          <mxGeometry x="10" y="10" width="180" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="src_sep_1" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=#E2E8F0;" vertex="1" parent="col1_left_box">
+          <mxGeometry x="10" y="90" width="180" height="8" as="geometry" />
+        </mxCell>
+
+        <mxCell id="src_cat_health" value="&lt;b style=&quot;color:#0F172A; font-size:11px;&quot;&gt;Health &amp;amp; Pharma&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#475569; line-height:1.4;&quot;&gt;• Community Pharmacy&lt;br&gt;• Ucare Pharmacy&lt;/span&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;" vertex="1" parent="col1_left_box">
+          <mxGeometry x="10" y="102" width="180" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="src_sep_2" value="" style="line;strokeWidth=1;fillColor=none;strokeColor=#E2E8F0;" vertex="1" parent="col1_left_box">
+          <mxGeometry x="10" y="160" width="180" height="8" as="geometry" />
+        </mxCell>
+
+        <mxCell id="src_cat_telecom" value="&lt;b style=&quot;color:#0F172A; font-size:11px;&quot;&gt;Telecom &amp;amp; Electronics&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#475569; line-height:1.4;&quot;&gt;• Cellcard, Smart, Metfone&lt;br&gt;• Samnang &amp;amp; AryStore Tech&lt;/span&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;" vertex="1" parent="col1_left_box">
+          <mxGeometry x="10" y="172" width="180" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="src_sep_3" value="" style="line;strokeWidth=1;fillColor=none;strokeColor=#E2E8F0;" vertex="1" parent="col1_left_box">
+          <mxGeometry x="10" y="230" width="180" height="8" as="geometry" />
+        </mxCell>
+
+        <mxCell id="src_cat_transit" value="&lt;b style=&quot;color:#0F172A; font-size:11px;&quot;&gt;Transport &amp;amp; Transit&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#475569; line-height:1.4;&quot;&gt;• redBus &amp;amp; BookMeBus&lt;br&gt;• KhmerMoto (Vehicles)&lt;/span&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;" vertex="1" parent="col1_left_box">
+          <mxGeometry x="10" y="242" width="180" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="src_sep_4" value="" style="line;strokeWidth=1;fillColor=none;strokeColor=#E2E8F0;" vertex="1" parent="col1_left_box">
+          <mxGeometry x="10" y="300" width="180" height="8" as="geometry" />
+        </mxCell>
+
+        <mxCell id="src_cat_util" value="&lt;b style=&quot;color:#0F172A; font-size:11px;&quot;&gt;Utilities &amp;amp; Fuel&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#475569; line-height:1.4;&quot;&gt;• EDC (Electricity Tariffs)&lt;br&gt;• PPWSA (Water Utilities)&lt;br&gt;• MOC Gasoline &amp;amp; LPG&lt;/span&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;" vertex="1" parent="col1_left_box">
+          <mxGeometry x="10" y="312" width="180" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="src_sep_5" value="" style="line;strokeWidth=1;fillColor=none;strokeColor=#E2E8F0;" vertex="1" parent="col1_left_box">
+          <mxGeometry x="10" y="380" width="180" height="8" as="geometry" />
+        </mxCell>
+
+        <mxCell id="src_cat_fx" value="&lt;b style=&quot;color:#0F172A; font-size:11px;&quot;&gt;Foreign Exchange (MEF)&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#475569; line-height:1.4;&quot;&gt;• MEF USD/KHR Daily Official&lt;br&gt;• Real-time currency anchor&lt;/span&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;" vertex="1" parent="col1_left_box">
+          <mxGeometry x="10" y="392" width="180" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="src_sep_6" value="" style="line;strokeWidth=1;fillColor=none;strokeColor=#E2E8F0;" vertex="1" parent="col1_left_box">
+          <mxGeometry x="10" y="450" width="180" height="8" as="geometry" />
+        </mxCell>
+
+        <mxCell id="src_cat_hotel" value="&lt;b style=&quot;color:#0F172A; font-size:11px;&quot;&gt;Hospitality &amp;amp; Real Estate&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#475569; line-height:1.4;&quot;&gt;• Sokha &amp;amp; Hyatt Hotels&lt;br&gt;• Khmer24 &amp;amp; RealEstate.kh&lt;/span&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;" vertex="1" parent="col1_left_box">
+          <mxGeometry x="10" y="462" width="180" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- Col 1 Right: Scraper Stream & Bronze DB -->
+        <mxCell id="col1_stream_box" value="&lt;b style=&quot;color:#0F172A; font-size:12px;&quot;&gt;Data Stream / Scraper Array&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#64748B;&quot;&gt;25 concurrent workers (UV)&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;arcSize=6;align=center;" vertex="1" parent="col1_bg">
+          <mxGeometry x="230" y="45" width="165" height="75" as="geometry" />
+        </mxCell>
+
+        <mxCell id="col1_cb_box" value="&lt;b style=&quot;color:#0F172A; font-size:11px;&quot;&gt;Dual-Currency Volume /&lt;br&gt;Price Velocity Circuit Breaker&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:9.5px; color:#64748B;&quot;&gt;Vol drop &amp;gt; 30% · Price ±50%&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;arcSize=6;align=center;" vertex="1" parent="col1_bg">
+          <mxGeometry x="230" y="145" width="165" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="col1_pg_box" value="&lt;b style=&quot;color:#0F172A; font-size:12px;&quot;&gt;PostgreSQL 16&lt;br&gt;Bronze Tables&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#64748B;&quot;&gt;Partitioned Lakehouse&lt;/span&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#FFFFFF;strokeColor=#64748B;strokeWidth=1.5;fontColor=#0F172A;" vertex="1" parent="col1_bg">
+          <mxGeometry x="235" y="260" width="155" height="85" as="geometry" />
+        </mxCell>
+
+        <mxCell id="col1_table_raw" value="&lt;b style=&quot;font-size:11px; color:#0F172A;&quot;&gt;raw_prices_main&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:9.5px; color:#64748B;&quot;&gt;[store, source, date, url, raw_json]&lt;/span&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;align=center;" vertex="1" parent="col1_bg">
+          <mxGeometry x="230" y="375" width="165" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="col1_table_vel" value="&lt;b style=&quot;font-size:11px; color:#0F172A;&quot;&gt;dual_currency_velocities&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:9.5px; color:#64748B;&quot;&gt;[store_slug, rolling_med_khr, usd]&lt;/span&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;align=center;" vertex="1" parent="col1_bg">
+          <mxGeometry x="230" y="455" width="165" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Col 1 internal arrows -->
+        <mxCell id="e_c1_1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=1.5;" edge="1" parent="col1_bg" source="col1_left_box" target="col1_stream_box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_c1_2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=1.5;" edge="1" parent="col1_bg" source="col1_stream_box" target="col1_cb_box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_c1_3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=1.5;" edge="1" parent="col1_bg" source="col1_cb_box" target="col1_pg_box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_c1_4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=1.5;" edge="1" parent="col1_bg" source="col1_pg_box" target="col1_table_raw">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_c1_5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=1.5;" edge="1" parent="col1_bg" source="col1_table_raw" target="col1_table_vel">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ================================================================================= -->
+        <!-- COLUMN 2: SILVER TRANSFORMATION LAYER (PURE WHITE)                                -->
+        <!-- ================================================================================= -->
+        <mxCell id="col2_bg" value="&lt;b style=&quot;font-size: 15px; color: #0F172A;&quot;&gt;Silver Transformation Layer&lt;/b&gt;" style="swimlane;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#94A3B8;strokeWidth=2;fontColor=#0F172A;startSize=35;rounded=1;arcSize=4;" vertex="1" parent="1">
+          <mxGeometry x="480" y="75" width="365" height="625" as="geometry" />
+        </mxCell>
+
+        <!-- Box 1: Text & Value Normalization -->
+        <mxCell id="s_box1" value="&lt;b style=&quot;font-size: 12px; color: #0F172A;&quot;&gt;Text &amp;amp; Value Normalization&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 10.5px; color: #475569; line-height: 1.4;&quot;&gt;• Khmer Numeral (០..៩) &amp;amp; USD-to-KHR Normalization&lt;br&gt;• Price / Quantity (e.g., kg/L) for Shrinkflation Defense&lt;br&gt;• Regex stripping of promo buzzwords (SALE, BUNDLE)&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;align=left;spacingLeft=12;arcSize=6;" vertex="1" parent="col2_bg">
+          <mxGeometry x="15" y="45" width="335" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- Box 2: Vector Item Matching -->
+        <mxCell id="s_box2" value="&lt;b style=&quot;font-size: 12px; color: #0F172A;&quot;&gt;Vector Item Matching Engine&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 10.5px; color: #475569; line-height: 1.4;&quot;&gt;• 768-dim Vector Embeddings (pgvector HNSW)&lt;br&gt;• Deterministic Spec Guards (RAM, Storage, Volume ≤ 10%)&lt;br&gt;• Vector Quality Guardrails &amp;amp; AI Review Arbitrator&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;align=left;spacingLeft=12;arcSize=6;" vertex="1" parent="col2_bg">
+          <mxGeometry x="15" y="180" width="335" height="115" as="geometry" />
+        </mxCell>
+
+        <!-- Box 3: AI Classification Layer -->
+        <mxCell id="s_box3" value="&lt;table style=&quot;width:100%; border:none;&quot;&gt;&lt;tr&gt;&lt;td&gt;&lt;b style=&quot;font-size: 12px; color: #0F172A;&quot;&gt;AI Classification Layer&lt;/b&gt;&lt;/td&gt;&lt;td style=&quot;text-align:right; padding-right:10px;&quot;&gt;&lt;span style=&quot;font-size:10px; font-weight:bold; color:#0284C7; border:1px solid #BAE6FD; padding:2px 4px; border-radius:3px;&quot;&gt;100% DD.G.C&lt;/span&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;span style=&quot;font-size: 10.5px; color: #475569; line-height: 1.4;&quot;&gt;• Store Priority Routing &amp;amp; Deterministic Regex Rules&lt;br&gt;• Gemini Flash AI Classification with Domain Trap Guardrails&lt;br&gt;• 100% NIS 4-Digit COICOP Classes (DD.G.C)&lt;br&gt;• Permanent Database Memoization Cache&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;align=left;spacingLeft=12;arcSize=6;" vertex="1" parent="col2_bg">
+          <mxGeometry x="15" y="320" width="335" height="135" as="geometry" />
+        </mxCell>
+
+        <!-- Box 4: Hedonic Quality Adjustment -->
+        <mxCell id="s_box4" value="&lt;b style=&quot;font-size: 12px; color: #0F172A;&quot;&gt;Hedonic Quality Adjustment&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 10.5px; color: #475569; line-height: 1.4;&quot;&gt;• Tech Specifications (RAM, Storage, Screen, Packaging)&lt;br&gt;• Hedonic Price Indexing for Electronics &amp;amp; Telecom&lt;br&gt;• Output to silver.clean_store_prices&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;align=left;spacingLeft=12;arcSize=6;" vertex="1" parent="col2_bg">
+          <mxGeometry x="15" y="480" width="335" height="115" as="geometry" />
+        </mxCell>
+
+        <!-- ================================================================================= -->
+        <!-- COLUMN 3: GOLD ECONOMETRIC & NOWCAST LAYER (PURE WHITE)                            -->
+        <!-- ================================================================================= -->
+        <mxCell id="col3_bg" value="&lt;b style=&quot;font-size: 15px; color: #0F172A;&quot;&gt;Gold Econometric &amp;amp; Nowcast Layer&lt;/b&gt;" style="swimlane;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#94A3B8;strokeWidth=2;fontColor=#0F172A;startSize=35;rounded=1;arcSize=4;" vertex="1" parent="1">
+          <mxGeometry x="865" y="75" width="350" height="625" as="geometry" />
+        </mxCell>
+
+        <!-- Box 1: Kimball Star Schema -->
+        <mxCell id="g_box1" value="&lt;b style=&quot;font-size: 12px; color: #0F172A;&quot;&gt;Kimball Star Schema&lt;/b&gt;&lt;br&gt;&lt;table style=&quot;width:100%; border:none; margin-top:4px;&quot;&gt;&lt;tr&gt;&lt;td style=&quot;width:50%; vertical-align:top;&quot;&gt;&lt;div style=&quot;border:1px solid #CBD5E1; padding:3px 6px; border-radius:3px; background:#FFFFFF; font-size:9.5px;&quot;&gt;&lt;b&gt;dim_items (SCD2)&lt;/b&gt;&lt;br&gt;PK item_key&lt;br&gt;item_name, coicop&lt;/div&gt;&lt;/td&gt;&lt;td style=&quot;width:50%; vertical-align:top;&quot;&gt;&lt;div style=&quot;border:1px solid #CBD5E1; padding:3px 6px; border-radius:3px; background:#FFFFFF; font-size:9.5px;&quot;&gt;&lt;b&gt;dim_stores&lt;/b&gt;&lt;br&gt;PK store_key&lt;br&gt;store_name, channel&lt;/div&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;div style=&quot;border:1px solid #CBD5E1; padding:4px 6px; border-radius:3px; background:#FFFFFF; font-size:9.5px; margin-top:4px; text-align:center;&quot;&gt;&lt;b&gt;fct_daily_prices&lt;/b&gt; (Grain: date, store_slug, item_id)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;align=center;arcSize=6;" vertex="1" parent="col3_bg">
+          <mxGeometry x="15" y="45" width="320" height="135" as="geometry" />
+        </mxCell>
+
+        <!-- Box 2: Axiomatic Elementary Aggregations -->
+        <mxCell id="g_box2" value="&lt;b style=&quot;font-size: 12px; color: #0F172A;&quot;&gt;Axiomatic Elementary Aggregations&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 10px; color: #475569; line-height: 1.4;&quot;&gt;• Tier 1 Jevons Elementary Geometric Mean&lt;br&gt;  (Axiomatic formulation eliminating Carli drift)&lt;br&gt;• 7-Day ILO Class-Mean Imputation for Missing Items&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;align=left;spacingLeft=10;arcSize=6;" vertex="1" parent="col3_bg">
+          <mxGeometry x="15" y="195" width="320" height="95" as="geometry" />
+        </mxCell>
+
+        <!-- Box 3: Two-Tier Laspeyres Stratification -->
+        <mxCell id="g_box3" value="&lt;b style=&quot;font-size: 12px; color: #0F172A;&quot;&gt;Two-Tier Laspeyres Stratification&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 10px; color: #475569; line-height: 1.4;&quot;&gt;• Two-Tier Rollup into 12 COICOP Divisions&lt;br&gt;• Official National Institute of Statistics (NIS) Weights&lt;br&gt;• Continuous Series Chain-Linking Splice Factor (S)&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;align=left;spacingLeft=10;arcSize=6;" vertex="1" parent="col3_bg">
+          <mxGeometry x="15" y="305" width="320" height="95" as="geometry" />
+        </mxCell>
+
+        <!-- Box 4: Nowcasting Engine -->
+        <mxCell id="g_box4" value="&lt;b style=&quot;font-size: 12px; color: #0F172A;&quot;&gt;Nowcasting Engine&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 10px; color: #0284C7;&quot;&gt;Headline &amp;amp; Core CPI Calculation&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 9.5px; color: #475569; line-height: 1.4;&quot;&gt;• Two-Stage Hybrid Ridge Nowcasting Engine (ml/nowcaster)&lt;br&gt;• 5-Basket Price Relatives Momentum (81.58% basket)&lt;br&gt;• Uncertainty Decay Fan Chart: Ut = sqrt((T-t)/T)&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;align=left;spacingLeft=10;arcSize=6;" vertex="1" parent="col3_bg">
+          <mxGeometry x="15" y="415" width="320" height="180" as="geometry" />
+        </mxCell>
+
+        <!-- ================================================================================= -->
+        <!-- COLUMN 4: SERVING & DECISION SUPPORT (PURE WHITE)                                  -->
+        <!-- ================================================================================= -->
+        <mxCell id="col4_bg" value="&lt;b style=&quot;font-size: 15px; color: #0F172A;&quot;&gt;Serving &amp;amp; Decision Support&lt;/b&gt;" style="swimlane;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#94A3B8;strokeWidth=2;fontColor=#0F172A;startSize=35;rounded=1;arcSize=4;" vertex="1" parent="1">
+          <mxGeometry x="1235" y="75" width="355" height="625" as="geometry" />
+        </mxCell>
+
+        <!-- Box 1: Metabase Dashboards -->
+        <mxCell id="sv_box1" value="&lt;b style=&quot;font-size: 12px; color: #0F172A;&quot;&gt;Metabase v0.49 Dashboards (Port 3001)&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 10px; color: #475569; line-height: 1.4;&quot;&gt;• Real-time Headline &amp;amp; Core CPI Tickers&lt;br&gt;• 12-Division COICOP Performance Breakdown&lt;br&gt;• Daily Inflation Trendline &amp;amp; Top Movers&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;align=left;spacingLeft=10;arcSize=6;" vertex="1" parent="col4_bg">
+          <mxGeometry x="15" y="45" width="325" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- Box 2: Health Matrix & Anomaly Alerts -->
+        <mxCell id="sv_box2" value="&lt;b style=&quot;font-size: 12px; color: #0F172A;&quot;&gt;25-Source Health Matrix &amp;amp; Anomaly Alerts&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 10px; color: #475569; line-height: 1.4;&quot;&gt;• Scraper Availability Grid (Green / Amber / Red)&lt;br&gt;• Price Spike Outlier Queue (&amp;gt; 20% DoD deviation)&lt;br&gt;• Official MEF FX Freshness Monitor&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;align=left;spacingLeft=10;arcSize=6;" vertex="1" parent="col4_bg">
+          <mxGeometry x="15" y="175" width="325" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- Box 3: Official NIS Benchmark Comparison -->
+        <mxCell id="sv_box3" value="&lt;b style=&quot;font-size: 12px; color: #0F172A;&quot;&gt;Official NIS Benchmark Comparison&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 10px; color: #0284C7;&quot;&gt;(gold.fct_cpi_nis_comparison)&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 10px; color: #475569; line-height: 1.4;&quot;&gt;• Mean Absolute Error (MAE) vs Official Releases&lt;br&gt;• Directional Concordance &amp;amp; Tracking Errors&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;align=left;spacingLeft=10;arcSize=6;" vertex="1" parent="col4_bg">
+          <mxGeometry x="15" y="305" width="325" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- Box 4: Central Bank & Policy Macro Analytics -->
+        <mxCell id="sv_box4" value="&lt;b style=&quot;font-size: 12px; color: #0F172A;&quot;&gt;Central Bank &amp;amp; Policy Macro Analytics&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 10px; color: #475569; line-height: 1.4;&quot;&gt;• Inflation Target Adherence &amp;amp; Early Warning System&lt;br&gt;• High-frequency Nowcast for National Bank of Cambodia&lt;br&gt;• Executive Analytics in Metabase Dashboards&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;align=left;spacingLeft=10;arcSize=6;" vertex="1" parent="col4_bg">
+          <mxGeometry x="15" y="435" width="325" height="160" as="geometry" />
+        </mxCell>
+
+        <!-- ================================================================================= -->
+        <!-- BOTTOM: AIRFLOW 2.9.3 MASTER ORCHESTRATION (PURE WHITE)                          -->
+        <!-- ================================================================================= -->
+        <mxCell id="af_bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#94A3B8;strokeWidth=2;arcSize=4;" vertex="1" parent="1">
+          <mxGeometry x="50" y="715" width="1540" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- Airflow Title Badge -->
+        <mxCell id="af_title_text" value="&lt;b style=&quot;font-size: 13px; color: #0F172A;&quot;&gt;🌪️ Airflow 2.9.3 Master Orchestration Workflow (08:00 ICT)&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="af_bg">
+          <mxGeometry x="15" y="15" width="380" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Sequence DAG nodes inside Airflow bar -->
+        <mxCell id="af_node1" value="&lt;b style=&quot;color:#0F172A; font-size:11px;&quot;&gt;cpi_master_dag&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;arcSize=6;" vertex="1" parent="af_bg">
+          <mxGeometry x="400" y="22" width="150" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="af_node2" value="&lt;b style=&quot;color:#0F172A; font-size:11px;&quot;&gt;25 Scraper DAGs&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;arcSize=6;" vertex="1" parent="af_bg">
+          <mxGeometry x="590" y="22" width="150" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="af_node3" value="&lt;b style=&quot;color:#0F172A; font-size:11px;&quot;&gt;Bronze Quality Gate&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;arcSize=6;" vertex="1" parent="af_bg">
+          <mxGeometry x="780" y="22" width="160" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="af_node4" value="&lt;b style=&quot;color:#0F172A; font-size:11px;&quot;&gt;silver_dag&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;arcSize=6;" vertex="1" parent="af_bg">
+          <mxGeometry x="980" y="22" width="140" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="af_node5" value="&lt;b style=&quot;color:#0F172A; font-size:11px;&quot;&gt;gold_cpi_dag&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;arcSize=6;" vertex="1" parent="af_bg">
+          <mxGeometry x="1160" y="22" width="150" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="af_node6" value="&lt;b style=&quot;color:#0F172A; font-size:11px;&quot;&gt;gold_dag&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.5;arcSize=6;" vertex="1" parent="af_bg">
+          <mxGeometry x="1350" y="22" width="150" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- Airflow DAG sequence arrows -->
+        <mxCell id="af_e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=2;" edge="1" parent="af_bg" source="af_node1" target="af_node2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="af_e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=2;" edge="1" parent="af_bg" source="af_node2" target="af_node3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="af_e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=2;" edge="1" parent="af_bg" source="af_node3" target="af_node4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="af_e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=2;" edge="1" parent="af_bg" source="af_node4" target="af_node5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="af_e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=2;" edge="1" parent="af_bg" source="af_node5" target="af_node6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ================================================================================= -->
+        <!-- CROSS-COLUMN CONNECTING ARROWS (INTER-STAGE LINEAGE)                              -->
+        <!-- ================================================================================= -->
+        <!-- Col 1 to Col 2 -->
+        <mxCell id="edge_col1_col2_top" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=2;" edge="1" parent="1" source="col1_cb_box" target="s_box1">
+          <mxGeometry relative="1" as="geometry">
+            <Array points="470 265; 470 175" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge_col1_col2_mid" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=2;" edge="1" parent="1" source="col1_pg_box" target="s_box2">
+          <mxGeometry relative="1" as="geometry">
+            <Array points="470 375; 470 312" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge_col1_col2_bot" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=2;" edge="1" parent="1" source="col1_table_raw" target="s_box3">
+          <mxGeometry relative="1" as="geometry">
+            <Array points="470 480; 470 462" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Col 2 to Col 3 -->
+        <mxCell id="edge_col2_col3_1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=2;" edge="1" parent="1" source="s_box4" target="g_box1">
+          <mxGeometry relative="1" as="geometry">
+            <Array points="855 612; 855 187" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge_col2_col3_2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=2;" edge="1" parent="1" source="s_box4" target="g_box2">
+          <mxGeometry relative="1" as="geometry">
+            <Array points="855 612; 855 317" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Col 3 to Col 4 -->
+        <mxCell id="edge_col3_col4_top" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=2;" edge="1" parent="1" source="g_box4" target="sv_box1">
+          <mxGeometry relative="1" as="geometry">
+            <Array points="1225 580; 1225 175" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge_col3_col4_mid" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=2;" edge="1" parent="1" source="g_box4" target="sv_box2">
+          <mxGeometry relative="1" as="geometry">
+            <Array points="1225 580; 1225 310" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge_col3_col4_bot" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284C7;strokeWidth=2;" edge="1" parent="1" source="g_box4" target="sv_box3">
+          <mxGeometry relative="1" as="geometry">
+            <Array points="1225 580; 1225 435" />
+          </mxGeometry>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+</mxfile>

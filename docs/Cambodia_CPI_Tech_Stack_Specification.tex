@@ -80,7 +80,7 @@
 
 \author{\textbf{National Institute of Statistics (NIS) \& National Bank of Cambodia (NBC) Research Initiative}\\[2pt]
 \small High-Frequency Economic Nowcasting Laboratory $\cdot$ Enterprise Data Platform Architecture}
-\date{\small Version 3.4 -- September 2026}
+\date{\small Version 3.4 -- September 21, 2026}
 
 \begin{document}
 
@@ -102,17 +102,24 @@ The Cambodia Daily CPI Pipeline is an automated, sovereign, cloud-agnostic data 
 
 \begin{table}[H]
 \centering
-\small
-\begin{tabularx}{\textwidth}{l p{2.6cm} p{3.6cm} p{3.2cm} X}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{@{}l >{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}p{3.1cm} >{\raggedright\arraybackslash}p{2.9cm} >{\raggedright\arraybackslash}X@{}}
 \toprule
 \textbf{Layer / Domain} & \textbf{Adopted Stack} & \textbf{Primary Function} & \textbf{Rejected Alternatives} & \textbf{Key Deciding Advantage} \\
 \midrule
 \textbf{Storage \& OLAP} & PostgreSQL 16 + \texttt{pgvector} & Unified Medallion Warehouse (Bronze/Silver/Gold) + Vectors & Snowflake, BigQuery, ClickHouse, Pinecone & Zero cloud lock-in, transactional integrity (ACID), in-database vector search. \\
+\addlinespace[2pt]
 \textbf{Orchestration} & Apache Airflow 2.9.3 (LocalExecutor) & 25-scraper fan-out, SLA scheduling, pipeline DAGs & Prefect, Dagster, Celery, Luigi & Enterprise SLA controls, ecosystem maturity, unified backfill semantics. \\
+\addlinespace[2pt]
 \textbf{Transformation} & dbt Core 1.8 + Cosmos & SQL data modeling, tests, Medallion lineage & Apache Spark, Custom Python scripts & Declarative DAGs, automated data contracts, idempotent testing. \\
+\addlinespace[2pt]
 \textbf{Scraping Engine} & \texttt{curl\_cffi} + Playwright & TLS fingerprint impersonation, browser rendering & Requests, Selenium, Scrapy, Puppeteer & Bypasses Cloudflare/PerimeterX JA3/HTTP2 anti-bot defenses natively. \\
+\addlinespace[2pt]
 \textbf{Semantic AI} & Google Gemini 2.5 Flash + Embeddings & COICOP classification, product deduplication & OpenAI GPT-4o, Local Ollama, HuggingFace & Multilingual Khmer support, 1M context window, lowest API latency \& cost. \\
+\addlinespace[2pt]
 \textbf{ML \& Nowcast} & Scikit-Learn + Statsmodels & 5-basket RidgeCV regularization, Hedonics & TensorFlow, PyTorch, Prophet & Analytical interpretability, Sherman-Morrison LOOCV speed, OLS fallbacks. \\
+\addlinespace[2pt]
 \textbf{BI Analytics} & Metabase v0.49 & Executive dashboards, interactive drill-down & Apache Superset, Tableau, PowerBI & Instant native SQL query tags, zero-friction local Docker deployment. \\
 \bottomrule
 \end{tabularx}
@@ -255,7 +262,7 @@ Apache Airflow acts as the central nervous system of the platform, orchestrating
 \subsection{What We Use It For}
 dbt Core transforms raw data in-warehouse using modular, version-controlled SQL:
 \begin{itemize}[leftmargin=*]
-    \item \textbf{Idempotent Transformations}: Compiles Jinja SQL macros into high-performance analytical queries (\texttt{delete+insert} incremental strategies).
+    \item \textbf{Idempotent Transformations}: Compiles Jinja SQL macros into high-performance analytical queries using incremental \texttt{delete+insert} strategies.
     \item \textbf{Axiomatic Invariant Testing}: Enforces non-null primary keys, positive prices, and UN COICOP weight closure ($\sum w_j = 1.0000$).
 \end{itemize}
 
@@ -347,15 +354,20 @@ To achieve maximum performance and operational throughput across the entire arch
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{l p{3.2cm} p{4.0cm} X}
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabularx}{\textwidth}{@{}l >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}X@{}}
 \toprule
 \textbf{Layer} & \textbf{Optimization Initiative} & \textbf{Engineering Action} & \textbf{Projected Impact} \\
 \midrule
-\textbf{Storage} & Monthly Table Partitioning & \texttt{PARTITION BY RANGE (scrape\_date)} on \texttt{silver.clean\_store\_prices} & 60\% faster incremental joins, reduced index I/O overhead. \\
+\textbf{Storage} & Monthly Table Partitioning & \texttt{PARTITION BY RANGE} on \texttt{clean\_store\_prices} & 60\% faster incremental joins, reduced index I/O overhead. \\
+\addlinespace[2pt]
 \textbf{Ingestion} & Persistent HTTP/2 Sockets & Implement session pooling in \texttt{curl\_cffi} scrapers & Cuts network scrape duration by 35\% across all 25 scrapers. \\
-\textbf{AI Curation} & Asynchronous Gemini Batch API & Convert synchronous LLM calls to official asynchronous batch endpoint & Decreases classification latency by 80\% and cuts API cost by 50\%. \\
-\textbf{Compute} & Vector Quantization (\texttt{pgvector}) & Use \texttt{halfvec} (FP16) or scalar 8-bit quantization on embeddings & Reduces vector index RAM footprint in PostgreSQL by 50\%. \\
-\textbf{Pipeline} & In-Memory Redis Caching & Cache latest exchange rates and store baseline catalogs in Redis & Eliminates duplicate database queries during high-concurrency runs. \\
+\addlinespace[2pt]
+\textbf{AI Curation} & Asynchronous Gemini Batch API & Convert synchronous LLM calls to official async batch endpoint & Decreases classification latency by 80\% and cuts API cost by 50\%. \\
+\addlinespace[2pt]
+\textbf{Compute} & Vector Quantization (\texttt{pgvector}) & Use \texttt{halfvec} (FP16) or scalar 8-bit quantization on vectors & Reduces vector index RAM footprint in PostgreSQL by 50\%. \\
+\addlinespace[2pt]
+\textbf{Pipeline} & In-Memory Redis Caching & Cache latest exchange rates and baseline catalogs in Redis & Eliminates duplicate database queries during high-concurrency runs. \\
 \bottomrule
 \end{tabularx}
 \caption{System Optimization and Hardware Efficiency Roadmap.}

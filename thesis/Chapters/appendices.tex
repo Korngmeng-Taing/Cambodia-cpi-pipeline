@@ -4,7 +4,8 @@
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{|c|>{\raggedright\arraybackslash}p{7.5cm}|r|>{\raggedright\arraybackslash}p{4cm}|}
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{|c|>{\raggedright\arraybackslash}X|r|>{\raggedright\arraybackslash}p{3.8cm}|}
 \hline
 \rowcolor{blue!20}
 \textbf{Division} & \textbf{COICOP Classification Title} & \textbf{Weight (\%)} & \textbf{Basket Type} \\ \hline
@@ -21,7 +22,7 @@
 11 & Restaurants and Hotels & 3.085\% & Headline \& Core \\ \hline
 12 & Miscellaneous Goods and Services & 2.065\% & Headline \& Core \\ \hline
 \textbf{Total} & \textbf{National Consumer Expenditure Basket} & \textbf{100.000\%} & \textbf{Headline: 100\% | Core: 52.2\%} \\ \hline
-\end{tabular}
+\end{tabularx}
 \caption{Official United Nations COICOP Divisions and Normalized CSES 2023 Weights}
 \label{tab:appendix_coicop_weights}
 \end{table}
@@ -32,7 +33,8 @@
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{|>{\raggedright\arraybackslash}p{5.5cm}|c|>{\raggedright\arraybackslash}p{4.2cm}|>{\raggedright\arraybackslash}p{3.8cm}|}
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{2.8cm}|>{\raggedright\arraybackslash}p{3.8cm}|>{\raggedright\arraybackslash}p{3.6cm}|}
 \hline
 \rowcolor{blue!20}
 \textbf{Data Collection Workflow} & \textbf{Schedule (ICT)} & \textbf{Target Platform} & \textbf{Ingestion Method} \\ \hline
@@ -49,7 +51,7 @@ Official Foreign Exchange Rates & 08:00 AM & Ministry of Economy & Official Dail
 Econometric Mart Transformations & 08:30 AM & Central Database & Automated Analytics Engine \\ \hline
 Official NIS Benchmark Ingestion & Mon 08:00 AM & National Institute of Statistics & Automated Portal Scraper \\ \hline
 Automated Maintenance \& Parquet & Sun 01:00 AM & Operations Schema & Partition \& Storage Offloader \\ \hline
-\end{tabular}
+\end{tabularx}
 \caption{Operational Schedule for Automated Daily Market Data Ingestion and Maintenance DAGs}
 \label{tab:appendix_airflow_dags}
 \end{table}
@@ -82,7 +84,8 @@ with strict inequality holding whenever price ratios $p_{i,t}/p_{i,0}$ are not s
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{|>{\raggedright\arraybackslash}p{4.2cm}|c|>{\raggedright\arraybackslash}p{4.2cm}|>{\raggedright\arraybackslash}p{4.8cm}|}
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{3.8cm}|>{\centering\arraybackslash}p{1.4cm}|>{\raggedright\arraybackslash}X|>{\raggedright\arraybackslash}X|}
 \hline
 \rowcolor{blue!20}
 \textbf{Analytical Field} & \textbf{Type} & \textbf{Economic Concept} & \textbf{Mathematical Formulation} \\ \hline
@@ -98,7 +101,35 @@ Nowcast MoM Inflation & Float & Projected Month-over-Month inflation & $\widehat
 Uncertainty Decay Factor & Float & Asymptotic variance decay ratio & $U_t = \sqrt{\frac{T - t}{T}} \in [0, 1]$ \\ \hline
 95\% Confidence Interval & Interval & Dynamic 95\% confidence envelope & $\widehat{\text{CPI}}_M(t) \pm 1.95996 \cdot \sigma_{\text{daily}} \cdot U_t$ \\ \hline
 Chain-Linked NIS Benchmark & Float & Chain-linked official NIS benchmark & $\text{CPI}_{\text{NIS}, M-1} \times (1 + \widehat{\pi}_M(t)/100)$ \\ \hline
-\end{tabular}
+\end{tabularx}
 \caption{Production Analytical Mart Schema for Real-Time Daily Inflation Nowcasting}
 \label{tab:appendix_nowcast_store}
 \end{table}
+
+\section*{Appendix E: Project Operational Execution Roadmap and Deliverable Milestones}
+\addcontentsline{toc}{section}{Appendix E: Project Operational Execution Roadmap and Deliverable Milestones}
+
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{2pt}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|*{10}{>{\centering\arraybackslash}p{0.72cm}|}}
+\hline
+\rowcolor{blue!20}
+\textbf{\footnotesize Activity / Milestone} & \textbf{\footnotesize W1-2} & \textbf{\footnotesize W3} & \textbf{\footnotesize W4} & \textbf{\footnotesize W5} & \textbf{\footnotesize W6} & \textbf{\footnotesize W7} & \textbf{\footnotesize W8} & \textbf{\footnotesize W9} & \textbf{\footnotesize W10} & \textbf{\footnotesize W11-12} \\
+\hline
+\textbf{Data Ingestion \& Scraping} & \progressbar{ } & \progressbar{ } & \progressbar{ } & & & & & & & \\
+\hline
+\textbf{Silver Cleaning \& AI} & & \progressbar{ } & \progressbar{ } & \progressbar{ } & & & & & & \\
+\hline
+\textbf{Gold Econometric Jevons} & & & & \progressbar{ } & \progressbar{ } & \progressbar{ } & & & & \\
+\hline
+\textbf{Nowcast \& BI Serving} & & & & & & \progressbar{ } & \progressbar{ } & \progressbar{ } & & \\
+\hline
+\textbf{Evaluation \& Defense} & & & & & & & & \progressbar{ } & \progressbar{ } & \progressbar{ } \\
+\hline
+\end{tabularx}
+\caption{Project Execution Schedule and Deliverable Milestones across the Operational Window}
+\label{table:appendix_roadmap}
+\end{table}
+

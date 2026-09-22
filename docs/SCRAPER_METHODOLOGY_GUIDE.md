@@ -164,20 +164,22 @@ Every morning at 08:00, Airflow orchestrates daily data extraction across **24 C
 - **Category / Source Type**: Telecommunications & Mobile Data (`telecom`)
 - **COICOP Division**: `08` (Information & Communication Services)
 - **Target Website**: [https://www.cellcard.com.kh/en/mobile](https://www.cellcard.com.kh/en/mobile)
-- **Best Scraping Method**: **Live DOM Card Parser (`.js-card`) + Next.js Fallback**
+- **Best Scraping Method**: **Next.js App Router Semantic DOM Parser (`<h4>` + Card Containers)**
   - **Endpoint**: `GET https://www.cellcard.com.kh/en/mobile`
-  - **Extraction**: Selects live `.js-card` DOM elements, extracting plan name (`h4`), data allowance (`\d+\s*GB`), validity period, and USD price (`\$\s*(\d+(\.\d+)?)`). Automatically falls back to `__NEXT_DATA__` JSON parsing or curated baseline if live cards are modified.
-  - **Coverage**: AO Mobile 5G, Serey, Big Love, Tourist SIMs (25 live plans + 3 fixed broadband tiers).
+  - **Extraction**: Selects live `<h4>` headings and parent plan containers, extracting plan names (e.g. `cellcard AO MOBILE 5G $1.5`, `Student $5`, `Gamer $2`), USD prices, data allowances (`\d+\s*GB`), and validity periods (`\d+\s*Days`). 
+  - **Coverage**: **25 live mobile plans** captured dynamically with zero browser overhead, backed by a verified fallback matrix.
 
 ---
 
-### 8. Cellcard Home Internet & Fiber (`cellcard_wifi`)
+### 8. Metfone Cambodia (`metfone`)
 
-- **Category / Source Type**: Broadband Internet (`telecom`)
+- **Category / Source Type**: Telecommunications & Mobile Data / FTTH (`telecom`)
 - **COICOP Division**: `08` (Information & Communication Services)
-- **Target Website**: [https://www.cellcard.com.kh/en/home-internet/](https://www.cellcard.com.kh/en/home-internet/)
-- **Best Scraping Method**: **DOM Card Parsing + Next.js Props**
-  - **Extraction**: Speed tiers (e.g. `20 Mbps`, `50 Mbps`, `100 Mbps`), monthly fee in USD, installation/router equipment notes.
+- **Target Website**: [https://metfone.com.kh/en/mobile](https://metfone.com.kh/en/mobile)
+- **Best Scraping Method**: **Live Next.js Proxy REST API + Tariff Matrix Cascade**
+  - **Endpoint**: `POST https://metfone.com.kh/api/proxy/packages/config-des-packages`
+  - **Payload**: `{"wsCode":"getConfigDesPackages","wsRequest":{"servicePackagesCode":"MOBILE_CODE","type":2,"language":"en","role":""}}`
+  - **Extraction**: Real-time KADO Plus packages (`KADO 1 Plus`, `KADO 1.5 Plus`, `KADO 6 Plus`, `KADO 10 Plus`) with exact prices, allowances, validity days, and activation codes. Merged seamlessly with complementary baseline tiers (Social, Entertainment, Education, Fiber) to ensure full basket representation.
 
 ---
 
@@ -186,10 +188,9 @@ Every morning at 08:00, Airflow orchestrates daily data extraction across **24 C
 - **Category / Source Type**: Telecommunications & Mobile Data (`telecom`)
 - **COICOP Division**: `08` (Information & Communication Services)
 - **Target Website**: [https://www.smart.com.kh/plans](https://www.smart.com.kh/plans)
-- **Best Scraping Method**: **Multi-URL Card Extraction + Structured Tariff Matrix**
-  - **Target Sub-URLs**: `/plans`, `/plans/smart-laor`, `/plans/smart-flexi250`, `/plans/5g-data`, `/plans/traveller-sim`, `/plans/smart-m2m`, `/services/surflikecrazy`.
-  - **Extraction**: Dial codes (`*1710*150*1#`), data allowances (GB/MB), validity periods, USD prices.
-  - **Fallback**: Pre-seeded structured catalog for Smart Laor!, Flexi, 5G Data, and Traveller SIM plans.
+- **Best Scraping Method**: **Live Plan Extraction (smart-laor) + Structured Baseline Matrix**
+  - **Target URL**: `https://www.smart.com.kh/plans/smart-laor`
+  - **Extraction**: Live regex parsing across React Server Component chunks for flagship Smart Laor! plans (`Data 1`, `Data 1.5`, `Data 6`, `Data 10`, `Rean Monthly`) capturing price and GB quotas dynamically, supplemented by curated baseline tiers for tourist SIMs and flexi bundles.
 
 ---
 

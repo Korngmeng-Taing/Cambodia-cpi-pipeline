@@ -147,9 +147,20 @@ rate = self.get_exchange_rate(scrape_date)
 When retailers update their frontend templates, follow these verified operational protocols:
 
 ### Cellcard Mobile (`scrapers/sources/cellcard.py`)
-- **Live Selector:** Parses `.js-card` elements on `https://www.cellcard.com.kh/en/mobile` for AO Mobile 5G/4G plans.
-- **Regex Extraction:** Extracts pricing via `\$\s*(\d+(\.\d+)?)` and data quotas via `(\d+\s*GB)`.
-- **Fallback Cascade:** If DOM cards change, falls back automatically to `__NEXT_DATA__` JSON parsing, and then to `CELLCARD_PLANS_BASELINE` with `is_fallback=True`.
+- **Live Selector:** Parses Next.js App Router rendered `<h4>` headings and parent plan containers on `https://www.cellcard.com.kh/en/mobile` for AO Mobile 5G/4G, Student, Gamer, and Big Love plans.
+- **Regex Extraction:** Extracts pricing via `\$\s*(\d+(\.\d+)?)`, data allowances via `(\d+\s*GB)`, and validity periods via `(\d+\s*Days?)`. Captures 25 live mobile plans dynamically.
+- **Fallback Cascade:** If DOM cards change, falls back automatically to `CELLCARD_MOBILE_PLANS` baseline with `is_fallback=True`.
+
+### Metfone Cambodia (`scrapers/sources/metfone.py`)
+- **Next.js Proxy API:** Queries `POST https://metfone.com.kh/api/proxy/packages/config-des-packages` (`wsCode: getConfigDesPackages`) for live KADO Plus packages.
+- **Catalog Merge:** Merges live packages with complementary baseline plans (Social, Entertainment, Education, Fiber) to guarantee complete 14-item basket representation.
+
+### Smart Cambodia (`scrapers/sources/smart.py`)
+- **Live Plan Extraction:** Scrapes live flagship plans directly from `https://www.smart.com.kh/plans/smart-laor` (`Smart Laor! Data 1`, `1.5`, `6`, `10`, `Rean Monthly`) using multiline regex across React Server Component chunks.
+- **Fallback Cascade:** Falls back to `SMART_MOBILE_PLANS` baseline for broader tiers and fiber broadband plans.
+
+### Khmer Moto Shop (`scrapers/sources/khmermoto.py`)
+- **Public Anakut REST API:** Direct unauthenticated JSON query to `https://system.anakutapp.com/ecommerce/public/api/products?store_code=KMT&row_per_page=100&page=1` pulling the full 187-item motorcycle and spare parts catalog.
 
 ### Khmer24 Real Estate (`scrapers/sources/khmer24.py`)
 - **Nuxt SSR Offset Pagination:** Khmer24 utilizes infinite scroll driven by `?offset={(page - 1) * 30}` rather than `?page={page}`.
@@ -157,7 +168,7 @@ When retailers update their frontend templates, follow these verified operationa
 
 ### Khmer Samnang Phone Shop (`scrapers/sources/samnangshop.py`)
 - **WooCommerce Store API:** Target `https://khmersamnang.com/wp-json/wc/store/v1/products?per_page=100`.
-- **Catalog Size:** Active listings reflect current in-stock catalog (e.g. 73 items following inventory audits). All active products are captured in a single paginated query.
+- **Catalog Size:** Active listings reflect current in-stock catalog (e.g. 75 items following inventory audits). All active products are captured in a single paginated query.
 
 ### Bayon BKK (`scrapers/sources/bayonbkk.py`)
 - **Anti-Bot Graceful Degradation:** Foodpanda/PerimeterX blocks live scrapers with HTTP 403 (`px-captcha`). In adherence to scraping ethics (never bypassing CAPTCHA), the scraper gracefully engages `BAYON_MENU_BASELINE` (`is_fallback=True`).

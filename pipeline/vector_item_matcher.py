@@ -443,72 +443,22 @@ class VectorItemMatcher:
         best_item: dict[str, Any],
         sim_score: float,
     ) -> dict[str, Any]:
-        """Sends ambiguous candidate pair to Gemini Pro/Flash or uses local thresholding in local-first mode."""
+        """Pure deterministic local evaluation for candidate pairs without calling Gemini LLM.
+        Any pair reaching this point has already passed deterministic spec guard checks."""
         canonical_name = best_item.get("canonical_name", "")
         item_id = str(best_item.get("item_id"))
 
-        use_local_first = os.getenv("USE_LOCAL_FALLBACK_FIRST", "true").lower() in ("true", "1", "yes")
-        if use_local_first or not HAS_GENAI or self.key_pool.get_key_count() == 0:
-            is_match = sim_score >= 0.70
-            return {
-                "decision": "APPROVE_MATCH" if is_match else "SPLIT_NEW",
-                "matched_item_id": item_id if is_match else None,
-                "confidence": round(sim_score, 4),
-                "method": "vector_embedding_local",
-                "reason": f"Local vector score {sim_score:.3f}",
-                "coicop_code": best_item.get("coicop_code") if is_match else None,
-                "coicop_division": best_item.get("coicop_division") if is_match else None,
-            }
-
-        prompt = f"""You are a master product entity matching expert for an official Consumer Price Index.
-Compare these two product titles and decide if they represent the EXACT SAME physical product and packaging size sold across different retailers:
-
-Candidate: "{candidate_name}"
-Existing Canonical: "{canonical_name}"
-
-Rules:
-1. Return APPROVE_MATCH if they are identical products/sizes (including Khmer/English translations or brand synonyms).
-2. Return SPLIT_NEW if they are different package sizes (e.g. 6-pack vs 1 can), different flavors, or different specs.
-
-Return strict JSON only:
-{{
-  "decision": "APPROVE_MATCH" or "SPLIT_NEW",
-  "confidence": float (0.0 to 1.0),
-  "reason": "short explanation under 10 words"
-}}"""
-
-        def _call_llm(key: str) -> dict[str, Any]:
-            client = genai.Client(api_key=key)
-            resp = client.models.generate_content(
-                model=LLM_MODEL,
-                contents=prompt,
-                config=genai_types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                ),
-            )
-            data = json.loads(resp.text)
-            decision = data.get("decision", "SPLIT_NEW").strip().upper()
-            return {
-                "decision": "APPROVE_MATCH" if decision == "APPROVE_MATCH" else "SPLIT_NEW",
-                "matched_item_id": item_id if decision == "APPROVE_MATCH" else None,
-                "confidence": float(data.get("confidence", 0.90)),
-                "method": "gemini_llm",
-                "reason": str(data.get("reason", "LLM match review")),
-                "coicop_code": best_item.get("coicop_code") if decision == "APPROVE_MATCH" else None,
-                "coicop_division": best_item.get("coicop_division") if decision == "APPROVE_MATCH" else None,
-            }
-
-        try:
-            return self.key_pool.execute_with_retry(_call_llm)
-        except Exception as e:
-            log.warning("LLM match review failed: %s. Falling back to SPLIT_NEW.", e)
-            return {
-                "decision": "SPLIT_NEW",
-                "matched_item_id": None,
-                "confidence": round(sim_score, 4),
-                "method": "llm_error_fallback",
-                "reason": f"LLM error fallback ({e})",
-            }
+        # Spec-guarded vector matches with cosine similarity >= 0.75 are approved
+        is_match = sim_score >= 0.75
+        return {
+            "decision": "APPROVE_MATCH" if is_match else "SPLIT_NEW",
+            "matched_item_id": item_id if is_match else None,
+            "confidence": round(sim_score, 4),
+            "method": "vector_embedding_local",
+            "reason": f"Spec-guarded vector match ({sim_score:.3f})" if is_match else f"Below threshold ({sim_score:.3f} < 0.75)",
+            "coicop_code": best_item.get("coicop_code") if is_match else None,
+            "coicop_division": best_item.get("coicop_division") if is_match else None,
+        }
 
     def find_closest_match(self, product_name: str, similarity_threshold: float = 0.75) -> tuple[str, float] | None:
         """Finds the closest matching product in the Gold Standard table using vector similarity.

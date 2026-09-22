@@ -515,7 +515,7 @@ class ItemMatcher:
         query = """
             SELECT rp.raw_price_id, rp.item_description_raw,
                    (rp.raw_payload->>'barcode')::text as barcode,
-                   (rp.raw_payload->>'sku')::text as sku,
+                   COALESCE((rp.raw_payload->>'sku')::text, (rp.raw_payload->>'item_id')::text) as sku,
                    rp.store_id,
                    (rp.raw_payload->>'brand')::text as brand,
                    (rp.raw_payload->>'package_size')::text as package_size

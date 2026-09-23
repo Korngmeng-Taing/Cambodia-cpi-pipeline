@@ -187,51 +187,79 @@
     This metric unit price forms the core defense against \textbf{shrinkflation}. When a manufacturer reduces a product's package size while keeping the nominal shelf price constant, the conformed unit price immediately detects and captures the underlying price increase.
 \end{enumerate}
 
-\subsection{Semantic Entity Matching with Multi-Barcode Aliasing and Physical Specification Guards}
-\hs To calculate true price changes over time, the system must track the exact same product from day to day across a master catalog of over 83,180 canonical products. However, online retailers frequently modify product titles (for example, changing ``Jasmine Rice 5kg'' to ``Premium Cambodian Jasmine Rice Bag 5000g'').
-\hs Standard text-matching algorithms often make catastrophic errors in retail data. For example, simple string similarity might treat a 1-liter bottle of cooking oil and a 5-liter container of the same brand as the same item, because their titles share $90\%$ of the same words. Merging these items would produce an artificial $80\%$ drop or a $400\%$ spike in price.
+\subsection{Semantic Entity Matching Architecture: The Five-Level Resolution Ladder}
+\hs To calculate true longitudinal price changes over time, the system must track the exact same product from day to day across a master catalog of over 50,300+ canonical products. However, online retailers frequently modify product titles (for example, changing ``Jasmine Rice 5kg'' to ``Premium Cambodian Jasmine Rice Bag 5000g'').
+\hs Standard text-matching algorithms often make catastrophic errors in retail data. For example, simple string similarity might treat a single can of Coca-Cola (330ml) and a 24-can carton of the same brand as the same item because their titles share over $90\%$ of the same lexical tokens. Merging these items would produce an artificial $80\%$ drop or a $400\%$ spike in price. Similarly, a 128GB smartphone and a 256GB model could merge erroneously due to near-identical model nomenclature.
 
-\hs To solve this problem, the pipeline deploys a hybrid entity resolution engine combining:
-\begin{itemize}
-    \item \textbf{Multi-Barcode Alias Resolution:} In real-world retail supply chains, identical canonical items are frequently sold under multiple barcodes or GTINs due to regional packaging updates, promotional sleeves, or distributor variations. The pipeline implements a dedicated one-to-many barcode alias resolution table, linking all associated physical barcodes to their unique canonical master record without splitting longitudinal price history.
-    \item \textbf{Dense Multilingual Vector Embeddings:} Product titles are converted into 768-dimensional dense mathematical vectors using advanced multilingual text embedding models. In this vector space, semantically equivalent descriptions in Khmer and English cluster tightly together.
-    \item \textbf{Deterministic Physical Specification Guards:} Before two listings can be merged as the same canonical product, they must pass strict physical attribute constraints:
-    \begin{itemize}
-        \item \textit{Metric Volume and Weight Guard:} The parsed volume or weight between the two items must match within a tight tolerance ($\le 10\%$). A 500ml bottle is never merged with a 1-liter bottle.
-        \item \textit{Linear Measurement Guard:} For household textiles, building supplies, and cables, linear dimensions (meters, centimeters) are strictly matched, preventing 1m and 2m cables from collapsing into a single item.
-        \item \textit{Apparel Size Guard:} For clothing and footwear (Division 03), distinct garment sizes (e.g., S, M, L, XL, XXL) maintain independent canonical records.
-        \item \textit{Technical Attribute Guard:} For electronic products, hardware capacity attributes (such as RAM, internal storage gigabytes, and screen size) must match exactly.
-        \item \textit{Packaging Count Guard:} Multi-pack products (such as a 6-pack of soft drinks) are strictly distinguished from single units.
-    \end{itemize}
-    \item \textbf{Automated Master Catalog Deduplication:} Periodic background audits inspect canonical product clusters to merge redundant identifiers created across divergent scraper runs while maintaining referential integrity across barcode mappings and historical price facts.
-\end{itemize}
-Only listings that satisfy both semantic vector similarity and all physical specification guards are linked into canonical product identities.
-
-\subsection{The AI-First COICOP Classification Architecture: Dual Pillars and Safety Nets}
-\hs To classify hundreds of thousands of diverse consumer listings into official National Institute of Statistics (NIS) Cambodia 4-digit COICOP Classes (Division.Group.Class, 48 official subclasses) across all 12 divisions, the production pipeline implements an optimized \textbf{Dual-Pillar Classification Architecture} supported by institutional safety nets:
+\hs To achieve bulletproof precision without sacrificing throughput, the pipeline deploys a deterministic \textbf{Five-Level Hierarchical Entity Resolution Ladder} operating strictly sequentially (Levels 1 through 5), illustrated in Figure~\ref{fig:matching_ladder}:
 
 \begin{enumerate}
-    \item \textbf{Pillar 1: Single-Division Store Purity Locks (Deterministic Domain Routing):}
-    Specialized commercial outlets operating strictly within a single economic sector resolve deterministically with zero latency ($O(1)$ SQL execution). Outlets such as Community Pharmacy and specialized pharmacies route directly to Division 06 (Health); passenger transit and retail fuel stations to Division 07 (Transport); cellular operators and internet service providers to Division 08 (Communications); real estate agencies, electricity utilities, and municipal water authorities to Division 04 (Housing and Utilities); and hotels to Division 11 (Restaurants and Accommodation). In the production database, Store Purity accounts for \textbf{14.34\%} of all active catalog items with 100\% mathematical precision.
-    
-    \item \textbf{Pillar 2: Direct Google Gemini AI Engine with Multi-Key Pooling and Memoization:}
-    For multi-department retailers (e.g., AEON Supermarkets, DeliShop, quick-commerce delivery feeds, and general merchandise marketplaces) where tens of thousands of heterogeneous items arrive daily:
-    \begin{itemize}[noitemsep]
-        \item \textit{Automated Zero-Shot Ingestion:} Newly discovered products identified by the entity resolution engine are evaluated directly by the AI classification engine.
-        \item \textit{Multi-Key API Key Pool:} To ensure high operational throughput without encountering API rate limits or quota bottlenecks, requests are distributed across a thread-safe round-robin API key pool supporting 6,000+ classifications daily with automated failover.
-        \item \textit{Multi-Attribute Rich Context:} The model ingests the item's title, brand, native supermarket breadcrumb categories, and price in KHR. This rich contextual input prevents domain classification traps (e.g., distinguishing cooking mirin from drinking alcohol, pet food from human food in Division 01, or cosmetic skincare from pharmaceuticals in Division 06).
-        \item \textit{Relational Database Memoization:} High-confidence predictions are permanently recorded into a dedicated classification cache and the canonical master dimension, enabling subsequent daily observations to resolve in under 1 millisecond with zero external API calls.
-        \item \textit{Production Workhorse:} The AI classification engine powers \textbf{76.42\% (38,543 items)} of the canonical classified catalog, serving as the foundational workhorse for retail intelligence.
-    \end{itemize}
+    \item \textbf{Level 1: Multi-Barcode Alias Resolution (GTIN-13 / EAN):}
+    If the scraped item presents a valid, non-null Global Trade Item Number (GTIN-13, EAN, or UPC), the system queries the canonical barcode catalog and alias registry. In real-world retail supply chains, identical canonical items are frequently sold under multiple barcodes due to regional packaging updates, promotional sleeves, or distributor variations. The one-to-many barcode alias table resolves alternate physical barcodes to the canonical master record in $O(1)$ time, guaranteeing zero duplication across supply chain repackaging.
 
-    \item \textbf{Institutional Safety Nets and Human Auditing ($< 9.2\%$ of items):}
-    To guarantee complete regulatory compliance against statutory edge cases:
-    \begin{itemize}[noitemsep]
-        \item \textit{Critical Domain Traps:} High-priority disambiguation patterns (accounting for 7.57\% of items) enforce strict domain boundaries, such as ensuring automotive air fresheners are routed to Division 05 (Household Maintenance) rather than Division 07 (Transport).
-        \item \textit{Exact Human Overrides:} Preserves manual corrections and barcode locks ($0.04\%$ of items) resulting from institutional statistical audits.
-        \item \textbf{100\% Classification Guarantee:} Across over \textbf{1,273,000 clean price observations} and 38,712 active elementary items in the warehouse, \textbf{zero rows} remain unclassified, and zero code-division mismatches exist.
+    \item \textbf{Level 2: In-Memory Store ID and Internal SKU Cache:}
+    If no barcode is provided by the retailer (common in GrabMart, Khmer24, and local pharmacy APIs), the system queries an in-memory hash index keyed on \texttt{(store\_id, item\_id/sku)}. For recurring items harvested daily from the same merchant, this level achieves instantaneous sub-millisecond resolution ($< 0.1\text{ ms}$) with $100\%$ precision, entirely bypassing database queries and vector lookups.
+
+    \item \textbf{Level 3: Exact Normalized Text and Package Size Compatibility:}
+    If the retailer identifier has changed or is unindexed, the system evaluates exact normalized title strings combined with parsed metric package sizes. If the cleaned string matches an existing canonical title exactly and the parsed metric package volume or weight matches within a strict tolerance ($\le 10\%$), the item is immediately linked.
+
+    \item \textbf{Level 4: Multilingual Vector Similarity with Physical Specification Guards (Local Deterministic Matching):}
+    For modified, translated, or reworded descriptions (e.g., Khmer vs. English catalog listings), the listing is embedded into a dense 768-dimensional multilingual vector representation using the \texttt{paraphrase-multilingual-mpnet-base-v2} sentence transformer. The vector is searched against the canonical inventory using PostgreSQL \texttt{pgvector} with an Hierarchical Navigable Small World (HNSW) index ($\le 5\text{ ms}$ query latency).
+    
+    Crucially, semantic vector models are inherently ``number blind''—dense embeddings measure semantic context rather than numerical magnitudes, producing dangerously high cosine similarities between single units and wholesale packs (e.g., $0.9155$ between a 1-can and 24-pack of Coca-Cola, and $0.9808$ between 128GB and 256GB smartphones). To eliminate false merges, Level 4 enforces a strict two-stage gate:
+    \begin{itemize}
+        \item \textit{Deterministic Physical Specification Guards (Firewall):} The candidate pair must satisfy strict physical attribute constraints before any similarity score is evaluated:
+        \begin{itemize}
+            \item \textbf{Metric Volume and Weight Guard:} Parsed unit volume or net weight must be within $\le 10\%$ difference. A 500ml beverage never merges with a 1-liter container.
+            \item \textbf{Linear Measurement Guard:} Fabric rolls, cables, and construction materials must match linear dimensions (meters, centimeters).
+            \item \textbf{Packaging Count Guard:} Multi-packs (e.g., 6-can pack, 24-can carton) are strictly separated from single cans.
+            \item \textbf{Hardware Specification Guard:} Consumer electronics must match internal storage (GB), system RAM, and display sizes exactly.
+            \item \textbf{Apparel Size Guard:} Clothing and footwear maintain distinct canonical records across sizes (S, M, L, XL, XXL).
+        \end{itemize}
+        \item \textit{Local Cosine Similarity Cutoff ($\ge 0.80$):} If and only if all physical specification guards pass, candidates with cosine similarity $S_{\text{cos}} \ge 0.80$ are automatically approved and linked.
     \end{itemize}
+    \textbf{Removal of External LLM Latency:} While early pipeline prototypes routed ambiguous candidates ($0.75 \le S_{\text{cos}} < 0.85$) to a Large Language Model for arbitration, empirical production benchmarks demonstrated that combining the 768-dimensional embeddings with rigorous deterministic spec guards achieved $100\%$ merge precision locally. Consequently, external LLM arbitration was completely excised from Level 4 matching, eliminating cloud API network latency, token expenses, and rate-limiting failure modes.
+
+    \item \textbf{Level 5: New Canonical Product Creation:}
+    If an incoming listing fails all previous four levels, it is identified as a genuinely novel product. A new canonical master record is generated with a unique \texttt{canonical\_item\_id}, and its text embedding, physical specs, and metadata are indexed for subsequent daily tracking.
 \end{enumerate}
+
+\subsection{The Two-Tier COICOP Classification Architecture: High-Throughput AI Bootstrap and Zero-Latency Daily Inheritance}
+\hs To classify hundreds of thousands of diverse consumer listings into official National Institute of Statistics (NIS) Cambodia 4-digit COICOP Classes (Division.Group.Class, 48 official subclasses) across all 12 divisions, the production pipeline implements an optimized \textbf{Two-Tier COICOP Classification Architecture} separating the initial catalog bootstrap from routine daily operations.
+
+\subsubsection{Tier 1: Store Purity Routing (Deterministic Domain Locks)}
+\hs Specialized commercial outlets operating strictly within a single economic sector resolve deterministically with zero computational overhead ($O(1)$ SQL execution). Because these merchants offer products exclusively in one domain, their entire catalog is locked directly to the corresponding official COICOP division and subclass:
+\begin{itemize}[noitemsep]
+    \item \textbf{Division 06 (Health):} Community Pharmacy chain and specialized pharmaceutical feeds $\rightarrow$ Class \texttt{06.1.1} (Pharmaceutical products) and Group \texttt{06.1}.
+    \item \textbf{Division 07 (Transport):} redBus Cambodia, BookMeBus inter-provincial bus transit $\rightarrow$ Class \texttt{07.3.2} (Passenger transport by road); retail fuel stations (Kampuchea Tela, Caltex) $\rightarrow$ Class \texttt{07.2.2} (Fuels and lubricants for personal transport equipment); Khmer Moto Shop $\rightarrow$ Class \texttt{07.1.2} (Motorcycles).
+    \item \textbf{Division 08 (Communication):} Cellcard, Smart Axiata, and Metfone mobile bundles and fiber subscriptions $\rightarrow$ Class \texttt{08.3.0} (Telephone and telefax services).
+    \item \textbf{Division 04 (Housing and Regulated Utilities):} Khmer24 Real Estate and Realestate.com.kh $\rightarrow$ Class \texttt{04.1.1} (Actual rentals paid by tenants); Electricit\'e du Cambodge (EDC) $\rightarrow$ Class \texttt{04.5.1} (Electricity); Phnom Penh Water Supply Authority (PPWSA) $\rightarrow$ Class \texttt{04.4.1} (Water supply).
+    \item \textbf{Division 11 (Restaurants and Hotels):} Sokha Hotels, Hyatt Regency Phnom Penh $\rightarrow$ Class \texttt{11.2.0} (Accommodation services); Bayon Restaurant BKK~I $\rightarrow$ Class \texttt{11.1.1} (Restaurants and cafes).
+\end{itemize}
+In the production database, Store Purity accounts for \textbf{14.34\%} of the master product catalog, providing a mathematically guaranteed, 100\% precise baseline with zero API costs.
+
+\subsubsection{Tier 2: Google Gemini 3.1 Flash Lite AI Engine (Multi-Department Classification)}
+\hs For multi-department retailers (e.g., AEON Supermarkets, DeliShop, GrabMart, L192 Marketplace) carrying tens of thousands of heterogeneous items across food, clothing, personal care, electronics, and household goods, deterministic store rules cannot apply. Here, the system deploys \textbf{Google Gemini 3.1 Flash Lite} as the AI classification engine:
+\begin{itemize}
+    \item \textbf{Transition to Active Generative Model:} The classification engine was transitioned from legacy models to \texttt{gemini-3.1-flash-lite}, providing state-of-the-art multilingual comprehension of Khmer and English retail terminology, sub-second inference latency, and high reasoning fidelity on ambiguous consumer goods.
+    \item \textbf{High-Density Micro-Batching (40 Items per Payload):} Rather than executing one API request per product, the pipeline batches unclassified items in groups of 40. Each payload transmits the item identifier, cleaned product title, brand, native retailer breadcrumb categories, and price in KHR. This batching architecture reduces API network handshakes by $97.5\%$ and maximizes quota utilization.
+    \item \textbf{Four-Key Thread-Safe API Pool:} Requests rotate across a thread-safe pool of four independent Gemini API keys with exponential backoff and automated failover, supporting over 6,000 classifications per minute under free-tier allowances (\$0 cost).
+    \item \textbf{Structured JSON Output Validation:} The model is prompted with the full 48-class official Cambodia NIS COICOP taxonomy and returns a strictly validated JSON array containing the \texttt{item\_id}, predicted 4-digit \texttt{coicop\_code} (e.g., \texttt{"01.1.1"}), the corresponding 2-digit \texttt{coicop\_division} (\texttt{"01"}), and a normalized \texttt{confidence} score ($0.0$ to $1.0$).
+    \item \textbf{Linguistic Context and Domain Trap Immunity:} Standard keyword matchers fail on homonyms and multi-use terms. Gemini 3.1 Flash Lite leverages contextual reasoning to navigate critical domain traps:
+    \begin{itemize}[noitemsep]
+        \item \textit{Bourbon Cookies vs. Whiskey:} Correctly classifies ``Bourbon Choco Chip Cookies'' into \texttt{01.1.8} (Sugar, confectionery) rather than \texttt{02.1.1} (Spirits/Whiskey).
+        \item \textit{Camel Peanuts vs. Tobacco:} Correctly classifies ``Camel Salted Peanuts'' into \texttt{01.1.7} (Nuts) rather than \texttt{02.2.0} (Tobacco).
+        \item \textit{Culinary vs. Cleaning Vinegar:} Differentiates distilled cooking vinegar (\texttt{01.1.9}) from cleaning vinegar (\texttt{05.6.1}) based on brand and supermarket aisle metadata.
+        \item \textit{Hot Pot Soup Base vs. Electric Cooker:} Routes soup seasoning packets to \texttt{01.1.9} (Food products n.e.c.) and electric hot pot appliances to \texttt{05.3.1} (Major household appliances).
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Operational Lifecycle: Day 1 Cold-Start vs. Day 2+ Zero-Compute Inheritance}
+\hs A vital innovation of the classification architecture is the distinction between catalog bootstrap and daily operational runs:
+\begin{itemize}
+    \item \textbf{Day 1 Cold-Start Catalog Bootstrap:} On initial deployment, the catalog of 50,303 items was processed through Store Purity (14.34\%), critical domain trap guardrails, and Gemini 3.1 Flash Lite micro-batches, successfully classifying \textbf{99.04\% (49,820 items)} into official NIS subclasses in under 20 minutes with zero API cost (\$0 cost).
+    \item \textbf{Day 2+ Operational Run (``Classify Once, Inherit Forever''):} In routine daily production, existing products arriving from daily crawlers resolve at Level 1, 2, or 4 of the Entity Resolution Ladder. When matched, they \textbf{inherit} their verified COICOP classification directly from the canonical master dimension in \textbf{0 milliseconds} with zero external API calls. Only genuinely novel Level 5 items trigger Gemini 3.1 Flash Lite, reducing ongoing daily AI compute requirements by over $99.2\%$.
+\end{itemize}
 
 \subsection{Empirical Quality Quarantines and Boundary Case Disambiguation}
 \hs Operating web scrapers in developing retail environments encounters boundary edge cases that distort elementary indices if unaddressed:

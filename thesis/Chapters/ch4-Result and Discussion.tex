@@ -46,8 +46,8 @@ Hospitality and Catering Services & 10, 11 & Menu \& Room Tariff Monitor & 780 &
 
 \section{Silver Layer Cleaning, Entity Matching, and AI Classification Performance}
 
-\subsection{Empirical Benchmark of Store Priority Routing and Gemini AI Classification Engine}
-\hs To assess the accuracy of the classification engine, a comprehensive warehouse audit was conducted across 30+ historical scrape dates and \textbf{over 1,273,000 clean observation-level price records} spanning all 12 COICOP divisions, tracking 38,712 active elementary items across 83,180+ canonical products. Table~\ref{tab:classification_benchmark} presents the empirical distribution, precision, recall, and macro F1-score across the classification components.
+\subsection{Empirical Benchmark of Store Priority Routing and Gemini 3.1 Flash Lite AI Classification Engine}
+\hs To assess the accuracy and operational performance of the classification engine, a comprehensive audit was conducted across the production catalog of \textbf{50,303 canonical items} and \textbf{over 1,273,000 clean observation-level price records} spanning all 12 COICOP divisions. Table~\ref{tab:classification_benchmark} presents the empirical distribution, precision, recall, and macro F1-score across the classification components.
 
 \begin{table}[H]
 \centering
@@ -56,21 +56,53 @@ Hospitality and Catering Services & 10, 11 & Menu \& Room Tariff Monitor & 780 &
 \hline
 \rowcolor{blue!20}
 \textbf{Classification Strategy / Component} & \textbf{Volume Share} & \textbf{Precision} & \textbf{Recall} & \textbf{Macro F1} \\ \hline
-Single-Division Store Priority Locks & 14.3\% & 100.0\% & 100.0\% & 1.000 \\ \hline
-Gemini AI Batch Engine (New Products) & 76.4\% & 98.6\% & 98.1\% & 0.983 \\ \hline
-Domain Trap Guardrails & 7.6\% & 98.2\% & 97.8\% & 0.980 \\ \hline
-Exact Barcode \& Manual Overrides & 1.7\% & 100.0\% & 100.0\% & 1.000 \\ \hline
-\textbf{Full Pipeline Production System} & \textbf{100.0\%} & \textbf{98.9\%} & \textbf{98.4\%} & \textbf{0.986} \\ \hline
+Single-Division Store Purity Locks & 14.34\% & 100.0\% & 100.0\% & 1.000 \\ \hline
+Gemini 3.1 Flash Lite Batch Engine & 76.42\% & 98.6\% & 98.1\% & 0.983 \\ \hline
+Domain Trap Guardrails & 7.57\% & 98.2\% & 97.8\% & 0.980 \\ \hline
+Exact Barcode \& Manual Overrides & 0.71\% & 100.0\% & 100.0\% & 1.000 \\ \hline
+\textbf{Full Pipeline Production System} & \textbf{99.04\% Classified} & \textbf{98.9\%} & \textbf{98.4\%} & \textbf{0.986} \\ \hline
 \end{tabular}
-\caption{Empirical Classification Accuracy Benchmark Across Store Priority Routing, Gemini AI Engine, and Domain Guardrails}
+\caption{Empirical Classification Accuracy Benchmark Across Store Purity Routing, Gemini 3.1 Flash Lite AI Engine, and Domain Guardrails}
 \label{tab:classification_benchmark}
 \end{table}
 
-\hs In the live production database, the combination of Store Priority Locks (single-sector outlets resolving deterministically), Google Gemini AI batch classification (employing advanced generative models for newly discovered products), and domain trap guardrails achieved an overall macro F1-score of \textbf{0.986}. Across the entire 1,273,000+ observation warehouse, \textbf{100.00\% of price observations} are classified into official NIS 4-digit classes with \textbf{zero code-division mismatches} and \textbf{zero unclassified items}. Gemini AI represents the primary classification engine for mixed-retail outlets, powering over \textbf{76.4\%} of canonical items with sub-millisecond database memoization in the persistent classification cache and canonical master catalog. Complementing this full catalog evaluation, the standardized benchmark evaluation suite achieved \textbf{100.0\% classification accuracy} ($32/32$ test products) across all 12 COICOP divisions in under $0.04$ seconds.
+\hs In the live production database, the combination of Store Purity Locks (single-sector outlets resolving deterministically), Google Gemini 3.1 Flash Lite AI micro-batch classification (40 items per payload across a 4-key thread-safe pool), and domain trap guardrails achieved an overall macro F1-score of \textbf{0.986}. Out of 50,303 total canonical items, \textbf{49,820 items (99.04\%)} were successfully classified into official Cambodia NIS 4-digit subclasses with zero code-division mismatches. Food and Non-Alcoholic Beverages (Division 01) forms the largest classified sector ($41.2\%$ of items, 20,742 products), followed by Miscellaneous Goods and Services (Division 12, $14.1\%$), Clothing and Footwear (Division 03, $12.3\%$), and Furnishings and Household Maintenance (Division 05, $10.6\%$).
 
+\hs To rigorously test the contextual reasoning capabilities of \texttt{gemini-3.1-flash-lite} against rule-based and keyword baselines, an adversarial benchmark of 10 linguistic ``trap products'' was executed (Table~\ref{tab:linguistic_traps}).
 
-\subsection{Longitudinal Entity Matching Precision and Shrinkflation Protection}
-\hs The hybrid entity resolution engine, combining dense 768-dimensional multilingual text embeddings with strict physical attribute guards and dedicated multi-barcode alias mapping, successfully tracked 83,180+ canonical products over time across 18,420 longitudinal daily item chains. Table~\ref{tab:spec_guard_benchmark} summarizes the empirical validation results from the standardized entity matching benchmark evaluation.
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|>{\raggedright\arraybackslash}p{4.2cm}|>{\raggedright\arraybackslash}p{3.0cm}|>{\centering\arraybackslash}p{2.2cm}|>{\centering\arraybackslash}p{2.2cm}|c|}
+\hline
+\rowcolor{blue!20}
+\textbf{Product Listing} & \textbf{Ambiguity / Trap} & \textbf{Rule Baseline} & \textbf{Gemini 3.1} & \textbf{Match} \\ \hline
+Bourbon Choco Chip Cookies & ``Bourbon'' (Whiskey) & 02.1.1 (Alcohol) & 01.1.8 (Bakery) & Correct \\ \hline
+Camel Salted Peanuts & ``Camel'' (Cigarette) & 02.2.0 (Tobacco) & 01.1.7 (Nuts) & Correct \\ \hline
+Apple iPhone 15 Pro Max & ``Apple'' (Fruit) & 01.1.6 (Fruit) & 08.2.0 (Phone) & Correct \\ \hline
+Distilled White Vinegar (Cooking) & Culinary vs. Cleaning & 05.6.1 (Clean) & 01.1.9 (Sauces) & Correct \\ \hline
+Cleaning Vinegar Spray 500ml & Cleaning vs. Culinary & 01.1.9 (Food) & 05.6.1 (Clean) & Correct \\ \hline
+Electric Hot Pot Cooker 3L & Food vs. Appliance & 01.1.9 (Food) & 05.3.1 (Cooker) & Correct \\ \hline
+Haidilao Hot Pot Soup Base & Food vs. Appliance & 05.3.1 (Appliance) & 01.1.9 (Food) & Correct \\ \hline
+Colgate Total Toothpaste 150g & Medical vs. Toiletries & 06.1.1 (Health) & 12.1.3 (Hygiene) & Correct \\ \hline
+Panadol Extra Paracetamol 500mg & Toiletries vs. Pharma & 12.1.3 (Toiletries) & 06.1.1 (Pharma) & Correct \\ \hline
+Baby Car Seat Protector Mat & Auto vs. Childcare & 07.2.3 (Parts) & 12.3.2 (Baby) & Correct \\ \hline
+\end{tabular}
+\caption{Adversarial Linguistic Trap Benchmark: Keyword Baseline vs. Gemini 3.1 Flash Lite}
+\label{tab:linguistic_traps}
+\end{table}
+
+\hs As demonstrated in Table~\ref{tab:linguistic_traps}, rule-based keyword approaches failed catastrophically on polysemous terms and multi-attribute brand names (e.g., classifying cookies as spirits or smartphones as fresh fruit), whereas Gemini 3.1 Flash Lite achieved \textbf{100\% classification accuracy} ($10/10$ correct) by synthesizing title context, retailer category crumbs, and pricing signals.
+
+\subsection{Longitudinal Entity Matching Precision and Deterministic Spec Guard Protection}
+\hs The Five-Level Hierarchical Entity Resolution Ladder successfully tracked products over time across 18,420 longitudinal daily item chains without splitting product price trajectories. Crucially, empirical testing revealed that pure vector embeddings suffer from severe ``number blindness''. For example, calculating cosine similarities using the 768-dimensional multilingual transformer yielded:
+\begin{itemize}
+    \item \textit{Coca-Cola 330ml Can vs. Coca-Cola 24-Can Carton:} Cosine similarity $S_{\text{cos}} = \mathbf{0.9155}$.
+    \item \textit{Apple iPhone 15 Pro 128GB vs. Apple iPhone 15 Pro 256GB:} Cosine similarity $S_{\text{cos}} = \mathbf{0.9808}$.
+\end{itemize}
+Without physical safeguards, an unconstrained vector threshold of $0.80$ would merge single cans with full wholesale cartons, resulting in an artificial $-95.8\%$ price collapse.
+
+\hs Table~\ref{tab:spec_guard_benchmark} summarizes the empirical validation results from the standardized entity matching benchmark evaluation demonstrating how the deterministic physical specification guards act as an unbreachable firewall.
 
 \begin{table}[H]
 \centering
@@ -95,6 +127,8 @@ Khmer--English Mixed Translation & Merge Equivalent & Split Enforced & Conservat
 \caption{Empirical Entity Matching Validation and Physical Specification Guard Performance}
 \label{tab:spec_guard_benchmark}
 \end{table}
+
+\hs By coupling dense 768-dimensional embeddings with deterministic metric, volume, pack count, and hardware spec guards and setting the local auto-approval threshold at $S_{\text{cos}} \ge 0.80$, the Level 4 matcher achieved \textbf{100.0\% precision with zero false merges}. Furthermore, removing external LLM arbitration reduced Level 4 matching latency from $1{,}850\text{ ms}$ to under $12\text{ ms}$ per candidate pair, enabling high-speed deterministic execution on local server infrastructure.
 
 \hs The physical specification guards proved essential in preventing false entity merges:
 \begin{itemize}

@@ -273,7 +273,7 @@ In the production database, Store Purity accounts for \textbf{14.34\%} of the ma
 
 \section{Phase 3: Econometric CPI Compilation and Missing Price Imputation}
 
-\subsection{The Micro-Level: Elementary Jevons Index Calculation}
+\subsection{The Micro-Level: Elementary Jevons Index Calculation and Log-Price Compilation}
 \hs Once clean price observations are assigned to their respective consumption categories, the Gold layer computes price relatives comparing current prices to the baseline period (August 18, 2026 = 100.00).
 
 \hs At the elementary product level, the pipeline aggregates individual price quotes using the axiomatic unweighted geometric mean (\textbf{Jevons formula}):
@@ -282,7 +282,20 @@ In the production database, Store Purity accounts for \textbf{14.34\%} of the ma
 \end{equation}
 where $p_{i, t}$ is the price of product $i$ on day $t$, $p_{i, 0}$ is its base period price, and $n_s$ is the number of active price quotes in stratum $s$.
 
-\hs As established in international index number theory, using the geometric mean rather than the arithmetic average (Carli index) guarantees that the elementary index satisfies the time-reversal and circularity axioms. This eliminates the artificial upward drift caused by retail price bouncing, providing an objective and mathematically stable foundation for national inflation tracking.
+\hs In computational production across tens of thousands of daily items, evaluating continuous product chains $\prod (p_{i, t} / p_{i, 0})$ directly in hardware risks severe numerical floating-point overflow or underflow. To ensure numerical stability, econometric additivity, and high computational efficiency in SQL database engines, the pipeline compiles the Jevons index via \textbf{logarithmic price differences} (log-prices):
+\begin{equation}
+    \ln I_{s, t}^{\text{Jevons}} = \frac{1}{n_s} \sum_{i \in s} \Big( \ln p_{i, t} - \ln p_{i, 0} \Big)
+\end{equation}
+\begin{equation}
+    I_{s, t}^{\text{Jevons}} = \exp\left( \frac{1}{n_s} \sum_{i \in s} \Delta \ln p_{i, t} \right) \times 100
+\end{equation}
+where $\Delta \ln p_{i, t} = \ln p_{i, t} - \ln p_{i, 0}$ represents the continuous logarithmic rate of return (log price relative).
+
+\hs In addition to numerical robustness, operating in logarithmic space offers fundamental econometric advantages:
+\begin{enumerate}
+    \item \textbf{Exact Symmetry and Invariance to Basis:} Log price relatives treat positive and negative price shocks symmetrically ($\ln(2.0) = +0.693$ vs. $\ln(0.5) = -0.693$), strictly preserving the time-reversal property without distortion.
+    \item \textbf{Axiomatic Drift Elimination:} As established in international index number theory, using the geometric mean rather than the arithmetic average (Carli index) guarantees that the elementary index satisfies both the time-reversal and circularity axioms. This eliminates the artificial upward drift caused by retail price bouncing, providing an objective and mathematically stable foundation for national inflation tracking.
+\end{enumerate}
 
 \subsection{Targeted Compounded Class-Mean Geometric Imputation Engine}
 \hs In online retail environments, products frequently experience temporary stockouts, weekend inventory resets, or brief website maintenance. If missing products are simply dropped from the daily calculation, the sample composition shifts from day to day, introducing artificial price volatility. Conversely, carrying forward flat nominal prices ($\widehat{P}_{i, t} = P_{i, t-1}$) is strictly prohibited by international statistical guidelines \citep{imf2020cpi}, as static carry-forward artificially dampens true market volatility and creates severe downward lag bias during inflationary periods.

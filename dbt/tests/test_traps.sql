@@ -84,6 +84,7 @@ where f.coicop_division <> t.expected
   and not (t.trap = 'CONTACT LENS' and (f.name_clean ilike '%CASE%' or f.name_clean ilike '%BOX%' or f.name_clean ilike '%CONTAINER%'))
   and not (t.trap = 'GREEN ONION SLICER' and f.name_clean ilike '%SLICER%')
   and not (t.trap in ('SHAMPOO', 'TOOTHPASTE', 'NAIL SCISSOR', 'NAIL SCISSORS') and f.store_slug in ('communitypharma', 'grab_ucare'))
+  and not (t.trap = 'SHAMPOO' and ci.canonical_name not ilike '%shampoo%')
   and not (t.trap = 'IPHONE' and ci.canonical_name not ilike '%iphone%')
   and not (t.trap = 'LAUNDRY DETERGENT' and ci.canonical_name not ilike '%laundry detergent%')
   and not (t.trap = 'TOOTHPASTE' and ci.canonical_name not ilike '%toothpaste%')

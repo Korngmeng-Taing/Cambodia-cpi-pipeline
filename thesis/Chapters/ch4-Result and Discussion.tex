@@ -155,8 +155,8 @@ isolated the quality improvement, revealing that quality-adjusted prices actuall
 
 \section{Econometric Compilation and Dual Inflation Dynamics}
 
-\subsection{Empirical Confirmation of Axiomatic Drift: Jevons vs. Carli}
-\hs A central theoretical question in price index measurement is whether the choice of mathematical formula causes significant distortions in high-frequency data. To test this empirically, the pipeline compiled daily price indices using both the unweighted geometric mean (\textbf{Jevons formula}) and the arithmetic mean of price relatives (\textbf{Carli formula}) across the same underlying price quotes.
+\subsection{Axiomatic Index Number Properties and Formula Bias Evaluation}
+\hs In international price index theory \citep{imf2020cpi}, the choice of functional form for aggregating elementary price quotes is of foundational importance. In high-frequency scanner and web-scraped datasets characterized by frequent sales promotions, stockouts, and rapid price bouncing, arithmetic aggregators can induce severe upward drift. To empirically substantiate the mathematical necessity of axiomatic price compilation, the pipeline evaluated the unweighted geometric mean (\textbf{Jevons formula}) against the arithmetic average of price relatives (\textbf{Carli formula}) and the ratio of arithmetic means (\textbf{Dutot formula}) over a continuous 90-day retail observation cycle.
 
 \begin{table}[H]
 \centering
@@ -165,20 +165,20 @@ isolated the quality improvement, revealing that quality-adjusted prices actuall
 \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{2.6cm}|>{\centering\arraybackslash}p{2.4cm}|>{\centering\arraybackslash}p{3.2cm}|}
 \hline
 \rowcolor{blue!20}
-\textbf{Index Calculation Formula} & \textbf{Time Reversal Test} & \textbf{Circularity Test} & \textbf{Empirical Annual Bias} \\ \hline
-Carli (Arithmetic Price Relatives) & Failed & Failed & $+1.18\%$ (Upward Drift) \\ \hline
-Dutot (Ratio of Arithmetic Averages) & Passed & Passed & Scale Dependent \\ \hline
-\textbf{Jevons (Geometric Mean)} & \textbf{Passed} & \textbf{Passed} & \textbf{0.00\% (Axiomatic Standard)} \\ \hline
+\textbf{Elementary Aggregation Formula} & \textbf{Time Reversal Test} & \textbf{Circularity Test} & \textbf{Empirical Annual Bias} \\ \hline
+Carli (Arithmetic Mean of Relatives) & Failed & Failed & $+1.18\%$ (Upward Drift) \\ \hline
+Dutot (Ratio of Arithmetic Averages) & Passed & Passed & Commensurability Deficit \\ \hline
+\textbf{Jevons (Unweighted Geometric Mean)} & \textbf{Passed} & \textbf{Passed} & \textbf{0.00\% (Axiomatic Benchmark)} \\ \hline
 Multilateral Rolling GEKS & Passed & Passed & Drift-Free (High Churn) \\ \hline
 \end{tabularx}
-\caption{Axiomatic Test Compliance and Empirical Formula Drift Evaluation}
+\caption{Axiomatic Test Compliance and Empirical Functional Formula Drift Evaluation}
 \label{tab:axiomatic_tests}
 \end{table}
 
-\hs As shown in Table~\ref{tab:axiomatic_tests}, over a 90-day retail cycle characterized by temporary sales promotions and price bounces, the arithmetic Carli formula accumulated an artificial upward bias of \textbf{+1.18\% per year}. In contrast, the Jevons formula satisfied both the time-reversal and circularity axioms, returning exactly to baseline when retail prices returned to their starting levels. This confirms the critical recommendation of the IMF CPI Manual \citep{imf2020cpi}: geometric averaging is mathematically essential to prevent artificial inflation drift in high-frequency online price monitoring.
+\hs As documented in Table~\ref{tab:axiomatic_tests}, the arithmetic Carli formula accumulated an artificial upward drift of \textbf{+1.18\% per annum} under retail promotional cycling. Because the Carli formula violates the time-reversal property ($I_{0, t} \cdot I_{t, 0} \neq 1$), an item whose price oscillates from 10{,}000 KHR to 8{,}000 KHR and back to 10{,}000 KHR registers a net artificial price gain ($0.5 \times (0.8 + 1.25) = 1.025$). In contrast, the Jevons formula satisfies both the time-reversal and transitivity axioms, returning strictly to $100.00$ when nominal prices revert to base levels. Consequently, the Jevons aggregator provides an axiomatic foundation that prevents spurious numerical inflation in daily retail monitoring.
 
-\subsection{Category-Level Volatility Analysis (CSES 2023 Basket)}
-\hs Table~\ref{tab:division_dynamics} details the 12 United Nations COICOP divisions, their official expenditure weights from the Cambodia Socio-Economic Survey (CSES 2023), their observed daily price volatilities, and their cumulative 30-day percentage changes.
+\subsection{Expenditure-Weighted Division Inflation Dynamics (CSES 2023 National Basket)}
+\hs Following elementary Jevons compilation, price relatives are synthesized into higher-level aggregates using official household expenditure weights established by the Cambodia Socio-Economic Survey (CSES 2023). Table~\ref{tab:division_dynamics} details the 12 United Nations COICOP divisions, their expenditure weights, high-frequency daily price volatilities ($\sigma$), and cumulative 30-day percentage changes.
 
 \begin{table}[H]
 \centering
@@ -187,7 +187,7 @@ Multilateral Rolling GEKS & Passed & Passed & Drift-Free (High Churn) \\ \hline
 \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|c|r|c|c|}
 \hline
 \rowcolor{blue!20}
-\textbf{COICOP Division Title} & \textbf{Code} & \textbf{Weight (\%)} & \textbf{Daily Volatility ($\sigma$)} & \textbf{30-Day Change} \\ \hline
+\textbf{COICOP Division Nomenclature} & \textbf{Division Code} & \textbf{CSES Weight (\%)} & \textbf{Daily Volatility ($\sigma$)} & \textbf{30-Day Change} \\ \hline
 Food \& Non-Alcoholic Beverages & 01 & 44.775\% & 0.042\% & $+0.34\%$ \\ \hline
 Alcoholic Beverages \& Tobacco & 02 & 1.625\% & 0.012\% & $+0.08\%$ \\ \hline
 Clothing \& Footwear & 03 & 3.036\% & 0.018\% & $-0.12\%$ \\ \hline
@@ -203,19 +203,19 @@ Miscellaneous Goods \& Services & 12 & 2.065\% & 0.019\% & $+0.09\%$ \\ \hline
 \textbf{National Headline CPI} & \textbf{01--12} & \textbf{100.000\%} & \textbf{0.031\%} & \textbf{+0.28\%} \\ \hline
 \textbf{Refined Core CPI} & \textbf{Excl. 01, 07} & \textbf{52.200\%} & \textbf{0.009\%} & \textbf{+0.07\%} \\ \hline
 \end{tabularx}
-\caption{Division-Level Weights (CSES 2023), High-Frequency Volatilities, and 30-Day Price Variations}
+\caption{COICOP Division Expenditure Weights (CSES 2023), High-Frequency Volatilities, and 30-Day Rate of Change}
 \label{tab:division_dynamics}
 \end{table}
 
-\hs The empirical data highlights clear structural contrasts across categories:
+\hs Analysis of the empirical cross-sectional trajectories reveals marked structural asymmetries across economic sectors:
 \begin{itemize}
-    \item \textbf{High-Volatility Categories (Food and Transport):} Transport exhibited the highest daily volatility ($\sigma = 0.085\%$), driven by the Ministry of Commerce's retail fuel price resets. Food and Non-Alcoholic Beverages exhibited the second highest volatility ($\sigma = 0.042\%$), influenced by daily arrivals of fresh perishables (fish, meat, and vegetables). Because Food and Transport together account for nearly \textbf{57\%} of Cambodian household expenditure, their fluctuations dominate the National Headline CPI.
-    \item \textbf{Sticky Categories (Housing, Communication, and Education):} In contrast, Communication ($\sigma = 0.005\%$) and Education ($\sigma = 0.002\%$) exhibited near-zero daily fluctuations. School tuition, fixed mobile internet contracts, and regulated utility tariffs adjust only on quarterly or annual cycles, providing structural anchor stability.
-    \item \textbf{Headline vs. Core Inflation Divergence:} Over the 30-day period, National Headline CPI rose by \textbf{+0.28\%}, whereas Refined Core CPI rose by only \textbf{+0.07\%}. This divergence illustrates why compiling both series is essential for policymakers: the Headline index captures the immediate cost-of-living impact felt by households, while the Core index shows that underlying structural monetary inflation remained subdued.
+    \item \textbf{Volatile Commodity Sectors (Food and Transport):} Transport exhibited the highest daily volatility ($\sigma = 0.085\%$), driven by the Ministry of Commerce's bi-weekly retail fuel pricing notices. Food and Non-Alcoholic Beverages exhibited the second-highest variance ($\sigma = 0.042\%$), subject to perishable harvest cycles and wholesale market turnover. Together, Divisions 01 and 07 command \textbf{56.955\%} of total consumption expenditure in Cambodia, making their supply-side dynamics the primary transmission channel of short-term aggregate price shocks.
+    \item \textbf{Nominally Rigid Sectors (Communication, Housing, and Education):} In contrast, Communication ($\sigma = 0.005\%$), Housing ($\sigma = 0.008\%$), and Education ($\sigma = 0.002\%$) demonstrated pronounced price stickiness. Regulated utility tariffs (EDC electricity and PPWSA water), long-term residential leases, and academic tuition fees adjust on discrete annual or quarterly cycles, acting as macroeconomic variance dampeners.
+    \item \textbf{Divergence Between Headline and Refined Core Inflation:} Over the 30-day evaluation horizon, National Headline CPI expanded by \textbf{+0.28\%}, whereas Refined Core CPI (excluding Food and Transport) advanced by merely \textbf{+0.07\%}. This substantial wedge demonstrates the critical policy utility of high-frequency dual-index tracking: while Headline movements reflected immediate real household expenditure pressure from food and energy imports, Core dynamics confirmed that underlying domestic demand and generalized monetary pressures remained anchored.
 \end{itemize}
 
-\paragraph{Granular Subclass Inflation Drilldown:}
-To illustrate the analytical depth enabled by automated 4-digit NIS subclass classification, Table~\ref{tab:subclass_contributors} decomposes the top drivers of the $+0.28\%$ Headline CPI monthly increase by their expenditure-weighted contribution ($w_c \times \Delta P_c$).
+\subsection{Subclass Attribution and Expenditure-Weighted Decomposition}
+\hs The high-granularity 4-digit NIS COICOP classification framework enables instantaneous decomposition of aggregate index innovations into specific commodity drivers. Table~\ref{tab:subclass_contributors} reports the top five contributing subclasses to the monthly Headline CPI increase, calculated as their expenditure-weighted contribution ($w_c \times \Delta P_c$).
 
 \begin{table}[H]
 \centering
@@ -224,25 +224,29 @@ To illustrate the analytical depth enabled by automated 4-digit NIS subclass cla
 \begin{tabularx}{\textwidth}{|c|>{\raggedright\arraybackslash}X|c|c|c|}
 \hline
 \rowcolor{blue!20}
-\textbf{COICOP Class} & \textbf{Subclass Description} & \textbf{Weight ($w_c$)} & \textbf{30d Change} & \textbf{Weighted Contrib.} \\ \hline
+\textbf{COICOP Code} & \textbf{Subclass Description} & \textbf{Expenditure Weight ($w_c$)} & \textbf{30d Price Change} & \textbf{Weighted Contribution} \\ \hline
 01.1.1 & Rice, Bread \& Cereals & 14.850\% & $+0.42\%$ & $+0.0624\%$ \\ \hline
 07.2.2 & Fuels and Lubricants (Gasoline \& Diesel) & 5.120\% & $+1.15\%$ & $+0.0589\%$ \\ \hline
 01.1.3 & Fresh Fish and Seafood & 11.200\% & $+0.38\%$ & $+0.0426\%$ \\ \hline
 01.1.2 & Meat (Pork, Beef, Poultry) & 9.450\% & $+0.31\%$ & $+0.0293\%$ \\ \hline
-11.1.1 & Restaurants, Cafes \& Fast Food & 2.650\% & $+0.28\%$ & $+0.0074\%$ \\ \hline
+11.1.1 & Restaurants, Cafes \& Canteens & 2.650\% & $+0.28\%$ & $+0.0074\%$ \\ \hline
 \rowcolor{gray!15}
-\textbf{Top 5} & \textbf{Combined Leading Inflation Drivers} & \textbf{43.270\%} & --- & \textbf{+0.2006\% (71.6\% of Total)} \\ \hline
+\textbf{Top 5} & \textbf{Combined Leading Subclass Drivers} & \textbf{43.270\%} & --- & \textbf{+0.2006\% (71.6\% of Total)} \\ \hline
 \end{tabularx}
 \caption{Top Subclass Contributors to Monthly Headline CPI Innovation}
 \label{tab:subclass_contributors}
 \end{table}
-\hs As shown in Table~\ref{tab:subclass_contributors}, three food subclasses (rice, fresh fish, and meat) combined with retail petroleum fuels accounted for \textbf{71.6\% of the total monthly inflation innovation}. High-frequency monitoring at the subclass level allows policymakers to immediately pinpoint whether price increases are driven by staple grain supply, fuel tariffs, or general retail demand.
 
+\hs As demonstrated in Table~\ref{tab:subclass_contributors}, three primary food categories (rice, fish, and meat) alongside retail motor fuels accounted for \textbf{71.6\% of total aggregate inflation innovation} ($+0.2006\%$ out of $+0.2800\%$). By providing continuous subclass-level transparency, the automated pipeline provides central bankers and fiscal authorities with immediate diagnostic insight, distinguishing localized agrarian supply shocks and global oil market pass-through from broad-based domestic wage-price spirals.
 
-\subsection{Annual Rebasing Continuity and Continuous Series Chain-Linking}
-\hs When annual rebasings occur in accordance with ILO CPI Manual standards \citep{imf2020cpi}, statistical continuity must be strictly preserved without artificial step discontinuities across December--January transitions. 
+\subsection{Annual Rebasing and Continuous Series Chain-Linking Integrity}
+\hs In compliance with international guidelines \citep{imf2020cpi}, regular basket updates and annual index rebasings must maintain continuous macroeconomic time-series without artificial level shifts or jump discontinuities across December--January transition boundaries.
 
-\hs The pipeline's automated rebasing engine identifies the optimal base day in December with maximum basket coverage and calculates the continuous splice factor $S = \bar{I}_{\text{Dec}}^{\text{continuous}} / 100.0$, persisting the calibrated base parameters in the analytical warehouse. Empirical simulation demonstrated zero series breaks across rebased boundaries, maintaining exact percentage price changes while seamlessly linking new representative product varieties into the multi-year macroeconometric panel.
+\hs The pipeline's automated chaining module identifies the optimal overlapping baseline period in December with maximum cross-merchant product continuity. It evaluates the exact linking splice factor:
+\begin{equation}
+    S = \frac{\bar{I}_{\text{Dec}}^{\text{continuous}}}{100.0000}
+\end{equation}
+and seamlessly rescales subsequent elementary trajectories. Empirical simulation across historical transition periods validated zero statistical step breaks, preserving true period-on-period inflation rates while dynamically incorporating newly introduced digital consumer varieties into the longitudinal national panel.
 
 \section{Real-Time Inflation Nowcasting Evaluation and Econometric Convergence}
 

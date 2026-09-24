@@ -273,46 +273,67 @@ In the production database, Store Purity accounts for \textbf{14.34\%} of the ma
 
 \section{Phase 3: Econometric CPI Compilation and Missing Price Imputation}
 
-\subsection{The Micro-Level: Elementary Jevons Index Calculation and Log-Price Compilation}
+\subsection{The Micro-Level: Elementary Aggregate Definition and Jevons Log-Price Compilation}
 \hs Once clean price observations are assigned to their respective consumption categories, the Gold layer computes price relatives comparing current prices to the baseline period (August 18, 2026 = 100.00).
 
-\hs At the elementary product level, the pipeline aggregates individual price quotes using the axiomatic unweighted geometric mean (\textbf{Jevons formula}):
+\subsubsection{Formal Definition of the Elementary Aggregate}
+\hs Following international statistical standards \citep{imf2020cpi}, an \textbf{Elementary Aggregate (EA)} is defined as the lowest hierarchical stratum in the index calculation for which expenditure weights are known and calibrated. In this architecture, an Elementary Aggregate is explicitly defined as:
+\begin{quote}
+\textit{The set of all homogeneous, quality-standardized product varieties belonging to the same 4-digit COICOP Class ($c$) observed on day $t$ across all monitored retail outlets.}
+\end{quote}
+Formally, let $\mathcal{S}_{c, t}$ denote the active matched basket for 4-digit class $c$ on day $t$:
 \begin{equation}
-    I_{s, t}^{\text{Jevons}} = \prod_{i \in s} \left( \frac{p_{i, t}}{p_{i, 0}} \right)^{\frac{1}{n_s}} = \frac{\left( \prod_{i \in s} p_{i, t} \right)^{\frac{1}{n_s}}}{\left( \prod_{i \in s} p_{i, 0} \right)^{\frac{1}{n_s}}} \times 100
+    \mathcal{S}_{c, t} = \left\{ (i, s) \;\middle|\; \text{Item } i \text{ sold at store } s \text{ with standardized price } P_{i,s,t} > 0, \; \text{Class}(i) = c \right\}
 \end{equation}
-where $p_{i, t}$ is the price of product $i$ on day $t$, $p_{i, 0}$ is its base period price, and $n_s$ is the number of active price quotes in stratum $s$.
+Within stratum $\mathcal{S}_{c, t}$, all multi-store observations representing the same canonical item are converted into continuous metric unit prices (KHR/kg or KHR/L) to enforce pure price dimensional homogeneity prior to aggregation.
+
+\subsubsection{Jevons Geometric Mean and Log-Price Formulation}
+\hs Because web scrapers observe daily price tags ($P$) without corresponding transaction sales quantities ($Q$), weighting individual brand varieties within an elementary aggregate is empirically impossible. Under the ILO and UN CPI guidelines, the unweighted geometric mean (\textbf{Jevons formula}) is mathematically mandated:
+\begin{equation}
+    I_{c, t}^{\text{Jevons}} = \prod_{i \in \mathcal{S}_{c, t}} \left( \frac{p_{i, t}}{p_{i, 0}} \right)^{\frac{1}{n_c}} = \frac{\left( \prod_{i \in \mathcal{S}_{c, t}} p_{i, t} \right)^{\frac{1}{n_c}}}{\left( \prod_{i \in \mathcal{S}_{c, t}} p_{i, 0} \right)^{\frac{1}{n_c}}} \times 100
+\end{equation}
+where $p_{i, t}$ is the price of product $i$ on day $t$, $p_{i, 0}$ is its reference base price, and $n_c = |\mathcal{S}_{c, t}|$ is the number of active items in class $c$.
 
 \hs In computational production across tens of thousands of daily items, evaluating continuous product chains $\prod (p_{i, t} / p_{i, 0})$ directly in hardware risks severe numerical floating-point overflow or underflow. To ensure numerical stability, econometric additivity, and high computational efficiency in SQL database engines, the pipeline compiles the Jevons index via \textbf{logarithmic price differences} (log-prices):
 \begin{equation}
-    \ln I_{s, t}^{\text{Jevons}} = \frac{1}{n_s} \sum_{i \in s} \Big( \ln p_{i, t} - \ln p_{i, 0} \Big)
+    \ln I_{c, t}^{\text{Jevons}} = \frac{1}{n_c} \sum_{i \in \mathcal{S}_{c, t}} \Big( \ln p_{i, t} - \ln p_{i, 0} \Big)
 \end{equation}
 \begin{equation}
-    I_{s, t}^{\text{Jevons}} = \exp\left( \frac{1}{n_s} \sum_{i \in s} \Delta \ln p_{i, t} \right) \times 100
+    I_{c, t}^{\text{Jevons}} = \exp\left( \frac{1}{n_c} \sum_{i \in \mathcal{S}_{c, t}} \Delta \ln p_{i, t} \right) \times 100
 \end{equation}
 where $\Delta \ln p_{i, t} = \ln p_{i, t} - \ln p_{i, 0}$ represents the continuous logarithmic rate of return (log price relative).
 
 \hs In addition to numerical robustness, operating in logarithmic space offers fundamental econometric advantages:
 \begin{enumerate}
     \item \textbf{Exact Symmetry and Invariance to Basis:} Log price relatives treat positive and negative price shocks symmetrically ($\ln(2.0) = +0.693$ vs. $\ln(0.5) = -0.693$), strictly preserving the time-reversal property without distortion.
-    \item \textbf{Axiomatic Drift Elimination:} As established in international index number theory, using the geometric mean rather than the arithmetic average (Carli index) guarantees that the elementary index satisfies both the time-reversal and circularity axioms. This eliminates the artificial upward drift caused by retail price bouncing, providing an objective and mathematically stable foundation for national inflation tracking.
+    \item \textbf{Consumer Substitution Bias Elimination:} By adopting the geometric mean, the Jevons formula implicitly assumes a unitary elasticity of consumer substitution ($\sigma = 1$). If one brand of rice experiences a temporary price surge, consumers substitute toward relatively cheaper alternative brands within the same 4-digit class. Unlike arithmetic aggregators (Dutot and Carli indices), Jevons completely eliminates upward formula drift caused by retail price bouncing.
 \end{enumerate}
 
-\subsection{Targeted Compounded Class-Mean Geometric Imputation Engine}
+\subsubsection{Decoupling Taxonomic Classification from Index Basket Inclusion}
+\hs A foundational methodological principle enforced throughout the pipeline is the strict separation between \textbf{taxonomic classification} and \textbf{index basket entry}:
+\begin{enumerate}
+    \item \textbf{Immediate Taxonomic Classification:} When a newly observed product appears in an online catalog (e.g., a newly released brand of oat milk), it is ingested, resolved, and classified immediately into its corresponding 4-digit COICOP code (\texttt{01.1.4}) via Tier 1 store rules or Tier 2 Gemini 3.1 Flash Lite inference.
+    \item \textbf{Shadow Tracking Phase:} Because the new item lacks an empirical base reference price on the initial benchmark date ($t=0$), entering it directly into the live Jevons calculation would either induce a null-division failure or require synthesizing an artificial base price, introducing phantom price level jumps. Consequently, newly classified products are placed into a non-reporting \textbf{shadow tracking pool}, tracking daily relative momentum against their first-observed entry price ($P_{\text{anchor}}$).
+    \item \textbf{Chained Basket Splicing:} The new product officially joins the active matched comparison basket $\mathcal{S}_{c, t}$ only during scheduled annual chain-linking and rebasing routines (\texttt{annual\_rebase\_cpi}), where new link reference prices are established without disrupting historical base continuity.
+\end{enumerate}
+
+\subsection{Three-Tier Compounded Hierarchical Imputation Cascade}
 \hs In online retail environments, products frequently experience temporary stockouts, weekend inventory resets, or brief website maintenance. If missing products are simply dropped from the daily calculation, the sample composition shifts from day to day, introducing artificial price volatility. Conversely, carrying forward flat nominal prices ($\widehat{P}_{i, t} = P_{i, t-1}$) is strictly prohibited by international statistical guidelines \citep{imf2020cpi}, as static carry-forward artificially dampens true market volatility and creates severe downward lag bias during inflationary periods.
 
-\hs To preserve longitudinal time-series continuity while accurately reflecting market price movements, the pipeline implements an international ILO-standard \textbf{Targeted Compounded Class-Mean Geometric Imputation Engine}:
+\hs To preserve longitudinal time-series continuity while accurately reflecting market price movements, the pipeline implements an international ILO-standard \textbf{Three-Tier Compounded Hierarchical Imputation Cascade}:
 \begin{enumerate}
-    \item When an item $i$ belonging to COICOP subclass $c$ is absent on day $t$ after an elapsed gap of $\Delta t$ calendar days ($1 \le \Delta t \le 7$):
+    \item \textbf{Tier 1: 4-Digit Class-Mean Imputation:} When an item $i$ belonging to COICOP class $c$ is absent on day $t$ after an elapsed gap of $\Delta t$ calendar days ($1 \le \Delta t \le 7$):
     \begin{equation}
         \widehat{P}_{i, t} = P_{i, t - \Delta t} \times \left( R_{c, t} \right)^{\Delta t}
     \end{equation}
-    where $R_{c, t}$ represents the daily geometric mean price relative of observed peers in the same subclass:
+    where $R_{c, t}$ represents the daily geometric mean price relative of active peers in the same 4-digit class:
     \begin{equation}
         R_{c, t} = \exp\left( \frac{1}{|S_{c, t}|} \sum_{j \in S_{c, t}} \big(\ln P_{j, t} - \ln P_{j, t-1}\big) \right)
     \end{equation}
-    and $S_{c, t}$ is the set of items in subclass $c$ actively observed on both day $t$ and day $t-1$.
-    \item By compounding the class-mean movement over elapsed missing days $(\cdot)^{\Delta t}$, the algorithm accurately mirrors cumulative price drift across multi-day weekend gaps or brief scraper disruptions.
-    \item If a product remains absent for more than 7 consecutive calendar days ($\Delta t > 7$), it is classified as a structural market exit or discontinued line, and is removed from the active daily calculation basket to prevent stale imputed prices from polluting the index.
+    provided that the class contains at least 3 actively observed products ($|S_{c, t}| \ge 3$).
+    \item \textbf{Tier 2: 3-Digit Group Fallback:} If an idiosyncratic stockout causes class $c$ to have fewer than 3 active quotes ($|S_{c, t}| < 3$), the engine falls back to the parent 3-digit COICOP Group $g$, imputing missing prices via group drift $R_{g, t}$.
+    \item \textbf{Tier 3: 2-Digit Division Fallback with Anti-Shock Damping:} If the entire group lacks sufficient active quotes, the engine applies division-level drift $R_{d, t}$, with a mathematical damping clamp $[0.80, 1.25]$ to prevent extreme localized supply shocks from polluting broad aggregates.
+    \item \textbf{Permanent Basket Exclusion ($\Delta t > 7$ Days):} If an item remains unobserved for more than 7 consecutive calendar days ($\Delta t > 7$), it is treated as a structural catalog discontinuation and quarantined from day $t$'s Jevons set, preventing persistent zombie prices from stagnating the index.
 \end{enumerate}
 
 \hs Table~\ref{tab:missing_imputation_rules} formalizes the multi-tier missing price imputation policy implemented across the pipeline in accordance with ILO and IMF CPI standards.
@@ -325,13 +346,31 @@ where $\Delta \ln p_{i, t} = \ln p_{i, t} - \ln p_{i, 0}$ represents the continu
 \hline
 \rowcolor{blue!20}
 \textbf{Absence Span} & \textbf{Economic Nature} & \textbf{Statistical Imputation Method} & \textbf{Mathematical Formula / Action} \\ \hline
-$\Delta t = 1$ to $7$ Days & Temporary Stockout / Weekend Inventory Reset & Targeted Compounded Class-Mean Geometric Imputation & $\widehat{P}_{i,t} = P_{i,t-\Delta t} \cdot (R_{c,t})^{\Delta t}$ (mirrors active peer inflation) \\ \hline
-$\Delta t = 8$ to $30$ Days & Extended Outage / Temporary Supply Interruption & Basket Exclusion from Active Daily Calculation & Product weight dynamically reallocated proportionally across active stratum peers \\ \hline
-$\Delta t > 30$ Days & Permanent Discontinuation / Catalog Obsolescence & Canonical Item Deprecation \& Matched-Model Splicing & Replaced with closest canonical peer matching physical specification guards \\ \hline
+$\Delta t = 1$ to $7$ Days & Temporary Stockout / Weekend Reset & 3-Tier Compounded Hierarchical Imputation & $\widehat{P}_{i,t} = P_{i,t-\Delta t} \cdot (R_{\text{tier},t})^{\Delta t}$ (Class $\to$ Group $\to$ Division) \\ \hline
+$\Delta t = 8$ to $30$ Days & Extended Outage / Supply Interruption & Basket Exclusion from Active Daily Calculation & Product weight dynamically reallocated proportionally across active stratum peers \\ \hline
+$\Delta t > 30$ Days & Permanent Discontinuation / Obsolescence & Canonical Item Deprecation \& Matched-Model Splicing & Replaced with closest canonical peer matching physical specification guards \\ \hline
 \end{tabularx}
 \caption{Systematic Missing Price Imputation and Catalog Dynamics Policy}
 \label{tab:missing_imputation_rules}
 \end{table}
+
+\subsection{Econometric Assumptions and Data Ingestion for Contractual and Sticky Services}
+\hs A rigorous consumer price index must explicitly account for sectors that do not operate on daily grocery e-commerce clearing cycles. Divisions such as \textbf{Housing (Division 04)}, \textbf{Education (Division 10)}, and \textbf{Regulated Transport (Division 07)} exhibit sticky, contractual, or administered pricing:
+\begin{enumerate}
+    \item \textbf{Housing, Water, and Electricity (Division 04, Weight 17.084\%):}
+    \begin{itemize}
+        \item \textit{Regulated Utilities:} Electricity (EDC) and municipal water (PPWSA) operate under statutory tariff schedules established by royal decree. These tariffs remain constant on a day-to-day basis ($I_{t} = I_{t-1}$) and are refreshed upon the official promulgation of revised gazettes.
+        \item \textit{Cooking LPG Gas:} High-frequency cylinder refills are scraped daily from certified retail distributors (Tela Khmer).
+        \item \textit{Residential Shelter Rents:} Sampled on a weekly recurring schedule from specialized property portals (\texttt{Realestate.com.kh}, \texttt{Khmer24}). Between weekly scrape windows, rent indices carry zero daily drift, preventing artificial synthetic price noise.
+    \end{itemize}
+    \item \textbf{Education (Division 10, Weight 1.174\%):} Higher education and secondary tuition fees follow semester institutional calendars. Tuition benchmarks are sampled at academic term boundaries (October and January) and carried forward as discrete step functions. Daily variation in Division 10 is driven by stationery, notebooks, and educational supplies scraped from online retail merchants.
+    \item \textbf{Communication and Transport Services (Divisions 08 \& 07):}
+    \begin{itemize}
+        \item Mobile telecom tariffs (Cellcard, Smart, Metfone) are captured daily from operator APIs, tracking dominant pre-paid data packs and weekly subscription bundles.
+        \item Automotive fuel prices (RON 92, RON 95, Diesel) update bi-weekly in strict accordance with retail price cap notifications issued by the Ministry of Commerce (MoC).
+    \end{itemize}
+\end{enumerate}
+This hybrid architecture mirrors central bank practice by allowing high-velocity consumer goods to inform daily inflation momentum while insulating structurally sticky expenditure categories from artificial high-frequency volatility.
 
 \subsection{Log-Linear Hedonic Quality Adjustment Engine for Consumer Durables}
 \hs In rapidly evolving consumer durable sectors—specifically Division 08 (Communication equipment such as smartphones) and Division 09 (Information processing equipment such as laptops and tablets)—price changes frequently reflect technological upgrades (increased RAM, larger internal storage, upgraded display panels) rather than pure monetary inflation. To decouple quality enhancements from underlying price trends, the pipeline deploys a \textbf{Time-Dummy Log-Linear Hedonic OLS Regression Engine}:

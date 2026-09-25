@@ -346,7 +346,7 @@
 \end{frame}
 
 % ── Slide 10: Classification Benchmarks ────────────────────────────────────────
-\begin{frame}[shrink=8]{Empirical Classification Performance Across 1.27M Records}
+\begin{frame}[shrink=8]{UN COICOP 2018 5-Digit Classification Performance}
   \begin{columns}
     \begin{column}{0.55\textwidth}
       \begin{table}[H]
@@ -363,10 +363,10 @@
         \end{tabular}
       \end{table}
 
-      \begin{block}{Zero-Defect Warehouse Milestone}
+      \begin{block}{Zero-Defect 5-Digit Warehouse Milestone}
         \begin{itemize}
-          \item \textbf{100.00\% Classification Coverage:} Across over 1,273,000 clean rows and 38,712 items, 0 items remain unclassified.
-          \item \textbf{0 Code-Division Mismatches:} Category classes (\texttt{DD.G.C}) match parent divisions perfectly.
+          \item \textbf{99.05\% 5-Digit Granularity:} 50,208 canonical items classified into UN COICOP 2018 5-digit subclasses (\texttt{DD.G.C.S}) across all 12 divisions (112 distinct subclasses).
+          \item \textbf{0 Code-Division Mismatches:} Structural hierarchy strictly preserved across 1.9M observation rows.
         \end{itemize}
       \end{block}
     \end{column}
@@ -392,42 +392,65 @@
 \section{Econometric Index Aggregation \& Jevons Formula}
 % ==============================================================================
 
-% ── Slide 11: Jevons vs Carli ─────────────────────────────────────────────────
-\begin{frame}[shrink=10]{Elementary Index Aggregation: Eliminating Formula Drift}
+% ── Slide 11: Jevons vs Carli & Two-Stage Store Balancing ──────────────────────
+\begin{frame}[shrink=10]{Two-Stage Store-Balanced Jevons Aggregation}
   \begin{columns}
     \begin{column}{0.48\textwidth}
-      \begin{alertblock}{The Arithmetic Problem (Carli Index)}
-        Traditional arithmetic mean of price relatives:
-        \begin{equation*}
-          I_{\text{Carli}} = \frac{1}{n} \sum_{i=1}^n \left( \frac{p_{i, t}}{p_{i, 0}} \right)
-        \end{equation*}
+      \begin{alertblock}{The Pitfall of Flat Elementary Aggregation}
+        In e-commerce, dominant hypermarkets (e.g. Delishop: 20k items) heavily outnumber smaller grocers (e.g. Chip Mong: 700 items).
         \begin{itemize}
-          \item Violates \textbf{Time-Reversal Axiom} ($I_{0,t} \cdot I_{t,0} \neq 1$).
-          \item Violates \textbf{Circularity Axiom}.
-          \item In bouncing retail prices, compounds an artificial \textbf{+1.18\%/year upward formula drift}!
+          \item A naive flat Jevons pool allows a single large store to exert 90\% weight on a category.
+          \item Induces spurious \textbf{$\pm 1.8$ point price swings} on store assortment restocking days.
         \end{itemize}
       \end{alertblock}
+
+      \begin{block}{ILO Targeted Imputation}
+        Missing items are imputed via active geometric momentum of sister items in the same subclass: $\widehat{P}_{i, t} = P_{i, t-\Delta t} \times \left( R_{c, t} \right)^{\Delta t}$.
+      \end{block}
     \end{column}
 
     \begin{column}{0.48\textwidth}
-      \begin{exampleblock}{The Axiomatic Solution (Jevons Formula)}
-        Unweighted geometric mean of price relatives:
+      \begin{exampleblock}{Two-Stage Store-Balanced Formulation}
+        \textbf{Stage 1: Store-Level Subclass Jevons}
         \begin{equation*}
-          I_{s, t}^{\text{Jevons}} = \prod_{i \in s} \left( \frac{p_{i, t}}{p_{i, 0}} \right)^{\frac{1}{n_s}} = \frac{\left( \prod_{i \in s} p_{i, t} \right)^{\frac{1}{n_s}}}{\left( \prod_{i \in s} p_{i, 0} \right)^{\frac{1}{n_s}}} \times 100
+          I_{c, s, t} = \prod_{i \in \mathcal{I}_{c, s, t}} \left( \frac{p_{i, t}}{p_{i, 0}} \right)^{\frac{1}{|\mathcal{I}_{c, s, t}|}}
+        \end{equation*}
+        \textbf{Stage 2: Balanced Cross-Store Synthesis}
+        \begin{equation*}
+          I_{c, t} = \prod_{s \in \mathcal{S}_{c, t}} \left( I_{c, s, t} \right)^{\frac{1}{|\mathcal{S}_{c, t}|}}
         \end{equation*}
         \begin{itemize}
           \item Satisfies \textbf{Time-Reversal} and \textbf{Transitivity}.
-          \item Recommended by IMF CPI Manual (2020) and ILO.
-          \item Completely eliminates arithmetic formula drift.
+          \item Fully eliminates retail catalog dominance bias.
         \end{itemize}
       \end{exampleblock}
     \end{column}
   \end{columns}
+\end{frame}
 
-  \vspace{0.3cm}
-  \begin{block}{ILO Targeted Compounded Class-Mean Geometric Imputation}
-    For stockouts or missing items, price relatives are imputed via the active geometric momentum of sister items in the same subclass: $\widehat{P}_{i, t} = P_{i, t-\Delta t} \times \left( R_{c, t} \right)^{\Delta t}$, avoiding flat carry-forward bias!
-  \end{block}
+% ── Slide 11b: Store-Balancing Ablation & Weight Coverage ──────────────────────
+\begin{frame}{Ablation Findings: Store-Balancing \& Basket Coverage}
+  \begin{columns}
+    \begin{column}{0.5\textwidth}
+      \begin{center}
+        \includegraphics[width=\textwidth]{../thesis/images/fig5_store_balancing_ablation.png}
+      \end{center}
+      \vspace{-0.2cm}
+      \begin{block}{Catalog Dominance Elimination}
+        Two-stage balancing eliminates hypermarket-induced volatility, cutting tracking error against official NIS data by \textbf{33.7\%} (0.0598 vs 0.0902 pts error).
+      \end{block}
+    \end{column}
+
+    \begin{column}{0.5\textwidth}
+      \begin{center}
+        \includegraphics[width=\textwidth]{../thesis/images/fig4_division_weights_coverage.png}
+      \end{center}
+      \vspace{-0.2cm}
+      \begin{exampleblock}{Representative Product Coverage}
+        50,208 canonical products provide deep micro-sampling across Food (44.8\%), Transport (12.2\%), and Core baskets.
+      \end{exampleblock}
+    \end{column}
+  \end{columns}
 \end{frame}
 
 % ── Slide 12: Laspeyres Weighting ─────────────────────────────────────────────
@@ -440,7 +463,7 @@
           \text{CPI}_t^{\text{Headline}} = \sum_{d=1}^{12} w_d \cdot I_{d, t}, \quad \sum_{d=1}^{12} w_d = 1.000
         \end{equation*}
         \begin{itemize}
-          \item Hierarchical aggregation from 48 Subclasses $\rightarrow$ 12 Divisions $\rightarrow$ National CPI.
+          \item Hierarchical roll-up: 112 5-Digit Subclasses $\rightarrow$ 12 Divisions $\rightarrow$ National CPI.
           \item Base period anchor: \textbf{August 18, 2026 = 100.00}.
         \end{itemize}
       \end{block}
@@ -482,6 +505,31 @@
         \end{tabular}
         }
       \end{table}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ── Slide 12b: Empirical High-Frequency Trajectory & Rice Tracker ─────────────
+\begin{frame}{High-Frequency Daily Trajectory \& 5-Digit Food Dynamics}
+  \begin{columns}
+    \begin{column}{0.5\textwidth}
+      \begin{center}
+        \includegraphics[width=\textwidth]{../thesis/images/fig1_headline_core_trajectory.png}
+      \end{center}
+      \vspace{-0.2cm}
+      \begin{block}{Headline vs. Core Trajectory (39 Days)}
+        Food inflation acts as primary driver (100.80), lifting Headline CPI to 100.45, while Core CPI anchors stability at 100.17 with robust $<1.5\%$ daily imputation.
+      \end{block}
+    \end{column}
+
+    \begin{column}{0.5\textwidth}
+      \begin{center}
+        \includegraphics[width=\textwidth]{../thesis/images/fig3_rice_daily_tracker.png}
+      \end{center}
+      \vspace{-0.2cm}
+      \begin{exampleblock}{Sovereign Rice Tracker (\texttt{01.1.1.1})}
+        Tracks 234--255 Cambodian rice varieties daily (mean 4,119 KHR/kg), providing unprecedented grain market transparency for food security monitoring.
+      \end{exampleblock}
     \end{column}
   \end{columns}
 \end{frame}
@@ -670,12 +718,12 @@
 \begin{frame}{Decision-Support System Architecture}
   \begin{columns}
     \begin{column}{0.48\textwidth}
-      \begin{block}{Consolidated 3-Dashboard Serving Layer}
-        Production Metabase (Port 3001) and Power BI decision support:
+      \begin{block}{Consolidated Metabase Decision Layer}
+        Production Metabase (Port 3000) and Power BI decision support:
         \begin{enumerate}
-          \item \textbf{Dashboard 01 (Macro CPI \& Inflation Analytics):} Real-time Headline/Core tickers, 12 COICOP table, nowcast convergence band, and official NIS tracking error indicators.
-          \item \textbf{Dashboard 02 (Operations Telemetry):} 25-source daily harvest health, extraction success rate (99.3\%), latency heatmaps, and circuit breaker status.
-          \item \textbf{Dashboard 03 (Silver Quality Screener):} Outlier price shock monitors, MAD filter alerts ($>3.5\times\text{MAD}$), and AI classification cache stats.
+          \item \textbf{Dashboard 139 (Macro CPI \& Inflation Analytics):} Real-time Headline/Core tickers, 12 COICOP table, and nowcast convergence band.
+          \item \textbf{High-Frequency 5-Digit Cards (Cards 1323--1325):} Daily 112-subclass tracker, sovereign rice price tracker (234--255 varieties), and trajectory comparison.
+          \item \textbf{Operations Telemetry \& Data Quality:} 25-source daily harvest health, extraction success rate (99.3\%), MAD outlier filter alerts ($>3.5\times\text{MAD}$), and AI classification cache stats.
         \end{enumerate}
       \end{block}
     \end{column}
@@ -742,8 +790,8 @@
         \begin{enumerate}
           \item \textbf{First Sovereign Daily CPI System:} End-to-end Medallion pipeline ingesting 25 endpoints daily at 08:00 AM ICT across all 12 COICOP divisions in Phnom Penh.
           \item \textbf{Accurate Entity Matching:} 7 physical specification guards + multilingual 768-dim embeddings preventing false merges and shrinkflation.
-          \item \textbf{Streamlined Classification:} Store Priority routing ($O(1)$) + Google Gemini AI with cache memoization and domain trap guardrails (98.6\% Macro F1, 0 mismatches).
-          \item \textbf{Axiomatic Mathematical Integrity:} Jevons geometric mean eliminating $+1.18\%$ upward drift.
+          \item \textbf{UN COICOP 2018 5-Digit Granularity:} 50,208 canonical products mapped across 112 subclasses with 99.05\% coverage and zero hierarchical code mismatches.
+          \item \textbf{Two-Stage Store-Balanced Jevons:} Cuts tracking error by \textbf{33.7\%} (0.0598 error) by eliminating catalog dominance bias.
           \item \textbf{Sub-Percentage Nowcasting:} Two-Stage Hybrid Ridge Nowcaster with out-of-sample tracking error of only \textbf{+0.0181 pp} against official NIS releases.
         \end{enumerate}
       \end{block}
@@ -753,8 +801,8 @@
       \begin{exampleblock}{Academic \& System Validation}
         \begin{itemize}
           \item \textbf{Full Test Suite:} Comprehensive unit and integration tests passing ($100\%$).
-          \item \textbf{Zero-Defect Warehouse:} 1,273,000+ rows, 100\% classified, 0 code mismatches.
-          \item \textbf{Production Telemetry:} 3 live Metabase dashboards (Port 3001).
+          \item \textbf{Zero-Defect Warehouse:} 1,908,984 observations across 50,208 items with complete daily analytical views.
+          \item \textbf{Production Telemetry:} Real-time Metabase dashboards and publication-grade empirical figures.
         \end{itemize}
       \end{exampleblock}
 

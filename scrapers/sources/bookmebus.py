@@ -17,6 +17,7 @@ except ImportError:
 from scrapers.base import BaseScraper
 from scrapers.sources._common import (
     _cffi_get,
+    _cffi_get_async,
     build_canonical_record,
     log,
 )

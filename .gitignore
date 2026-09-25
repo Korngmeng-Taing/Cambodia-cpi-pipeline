@@ -91,3 +91,4 @@ thesis/*.xdv
 mcp_config.json
 build-fast.bat
 orchestration/Dockerfile.optimized
+scratch/

@@ -433,6 +433,74 @@ the pipeline outputs an exact estimated index level directly compatible with off
 \end{equation}
 the model evaluated tracking error ($\epsilon_{\text{tracking}} = \text{CPI}_{\text{rebased}} - \text{CPI}_{\text{NIS}}$) across the operational period. The rebased pipeline index matched the baseline anchor month at $219.007$, with subsequent tracking errors remaining bounded within $\pm 0.12$ index points ($< 0.05\%$ relative tracking error) and achieving \textbf{100\% directional concordance} on month-over-month inflation momentum. This empirical validation confirms that automated high-frequency web scraping across modern retail platforms faithfully replicates macroeconomic price movements compiled through traditional physical field surveys, while eliminating publication lags.
 
+\section{Empirical Evaluation of UN COICOP 2018 5-Digit Granularity and Store-Balanced Jevons Aggregation}
+\hs The deployment of the Two-Stage Store-Balanced Jevons engine and the UN COICOP 2018 5-digit classification framework establishes an unprecedented empirical baseline for digital price measurement in Southeast Asia. Across the continuous 39-day evaluation horizon (August 18 to September 24, 2026), the system tracked over $1.91$ million elementary price observations across $50,208$ unique canonical consumer commodities.
+
+\subsection{Longitudinal Trajectory of Headline, Core, and Food CPI}
+\hs Figure~\ref{fig:headline_core_trajectory} depicts the daily trajectory of the Cambodian Headline Consumer Price Index alongside Core CPI (excluding food and transport) and Food CPI (Division 01). 
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{images/fig1_headline_core_trajectory.png}
+    \caption{39-Day Daily Trajectory of Headline CPI, Core CPI, and Food CPI in Cambodia (August 18 -- September 24, 2026), overlaid with daily imputation rates.}
+    \label{fig:headline_core_trajectory}
+\end{figure}
+
+\hs The daily index hovered within an exceptionally tight corridor: Headline CPI moved from $100.00$ at base to $100.57$ on September 22 before settling at $99.83$ on September 24. Core CPI exhibited structural stickiness, stabilizing between $99.02$ and $99.33$, whereas Food CPI accounted for $78\%$ of aggregate high-frequency variance. Crucially, the daily missing-price imputation rate remained strictly bounded between $5.95\%$ and $7.05\%$ (averaging $6.4\%$), confirming that over $93\%$ of daily elementary indices are computed from direct, live retail transactions rather than synthetic imputations.
+
+\subsection{Ablation Study: Mitigating Hypermarket Catalog Dominance}
+\hs A pivotal empirical contribution of this research is the quantitative demonstration of store-balancing benefits. Under standard unweighted geometric aggregation (Flat Jevons), large digital supermarkets (such as Delishop with over 20,000 listed items) completely dominate the elementary index calculation. 
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{images/fig5_store_balancing_ablation.png}
+    \caption{Ablation Analysis: Two-Stage Store-Balanced Jevons vs. Unweighted Flat Jevons Aggregation, showing elimination of catalog-size dominance bias.}
+    \label{fig:store_balancing_ablation}
+\end{figure}
+
+\hs Figure~\ref{fig:store_balancing_ablation} displays the ablation divergence spread ($\Delta I = I_{\text{Flat}} - I_{\text{Balanced}}$). During promotional campaigns launched by the dominant hypermarket, Flat Jevons produced spurious aggregate index fluctuations of up to $\pm 1.8$ index points. Conversely, the Two-Stage Store-Balanced Jevons engine bounded each establishment's influence to $1/S_c$, reducing volatility by $64\%$ and improving benchmarking accuracy against the official NIS sovereign release by \textbf{33.7\%} (reducing tracking error from $0.0902$ down to $0.0598$ index points).
+
+\subsection{Microeconomic Disaggregation: 5-Digit Food Subclass Dynamics}
+\hs By disaggregating broad 4-digit food categories into UN COICOP 2018 5-digit subclasses ($DD.G.C.S$), the pipeline reveals nuanced micro-level pricing behaviors that remain completely invisible in conventional surveys.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{images/fig2_5digit_food_dynamics.png}
+    \caption{Daily Price Dynamics across Key UN COICOP 2018 5-Digit Food Subclasses (Rice, Fresh Pork, Fresh Fish, Dairy Products, and Soft Drinks).}
+    \label{fig:5digit_food_dynamics}
+\end{figure}
+
+\hs Figure~\ref{fig:5digit_food_dynamics} demonstrates the divergent intra-month dynamics across five vital consumption categories:
+\begin{enumerate}
+    \item \textbf{Rice (\texttt{01.1.1.1}):} As the primary staple of the Cambodian diet (CEIC weight $6.162\%$), Rice exhibited steady behavior, rising modestly by $+0.10\%$ over the 39-day window.
+    \item \textbf{Fresh Pork (\texttt{01.1.2.1}) and Fresh Fish (\texttt{01.1.3.1}):} Perishable livestock and aquaculture showed cyclical intra-week fluctuations: prices dipped mid-week (e.g., September 18--19 at $99.82$ and $99.50$) before rebounding toward the weekend to $100.16$ and $100.14$.
+    \item \textbf{Dairy Products (\texttt{01.1.4.3}) and Soft Drinks (\texttt{01.2.2.2}):} Packaged goods showed smooth, monotonic adjustments ($100.16$ and $100.15$), reflecting formal supply-chain wholesale contracts.
+\end{enumerate}
+
+\subsection{High-Frequency Rice Inflation Monitoring}
+\hs In Cambodia, rice price volatility is a matter of food security and political economy. Figure~\ref{fig:rice_daily_tracker} provides an exhaustive view of the daily Rice sub-index (\texttt{01.1.1.1}), constructed from $283$ unique canonical rice varieties (including Jasmine/Phka Rumduol, Mixed White Rice, and Sticky Rice).
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{images/fig3_rice_daily_tracker.png}
+    \caption{High-Frequency Daily Rice Price Index (COICOP \texttt{01.1.1.1}), Average Price in KHR, and Monitored Variety Count in Phnom Penh.}
+    \label{fig:rice_daily_tracker}
+\end{figure}
+
+\hs The daily density of monitored rice products remained remarkably stable, with $234$ to $255$ active varieties sampled daily across Phnom Penh supermarkets and e-commerce platforms. The average observed price hovered between $52,000$ and $56,000$ KHR per standard packaging unit, with Jevons index movements capturing micro-shifts of less than $\pm 0.15\%$.
+
+\subsection{Macroeconomic Weight Alignment and Product Coverage}
+\hs Figure~\ref{fig:division_weights_coverage} contrasts the official National Institute of Statistics expenditure weights against the empirical product coverage achieved by the automated web-scraping architecture.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{images/fig4_division_weights_coverage.png}
+    \caption{Official NIS Household Expenditure Weights ($W_d$) vs. Scraped Product Density ($N_d$) across all 12 COICOP Divisions.}
+    \label{fig:division_weights_coverage}
+\end{figure}
+
+\hs The digital pipeline achieves active product coverage across $11$ of the $12$ COICOP divisions, capturing $98.83\%$ of the national consumption basket. Division 01 (Food) and Division 12 (Miscellaneous Personal Care) boast the largest product catalogs ($20,760$ and $6,640$ items respectively), providing deep statistical density that virtually eliminates sampling error in high-weight categories.
+
 \section{Real-World Policy Case Study: High-Frequency Shock Transmission}
 \hs To illustrate the practical utility of the daily pipeline for economic decision-makers, the system traced a real-world macroeconomic event: an official retail fuel price adjustment announced by the Ministry of Commerce.
 

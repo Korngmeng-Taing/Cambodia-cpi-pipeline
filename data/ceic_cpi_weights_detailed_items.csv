@@ -1,0 +1,8 @@
+coicop_code,item_name,level,weight_pct,parent_code,source
+01.1.1,Bread & Cereals,4-digit Class,8.274,01.1,CEIC Data / NIS Cambodia (Phnom Penh CPI)
+01.1.1.1,Rice (Total),5-digit Subclass,6.162,01.1.1,CEIC Data / NIS Cambodia (Phnom Penh CPI)
+01.1.1.1.1,Rice: Quality 1 (Jasmine / Phka Rumduol),6-digit Product,3.052,01.1.1.1,CEIC Data / NIS Cambodia (Phnom Penh CPI)
+01.1.1.1.2,Rice: Quality 2 (Mixed White Rice),6-digit Product,2.681,01.1.1.1,CEIC Data / NIS Cambodia (Phnom Penh CPI)
+01.1.1.1.3,Rice: Glutinous (Sticky Rice),6-digit Product,0.429,01.1.1.1,CEIC Data / NIS Cambodia (Phnom Penh CPI)
+01.1.1.9,Other Grains & Cereals,5-digit Subclass,0.090,01.1.1,CEIC Data / NIS Cambodia (Phnom Penh CPI)
+01.1.1.2,Bread Flour & Noodles,5-digit Subclass,2.022,01.1.1,CEIC Data / NIS Cambodia (Phnom Penh CPI)

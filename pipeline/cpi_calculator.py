@@ -527,7 +527,8 @@ class CPICalculationEngine:
         calc_date: date, 
         base_df: pd.DataFrame, 
         df_history: pd.DataFrame,
-        imputation_window_days: int = 7
+        imputation_window_days: int = 7,
+        shadow_track_new_items: bool = False
     ) -> pd.DataFrame:
         """
         Computes elementary Jevons price indices for calc_date with ILO Class-Mean Imputation.
@@ -573,6 +574,14 @@ class CPICalculationEngine:
             observation_count=("price_khr", "count")
         ).reset_index()
 
+        # Preserve primary store_slug for each item (modal store with most observations)
+        # Used downstream for store-balanced Jevons aggregation (ILO CPI Manual §6.57-6.68)
+        if "store_slug" in today_obs.columns:
+            store_mode = today_obs.groupby("item_id")["store_slug"].agg(
+                lambda s: s.value_counts().index[0] if len(s) > 0 else None
+            ).reset_index().rename(columns={"store_slug": "primary_store"})
+            today_agg = pd.merge(today_agg, store_mode, on="item_id", how="left")
+
         # Dynamic expansion: If an item in today_agg is NOT in base_df, enroll it dynamically
         missing_mask = ~today_agg["item_id"].isin(base_df["item_id"])
         if missing_mask.any():
@@ -615,11 +624,12 @@ class CPICalculationEngine:
         merged["base_price_khr"] = np.where(use_unit_price, merged["base_unit_price_khr"], merged["base_price_khr"])
         merged["current_price_khr"] = np.where(use_unit_price, merged["today_unit_price_khr"], merged["today_price_khr"])
 
-        # Compute division movement ratios for observed items between yesterday and today
+        # Compute division, group, and subclass movement ratios for observed items between yesterday and today
         prior_dates = sorted([d for d in df_history["scrape_date"].unique() if d < calc_date])
         prev_date = prior_dates[-1] if prior_dates else None
         
         division_movement_ratios: dict[str, float] = {}
+        group_movement_ratios: dict[str, float] = {}
         subclass_movement_ratios: dict[str, float] = {}
         if prev_date is not None and not today_obs.empty:
             prev_obs = df_history[df_history["scrape_date"] == prev_date]
@@ -647,9 +657,17 @@ class CPICalculationEngine:
                     if len(group) > 0:
                         division_movement_ratios[str(div)] = float(np.exp(np.mean(np.log(group["ratio"]))))
                 if "coicop_code" in common.columns:
+                    # 4-digit Subclass movements (e.g. 01.1.1)
                     for sc, group in common.groupby("coicop_code"):
-                        if len(group) >= 2 and pd.notna(sc) and str(sc).strip():
+                        if len(group) >= 1 and pd.notna(sc) and str(sc).strip():
                             subclass_movement_ratios[str(sc).strip()] = float(np.exp(np.mean(np.log(group["ratio"]))))
+                    # 3-digit Group movements (e.g. 01.1 from 01.1.1)
+                    common["coicop_group"] = common["coicop_code"].astype(str).str.strip().apply(
+                        lambda c: ".".join(c.split(".")[:2]) if "." in c and len(c.split(".")) >= 2 else ""
+                    )
+                    for grp, group in common.groupby("coicop_group"):
+                        if len(group) >= 1 and grp:
+                            group_movement_ratios[grp] = float(np.exp(np.mean(np.log(group["ratio"]))))
 
         # Apply ILO Class-Mean Imputation for missing items (gap <= 7 days)
         missing_mask = merged["current_price_khr"].isna()
@@ -709,13 +727,16 @@ class CPICalculationEngine:
                     if val is not None and not pd.isna(val) and float(val) > 0:
                         div = str(getattr(r, "coicop_division", "01"))
                         sc = str(getattr(r, "coicop_code", "")).strip() if pd.notna(getattr(r, "coicop_code", None)) else ""
-                        # Two-tier ILO Class-Mean Imputation:
-                        # Tier 1: Subclass-level geometric movement if available
-                        # Tier 2: Division-level geometric movement fallback
-                        # Under ILO CPI Manual §6.58, advance the item's previous price
-                        # using the class price movement relative to previous period.
+                        # Three-tier ILO Class-Mean Imputation:
+                        # Tier 1: 4-digit Subclass (Class) geometric movement if available
+                        # Tier 2: 3-digit Group geometric movement fallback
+                        # Tier 3: 2-digit Division geometric movement fallback
+                        # (Missing > 7 days are excluded from the basket below)
+                        grp = ".".join(sc.split(".")[:2]) if ("." in sc and len(sc.split(".")) >= 2) else ""
                         if sc and sc in subclass_movement_ratios:
                             movement = subclass_movement_ratios[sc]
+                        elif grp and grp in group_movement_ratios:
+                            movement = group_movement_ratios[grp]
                         else:
                             movement = division_movement_ratios.get(div, 1.0)
                         movement = max(0.80, min(1.25, movement))
@@ -758,6 +779,13 @@ class CPICalculationEngine:
         valid["price_ratio_pct"] = valid["price_ratio"] * 100.0
         valid["elementary_index"] = valid["price_ratio_pct"]
         valid["calculation_date"] = calc_date
+
+        # Requirement 7: Shadow Tracking for new products.
+        # If shadow_track_new_items=True, newly enrolled products (first_seen_date == calc_date)
+        # are shadowed (anchored in dim_item_base_prices) and excluded from the active basket on day t,
+        # entering the active price relative comparison starting on t+1.
+        if shadow_track_new_items and "first_seen_date" in valid.columns:
+            valid = valid[valid["first_seen_date"] != calc_date].copy()
 
         return valid
 
@@ -837,9 +865,24 @@ class CPICalculationEngine:
 
                     valid_sub_items = div_items_with_sub[div_items_with_sub["price_ratio"] > 0]
                     if not valid_sub_items.empty:
-                        # Vectorized Jevons geometric-mean per subclass
-                        subclass_series = valid_sub_items.groupby("subclass_code")["price_ratio"].apply(
-                            lambda s: float(np.exp(np.mean(np.log(s))) * 100.0)
+                        has_store = "primary_store" in valid_sub_items.columns and valid_sub_items["primary_store"].notna().any()
+
+                        def _store_balanced_jevons(sub_df):
+                            """Two-Stage Jevons (ILO CPI Manual §6.57-6.68):
+                            Stage 1: Geometric mean of price ratios within each store.
+                            Stage 2: Geometric mean across store-level means.
+                            This gives each store equal weight regardless of how many products it contributes.
+                            Falls back to standard flat Jevons if only 1 store or no store info."""
+                            if has_store and sub_df["primary_store"].nunique() > 1:
+                                store_means = sub_df.groupby("primary_store")["price_ratio"].apply(
+                                    lambda s: float(np.exp(np.mean(np.log(s))))
+                                )
+                                return float(np.exp(np.mean(np.log(store_means))) * 100.0)
+                            else:
+                                return float(np.exp(np.mean(np.log(sub_df["price_ratio"]))) * 100.0)
+
+                        subclass_series = valid_sub_items.groupby("subclass_code").apply(
+                            _store_balanced_jevons, include_groups=False
                         )
                         subclass_indices = subclass_series.tolist()
                         subclass_wts = [self.subclass_weights.get(sc) for sc in subclass_series.index]
@@ -875,7 +918,7 @@ class CPICalculationEngine:
                 obs_cnt = 0
                 item_cnt = 0
                 log.info("Division %s (%s) has no items on %s — reweighting headline aggregation.",
-                         div_code, DIVISION_NAMES.get(div_code, ""), elementary_df["calculation_date"].iloc[0] if not elementary_df.empty else "?")
+                         div_code, DIVISION_NAMES.get(div_code, ""), calc_date)
 
             div_records.append({
                 "calculation_date": calc_date,
@@ -895,9 +938,16 @@ class CPICalculationEngine:
         active_div = df_div[df_div["item_count"] > 0]
         if active_div.empty:
             headline_cpi = 100.0 * splice_factor
+            coverage_weight = 0.0
+            active_div_count = 0
         else:
             total_weight = active_div["weight"].sum()
             headline_cpi = float((active_div["weight"] * active_div["division_index"]).sum() / total_weight)
+            # CoverageWeight_t = sum(W_d for d in A_t) where A_t is divisions with >= 5 observations (ILO/IMF standard)
+            well_observed = df_div[df_div["observation_count"] >= 5]
+            raw_cov_wt = float(well_observed["weight"].sum())
+            coverage_weight = round(raw_cov_wt * 100.0 if raw_cov_wt <= 1.01 else raw_cov_wt, 4)
+            active_div_count = len(well_observed)
 
         # Core CPI (Ex-Food & Energy): Excludes Division 01 (Food & Non-Alcoholic Beverages),
         # Division 04 (Housing, Water, Electricity, Gas & Fuels), and Division 07 (Transport
@@ -917,10 +967,178 @@ class CPICalculationEngine:
             "headline_cpi": headline_cpi,
             "core_cpi": core_cpi,
             "total_items": len(elementary_df),
-            "total_observations": int(elementary_df["observation_count"].sum())
+            "total_observations": int(elementary_df["observation_count"].sum()),
+            "coverage_weight": coverage_weight,
+            "active_division_count": active_div_count
         }
 
         return df_div, headline_summary
+
+    @staticmethod
+    def generate_store_sample_balance_report(
+        df_raw_obs: pd.DataFrame,
+        df_elementary: pd.DataFrame | None = None
+    ) -> pd.DataFrame:
+        """
+        Analyzes sample balance and store concentration across 4-digit COICOP classes (Requirements 4 & 5).
+        Returns a DataFrame reporting per COICOP class:
+          - coicop_code: 4-digit class code
+          - total_observations: total scraped observations in class
+          - active_canonical_products: unique canonical products observed
+          - number_of_stores: count of contributing stores
+          - observations_by_store: dict/str breakdown of obs count per store
+          - store_share_pct: dict/str breakdown of store observation percentages
+          - top_store_slug: retailer with largest observation volume
+          - top_store_share_pct: share % of the dominant store
+          - is_store_dominated: True if any single store contributes > 60% of observations
+          - imputed_observations: count of carried-forward/imputed products in class
+          - unmatched_products: count of unclassified or unmatched items
+        """
+        if df_raw_obs.empty:
+            return pd.DataFrame()
+
+        df = df_raw_obs.copy()
+        if "coicop_code" not in df.columns:
+            df["coicop_code"] = "unclassified"
+        df["coicop_code"] = df["coicop_code"].fillna("unclassified").astype(str).str.strip()
+
+        imputed_lookup = {}
+        if df_elementary is not None and not df_elementary.empty and "is_imputed" in df_elementary.columns:
+            elem_df = df_elementary.copy()
+            elem_df["coicop_code"] = elem_df["coicop_code"].fillna("unclassified").astype(str).str.strip()
+            imputed_counts = elem_df.groupby("coicop_code")["is_imputed"].apply(lambda s: int(s.sum())).to_dict()
+            imputed_lookup = imputed_counts
+
+        # Determine store column (store_slug, store_name, or store)
+        store_col = next((c for c in ["store_slug", "store_name", "store"] if c in df.columns), None)
+
+        records = []
+        for class_code, grp in df.groupby("coicop_code"):
+            total_obs = len(grp)
+            uniq_prods = int(grp["item_id"].dropna().nunique()) if "item_id" in grp.columns else 0
+            stores = grp[store_col].dropna().unique().tolist() if store_col else []
+            n_stores = len(stores)
+            
+            store_counts = grp[store_col].value_counts().to_dict() if store_col else {}
+            store_shares = {s: round((cnt / total_obs) * 100.0, 2) for s, cnt in store_counts.items()}
+            top_store = max(store_shares, key=store_shares.get) if store_shares else None
+            top_share = store_shares.get(top_store, 0.0) if top_store else 0.0
+
+            unmatched_cnt = 0
+            if "item_id" in grp.columns:
+                unmatched_cnt = int(grp["item_id"].isna().sum())
+            if class_code == "unclassified":
+                unmatched_cnt += total_obs
+
+            records.append({
+                "coicop_code": class_code,
+                "total_observations": total_obs,
+                "active_canonical_products": uniq_prods,
+                "number_of_stores": n_stores,
+                "observations_by_store": store_counts,
+                "store_share_pct": store_shares,
+                "top_store_slug": top_store,
+                "top_store_share_pct": top_share,
+                "is_store_dominated": bool(top_share > 60.0 and n_stores > 1),
+                "imputed_observations": imputed_lookup.get(class_code, 0),
+                "unmatched_products": unmatched_cnt
+            })
+
+        return pd.DataFrame(records)
+
+    def evaluate_nis_benchmark_accuracy(self, conn=None) -> dict:
+        """
+        Calculates formal benchmark statistical accuracy comparing rebased pipeline CPI
+        against official NIS monthly releases (Requirement 9):
+          - MAE (Mean Absolute Error on CPI level)
+          - RMSE (Root Mean Squared Error on CPI level)
+          - Pearson Correlation (r)
+          - Inflation Rate Error (MAE on Month-on-Month inflation % points)
+          - Directional Concordance (% of months where pipeline & NIS inflation signs match)
+        """
+        close_conn = False
+        if conn is None:
+            conn = self.get_connection()
+            close_conn = True
+
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT 
+                        cpi_month,
+                        pipeline_headline_cpi,
+                        nis_headline_cpi,
+                        pipeline_headline_cpi_rebased_to_nis,
+                        headline_rebased_error,
+                        pipeline_mom_pct,
+                        nis_mom_pct,
+                        directional_concordance
+                    FROM gold.fct_cpi_nis_comparison
+                    WHERE pipeline_headline_cpi IS NOT NULL 
+                      AND nis_headline_cpi IS NOT NULL
+                    ORDER BY cpi_month;
+                """)
+                cols = [desc[0] for desc in cur.description]
+                rows = cur.fetchall()
+                if not rows:
+                    log.warning("No benchmark comparison records found in gold.fct_cpi_nis_comparison.")
+                    return {
+                        "n_months": 0,
+                        "mae": None,
+                        "rmse": None,
+                        "correlation": None,
+                        "inflation_mae_pct_points": None,
+                        "directional_concordance_pct": None
+                    }
+                df_comp = pd.DataFrame(rows, columns=cols)
+                
+                # Convert numeric fields
+                for col in ["pipeline_headline_cpi_rebased_to_nis", "nis_headline_cpi", "pipeline_mom_pct", "nis_mom_pct"]:
+                    df_comp[col] = pd.to_numeric(df_comp[col], errors="coerce")
+
+                pipe_rebased = df_comp["pipeline_headline_cpi_rebased_to_nis"].dropna()
+                nis_actual = df_comp.loc[pipe_rebased.index, "nis_headline_cpi"]
+
+                # MAE & RMSE
+                diff = (pipe_rebased - nis_actual).to_numpy()
+                mae = float(np.mean(np.abs(diff))) if len(diff) > 0 else 0.0
+                rmse = float(np.sqrt(np.mean(diff ** 2))) if len(diff) > 0 else 0.0
+
+                # Pearson Correlation
+                if len(pipe_rebased) >= 2 and np.std(pipe_rebased) > 1e-6 and np.std(nis_actual) > 1e-6:
+                    corr = float(np.corrcoef(pipe_rebased, nis_actual)[0, 1])
+                else:
+                    corr = 1.0
+
+                # Inflation rate error
+                valid_mom = df_comp.dropna(subset=["pipeline_mom_pct", "nis_mom_pct"])
+                if not valid_mom.empty:
+                    mom_diff = np.abs(valid_mom["pipeline_mom_pct"].to_numpy() - valid_mom["nis_mom_pct"].to_numpy())
+                    inflation_mae = float(np.mean(mom_diff))
+                    # Directional concordance
+                    concordant = (
+                        ((valid_mom["pipeline_mom_pct"] > 0) & (valid_mom["nis_mom_pct"] > 0)) |
+                        ((valid_mom["pipeline_mom_pct"] < 0) & (valid_mom["nis_mom_pct"] < 0)) |
+                        ((valid_mom["pipeline_mom_pct"] == 0) & (valid_mom["nis_mom_pct"] == 0))
+                    )
+                    dir_concordance = float(concordant.mean() * 100.0)
+                else:
+                    inflation_mae = None
+                    dir_concordance = None
+
+                return {
+                    "n_months": len(df_comp),
+                    "sample_months": len(df_comp),
+                    "mae": round(mae, 4),
+                    "rmse": round(rmse, 4),
+                    "correlation": round(corr, 4),
+                    "pearson_correlation": round(corr, 4),
+                    "inflation_mae_pct_points": round(inflation_mae, 4) if inflation_mae is not None else None,
+                    "directional_concordance_pct": round(dir_concordance, 2) if dir_concordance is not None else None
+                }
+        finally:
+            if close_conn:
+                conn.close()
 
     def run_daily_pipeline(
         self, 

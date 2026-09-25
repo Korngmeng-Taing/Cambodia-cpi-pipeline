@@ -385,24 +385,42 @@ where $P_{i, t}$ is the observed unit price in KHR, $X_{i, k}$ denotes quantifie
 \end{equation}
 \hs To ensure pipeline resilience, the hedonic engine enforces automated numerical guards: if the sample size is inadequate ($n < 5$) or the characteristic design matrix exhibits multicollinearity or rank-deficiency, the engine seamlessly switches to an analytical Ordinary Least Squares solver or passes observed prices forward untouched, preventing matrix singularity crashes during production runs.
 
-\subsection{The Macro-Level: Two-Tier Subclass-Weighted Laspeyres Aggregation}
-\hs Rather than collapsing unweighted elementary items directly into 12 broad division aggregates, international best practice \citep{imf2020cpi} dictates hierarchical stratum weighting. The pipeline implements a mathematically rigorous \textbf{Two-Tier Subclass-Weighted Laspeyres Aggregation}:
-\begin{enumerate}
-    \item \textbf{Tier 1: Subclass-Level Laspeyres Aggregation ($I_{c, t}$):} At the 4-digit/subclass level $c$ (spanning 48 official CSES expenditure categories), elementary items $i \in c$ with base prices $p_{i, 0}$ are combined using their normalized subclass weights:
-    \begin{equation}
-        I_{c, t} = \sum_{i \in c} \omega_{i, c} \cdot \left( \frac{p_{i, t}}{p_{i, 0}} \right) \times 100
-    \end{equation}
-    where $\sum_{i \in c} \omega_{i, c} = 1.0$.
-    \item \textbf{Tier 2: Division-Level Laspeyres Aggregation ($I_{d, t}$):} Subclass indices $I_{c, t}$ belonging to division $d$ are aggregated using official CSES household expenditure shares $\beta_c$:
-    \begin{equation}
-        I_{d, t} = \frac{\sum_{c \in d} \beta_c \cdot I_{c, t}}{\sum_{c \in d} \beta_c}
-    \end{equation}
-    \item \textbf{Tier 3: National Headline CPI:} The final Headline CPI is computed as the expenditure-weighted sum across all 12 COICOP divisions:
-    \begin{equation}
-        \text{CPI}_t^{\text{Headline}} = \sum_{d=1}^{12} w_d \cdot I_{d, t}
-    \end{equation}
-    where $\sum_{d=1}^{12} w_d = 1.00000$ ($100.000\%$).
-\end{enumerate}
+\subsection{The Micro-to-Macro Hierarchy: Two-Stage Store-Balanced Jevons and UN COICOP 2018 5-Digit Aggregation}
+\hs In multi-store web-scraped price collection, a severe methodological flaw of conventional unweighted geometric mean (Flat Jevons) aggregation is \textit{catalog-size dominance bias} \citep{imf2020cpi, cavallo2016billion}. When an expansive online hypermarket (e.g., Delishop with 20,000 listed products) contributes $75\%$ of raw price observations while traditional or specialized retail outlets (e.g., Grab Supermarket or Chip Mong with 700 to 1,500 products) contribute modest sample sizes, an unweighted elementary index effectively reflects the pricing policies of the single largest retailer rather than the broader market.
+
+\subsubsection{Formulation of the Two-Stage Store-Balanced Jevons Elementary Index}
+\hs To satisfy the international standards codified in the \textit{ILO/IMF Consumer Price Index Manual} \citep{imf2020cpi} (§6.57--6.68), the pipeline formulates a \textbf{Two-Stage Store-Balanced Jevons Elementary Index}. Let $\mathcal{S}_c$ denote the set of active retail establishments selling commodities within subclass $c$, with cardinality $S_c = |\mathcal{S}_c|$. Within each individual retail store $s \in \mathcal{S}_c$, let $\mathcal{U}_{c, s}$ denote the set of verified canonical commodities observed on calculation date $t$, with sample size $N_{c, s} = |\mathcal{U}_{c, s}|$.
+
+\hs The store-specific geometric micro-index $I_{c, s, t}$ is evaluated first:
+\begin{equation}
+    I_{c, s, t} = \prod_{i \in \mathcal{U}_{c, s}} \left( \frac{P_{s, i, t}}{P_{s, i, 0}} \right)^{\frac{1}{N_{c, s}}} = \exp\left( \frac{1}{N_{c, s}} \sum_{i \in \mathcal{U}_{c, s}} \ln \left( \frac{P_{s, i, t}}{P_{s, i, 0}} \right) \right)
+\end{equation}
+where $P_{s, i, t}$ is the metric-standardized unit price (KHR/kg or KHR/L) for consumable items and unit price for durables, and $P_{s, i, 0}$ is the baseline anchor price.
+
+\hs In the second stage, the store-balanced elementary index $I_{c, t}^{\text{balanced}}$ averages the store-level micro-indices with equal store weights $w_s = 1 / S_c$:
+\begin{equation}
+    I_{c, t}^{\text{balanced}} = \prod_{s \in \mathcal{S}_c} \left( I_{c, s, t} \right)^{\frac{1}{S_c}} \times 100 = \exp\left( \frac{1}{S_c} \sum_{s \in \mathcal{S}_c} \frac{1}{N_{c, s}} \sum_{i \in \mathcal{U}_{c, s}} \ln R_{s, i, t} \right) \times 100
+\end{equation}
+where $R_{s, i, t} = P_{s, i, t} / P_{s, i, 0}$. This mathematical formulation strictly guarantees retailer catalog-size invariance: a promotion on 5,000 items in a hypermarket cannot distort the aggregate elementary index beyond its assigned establishment weight ($1/S_c$).
+
+\subsubsection{UN COICOP 2018 5-Digit Taxonomy and Hierarchical Roll-Up}
+\hs To achieve high microeconomic granularity while preserving official macroeconomic benchmarking, the pipeline maps all 50,692 canonical commodities into the \textbf{UN COICOP 2018 5-Digit Subclass Taxonomy} ($DD.G.C.S$, spanning 112 active subclasses across all 12 divisions). This separates granular consumption staples that were previously pooled together in 4-digit categories:
+\begin{itemize}
+    \item \textbf{01.1.1 Bread and Cereals:} Granularly segmented into Rice (\texttt{01.1.1.1}, CEIC weight $6.162\%$), Bread (\texttt{01.1.1.2}, $0.173\%$), Pasta and Noodles (\texttt{01.1.1.3}, $1.008\%$), Biscuits (\texttt{01.1.1.4}, $0.280\%$), Cakes (\texttt{01.1.1.5}, $0.561\%$), and Flour/Other Grains (\texttt{01.1.1.9}, $0.090\%$).
+    \item \textbf{01.1.2 Meat:} Segregated into Fresh Pork (\texttt{01.1.2.1}, $5.618\%$), Fresh Beef (\texttt{01.1.2.2}, $2.165\%$), Fresh Poultry (\texttt{01.1.2.3}, $1.303\%$), Fresh Duck (\texttt{01.1.2.4}, $0.319\%$), and Processed Meats (\texttt{01.1.2.5}, $0.276\%$).
+    \item \textbf{01.1.3 Fish and Seafood:} Segregated into Fresh Fish (\texttt{01.1.3.1}, $7.435\%$), Crustaceans/Seafood (\texttt{01.1.3.2}, $0.229\%$), and Prahok/Processed Fish (\texttt{01.1.3.3}, $1.646\%$).
+    \item \textbf{07.2.2 Automotive Fuels:} Disaggregated into Gasoline (\texttt{07.2.2.1}, $4.969\%$), Diesel (\texttt{07.2.2.2}, $0.144\%$), and Lubricants (\texttt{07.2.2.3}, $0.062\%$).
+\end{itemize}
+
+\hs \textbf{Axiomatic Hierarchical Roll-Up:} Because the National Institute of Statistics official expenditure baseline relies on 4-digit CSES household budget survey weights ($W_d$ and $\beta_c$), the aggregation engine implements an axiomatic hierarchical roll-up operator $\psi: \{DD.G.C.S\} \to \{DD.G.C\}$:
+\begin{equation}
+    I_{c, t}^{\text{4-digit}} = \prod_{s \in \mathcal{C}(c)} \left( I_{s, t}^{\text{5-digit}} \right)^{\omega_s} \quad \text{where} \quad \sum_{s \in \mathcal{C}(c)} \omega_s = 1.0
+\end{equation}
+where $\mathcal{C}(c)$ represents the child 5-digit subclasses under parent class $c$. Subclass indices are then synthesized into 12 broad division indices ($I_{d, t}$) and the national Headline CPI via official fixed-basket Laspeyres expenditure shares:
+\begin{equation}
+    I_{d, t} = \frac{\sum_{c \in d} \beta_c \cdot I_{c, t}}{\sum_{c \in d} \beta_c}, \qquad \text{CPI}_t^{\text{Headline}} = \sum_{d=1}^{12} w_d \cdot I_{d, t}
+\end{equation}
+where $\sum_{d=1}^{12} w_d = 1.00000$ ($100.000\%$). This guarantees seamless backward compatibility with official sovereign statistics while delivering unprecedented analytical resolution for commodity-specific policy analysis.
 
 \subsection{Continuous Series Chain-Linking and Splice Factor Formulation}
 \hs In production price statistics, baseline updating or index rebasing (e.g., transitioning from Base Period 0 to Base Period 1) must never introduce artificial step discontinuities into historical analytical records. To ensure seamless longitudinal continuity across rebasing events, the pipeline implements an axiomatic \textbf{Continuous Series Chain-Linking Splice Factor}:

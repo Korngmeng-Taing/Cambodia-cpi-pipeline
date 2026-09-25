@@ -418,6 +418,279 @@ def test_persistent_base_registry_and_enrollment(cpi_engine, monkeypatch):
     assert new_row["base_price_khr"] == pytest.approx(5000.0, abs=0.01)
 
 
+def test_three_tier_imputation_hierarchy(cpi_engine):
+    """Verifies the ILO 3-tier imputation fallback: Subclass (4-digit) -> Group (3-digit) -> Division (2-digit)."""
+    calc_date = date(2026, 9, 2)
+    prev_date = date(2026, 9, 1)
+
+    # Base registry
+    base_df = pd.DataFrame([
+        {"item_id": "item-subclass-matched", "coicop_division": "01", "coicop_code": "01.1.1", "base_price_khr": 1000.0, "base_unit_price_khr": 1000.0, "base_obs_count": 1},
+        {"item_id": "item-group-matched", "coicop_division": "01", "coicop_code": "01.1.2", "base_price_khr": 2000.0, "base_unit_price_khr": 2000.0, "base_obs_count": 1},
+        {"item_id": "item-div-matched", "coicop_division": "02", "coicop_code": "02.1.1", "base_price_khr": 3000.0, "base_unit_price_khr": 3000.0, "base_obs_count": 1},
+        # Imputed targets (missing on calc_date, present on prev_date)
+        {"item_id": "missing-subclass", "coicop_division": "01", "coicop_code": "01.1.1", "base_price_khr": 1000.0, "base_unit_price_khr": 1000.0, "base_obs_count": 1},
+        {"item_id": "missing-group", "coicop_division": "01", "coicop_code": "01.1.9", "base_price_khr": 2000.0, "base_unit_price_khr": 2000.0, "base_obs_count": 1},
+        {"item_id": "missing-div", "coicop_division": "02", "coicop_code": "02.2.1", "base_price_khr": 3000.0, "base_unit_price_khr": 3000.0, "base_obs_count": 1},
+    ])
+
+    # History: on prev_date, all items exist. On calc_date, the three 'missing-*' items are missing.
+    df_history = pd.DataFrame([
+        # Yesterday observations
+        {"scrape_date": prev_date, "item_id": "item-subclass-matched", "coicop_division": "01", "coicop_code": "01.1.1", "price_khr": 1000.0, "unit_price_khr": 1000.0},
+        {"scrape_date": prev_date, "item_id": "item-group-matched", "coicop_division": "01", "coicop_code": "01.1.2", "price_khr": 2000.0, "unit_price_khr": 2000.0},
+        {"scrape_date": prev_date, "item_id": "item-div-matched", "coicop_division": "02", "coicop_code": "02.1.1", "price_khr": 3000.0, "unit_price_khr": 3000.0},
+        {"scrape_date": prev_date, "item_id": "missing-subclass", "coicop_division": "01", "coicop_code": "01.1.1", "price_khr": 1000.0, "unit_price_khr": 1000.0},
+        {"scrape_date": prev_date, "item_id": "missing-group", "coicop_division": "01", "coicop_code": "01.1.9", "price_khr": 2000.0, "unit_price_khr": 2000.0},
+        {"scrape_date": prev_date, "item_id": "missing-div", "coicop_division": "02", "coicop_code": "02.2.1", "price_khr": 3000.0, "unit_price_khr": 3000.0},
+        # Today observations: 01.1.1 rose +10%, 01.1.2 rose +5%, 02.1.1 rose +20%
+        {"scrape_date": calc_date, "item_id": "item-subclass-matched", "coicop_division": "01", "coicop_code": "01.1.1", "price_khr": 1100.0, "unit_price_khr": 1100.0},
+        {"scrape_date": calc_date, "item_id": "item-group-matched", "coicop_division": "01", "coicop_code": "01.1.2", "price_khr": 2100.0, "unit_price_khr": 2100.0},
+        {"scrape_date": calc_date, "item_id": "item-div-matched", "coicop_division": "02", "coicop_code": "02.1.1", "price_khr": 3600.0, "unit_price_khr": 3600.0},
+    ])
+
+    result = cpi_engine.compute_daily_elementary_indices(calc_date, base_df, df_history)
+
+    # 1. missing-subclass shares '01.1.1' -> should receive exactly +10% (1000 * 1.1 = 1100)
+    sub_row = result[result["item_id"] == "missing-subclass"].iloc[0]
+    assert sub_row["is_imputed"] is True or sub_row["is_imputed"] == 1
+    assert sub_row["current_price_khr"] == pytest.approx(1100.0, rel=1e-3)
+
+    # 2. missing-group is '01.1.9', no 01.1.9 items exist today, so it falls back to group '01.1'
+    # Group 01.1 contains item-subclass-matched (1.10) and item-group-matched (1.05)
+    # Geometric mean = sqrt(1.10 * 1.05) ~ 1.0747
+    grp_row = result[result["item_id"] == "missing-group"].iloc[0]
+    assert grp_row["is_imputed"] is True or grp_row["is_imputed"] == 1
+    assert grp_row["current_price_khr"] == pytest.approx(2000.0 * np.sqrt(1.10 * 1.05), rel=1e-3)
+
+    # 3. missing-div is '02.2.1', no 02.2.* items today, so it falls back to division '02' (+20% -> 1.20)
+    div_row = result[result["item_id"] == "missing-div"].iloc[0]
+    assert div_row["is_imputed"] is True or div_row["is_imputed"] == 1
+    assert div_row["current_price_khr"] == pytest.approx(3600.0, rel=1e-3)
+
+
+def test_shadow_tracking_new_products(cpi_engine, monkeypatch):
+    """Verifies that when shadow_track_new_items=True, newly enrolled products are anchored but excluded from active day t index."""
+    monkeypatch.setattr(cpi_engine, "enroll_new_base_items", lambda items, dt: None)
+
+    calc_date = date(2026, 9, 20)
+    base_df = pd.DataFrame([
+        {"item_id": "item-old", "coicop_division": "01", "coicop_code": "01.1.1", "base_price_khr": 1000.0, "base_unit_price_khr": 1000.0, "base_obs_count": 1, "first_seen_date": date(2026, 9, 1)}
+    ])
+    df_history = pd.DataFrame([
+        {"scrape_date": calc_date, "item_id": "item-old", "coicop_division": "01", "coicop_code": "01.1.1", "price_khr": 1050.0, "unit_price_khr": 1050.0},
+        {"scrape_date": calc_date, "item_id": "item-brand-new", "coicop_division": "01", "coicop_code": "01.1.1", "price_khr": 5000.0, "unit_price_khr": 5000.0},
+    ])
+
+    # When shadow_track_new_items=False (default), both items are in result
+    res_default = cpi_engine.compute_daily_elementary_indices(calc_date, base_df, df_history, shadow_track_new_items=False)
+    assert "item-brand-new" in set(res_default["item_id"])
+
+    # When shadow_track_new_items=True, item-brand-new is anchored but shadow-tracked (excluded on day t)
+    res_shadow = cpi_engine.compute_daily_elementary_indices(calc_date, base_df, df_history, shadow_track_new_items=True)
+    assert "item-brand-new" not in set(res_shadow["item_id"])
+    assert "item-old" in set(res_shadow["item_id"])
+
+
+def test_coverage_weight_and_store_balance(cpi_engine):
+    """Verifies CoverageWeight_t calculation and store sample balance generation."""
+    calc_date = date(2026, 9, 15)
+
+    # 1. Verify store sample balance report
+    df_raw = pd.DataFrame([
+        {"item_id": "item-1", "store_name": "StoreA", "coicop_code": "01.1.1", "coicop_division": "01", "product_name": "Product 1"},
+        {"item_id": "item-2", "store_name": "StoreA", "coicop_code": "01.1.1", "coicop_division": "01", "product_name": "Product 2"},
+        {"item_id": "item-3", "store_name": "StoreB", "coicop_code": "01.1.1", "coicop_division": "01", "product_name": "Product 3"},
+        {"item_id": None, "store_name": "StoreB", "coicop_code": "01.1.1", "coicop_division": "01", "product_name": "Unmatched 1"},
+    ])
+    df_elem = pd.DataFrame([
+        {"item_id": "item-1", "coicop_code": "01.1.1", "coicop_division": "01", "is_imputed": False},
+        {"item_id": "item-2", "coicop_code": "01.1.1", "coicop_division": "01", "is_imputed": False},
+        {"item_id": "item-3", "coicop_code": "01.1.1", "coicop_division": "01", "is_imputed": True},
+    ])
+
+    balance_report = cpi_engine.generate_store_sample_balance_report(df_raw, df_elem)
+    assert not balance_report.empty
+    row = balance_report.iloc[0]
+    assert row["total_observations"] == 4
+    assert row["active_canonical_products"] == 3
+    assert row["number_of_stores"] == 2
+    assert row["unmatched_products"] == 1
+    assert row["imputed_observations"] == 1
+    assert "StoreA" in row["observations_by_store"]
+
+    # 2. Verify CoverageWeight_t in aggregate_division_and_headline
+    # Create mock subclass aggregations for Division 01 (weight 43.17%) and Division 02 (weight 2.92%)
+    df_items = pd.DataFrame([
+        {"item_id": f"item-01-{i}", "coicop_division": "01", "coicop_code": "01.1.1", "price_ratio": 1.02, "price_ratio_pct": 102.0, "observation_count": 1}
+        for i in range(10)  # >= 5 obs -> active division
+    ] + [
+        {"item_id": f"item-02-{i}", "coicop_division": "02", "coicop_code": "02.1.1", "price_ratio": 1.01, "price_ratio_pct": 101.0, "observation_count": 1}
+        for i in range(2)   # < 5 obs -> not sufficiently covered
+    ])
+
+    div_idx, headline = cpi_engine.aggregate_division_and_headline(df_items, calc_date)
+
+    assert "coverage_weight" in headline
+    # Only Division 01 met the min_obs_per_division >= 5 threshold, so coverage_weight is Div 01's weight (~44.78%)
+    assert headline["coverage_weight"] == pytest.approx(44.78, abs=0.5)
+    assert headline["active_division_count"] == 1
+
+
+def test_evaluate_nis_benchmark_accuracy_calculation(cpi_engine):
+    """Verifies that evaluate_nis_benchmark_accuracy computes correct MAE, RMSE, Pearson r, and concordance."""
+    class MockCursor:
+        def __init__(self, data):
+            self.data = data
+            self.description = [
+                ("cpi_month",),
+                ("pipeline_headline_cpi",),
+                ("nis_headline_cpi",),
+                ("pipeline_headline_cpi_rebased_to_nis",),
+                ("headline_rebased_error",),
+                ("pipeline_mom_pct",),
+                ("nis_mom_pct",),
+                ("directional_concordance",)
+            ]
+        def execute(self, q): pass
+        def fetchall(self): return self.data
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+
+    class MockConn:
+        def __init__(self, data):
+            self.data = data
+        def cursor(self): return MockCursor(self.data)
+
+    mock_data = [
+        ("2026-01-01", 100.0, 100.0, 100.0, 0.0, 0.0, 0.0, True),
+        ("2026-02-01", 102.0, 101.9, 102.0, 0.1, 2.0, 1.9, True),
+        ("2026-03-01", 103.0, 102.8, 103.0, 0.2, 1.0, 0.9, True),
+        ("2026-04-01", 101.0, 100.9, 101.0, 0.1, -1.9, -1.8, True),
+    ]
+
+    metrics = cpi_engine.evaluate_nis_benchmark_accuracy(MockConn(mock_data))
+    assert metrics["sample_months"] == 4
+    # Errors: |100-100|=0, |102-101.9|=0.1, |103-102.8|=0.2, |101-100.9|=0.1. MAE = 0.4/4 = 0.1
+    assert metrics["mae"] == pytest.approx(0.1, abs=1e-4)
+    # Directional concordance: all 3 MoM changes have same sign -> 100%
+    assert metrics["directional_concordance_pct"] == pytest.approx(100.0, abs=1e-4)
+    assert metrics["pearson_correlation"] > 0.95
+
+
+def test_store_balanced_jevons(cpi_engine):
+    """Verifies the two-stage store-balanced Jevons gives each store equal weight.
+    
+    Scenario: COICOP class 01.1.1 has two stores:
+      - StoreA: 100 products, all with price_ratio = 1.10 (10% increase)
+      - StoreB:   5 products, all with price_ratio = 0.90 (10% decrease)
+    
+    Without store balancing (flat Jevons): 
+      geometric_mean of 105 items skewed toward 1.10
+      = exp((100*ln(1.10) + 5*ln(0.90)) / 105) * 100 ~ 108.98
+    
+    With store balancing (two-stage):
+      Stage 1: StoreA mean = 1.10, StoreB mean = 0.90
+      Stage 2: geometric_mean(1.10, 0.90) = sqrt(1.10 * 0.90) ~ 0.9950
+      = 99.50
+    """
+    calc_date = date(2026, 9, 15)
+    
+    # Build items: 100 from StoreA, 5 from StoreB
+    items = []
+    for i in range(100):
+        items.append({
+            "item_id": f"storeA-item-{i}",
+            "coicop_division": "01",
+            "coicop_code": "01.1.1",
+            "price_ratio": 1.10,
+            "price_ratio_pct": 110.0,
+            "primary_store": "storeA",
+            "observation_count": 1,
+        })
+    for i in range(5):
+        items.append({
+            "item_id": f"storeB-item-{i}",
+            "coicop_division": "01",
+            "coicop_code": "01.1.1",
+            "price_ratio": 0.90,
+            "price_ratio_pct": 90.0,
+            "primary_store": "storeB",
+            "observation_count": 1,
+        })
+    
+    df_items = pd.DataFrame(items)
+    div_idx, headline = cpi_engine.aggregate_division_and_headline(df_items, calc_date)
+    
+    # With store balancing: geometric_mean(1.10, 0.90) * 100 = sqrt(0.99) * 100 ~ 99.50
+    div01_row = div_idx[div_idx["coicop_division"] == "01"].iloc[0]
+    
+    # The flat Jevons would give ~108.98. Store-balanced should be ~99.50.
+    # This proves the 100-item store doesn't dominate the 5-item store.
+    assert div01_row["division_index"] == pytest.approx(99.50, abs=0.5), \
+        f"Store-balanced Jevons should give ~99.50, got {div01_row['division_index']:.2f}"
+    
+    # Verify: removing primary_store forces flat Jevons (no store info -> fallback)
+    df_items_no_store = df_items.drop(columns=["primary_store"])
+    div_idx2, headline2 = cpi_engine.aggregate_division_and_headline(df_items_no_store, calc_date)
+    div01_flat = div_idx2[div_idx2["coicop_division"] == "01"].iloc[0]
+    
+    # Flat Jevons should be heavily skewed toward StoreA's 1.10
+    assert div01_flat["division_index"] > 108.0, \
+        f"Flat Jevons (no store info) should be >108, got {div01_flat['division_index']:.2f}"
+
+
+def test_coicop_2018_five_digit_hierarchical_rollup(cpi_engine):
+    """Verifies that items tagged with 5-digit COICOP 2018 codes (e.g. 01.1.1.1 for Rice,
+    01.1.2.1 for Pork, 07.2.2.1 for Gasoline) automatically roll up to their official 4-digit
+    parent subclass (01.1.1, 01.1.2, 07.2.2) and aggregate accurately without errors.
+    """
+    calc_date = date(2026, 9, 20)
+    
+    # Check that _get_subclass_code strips the 5th digit
+    assert cpi_engine._get_subclass_code("01.1.1.1", "01") == "01.1.1"  # Rice -> Bread & Cereals
+    assert cpi_engine._get_subclass_code("01.1.2.1", "01") == "01.1.2"  # Pork -> Meat
+    assert cpi_engine._get_subclass_code("07.2.2.1", "07") == "07.2.2"  # Gasoline -> Fuels & Lubricants
+    
+    # Build items with 5-digit codes
+    items = pd.DataFrame([
+        {
+            "item_id": "rice-jasmine-1",
+            "coicop_division": "01",
+            "coicop_code": "01.1.1.1",  # 5-digit COICOP 2018
+            "price_ratio": 1.05,
+            "price_ratio_pct": 105.0,
+            "primary_store": "aeon",
+            "observation_count": 5,
+        },
+        {
+            "item_id": "rice-white-2",
+            "coicop_division": "01",
+            "coicop_code": "01.1.1.1",  # 5-digit COICOP 2018
+            "price_ratio": 1.05,
+            "price_ratio_pct": 105.0,
+            "primary_store": "delishop",
+            "observation_count": 5,
+        },
+        {
+            "item_id": "pork-belly-1",
+            "coicop_division": "01",
+            "coicop_code": "01.1.2.1",  # 5-digit COICOP 2018 (Pork)
+            "price_ratio": 1.00,
+            "price_ratio_pct": 100.0,
+            "primary_store": "aeon",
+            "observation_count": 5,
+        }
+    ])
+    
+    div_df, headline = cpi_engine.aggregate_division_and_headline(items, calc_date)
+    div01 = div_df[div_df["coicop_division"] == "01"].iloc[0]
+    
+    # 01.1.1 index = 105.0 (weight 17.230)
+    # 01.1.2 index = 100.0 (weight 8.450)
+    expected = (17.230 * 105.0 + 8.450 * 100.0) / (17.230 + 8.450)
+    assert div01["division_index"] == pytest.approx(expected, abs=0.01)
+
 
 
 

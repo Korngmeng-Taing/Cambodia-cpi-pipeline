@@ -64,18 +64,22 @@ For each product, determine:
    11: Restaurants and hotels
    12: Miscellaneous goods and services
 
-2. "coicop_code": EXACT 4-digit NIS Cambodia COICOP Class code (format DD.G.C, e.g. "01.1.1", "01.1.2", "01.2.2", "02.1.3", "03.1.2", "05.6.1", "06.1.1", "07.2.2", "08.3.0", "09.3.1", "11.1.1", "12.1.3").
-   NEVER return 5 digits (e.g. do NOT return 01.1.1.1, use 01.1.1).
-   NEVER return only 2 digits. ALWAYS return the exact 4-digit class code (DD.G.C).
+2. "coicop_code": UN COICOP 2018 5-digit Subclass code (format DD.G.C.S, e.g. "01.1.1.1" for Rice, "01.1.1.2" for Bread, "01.1.1.3" for Noodles, "01.1.2.1" for Pork, "01.1.2.2" for Beef, "01.1.2.3" for Poultry, "01.1.3.1" for Fresh Fish, "07.2.2.1" for Gasoline).
+   If uncertain of the 5th digit, return the standard 4-digit Class code (DD.G.C, e.g. "01.1.1", "01.2.2", "05.6.1").
+   NEVER return only 2 digits.
 
 3. "confidence": Float between 0.0 and 1.0.
 
 CRITICAL GUARDRAIL RULES:
-- PET FOOD & ACCESSORIES: Dog food, cat food, pet treats, cat litter -> MUST BE "09.3.1" (Games, toys and hobbies / pets), NEVER Division 01 (Human food).
+- RICE vs GRAINS: Rice (Jasmine, White, Glutinous) -> "01.1.1.1". Bread -> "01.1.1.2". Instant noodles, pasta -> "01.1.1.3". Biscuits/crackers -> "01.1.1.4".
+- FRESH MEAT: Fresh Pork -> "01.1.2.1", Fresh Beef -> "01.1.2.2", Fresh Chicken/Poultry -> "01.1.2.3", Duck -> "01.1.2.4", Sausages/Processed meat -> "01.1.2.5".
+- FISH & SEAFOOD: Fresh Fish -> "01.1.3.1", Shrimp/Crab/Squid -> "01.1.3.2", Dried/Prahok/Canned fish -> "01.1.3.3".
+- PET FOOD & ACCESSORIES: Dog food, cat food, pet treats, cat litter -> MUST BE "09.3.1" (Pets & hobbies), NEVER Division 01 (Human food).
 - PERSONAL CARE & HYGIENE: Shampoo, soaps, skincare, sunscreen, toothpaste, diapers, sanitary pads -> MUST BE "12.1.3" or "12.1.1" (Personal Care), NEVER Division 01 or 05.
-- SUPERMARKET PACKAGED / READY FOOD: Frozen meals, cup noodles, instant food, canned goods -> Division "01" (Food e.g. "01.1.9" or "01.1.1"), NEVER Division 11 (Restaurants).
+- SUPERMARKET PACKAGED / READY FOOD: Frozen meals, cup noodles, instant food, canned goods -> Division "01" (Food e.g. "01.1.9" or "01.1.1.3"), NEVER Division 11 (Restaurants).
 - ALCOHOLIC BEVERAGES: Beer -> "02.1.3", Wine -> "02.1.2", Spirits -> "02.1.1", Cigarettes -> "02.2.0", NEVER Division 01.
 - BABY FORMULA & BABY FOOD: Division "01" (e.g. "01.1.4" for milk/formula or "01.1.9").
+- FUELS & GASOLINE: Regular/Super Gasoline -> "07.2.2.1", Diesel -> "07.2.2.2", Motor Oil -> "07.2.2.3".
 - CLEANING AGENTS: Detergent, dish soap, bleach, floor cleaner -> "05.6.1" (Non-durable household goods).
 - PHARMACEUTICALS & HEALTH: Medicines, vitamins, pain relief -> "06.1.1", Balms, masks, bandages -> "06.1.2".
 
@@ -84,7 +88,7 @@ Return ONLY a JSON array of objects with the exact schema:
   {
     "id": "<string or int matching input id>",
     "coicop_division": "<2-digit division e.g. 01>",
-    "coicop_code": "<4-digit class code e.g. 01.1.1>",
+    "coicop_code": "<5-digit or 4-digit code e.g. 01.1.1.1>",
     "confidence": <float>,
     "reason": "<short justification under 10 words>"
   }

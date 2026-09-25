@@ -23,7 +23,7 @@ from pipeline.config import get_database_url
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("reclassify_5digit")
 
-SQL_RECLASSIFICATION = """
+SQL_RECLASSIFICATION = r"""
 -- 1. Division 01: Food & Non-Alcoholic Beverages
 -- 01.1.1 Bread & cereals
 UPDATE silver.canonical_items

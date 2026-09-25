@@ -317,7 +317,7 @@ where $\Delta \ln p_{i, t} = \ln p_{i, t} - \ln p_{i, 0}$ represents the continu
     \item \textbf{Chained Basket Splicing:} The new product officially joins the active matched comparison basket $\mathcal{S}_{c, t}$ only during scheduled annual chain-linking and rebasing routines (\texttt{annual\_rebase\_cpi}), where new link reference prices are established without disrupting historical base continuity.
 \end{enumerate}
 
-\subsection{Three-Tier Compounded Hierarchical Imputation Cascade}
+\subsection{Three-Tier Compounded Hierarchical Imputation Cascade}\label{sec:imputation}
 \hs In online retail environments, products frequently experience temporary stockouts, weekend inventory resets, or brief website maintenance. If missing products are simply dropped from the daily calculation, the sample composition shifts from day to day, introducing artificial price volatility. Conversely, carrying forward flat nominal prices ($\widehat{P}_{i, t} = P_{i, t-1}$) is strictly prohibited by international statistical guidelines \citep{imf2020cpi}, as static carry-forward artificially dampens true market volatility and creates severe downward lag bias during inflationary periods.
 
 \hs To preserve longitudinal time-series continuity while accurately reflecting market price movements, the pipeline implements an international ILO-standard \textbf{Three-Tier Compounded Hierarchical Imputation Cascade}:
@@ -403,6 +403,53 @@ where $P_{s, i, t}$ is the metric-standardized unit price (KHR/kg or KHR/L) for 
 \end{equation}
 where $R_{s, i, t} = P_{s, i, t} / P_{s, i, 0}$. This mathematical formulation strictly guarantees retailer catalog-size invariance: a promotion on 5,000 items in a hypermarket cannot distort the aggregate elementary index beyond its assigned establishment weight ($1/S_c$).
 
+\subsubsection{Economic Meaning of Equal Store Weighting and the Catalog Dominance Dilemma}
+\hs In statistical price index methodology, \textbf{``equal weighting'' ($w_s = 1/S_c$)} denotes that each active retail establishment operates as an independent geographic market sampling unit in the urban economy. When transactional sales volume ($q_{s, i}$) is unobserved in web-scraped or scanner feeds, granting each outlet equal voting power is recommended by the \textit{ILO/IMF CPI Manual} \citep{imf2020cpi} (§6.57--6.68) to prevent e-commerce catalog size from masquerading as economic market share.
+
+\hs To understand the mathematical necessity of this approach, consider a stylized empirical scenario tracking the daily Rice subclass (\texttt{01.1.1.1}) across two licensed supermarkets in Phnom Penh:
+\begin{itemize}
+    \item \textbf{Store A (Expansive Online Hypermarket, e.g., DeliShop):} Lists $N_A = 190$ rice items online. Over the observation period, Store A's prices remain unchanged ($R_{A, i} = 1.00$, $0\%$ inflation).
+    \item \textbf{Store B (Localized Chain Grocer, e.g., Chip Mong):} Lists only $N_B = 10$ rice varieties online. Due to supply adjustments, Store B experiences a $+10\%$ price increase across its rice assortment ($R_{B, i} = 1.10$, $+10\%$ inflation).
+\end{itemize}
+
+\hs Under a conventional, unweighted pooled calculation (\textbf{Flat Jevons}), all 200 scraped observations are aggregated simultaneously:
+\begin{equation}
+    I_{\text{Flat}} = \left( \prod_{i=1}^{200} R_i \right)^{\frac{1}{200}} = \left( 1.00^{190} \times 1.10^{10} \right)^{\frac{1}{200}}
+\end{equation}
+Expressing this in continuous logarithmic space reveals the implicit establishment weighting:
+\begin{equation}
+    \ln I_{\text{Flat}} = \underbrace{\frac{190}{200}}_{95\% \text{ weight}} \ln(1.00) + \underbrace{\frac{10}{200}}_{5\% \text{ weight}} \ln(1.10) = 0.95 \times 0 + 0.05 \times 0.09531 = 0.004765
+\end{equation}
+\begin{equation}
+    I_{\text{Flat}} = \exp(0.004765) \times 100 = \mathbf{100.48} \quad \implies \quad \mathbf{+0.48\% \text{ inflation}}
+\end{equation}
+Notice the distortion: because Store A listed 190 SKUs, it inadvertently absorbed \textbf{95\% of the index's weight}, almost completely erasing the genuine $+10\%$ price pressure occurring at Store B.
+
+\hs Conversely, evaluating the same data via the \textbf{Two-Stage Store-Balanced Jevons}:
+\begin{enumerate}
+    \item \textit{Stage 1 (Store Micro-Indices):}
+    \begin{equation}
+        I_A = \left( 1.00^{190} \right)^{\frac{1}{190}} = 1.0000, \qquad I_B = \left( 1.10^{10} \right)^{\frac{1}{10}} = 1.1000
+    \end{equation}
+    \item \textit{Stage 2 (Equal-Weight Establishment Synthesis with $S_c = 2$):}
+    \begin{equation}
+        I_{\text{Balanced}} = \left( I_A \right)^{\frac{1}{2}} \times \left( I_B \right)^{\frac{1}{2}} = \sqrt{1.0000 \times 1.1000} = 1.04881
+    \end{equation}
+    \begin{equation}
+        \ln I_{\text{Balanced}} = \underbrace{\frac{1}{2}}_{50\% \text{ weight}} \ln(I_A) + \underbrace{\frac{1}{2}}_{50\% \text{ weight}} \ln(I_B) \implies \mathbf{104.88} \quad \implies \quad \mathbf{+4.88\% \text{ inflation}}
+    \end{equation}
+\end{enumerate}
+Each retailer receives exactly $50\%$ voting power, preventing catalog upload volume from distorting urban economic price signals.
+
+\subsubsection{Holistic Pipeline Architecture for Handling Dataset Imbalance}
+\hs Beyond catalog size asymmetry, automated sovereign price collection must handle dataset imbalance across multiple operational strata:
+\begin{enumerate}
+    \item \textbf{Category Observation Count vs. Expenditure Share Asymmetry:} Scraping yields over $25,000$ rows daily in Division 01 (Food), but only $\sim 20$ rows in Division 04 (Housing and Regulated Utilities for electricity and municipal water). Rather than pooling raw microdata, the pipeline applies \textbf{Fixed-Basket Laspeyres Expenditure Weighting} ($W_d$): Division 04's elementary index is calculated strictly within its own boundary and weighted at exactly $17.084\%$ in the national CPI, guaranteeing that product sample size never dictates macroeconomic importance.
+    \item \textbf{Taxonomic Class Distribution Skewness:} Among 112 COICOP subclasses, staples such as general bread/cereals (\texttt{01.1.1.9}) encompass thousands of items, while niche classes (e.g., solid fuels \texttt{04.5.4} or orthopedic appliances \texttt{06.1.2}) have sparse observations. The pipeline mitigates class imbalance through $O(1)$ \textbf{Store Priority Locks} (routing specialized merchants directly to minority classes), \textbf{Negative Pattern Traps} (blocking dominant food classes from absorbing personal care items), and the \textbf{Hierarchical Roll-Up Operator ($\psi$)} that consolidates sparse subclasses into parent 4-digit categories.
+    \item \textbf{Temporal Missingness and Stockout Asymmetry:} Retail items exhibit irregular replenishment schedules. Dropping missing items introduces selection and survival bias, while static nominal price carry-forward dampens volatility. The pipeline deploys the \textbf{Three-Tier Compounded Hierarchical Imputation Cascade} (Section~\ref{sec:imputation}), advancing unobserved items via active sister item geometric drift.
+    \item \textbf{Mixed-Frequency / High-Dimensional Indicator Asymmetry in Nowcasting:} In macro nowcasting (Section~\ref{sec:nowcasting_engine}), the system combines 30 daily price momentum signals with a limited monthly historical sample of official NIS prints. To prevent overfitting on noisy daily high-frequency indicators, the engine utilizes \textbf{Regularized Ridge Regression ($L_2$ penalty)} combined with \textbf{Empirical Bayesian Prior Shrinkage} and dynamic uncertainty envelopes ($U_t = \pm 1.96 \cdot \sigma \cdot \sqrt{(T-t)/T}$).
+\end{enumerate}
+
 \subsubsection{UN COICOP 2018 5-Digit Taxonomy and Hierarchical Roll-Up}
 \hs To achieve high microeconomic granularity while preserving official macroeconomic benchmarking, the pipeline maps all 50,692 canonical commodities into the \textbf{UN COICOP 2018 5-Digit Subclass Taxonomy} ($DD.G.C.S$, spanning 112 active subclasses across all 12 divisions). This separates granular consumption staples that were previously pooled together in 4-digit categories:
 \begin{itemize}
@@ -444,7 +491,7 @@ where $\mathcal{D}_{\text{core}}$ comprises all core non-food, non-energy expend
 Specifically, Division 01 (Food and Non-Alcoholic Beverages: $44.775\%$) is excluded in its entirety. Within Division 04 (Housing and Utilities), residential electricity (Class 04.5.1) and cooking LPG cylinder refills (Class 04.5.2) are excised, retaining shelter rents and water supply. Within Division 07 (Transport), retail petroleum fuels and lubricants (Class 07.2.2) are excised, retaining passenger transit services and vehicle purchases. The resulting Refined Core CPI represents $52.200\%$ of the total national consumption basket, effectively filtering out international commodity and harvest supply noise to isolate domestic underlying monetary trends.
 
 
-\section{Phase 4: Real-Time Inflation Nowcasting and Micro-to-Macro Econometrics}
+\section{Phase 4: Real-Time Inflation Nowcasting and Micro-to-Macro Econometrics}\label{sec:nowcasting_engine}
 
 \subsection{The Official Reporting Lag and Micro-to-Macro Nowcasting Formulation}
 \hs While conventional statistical agencies rely on retrospective monthly consumer surveys published 30 to 60 days after price collection, monetary authorities and fiscal planners require continuous, real-time macroeconomic intelligence \citep{cavallo2016billion, macias2023nowcasting}. To bridge this critical temporal gap, the pipeline implements an autonomous \textbf{Two-Stage Hybrid Ridge Disaggregated Nowcasting Engine}. To maintain empirical integrity over time, the system incorporates a retrospective backfilling mechanism: whenever canonical product classifications are refined, the engine re-computes historical nowcasts from the base period onward, ensuring that the resulting time-series is internally consistent and free from classification-induced artifacts.

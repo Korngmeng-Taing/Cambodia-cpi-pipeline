@@ -169,7 +169,6 @@ isolated the quality improvement, revealing that quality-adjusted prices actuall
 Carli (Arithmetic Mean of Relatives) & Failed & Failed & $+1.18\%$ (Upward Drift) \\ \hline
 Dutot (Ratio of Arithmetic Averages) & Passed & Passed & Commensurability Deficit \\ \hline
 \textbf{Jevons (Unweighted Geometric Mean)} & \textbf{Passed} & \textbf{Passed} & \textbf{0.00\% (Axiomatic Benchmark)} \\ \hline
-Multilateral Rolling GEKS & Passed & Passed & Drift-Free (High Churn) \\ \hline
 \end{tabularx}
 \caption{Axiomatic Test Compliance and Empirical Functional Formula Drift Evaluation}
 \label{tab:axiomatic_tests}
@@ -216,8 +215,8 @@ Miscellaneous Goods \& Services & 12 & 2.065\% & 0.019\% & $+0.09\%$ \\ \hline
     \item \textbf{Divergence Between Headline and Refined Core Inflation:} Over the 30-day evaluation horizon, National Headline CPI expanded by \textbf{+0.28\%}, whereas Refined Core CPI (excluding Food and Transport) advanced by merely \textbf{+0.07\%}. This substantial wedge demonstrates the critical policy utility of high-frequency dual-index tracking: while Headline movements reflected immediate real household expenditure pressure from food and energy imports, Core dynamics confirmed that underlying domestic demand and generalized monetary pressures remained anchored.
 \end{itemize}
 
-\subsection{Subclass Attribution and Expenditure-Weighted Decomposition}
-\hs The high-granularity 4-digit NIS COICOP classification framework enables instantaneous decomposition of aggregate index innovations into specific commodity drivers. Table~\ref{tab:subclass_contributors} reports the top five contributing subclasses to the monthly Headline CPI increase, calculated as their expenditure-weighted contribution ($w_c \times \Delta P_c$).
+\subsection{Class Attribution and Expenditure-Weighted Decomposition}
+\hs The 4-digit NIS COICOP classification framework enables instantaneous decomposition of aggregate index innovations into specific commodity drivers. Table~\ref{tab:class_contributors} reports the top five contributing Classes to the monthly Headline CPI increase, calculated as their expenditure-weighted contribution ($w_c \times \Delta P_c$).
 
 \begin{table}[H]
 \centering
@@ -226,20 +225,20 @@ Miscellaneous Goods \& Services & 12 & 2.065\% & 0.019\% & $+0.09\%$ \\ \hline
 \begin{tabularx}{\textwidth}{|c|>{\raggedright\arraybackslash}X|c|c|c|}
 \hline
 \rowcolor{blue!20}
-\textbf{COICOP Code} & \textbf{Subclass Description} & \textbf{Expenditure Weight ($w_c$)} & \textbf{30d Price Change} & \textbf{Weighted Contribution} \\ \hline
-01.1.1 & Rice, Bread \& Cereals & 14.850\% & $+0.42\%$ & $+0.0624\%$ \\ \hline
-07.2.2 & Fuels and Lubricants (Gasoline \& Diesel) & 5.120\% & $+1.15\%$ & $+0.0589\%$ \\ \hline
-01.1.3 & Fresh Fish and Seafood & 11.200\% & $+0.38\%$ & $+0.0426\%$ \\ \hline
-01.1.2 & Meat (Pork, Beef, Poultry) & 9.450\% & $+0.31\%$ & $+0.0293\%$ \\ \hline
-11.1.1 & Restaurants, Cafes \& Canteens & 2.650\% & $+0.28\%$ & $+0.0074\%$ \\ \hline
+\textbf{COICOP Code} & \textbf{Class Description} & \textbf{Expenditure Weight ($w_c$)} & \textbf{30d Price Change} & \textbf{Weighted Contribution} \\ \hline
+01.1.2 & Meat (Pork, Beef, Poultry) & 9.681\% & $+0.31\%$ & $+0.0300\%$ \\ \hline
+01.1.3 & Fresh Fish and Seafood & 9.310\% & $+0.38\%$ & $+0.0354\%$ \\ \hline
+01.1.1 & Rice, Bread \& Cereals & 8.274\% & $+0.42\%$ & $+0.0348\%$ \\ \hline
+07.2.2 & Fuels and Lubricants (Gasoline \& Diesel) & 5.175\% & $+0.85\%$ & $+0.0440\%$ \\ \hline
+01.1.7 & Fresh Vegetables & 4.814\% & $+0.35\%$ & $+0.0168\%$ \\ \hline
 \rowcolor{gray!15}
-\textbf{Top 5} & \textbf{Combined Leading Subclass Drivers} & \textbf{43.270\%} & --- & \textbf{+0.2006\% (71.6\% of Total)} \\ \hline
+\textbf{Top 5} & \textbf{Combined Leading Class Drivers} & \textbf{37.254\%} & --- & \textbf{+0.1610\% (57.5\% of Total)} \\ \hline
 \end{tabularx}
-\caption{Top Subclass Contributors to Monthly Headline CPI Innovation}
-\label{tab:subclass_contributors}
+\caption{Top Class Contributors to Monthly Headline CPI Innovation}
+\label{tab:class_contributors}
 \end{table}
 
-\hs As demonstrated in Table~\ref{tab:subclass_contributors}, three primary food categories (rice, fish, and meat) alongside retail motor fuels accounted for \textbf{71.6\% of total aggregate inflation innovation} ($+0.2006\%$ out of $+0.2800\%$). By providing continuous subclass-level transparency, the automated pipeline provides central bankers and fiscal authorities with immediate diagnostic insight, distinguishing localized agrarian supply shocks and global oil market pass-through from broad-based domestic wage-price spirals.
+\hs As demonstrated in Table~\ref{tab:class_contributors}, primary food staples (meat, fish, rice, and vegetables) alongside retail motor fuels accounted for the majority of aggregate inflation innovation. By providing continuous category-level transparency, the automated pipeline provides central bankers and fiscal authorities with immediate diagnostic insight, distinguishing localized agrarian supply shocks and global oil market pass-through from broad-based domestic wage-price spirals.
 
 \subsection{Annual Rebasing and Continuous Series Chain-Linking Integrity}
 \hs In compliance with international guidelines \citep{imf2020cpi}, regular basket updates and annual index rebasings must maintain continuous macroeconomic time-series without artificial level shifts or jump discontinuities across December--January transition boundaries.
@@ -269,28 +268,6 @@ and seamlessly rescales subsequent elementary trajectories. Empirical simulation
     \item \textbf{Strict Division Assignment:} Every Group maps to exactly one of the 12 official COICOP Divisions.
 \end{enumerate}
 
-\subsection{Aggregation Formula Sensitivity: Store-Balanced vs. Flat Jevons}
-\hs To evaluate whether store balancing truly matters in high-frequency web scraping, we conducted an empirical sensitivity experiment over a 30-day continuous historical window. We compared the deployed \textbf{Two-Stage Store-Balanced Jevons} against a conventional, unweighted \textbf{Single-Stage Flat Jevons}:
-
-\begin{table}[H]
-\centering
-\small
-\setlength{\tabcolsep}{6pt}
-\begin{tabular}{|l|c|c|c|}
-\hline
-\rowcolor{blue!20}
-\textbf{Metric / Metric Property} & \textbf{Store-Balanced Jevons} & \textbf{Flat Single-Stage Jevons} & \textbf{Difference ($\Delta$)} \\ \hline
-Mean Headline CPI Level & 99.7892 & 100.0658 & $-0.2766$ index points \\ \hline
-Standard Deviation of Delta & --- & --- & $1.1098$ \\ \hline
-Catalog Dominance Resistance & Guaranteed ($1/S$ outlet weight) & None ($N_{\text{store}}/N_{\text{total}}$ bias) & --- \\ \hline
-Retailer Promotion Skew & Neutralized across outlets & Biased toward hypermarkets & --- \\ \hline
-\end{tabular}
-\caption{Sensitivity Analysis: Two-Stage Store-Balanced Jevons vs. Flat Unweighted Jevons (30-Day Window).}
-\label{tab:sensitivity_jevons}
-\end{table}
-
-\hs In simple words, the experiment shows that Flat Jevons gives an unfair advantage to large online supermarkets (such as DeliShop or AEON) that list tens of thousands of items. If a hypermarket discounts thousands of slow-moving packaged goods, an unweighted Flat Jevons index would show false deflation for the entire country, ignoring the real price increases at neighborhood grocers. By contrast, the Two-Stage Store-Balanced Jevons ensures that each retail merchant has an equal voice ($1/S$). On average, this prevented large supermarket catalogs from artificially pulling down the national price level by \textbf{$-0.2766$ index points}, keeping the inflation measure faithful to what everyday shoppers actually experience across different stores.
-
 \subsection{Official Benchmark Comparison and Historical Backfill Performance}
 \hs The complete daily CPI engine was backfilled across all \textbf{41 historical calculation dates} (from inception on August 18, 2026 through September 27, 2026), generating over 490 division-level observations and updating the core Kimball star-schema data models.
 
@@ -309,6 +286,8 @@ This near-perfect alignment confirms that digital price scraping, when paired wi
     \item \textbf{dbt Transformation Models:} All 26 dbt Gold layer models and data schema tests passed with zero warnings and zero errors.
     \item \textbf{Apache Airflow Orchestration:} The production scheduler continuously compiles and syncs all daily workflow DAGs in under $0.65$ seconds with zero syntax errors, ensuring reliable automated daily execution at 08:00 AM ICT without requiring manual human intervention.
 \end{itemize}
+
+\section{Real-Time Inflation Nowcasting Evaluation and Econometric Convergence}
 
 \subsection{Empirical Accuracy Benchmarks Across Intra-Month Checkpoints}
 \hs The primary institutional objective of the high-frequency pipeline is to eliminate the 30-to-60-day reporting lag inherent in official national statistics through continuous, real-time nowcasting. Out-of-sample evaluation was conducted across historical monthly reference periods by comparing daily nowcasted index values $\widehat{\text{CPI}}_M(t)$ and Month-over-Month projected inflation $\widehat{\pi}_{\text{MoM}, t}$ against official retrospective releases published by the National Institute of Statistics (NIS).
@@ -482,17 +461,8 @@ the pipeline outputs an exact estimated index level directly compatible with off
     \item \textbf{Ministry of Economy and Finance (MEF):} Can anticipate fiscal expenditure pressures, fuel subsidy allocations, and vulnerable household cash-transfer adjustments with verified high-frequency empirical evidence.
 \end{itemize}
 
-\subsection{Official NIS Benchmark Comparison and Tracking Error Analysis}
-\hs Beyond internal nowcasting convergence, the pipeline continuously benchmarks its aggregated indices against official retrospective publications from the National Institute of Statistics (NIS) via the automated benchmark tracking mart. 
-
-\hs By rebasing the pipeline's daily Jevons/Laspeyres index to the official Oct--Dec 2006 anchor:
-\begin{equation}
-    \text{CPI}_{M, \text{rebased}}^{\text{pipeline}} = \left( \frac{\text{CPI}_M^{\text{pipeline}}}{100.0} \right) \times \text{CPI}_{2026-08}^{\text{NIS}}
-\end{equation}
-the model evaluated tracking error ($\epsilon_{\text{tracking}} = \text{CPI}_{\text{rebased}} - \text{CPI}_{\text{NIS}}$) across the operational period. The rebased pipeline index matched the baseline anchor month at $219.007$, with subsequent tracking errors remaining bounded within $\pm 0.12$ index points ($< 0.05\%$ relative tracking error) and achieving \textbf{100\% directional concordance} on month-over-month inflation momentum. This empirical validation confirms that automated high-frequency web scraping across modern retail platforms faithfully replicates macroeconomic price movements compiled through traditional physical field surveys, while eliminating publication lags.
-
-\section{Empirical Evaluation of UN COICOP 2018 5-Digit Granularity and Store-Balanced Jevons Aggregation}
-\hs The deployment of the Two-Stage Store-Balanced Jevons engine and the UN COICOP 2018 5-digit classification framework establishes an unprecedented empirical baseline for digital price measurement in Southeast Asia. Across the continuous 39-day evaluation horizon (August 18 to September 24, 2026), the system tracked over $1.91$ million elementary price observations across $50,208$ unique canonical consumer commodities.
+\section{Empirical Evaluation of UN COICOP 2018 Granularity and Store-Balanced Jevons Aggregation}
+\hs The deployment of the Two-Stage Store-Balanced Jevons engine and the UN COICOP 2018 classification framework establishes an unprecedented empirical baseline for digital price measurement in Southeast Asia. Across the continuous 41-day evaluation horizon (August 18 to September 27, 2026), the system tracked over $1.91$ million elementary price observations across $50,208$ unique canonical consumer commodities.
 
 \subsection{Longitudinal Trajectory of Headline, Core, and Food CPI}
 \hs Figure~\ref{fig:headline_core_trajectory} depicts the daily trajectory of the Cambodian Headline Consumer Price Index alongside Core CPI (excluding food and transport) and Food CPI (Division 01). 
@@ -500,11 +470,11 @@ the model evaluated tracking error ($\epsilon_{\text{tracking}} = \text{CPI}_{\t
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.95\textwidth]{images/fig1_headline_core_trajectory.png}
-    \caption{39-Day Daily Trajectory of Headline CPI, Core CPI, and Food CPI in Cambodia (August 18 -- September 24, 2026), overlaid with daily imputation rates.}
+    \caption{41-Day Daily Trajectory of Headline CPI, Core CPI, and Food CPI in Cambodia (August 18 -- September 27, 2026), overlaid with daily imputation rates.}
     \label{fig:headline_core_trajectory}
 \end{figure}
 
-\hs The daily index hovered within an exceptionally tight corridor: Headline CPI moved from $100.00$ at base to $100.57$ on September 22 before settling at $99.83$ on September 24. Core CPI exhibited structural stickiness, stabilizing between $99.02$ and $99.33$, whereas Food CPI accounted for $78\%$ of aggregate high-frequency variance. Crucially, the daily missing-price imputation rate remained strictly bounded between $5.95\%$ and $7.05\%$ (averaging $6.4\%$), confirming that over $93\%$ of daily elementary indices are computed from direct, live retail transactions rather than synthetic imputations.
+\hs The daily index hovered within an exceptionally tight corridor: Headline CPI moved from $100.00$ at base to $100.57$ on September 22 before settling at $99.79$ on September 27. Core CPI exhibited structural stickiness, stabilizing between $99.02$ and $99.33$, whereas Food CPI accounted for $78\%$ of aggregate high-frequency variance. Crucially, the daily missing-price imputation rate remained strictly bounded between $5.95\%$ and $7.05\%$ (averaging $6.4\%$), confirming that over $93\%$ of daily elementary indices are computed from direct, live retail transactions rather than synthetic imputations.
 
 \subsection{Ablation Study: Mitigating Hypermarket Catalog Dominance}
 \hs A pivotal empirical contribution of this research is the quantitative demonstration of store-balancing benefits. Under standard unweighted geometric aggregation (Flat Jevons), large digital supermarkets (such as Delishop with over 20,000 listed items) completely dominate the elementary index calculation. 
@@ -516,9 +486,30 @@ the model evaluated tracking error ($\epsilon_{\text{tracking}} = \text{CPI}_{\t
     \label{fig:store_balancing_ablation}
 \end{figure}
 
-\hs Figure~\ref{fig:store_balancing_ablation} displays the ablation divergence spread ($\Delta I = I_{\text{Flat}} - I_{\text{Balanced}}$). As formalized in the stylized analytical model in Section~3.6.2, Flat Jevons allocates an implicit weight proportional to item count (giving $95\%$ weight to a retailer listing $190$ SKUs over a grocer listing $10$ SKUs), allowing a single establishment's stock updates to dictate the index. In the empirical dataset, during promotional campaigns launched by the dominant hypermarket, Flat Jevons produced spurious aggregate index fluctuations of up to $\pm 1.8$ index points, inducing a persistent upward distortion of \textbf{+0.52 index points} ($101.62$ under Flat Jevons vs. $101.15$ under Two-Stage Store-Balanced Jevons on the terminal September evaluation checkpoint).
+\hs Figure~\ref{fig:store_balancing_ablation} displays the ablation divergence spread ($\Delta I = I_{\text{Flat}} - I_{\text{Balanced}}$). As formalized in Section~3.6.2, Flat Jevons allocates an implicit weight proportional to item count (giving $95\%$ weight to a retailer listing $190$ SKUs over a grocer listing $10$ SKUs), allowing a single establishment's stock updates to dictate the index. In the empirical dataset, during promotional campaigns launched by the dominant hypermarket, Flat Jevons produced spurious aggregate index fluctuations of up to $\pm 1.8$ index points, inducing a persistent upward distortion of \textbf{+0.52 index points} ($101.62$ under Flat Jevons vs. $101.15$ under Two-Stage Store-Balanced Jevons on the terminal evaluation checkpoint).
 
-\hs By enforcing equal weighting across retail establishments within each elementary cell ($w_s = 1/S_c$ in Stage 1, followed by unweighted geometric aggregation across stores in Stage 2), the Two-Stage Store-Balanced Jevons engine neutralized catalog inflation. This intervention:
+\hs To rigorously quantify this effect, Table~\ref{tab:sensitivity_jevons} compares the deployed Two-Stage Store-Balanced Jevons against the Single-Stage Flat Jevons across key statistical metrics:
+
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\rowcolor{blue!20}
+\textbf{Metric / Metric Property} & \textbf{Store-Balanced Jevons} & \textbf{Flat Single-Stage Jevons} & \textbf{Difference ($\Delta$)} \\ \hline
+Mean Headline CPI Level & 99.7892 & 100.0658 & $-0.2766$ index points \\ \hline
+Standard Deviation of Delta & --- & --- & $1.1098$ \\ \hline
+Catalog Dominance Resistance & Guaranteed ($1/S$ outlet weight) & None ($N_{\text{store}}/N_{\text{total}}$ bias) & --- \\ \hline
+Retailer Promotion Skew & Neutralized across outlets & Biased toward hypermarkets & --- \\ \hline
+\end{tabular}
+\caption{Sensitivity Analysis: Two-Stage Store-Balanced Jevons vs. Flat Unweighted Jevons.}
+\label{tab:sensitivity_jevons}
+\end{table}
+
+\hs In simple words, the experiment shows that Flat Jevons gives an unfair advantage to large online supermarkets (such as DeliShop or AEON) that list tens of thousands of items. If a hypermarket discounts thousands of slow-moving packaged goods, an unweighted Flat Jevons index would show false deflation for the entire country, ignoring the real price increases at neighborhood grocers. By contrast, the Two-Stage Store-Balanced Jevons ensures that each retail merchant has an equal voice ($1/S$). On average, this prevented large supermarket catalogs from artificially pulling down the national price level by \textbf{$-0.2766$ index points}, keeping the inflation measure faithful to what everyday shoppers actually experience across different stores.
+
+\hs By enforcing equal weighting across retail establishments within each elementary cell ($w_s = 1/S$ in Stage 1, followed by unweighted geometric aggregation across stores in Stage 2), the Two-Stage Store-Balanced Jevons engine neutralized catalog inflation. This intervention:
 \begin{itemize}
     \item Reduced high-frequency daily index variance by \textbf{64.0\%}.
     \item Eliminated the $+0.52$ index point structural distortion caused by hypermarket promotional cycling.
@@ -545,8 +536,8 @@ the model evaluated tracking error ($\epsilon_{\text{tracking}} = \text{CPI}_{\t
 \texttt{01.1.2.2} & Fresh Beef & 01.1.2 (9.681\%) & 2.165\% & 100.10 \\ \hline
 \texttt{01.1.2.3} & Fresh Chicken & 01.1.2 (9.681\%) & 1.303\% & 100.06 \\ \hline
 \texttt{01.1.2.4} & Fresh Duck & 01.1.2 (9.681\%) & 0.319\% & 100.04 \\ \hline
-\texttt{07.2.2.1} & Retail Automotive Gasoline & 07.2.2 (5.175\%) & 4.969\% & 115.13 \\ \hline
-\texttt{07.2.2.2} & Retail Automotive Diesel & 07.2.2 (5.175\%) & 0.144\% & 112.40 \\ \hline
+\texttt{07.2.2.1} & Retail Automotive Gasoline & 07.2.2 (5.175\%) & 4.969\% & 100.85 \\ \hline
+\texttt{07.2.2.2} & Retail Automotive Diesel & 07.2.2 (5.175\%) & 0.144\% & 100.60 \\ \hline
 \texttt{07.2.2.3} & Motor Oils and Lubricants & 07.2.2 (5.175\%) & 0.062\% & 100.25 \\ \hline
 \end{tabularx}
 \caption{Empirical 5-Digit COICOP Subclass Expenditure Weights (CEIC/NIS Phnom Penh) and Terminal Micro-Indices}
@@ -593,7 +584,7 @@ the model evaluated tracking error ($\epsilon_{\text{tracking}} = \text{CPI}_{\t
 \hs Continuous telemetry from the live production database confirms the high fidelity and robustness of the digital price pipeline:
 \begin{itemize}
     \item \textbf{National Consumption Weight Coverage ($98.83\%$):} The automated scraping infrastructure actively monitors 11 of the 12 COICOP divisions, capturing exactly \textbf{98.826\%} of the official national expenditure basket. Only tertiary education tuition fees (Division 10, weight $1.174\%$), which adjust purely on annual academic cycles, rely on discrete administrative gazettes.
-    \item \textbf{Low Imputation Rate ($6.02\%$):} Across the 39-day continuous evaluation window, the daily missing-price imputation rate averaged \textbf{6.0204\%} (oscillating between a minimum of $5.95\%$ and a peak of $8.40\%$). Because this is well below the internationally accepted maximum threshold of $10.0\%$, \textbf{93.98\%} of all elementary indices are computed from direct, live retail transactions rather than carried-forward imputations.
+    \item \textbf{Low Imputation Rate ($6.02\%$):} Across the 41-day continuous evaluation window (August 18 to September 27, 2026), the daily missing-price imputation rate averaged \textbf{6.02\%} (oscillating between a minimum of $5.95\%$ and a peak of $8.40\%$). Because this is well below the internationally accepted maximum threshold of $10.0\%$, \textbf{93.98\%} of all elementary indices are computed from direct, live retail transactions rather than carried-forward imputations.
     \item \textbf{High-Density Sampling Universe:} Each morning, the pipeline processes over \textbf{15,800 canonical items} representing \textbf{16,600+ observation-level price quotes}, ensuring high statistical power and eliminating idiosyncratic single-item sampling noise.
 \end{itemize}
 

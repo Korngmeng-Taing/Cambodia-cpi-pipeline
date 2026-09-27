@@ -279,29 +279,29 @@ In the production database, Store Purity accounts for \textbf{14.34\%} of the ma
 \hs Once clean price observations are assigned to their respective consumption categories, the Gold layer computes price relatives comparing current prices to the baseline period (August 18, 2026 = 100.00).
 
 \subsubsection{Formal Definition of the Elementary Aggregate}
-\hs Following international statistical standards \citep{imf2020cpi}, an \textbf{Elementary Aggregate (EA)} is defined as the lowest hierarchical stratum in the index calculation for which expenditure weights are known and calibrated. In this architecture, an Elementary Aggregate is explicitly defined as:
+\hs Following international statistical standards \citep{imf2020cpi}, an \textbf{Elementary Aggregate (EA)} is defined as the lowest hierarchical stratum in the index calculation for which reliable expenditure weights are available and products are sufficiently homogeneous. In this architecture, an Elementary Aggregate is explicitly defined as:
 \begin{quote}
-\textit{The set of all homogeneous, quality-standardized product varieties belonging to the same 4-digit COICOP Class ($c$) observed on day $t$ across all monitored retail outlets.}
+\textit{The set of all homogeneous, quality-standardized product varieties belonging to the lowest reliable COICOP level (a detailed Subclass in Case A, or the Class itself in Case B) observed on day $t$ across all monitored retail outlets.}
 \end{quote}
-Formally, let $\mathcal{S}_{c, t}$ denote the active matched basket for 4-digit class $c$ on day $t$:
+Formally, let $\mathcal{S}_{e, t}$ denote the active matched basket for elementary aggregate $e$ on day $t$:
 \begin{equation}
-    \mathcal{S}_{c, t} = \left\{ (i, s) \;\middle|\; \text{Item } i \text{ sold at store } s \text{ with standardized price } P_{i,s,t} > 0, \; \text{Class}(i) = c \right\}
+    \mathcal{S}_{e, t} = \left\{ (i, s) \;\middle|\; \text{Item } i \text{ sold at store } s \text{ with standardized price } P_{i,s,t} > 0, \; \text{EA}(i) = e \right\}
 \end{equation}
-Within stratum $\mathcal{S}_{c, t}$, all multi-store observations representing the same canonical item are converted into continuous metric unit prices (KHR/kg or KHR/L) to enforce pure price dimensional homogeneity prior to aggregation.
+Within stratum $\mathcal{S}_{e, t}$, all multi-store observations representing the same canonical item are converted into continuous metric unit prices (KHR/kg or KHR/L) to enforce pure price dimensional homogeneity prior to aggregation.
 
 \subsubsection{Jevons Geometric Mean and Log-Price Formulation}
 \hs Because web scrapers observe daily price tags ($P$) without corresponding transaction sales quantities ($Q$), weighting individual brand varieties within an elementary aggregate is empirically impossible. Under the ILO and UN CPI guidelines, the unweighted geometric mean (\textbf{Jevons formula}) is mathematically mandated:
 \begin{equation}
-    I_{c, t}^{\text{Jevons}} = \prod_{i \in \mathcal{S}_{c, t}} \left( \frac{p_{i, t}}{p_{i, 0}} \right)^{\frac{1}{n_c}} = \frac{\left( \prod_{i \in \mathcal{S}_{c, t}} p_{i, t} \right)^{\frac{1}{n_c}}}{\left( \prod_{i \in \mathcal{S}_{c, t}} p_{i, 0} \right)^{\frac{1}{n_c}}} \times 100
+    I_{e, t}^{\text{Jevons}} = \prod_{i \in \mathcal{S}_{e, t}} \left( \frac{p_{i, t}}{p_{i, 0}} \right)^{\frac{1}{n_e}} = \frac{\left( \prod_{i \in \mathcal{S}_{e, t}} p_{i, t} \right)^{\frac{1}{n_e}}}{\left( \prod_{i \in \mathcal{S}_{e, t}} p_{i, 0} \right)^{\frac{1}{n_e}}} \times 100
 \end{equation}
-where $p_{i, t}$ is the price of product $i$ on day $t$, $p_{i, 0}$ is its reference base price, and $n_c = |\mathcal{S}_{c, t}|$ is the number of active items in class $c$.
+where $p_{i, t}$ is the price of product $i$ on day $t$, $p_{i, 0}$ is its reference base price, and $n_e = |\mathcal{S}_{e, t}|$ is the number of active items in elementary aggregate $e$.
 
 \hs In computational production across tens of thousands of daily items, evaluating continuous product chains $\prod (p_{i, t} / p_{i, 0})$ directly in hardware risks severe numerical floating-point overflow or underflow. To ensure numerical stability, econometric additivity, and high computational efficiency in SQL database engines, the pipeline compiles the Jevons index via \textbf{logarithmic price differences} (log-prices):
 \begin{equation}
-    \ln I_{c, t}^{\text{Jevons}} = \frac{1}{n_c} \sum_{i \in \mathcal{S}_{c, t}} \Big( \ln p_{i, t} - \ln p_{i, 0} \Big)
+    \ln I_{e, t}^{\text{Jevons}} = \frac{1}{n_e} \sum_{i \in \mathcal{S}_{e, t}} \Big( \ln p_{i, t} - \ln p_{i, 0} \Big)
 \end{equation}
 \begin{equation}
-    I_{c, t}^{\text{Jevons}} = \exp\left( \frac{1}{n_c} \sum_{i \in \mathcal{S}_{c, t}} \Delta \ln p_{i, t} \right) \times 100
+    I_{e, t}^{\text{Jevons}} = \exp\left( \frac{1}{n_e} \sum_{i \in \mathcal{S}_{e, t}} \Delta \ln p_{i, t} \right) \times 100
 \end{equation}
 where $\Delta \ln p_{i, t} = \ln p_{i, t} - \ln p_{i, 0}$ represents the continuous logarithmic rate of return (log price relative).
 
@@ -447,7 +447,7 @@ Each retailer receives exactly $50\%$ voting power, preventing catalog upload vo
 \hs Beyond catalog size asymmetry, automated sovereign price collection must handle dataset imbalance across multiple operational strata:
 \begin{enumerate}
     \item \textbf{Category Observation Count vs. Expenditure Share Asymmetry:} Scraping yields over $25,000$ rows daily in Division 01 (Food), but only $\sim 20$ rows in Division 04 (Housing and Regulated Utilities for electricity and municipal water). Rather than pooling raw microdata, the pipeline applies \textbf{Fixed-Basket Laspeyres Expenditure Weighting} ($W_d$): Division 04's elementary index is calculated strictly within its own boundary and weighted at exactly $17.084\%$ in the national CPI, guaranteeing that product sample size never dictates macroeconomic importance.
-    \item \textbf{Taxonomic Class Distribution Skewness:} Among 112 COICOP subclasses, staples such as general bread/cereals (\texttt{01.1.1.9}) encompass thousands of items, while niche classes (e.g., solid fuels \texttt{04.5.4} or orthopedic appliances \texttt{06.1.2}) have sparse observations. The pipeline mitigates class imbalance through $O(1)$ \textbf{Store Priority Locks} (routing specialized merchants directly to minority classes), \textbf{Negative Pattern Traps} (blocking dominant food classes from absorbing personal care items), and the \textbf{Hierarchical Roll-Up Operator ($\psi$)} that consolidates sparse subclasses into parent 4-digit categories.
+    \item \textbf{Taxonomic Distribution Skewness:} Across the 76 leaf Elementary Aggregates, core staples such as rice and fresh meats encompass thousands of daily items, while specialized classes (e.g., orthopedic appliances or municipal water tariffs) have sparse observations. The pipeline mitigates class imbalance through $O(1)$ \textbf{Store Priority Locks} (routing specialized merchants directly to minority categories), \textbf{Negative Pattern Traps} (blocking dominant food classes from absorbing personal care items), and dynamic multi-tier aggregation that aggregates each elementary node directly to its parent without artificial pooling.
     \item \textbf{Temporal Missingness and Stockout Asymmetry:} Retail items exhibit irregular replenishment schedules. Dropping missing items introduces selection and survival bias, while static nominal price carry-forward dampens volatility. The pipeline deploys the \textbf{Three-Tier Compounded Hierarchical Imputation Cascade} (Section~\ref{sec:imputation}), advancing unobserved items via active sister item geometric drift.
     \item \textbf{Mixed-Frequency / High-Dimensional Indicator Asymmetry in Nowcasting:} In macro nowcasting (Section~\ref{sec:nowcasting_engine}), the system combines 30 daily price momentum signals with a limited monthly historical sample of official NIS prints. To prevent overfitting on noisy daily high-frequency indicators, the engine utilizes \textbf{Regularized Ridge Regression ($L_2$ penalty)} combined with \textbf{Empirical Bayesian Prior Shrinkage} and dynamic uncertainty envelopes ($U_t = \pm 1.96 \cdot \sigma \cdot \sqrt{(T-t)/T}$).
 \end{enumerate}

@@ -19,7 +19,7 @@
 \begin{enumerate}
     \item \textbf{The Bronze Layer (Raw Storage):} Acts as the permanent, immutable landing zone for all incoming web extractions. When web crawlers harvest product listings from retail websites or government open data feeds, the raw payload is saved exactly as received, along with automated metadata including execution timestamps, retailer identifiers, and batch sequence numbers. No transformations, filters, or corrections are applied in this layer. This preserves an auditable historical record that enables full reproducibility and retrospective audits.
     \item \textbf{The Silver Layer (Cleaned and Validated Data):} Acts as the central data refinery. In this layer, raw unstructured text is cleansed, duplicate listings are deduplicated, multi-currency values are unified into Cambodian Riel, packaging sizes are parsed into standard metric units, identical products are linked across time using semantic entity matching, and products are classified into the 12 United Nations COICOP categories using Store Priority routing and Google Gemini AI batch classification with domain trap guardrails.
-    \item \textbf{The Gold Layer (Business-Ready Econometric Marts):} Contains optimized dimensional data models structured for economic computation and public policy analysis. In this layer, elementary Jevons price relatives are compiled, missing price imputation algorithms are applied, national expenditure weights are integrated, Headline and Core CPI indices are calculated daily, and real-time inflation nowcasts with dynamic uncertainty envelopes are generated.
+    \item \textbf{The Gold Layer (Business-Ready Econometric Marts):} Implements a Kimball star-schema dimensional warehouse structured for high-performance econometric computation and public policy analysis. In this layer, conformed dimensions (\texttt{dim\_coicop\_hierarchy}, \texttt{dim\_items}, \texttt{dim\_stores}) interface with partitioned fact tables (\texttt{fct\_daily\_prices}, \texttt{fct\_elementary\_indices}, \texttt{fct\_coicop\_class\_daily}, \texttt{fct\_cpi\_daily}, \texttt{fct\_cpi\_nowcast}) and curated analytical views. The Gold layer compiles store-balanced Jevons elementary indices across 76 dynamic leaf aggregates, aggregates 12 COICOP divisions using CSES expenditure weights, imputes missing quotes, executes regularized Ridge nowcasting, and serves real-time Metabase business intelligence dashboards.
 \end{enumerate}
 
 \subsection{Multi-Source Coverage: The 25 Market Sources}
@@ -745,6 +745,71 @@ and verifying whether actual inflation fell within the estimated 95\% confidence
 \end{enumerate}
 
 \section{Production Deployment and Analytical Dashboard Architecture}
+
+\subsection{The Gold Layer: Kimball Star-Schema Dimensional Architecture and Analytical Marts}
+\hs The final medallion stage is the \textbf{Gold Layer}, designed according to Ralph Kimball's dimensional data modeling methodology. In contrast to the normalized relational schemas of the Silver layer, the Gold layer organizes economic facts and reference dimensions into a high-performance \textbf{Star Schema} optimized for high-speed analytical querying, econometric index compilation, machine learning nowcasting, and business intelligence reporting in Metabase and Power BI.
+
+\hs The architecture cleanly decouples static, conformed master dimensions from high-frequency transactional and aggregated fact tables, layered beneath curated analytical marts:
+\begin{enumerate}
+    \item \textbf{Conformed Master Dimensions (\texttt{gold.dim\_*}):}
+    \begin{itemize}
+        \item \texttt{gold.dim\_coicop\_hierarchy}: The master classification dimension representing the dynamic UN COICOP 2018 hierarchy. Rather than enforcing an artificial, uniform 5-digit depth, this table explicitly models the irregular COICOP structure: Division $\to$ Group $\to$ Class $\to$ Subclass. Each record encodes its \texttt{node\_code}, \texttt{parent\_code}, \texttt{node\_level}, official CSES household \texttt{weight}, \texttt{has\_weighted\_children}, and a boolean flag \texttt{is\_elementary\_aggregate}. This establishes exactly \textbf{76 leaf Elementary Aggregates (EAs)} (35 Case A Subclasses and 41 Case B Classes) with zero double-counting and an exact $100.000\%$ national expenditure weight summation.
+        \item \texttt{gold.dim\_items}: The canonical item master dimension (one row per unique product across all merchants). It stores cleaned canonical names, bilingual English/Khmer descriptions, package sizes, normalized metric units (e.g., kg, L), barcode/GTIN alias arrays, and confirmed COICOP classification codes.
+        \item \texttt{gold.dim\_stores}: The retail establishment and data source dimension. It maintains merchant names, retail channel types (hypermarket, quick-commerce delivery, digital marketplace, retail pharmacy, regulated utility, government gazette), geographic coordinates, default currency, and operational status.
+        \item \texttt{gold.dim\_item\_base\_prices}: A date-effective reference dimension storing the baseline anchor price ($P_{i,0}$) and standardized metric unit price for every canonical item on the active base date.
+        \item \texttt{gold.dim\_nis\_official\_cpi} \& \texttt{gold.cpi\_base\_dates}: Lookup tables storing retrospective official monthly CPI releases published by the National Institute of Statistics ($Base = 100$ in Oct--Dec 2006) and annual chain-linking splice factors ($S$) to support continuous series splicing.
+    \end{itemize}
+
+    \item \textbf{High-Performance Fact Tables (\texttt{gold.fct\_*}):}
+    \begin{itemize}
+        \item \texttt{gold.fct\_daily\_prices}: The primary micro-level price fact table. Its grain is one row per \texttt{(scrape\_date, store\_slug, item\_id)}. It contains standardized prices in KHR, metric unit prices, discount flags, continuous log-price relatives ($\ln(P_{i,t}/P_{i,0})$), and MAD outlier flags. To sustain long-term high-speed queries across millions of rows, it is declaratively partitioned by calendar month.
+        \item \texttt{gold.fct\_elementary\_indices}: The foundational micro-index fact table. Its grain is one row per \texttt{(calculation\_date, coicop\_code)}. It records the Stage 1 Store-Balanced Jevons index ($I_{EA,t}$) across the 76 leaf Elementary Aggregates, accompanied by active item counts, imputed item counts, store counts ($S$), and effective coverage weights. It is partitioned monthly from inception through 2027.
+        \item \texttt{gold.fct\_coicop\_class\_daily}: Intermediate 4-digit COICOP class index facts dynamically rolled up from Case A Subclasses or Case B Classes using official survey weights ($w_e$).
+        \item \texttt{gold.fct\_cpi\_daily}: The daily macroeconomic synthesis fact table. It records the 12 COICOP Division indices, National Headline CPI, and Refined Core CPI (excluding food and transport), along with daily active aggregate counts and total coverage weights.
+        \item \texttt{gold.fct\_cpi\_monthly}: Conformed monthly CPI facts, Month-over-Month (MoM), and Year-over-Year (YoY) inflation rates.
+        \item \texttt{gold.fct\_cpi\_nowcast}: The real-time machine learning nowcasting fact table. It logs daily projected month-end inflation ($\widehat{\pi}_{\text{MoM}}$), nowcasted Headline CPI on the official NIS scale, dynamic 95\% confidence envelope boundaries ($[CI_{\text{lower}}, CI_{\text{upper}}]$), and individual sub-basket projections (Food, Transport, Housing, Restaurants, Alcohol).
+        \item \texttt{gold.nowcast\_calibrated\_parameters} \& \texttt{gold.nowcast\_performance\_metrics}: Tracks rolling 36-month RidgeCV pass-through elasticities ($\hat{\beta}_j$), Empirical Bayes shrinkage coefficients ($\lambda_k$), out-of-sample RMSE, and Diebold--Mariano test statistics.
+        \item \texttt{gold.mart\_price\_anomalies}: An anomaly audit fact table recording daily price shifts ($\ge 20\%$ DoD), critical spikes, shrinkflation alerts, and missing-price streaks.
+    \end{itemize}
+
+    \item \textbf{Curated Analytical Views and Serving Marts (\texttt{gold.v\_*}):}
+    \begin{itemize}
+        \item \texttt{gold.fct\_cpi\_nis\_comparison}: The tracking error evaluation mart comparing daily/monthly high-frequency scraped CPI against official NIS Cambodia benchmark releases ($\epsilon_{\text{tracking}} = \text{CPI}_{\text{rebased}} - \text{CPI}_{\text{NIS}}$) and directional momentum concordance.
+        \item \texttt{gold.v\_cpi\_inflation\_summary}: Executive headline KPI mart powering headline ticker cards for Headline, Core, and Food inflation.
+        \item \texttt{gold.v\_coicop\_class\_breakdown}: Granular category contribution mart evaluating $w_c \times \Delta P_c$.
+        \item \texttt{gold.v\_cpi\_subclass\_5digit\_daily}: Granular 5-digit subclass time-series mart for microeconomic pricing analysis.
+        \item \texttt{gold.v\_cpi\_rice\_daily}: Food security rice surveillance mart tracking variety count, average price in KHR, and the Jevons rice sub-index.
+        \item \texttt{gold.v\_nowcast\_evaluation}: Real-time tracking mart evaluating live nowcasts against retrospective NIS prints with 95\% CI containment indicators.
+        \item \texttt{gold.v\_cpi\_micro\_audit}: Micro-level audit mart displaying item-level price quotes, canonical specs, and relative price movements.
+        \item \texttt{gold.v\_coverage} \& \texttt{gold.v\_monitor\_*}: Scraper operational telemetry, source availability matrix, price anomaly alerts, and USD/KHR exchange rate freshness.
+    \end{itemize}
+\end{enumerate}
+
+\hs Table~\ref{tab:gold_schema_architecture} outlines the complete architecture of the production Gold layer in PostgreSQL, detailing the model identifier, architectural classification, primary grain, and analytical function.
+
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{4.3cm}|>{\centering\arraybackslash}p{2.6cm}|>{\raggedright\arraybackslash}p{2.9cm}|>{\raggedright\arraybackslash}X|}
+\hline
+\rowcolor{blue!20}
+\textbf{Model Identifier} & \textbf{Model Type} & \textbf{Primary Key / Grain} & \textbf{Operational \& Analytical Function} \\ \hline
+\texttt{dim\_coicop\_hierarchy} & Conformed Dimension & \texttt{node\_code} & Dynamic COICOP mapping (12 Div $\to$ 28 Grp $\to$ 49 Cls $\to$ 76 EA) with dynamic EA flags. \\ \hline
+\texttt{dim\_items} & Conformed Dimension & \texttt{item\_id} & Canonical item master: normalized names, metric units, GTIN aliases, COICOP codes. \\ \hline
+\texttt{dim\_stores} & Conformed Dimension & \texttt{store\_slug} & Retailer master: merchant names, channels, currencies, and operational status. \\ \hline
+\texttt{dim\_item\_base\_prices} & Reference Lookup & \texttt{(item\_id, date)} & Date-effective catalog storing baseline anchor price $P_{i,0}$ and metric unit price. \\ \hline
+\texttt{fct\_daily\_prices} & Core Fact Table & \texttt{(date, store, item)} & Observation-level prices, unit prices, promo flags, log relatives, outlier tags (Partitioned). \\ \hline
+\texttt{fct\_elementary\_indices} & Core Fact Table & \texttt{(date, coicop\_code)} & Stage 1 Store-Balanced Jevons index ($I_{EA,t}$) across 76 leaf EAs with coverage weights. \\ \hline
+\texttt{fct\_coicop\_class\_daily} & Intermediate Fact & \texttt{(date, coicop\_code)} & Class-level price indices dynamically rolled up from Case A Subclasses or Case B Classes. \\ \hline
+\texttt{fct\_cpi\_daily} & Macro Fact Table & \texttt{(date, division)} & Daily 12 Division indices, National Headline CPI, and Refined Core CPI with aggregate counts. \\ \hline
+\texttt{fct\_cpi\_monthly} & Monthly Fact Table & \texttt{(cpi\_month, division)} & Conformed monthly CPI facts with MoM and YoY rates for macroeconomic reporting. \\ \hline
+\texttt{fct\_cpi\_nowcast} & ML Nowcast Fact & \texttt{nowcast\_date} & Real-time ML nowcast ($\widehat{\pi}_{\text{MoM}}$, NIS scale, 95\% CI envelope, 5-basket breakdown). \\ \hline
+\texttt{fct\_cpi\_nis\_comparison} & Analytical Mart & \texttt{cpi\_month} & Tracking error mart ($\epsilon_{\text{tracking}} = \text{CPI}_{\text{rebased}} - \text{CPI}_{\text{NIS}}$) and momentum concordance. \\ \hline
+\end{tabularx}
+\caption{Production Gold Layer Dimensional Architecture: Star-Schema Models, Grains, and Business Functions.}
+\label{tab:gold_schema_architecture}
+\end{table}
 
 \subsection{Consolidated 3-Dashboard Metabase Architecture and BI Serving}
 \hs To ensure that the analytical outputs of the pipeline are immediately usable by economic policymakers, researchers, and data engineers, the system provisions \textbf{3 consolidated enterprise Metabase dashboards} (Port 3001/3000) and Microsoft Power BI reporting:

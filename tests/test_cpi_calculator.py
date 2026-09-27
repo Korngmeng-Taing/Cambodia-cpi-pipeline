@@ -652,8 +652,8 @@ def test_coicop_2018_five_digit_hierarchical_rollup(cpi_engine):
     assert cpi_engine._get_subclass_code("01.1.2.1", "01") == "01.1.2.1"  # Pork Subclass
     assert cpi_engine._get_subclass_code("07.2.2.1", "07") == "07.2.2.1"  # Gasoline Subclass
     
-    # Child codes roll up to the nearest parent present in weights:
-    assert cpi_engine._get_subclass_code("01.1.1.1.9", "01") == "01.1.1.1"  # Unknown Rice -> Rice
+    # Child codes roll up to the nearest leaf EA or parent present in weights:
+    assert cpi_engine._get_subclass_code("01.1.1.1.9", "01") == "01.1.1.1.2"  # Unknown Rice -> Mixed White Rice Leaf EA
     assert cpi_engine._get_subclass_code("01.1.9.9", "01") == "01.1.9"      # Unknown Food -> Food Products n.e.c.
     
     # Build items with 5-digit codes
@@ -662,6 +662,7 @@ def test_coicop_2018_five_digit_hierarchical_rollup(cpi_engine):
             "item_id": "rice-jasmine-1",
             "coicop_division": "01",
             "coicop_code": "01.1.1.1",  # 5-digit Rice (weight 6.162%)
+            "canonical_name": "Phka Rumduol Jasmine Rice",
             "price_ratio": 1.05,
             "price_ratio_pct": 105.0,
             "primary_store": "aeon",
@@ -671,6 +672,7 @@ def test_coicop_2018_five_digit_hierarchical_rollup(cpi_engine):
             "item_id": "rice-white-2",
             "coicop_division": "01",
             "coicop_code": "01.1.1.1",  # 5-digit Rice (weight 6.162%)
+            "canonical_name": "Mixed White Rice",
             "price_ratio": 1.05,
             "price_ratio_pct": 105.0,
             "primary_store": "delishop",
@@ -680,6 +682,7 @@ def test_coicop_2018_five_digit_hierarchical_rollup(cpi_engine):
             "item_id": "pork-belly-1",
             "coicop_division": "01",
             "coicop_code": "01.1.2.1",  # 5-digit Pork (weight 5.618%)
+            "canonical_name": "Fresh Pork Belly",
             "price_ratio": 1.00,
             "price_ratio_pct": 100.0,
             "primary_store": "aeon",
@@ -690,9 +693,12 @@ def test_coicop_2018_five_digit_hierarchical_rollup(cpi_engine):
     div_df, headline = cpi_engine.aggregate_division_and_headline(items, calc_date)
     div01 = div_df[div_df["coicop_division"] == "01"].iloc[0]
     
-    # 01.1.1.1 (Rice) index = 105.0 (weight 6.162)
-    # 01.1.2.1 (Pork) index = 100.0 (weight 5.618)
-    expected = (6.162 * 105.0 + 5.618 * 100.0) / (6.162 + 5.618)
+    # Hierarchical roll-up: Class 01.1.1 (Bread & Cereals, wt 8.274) index = 105.0
+    #                       Class 01.1.2 (Meat, wt 9.681) index = 100.0
+    # Group 01.1 (Food) index = (8.274 * 105.0 + 9.681 * 100.0) / (8.274 + 9.681)
+    w_bread = cpi_engine.hierarchy.classes["01.1.1"].weight
+    w_meat = cpi_engine.hierarchy.classes["01.1.2"].weight
+    expected = (w_bread * 105.0 + w_meat * 100.0) / (w_bread + w_meat)
     assert div01["division_index"] == pytest.approx(expected, abs=0.01)
 
 def test_5digit_ceic_subclass_weights_consistency(cpi_engine):

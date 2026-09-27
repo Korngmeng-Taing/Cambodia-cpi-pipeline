@@ -19,6 +19,7 @@ import psycopg2
 from psycopg2.extras import execute_batch
 
 from pipeline.config import get_database_url
+from pipeline.coicop_hierarchy import COICOPHierarchy
 
 log = logging.getLogger(__name__)
 
@@ -200,60 +201,39 @@ class CPICalculationEngine:
     subclass-weighted Laspeyres 12-division aggregation, and Headline / Core CPI series.
     """
 
-    def __init__(self, db_url: str | None = None):
+    def __init__(self, db_url: str | None = None, hierarchy: COICOPHierarchy | None = None):
         self.db_url = db_url or get_database_url()
         self.weights = DEFAULT_NIS_WEIGHTS.copy()
+        self.hierarchy = hierarchy or COICOPHierarchy.load_default()
         self.subclass_weights = self._load_subclass_weights()
+        self.ea_weights = {
+            code: ea.weight for code, ea in self.hierarchy.elementary_aggregates.items()
+        }
 
     def _load_subclass_weights(self) -> dict[str, float]:
-        """Loads official 4-digit / Class level COICOP expenditure weights from seed CSV or defaults."""
+        """Loads official COICOP expenditure weights from seed CSV or hierarchy."""
         weights = DEFAULT_SUBCLASS_WEIGHTS.copy()
-        csv_path = Path(__file__).resolve().parent.parent / "dbt" / "seeds" / "cambodia_cpi_coicop_weights_breakdown.csv"
-        if csv_path.exists():
-            try:
-                df = pd.read_csv(csv_path, dtype=str)
-                df["weight_pct"] = pd.to_numeric(df["weight_pct"], errors="coerce")
-                # Filter for Class and Subclass breakdown rows to enable 5-digit granularity while preventing Group/Division double-counting
-                if "coicop_level" in df.columns:
-                    df = df[df["coicop_level"].astype(str).str.strip().str.lower().isin(["class", "subclass"])]
-                for _, row in df.iterrows():
-                    code = str(row.get("coicop_code", "")).strip()
-                    wt = row.get("weight_pct")
-                    if code and not pd.isna(wt) and float(wt) > 0:
-                        weights[code] = float(wt)
-            except Exception as e:
-                log.warning("Could not load subclass weights from seed CSV: %s", e)
+        if hasattr(self, "hierarchy") and self.hierarchy:
+            for code, node in self.hierarchy.nodes.items():
+                weights[code] = node.weight
         return weights
 
-    def _get_subclass_code(self, raw_code: str | None, div_code: str) -> str:
-        """Resolves raw COICOP code into an official subclass / class code matching weights.
-        Implements automatic hierarchical roll-up: if a 5-digit code isn't in the weights,
-        it tries the 4-digit and 3-digit parents.
-        """
+    def _get_subclass_code(self, raw_code: str | None, div_code: str, product_name: str | None = None) -> str:
+        """Resolves raw COICOP code into an official Elementary Aggregate code or known node."""
         if raw_code is None or pd.isna(raw_code):
             return f"{div_code}.unclassified"
         code = str(raw_code).strip()
-        if not code:
+        if not code or "unclassified" in code.lower() or code == "unknown_code":
             return f"{div_code}.unclassified"
-
-        # 1. Exact match (checks 5-digit, then 4-digit, etc. based on weights table)
-        if code in self.subclass_weights:
-            return code
-
-        # 2. Hierarchical Roll-up (Strip lowest digit until a weight match is found)
-        # Example: 01.1.1.1 -> 01.1.1 -> 01.1 -> 01
-        parts = code.split('.')
-        for i in range(len(parts)-1, 0, -1):
-            parent_code = '.'.join(parts[:i])
-            if parent_code in self.subclass_weights:
-                return parent_code
-
-        # 3. Manual mapping for known anomalies
-        if code in DEFAULT_COICOP_CLASS_MAPPING:
-            return DEFAULT_COICOP_CLASS_MAPPING[code]
-
-        # 4. Fallback: unclassified division bucket
-        return f"{div_code}.unclassified"
+        if hasattr(self, "hierarchy") and self.hierarchy:
+            if code in self.hierarchy.elementary_aggregates:
+                return code
+            if product_name:
+                return self.hierarchy.map_product_to_ea(code, product_name)
+            if code in self.hierarchy.nodes:
+                return code
+            return self.hierarchy.map_product_to_ea(code, product_name)
+        return code
 
     def get_connection(self):
         conn_str = self.db_url.replace("postgresql+psycopg2://", "postgresql://", 1)
@@ -885,81 +865,75 @@ class CPICalculationEngine:
     ) -> tuple[pd.DataFrame, dict]:
         """
         Aggregates elementary indices into 12 COICOP division indices and Headline / Core CPI.
-        Implements ILO/IMF two-tier aggregation:
-          Tier 1: Jevons unweighted geometric mean of price ratios within each 4-digit COICOP subclass.
-          Tier 2: Laspeyres expenditure-weighted aggregation of subclass indices to form division index.
-          Tier 3: Laspeyres expenditure-weighted aggregation of division indices to form Headline / Core CPI.
+        Implements UN COICOP / ILO 2020 Multi-Tier Hierarchical Aggregation:
+          Tier 1: Two-stage Store-Balanced Jevons geometric mean of price ratios
+                  within each Elementary Aggregate (EA).
+                  Case A: Subclass is the EA if Class has detailed weighted subclasses.
+                  Case B: Class itself is the EA if Class has no detailed subclasses.
+          Tier 2: Laspeyres expenditure-weighted aggregation of EAs to form Class indices.
+          Tier 3: Laspeyres expenditure-weighted aggregation of Classes to form Group indices.
+          Tier 4: Laspeyres expenditure-weighted aggregation of Groups to form Division indices.
+          Tier 5: Laspeyres expenditure-weighted aggregation of Divisions to form Headline & Core CPI.
+        Missing aggregates are excluded from numerator and denominator (weights renormalized).
         Optional splice_factor applies continuous series chain-linking on rebasing.
         """
-        div_records = []
-        has_coicop_code = "coicop_code" in elementary_df.columns
+        df_elem = elementary_df.copy()
+        if not df_elem.empty:
+            name_col = next((c for c in ["canonical_name", "name_clean", "name"] if c in df_elem.columns), None)
+            df_elem["ea_code"] = df_elem.apply(
+                lambda r: self.hierarchy.map_product_to_ea(
+                    r.get("coicop_code"),
+                    r.get(name_col) if name_col else None
+                ),
+                axis=1
+            )
+            if "coicop_division" not in df_elem.columns or df_elem["coicop_division"].isna().any():
+                df_elem["coicop_division"] = df_elem["ea_code"].str[:2]
 
-        for div_code, weight in self.weights.items():
-            div_items = elementary_df[elementary_df["coicop_division"] == div_code]
-            if not div_items.empty:
-                # Group items by subclass within the division
-                if has_coicop_code and div_items["coicop_code"].notna().any():
-                    div_items_with_sub = div_items.copy()
-                    div_items_with_sub["subclass_code"] = div_items_with_sub["coicop_code"].apply(
-                        lambda c, d=div_code: self._get_subclass_code(c, d)
+            valid_items = df_elem[df_elem["price_ratio"] > 0].copy()
+        else:
+            valid_items = pd.DataFrame()
+
+        # Step 1: Calculate EA-level elementary index using Store-Balanced Jevons
+        ea_indices: dict[str, float] = {}
+        if not valid_items.empty:
+            has_store = "primary_store" in valid_items.columns and valid_items["primary_store"].notna().any()
+
+            def _store_balanced_jevons(sub_df):
+                if has_store and sub_df["primary_store"].nunique() > 1:
+                    store_means = sub_df.groupby("primary_store")["price_ratio"].apply(
+                        lambda s: float(np.exp(np.mean(np.log(s[s > 0]))))
                     )
+                    valid_store_means = store_means[store_means > 0].dropna()
+                    if not valid_store_means.empty:
+                        return float(np.exp(np.mean(np.log(valid_store_means))) * 100.0)
+                valid_ratios = sub_df["price_ratio"][sub_df["price_ratio"] > 0].dropna()
+                if len(valid_ratios) > 0:
+                    return float(np.exp(np.mean(np.log(valid_ratios))) * 100.0)
+                return 100.0
 
-                    valid_sub_items = div_items_with_sub[div_items_with_sub["price_ratio"] > 0]
-                    if not valid_sub_items.empty:
-                        has_store = "primary_store" in valid_sub_items.columns and valid_sub_items["primary_store"].notna().any()
+            for ea_code, grp in valid_items.groupby("ea_code"):
+                ea_indices[str(ea_code)] = _store_balanced_jevons(grp)
 
-                        def _store_balanced_jevons(sub_df):
-                            """Two-Stage Jevons (ILO CPI Manual §6.57-6.68):
-                            Stage 1: Geometric mean of price ratios within each store.
-                            Stage 2: Geometric mean across store-level means.
-                            This gives each store equal weight regardless of how many products it contributes.
-                            Falls back to standard flat Jevons if only 1 store or no store info."""
-                            if has_store and sub_df["primary_store"].nunique() > 1:
-                                store_means = sub_df.groupby("primary_store")["price_ratio"].apply(
-                                    lambda s: float(np.exp(np.mean(np.log(s))))
-                                )
-                                return float(np.exp(np.mean(np.log(store_means))) * 100.0)
-                            else:
-                                return float(np.exp(np.mean(np.log(sub_df["price_ratio"]))) * 100.0)
+        # Step 2: Multi-Tier Aggregation (EA -> Class -> Group -> Division)
+        class_indices, group_indices, division_indices = self.hierarchy.aggregate_multi_tier(ea_indices)
 
-                        subclass_series = valid_sub_items.groupby("subclass_code").apply(
-                            _store_balanced_jevons, include_groups=False
-                        )
-                        subclass_indices = subclass_series.tolist()
-                        subclass_wts = [self.subclass_weights.get(sc) for sc in subclass_series.index]
-                        # Resilient Laspeyres weighting across subclasses
-                        valid_pairs = [
-                            (idx, wt) for idx, wt in zip(subclass_indices, subclass_wts, strict=False)
-                            if wt is not None and wt > 0
-                        ]
-                        if valid_pairs:
-                            sum_valid_wts = sum(wt for _, wt in valid_pairs)
-                            div_index = sum(idx * wt for idx, wt in valid_pairs) / sum_valid_wts
-                        else:
-                            # Fallback only if no valid subclass weights exist: unweighted geometric mean
-                            div_index = float(np.exp(np.mean(np.log(div_items["price_ratio"]))) * 100.0)
-                    else:
-                        div_index = float(np.exp(np.mean(np.log(div_items["price_ratio"]))) * 100.0)
-                else:
-                    # No subclass codes provided: unweighted geometric mean across division items
-                    div_index = float(np.exp(np.mean(np.log(div_items["price_ratio"]))) * 100.0)
+        # Step 3: Division DataFrame
+        div_records = []
+        for div_code in [f"{i:02d}" for i in range(1, 13)]:
+            weight = self.weights.get(div_code, 0.0)
+            div_items = df_elem[df_elem["coicop_division"] == div_code] if not df_elem.empty else pd.DataFrame()
+            item_cnt = len(div_items)
+            obs_cnt = int(div_items["observation_count"].sum()) if (item_cnt > 0 and "observation_count" in div_items.columns) else 0
 
-                # Apply continuous chain-linking splice factor if applicable
-                if splice_factor != 1.0 and not np.isnan(div_index):
-                    div_index = div_index * splice_factor
-
-                obs_cnt = int(div_items["observation_count"].sum())
-                item_cnt = len(div_items)
-            else:
-                # FIX: Do NOT default to 100.0 — that artificially drags the
-                # headline CPI toward 100 on days when a division is missing.
-                # Instead, mark as NaN so its weight is excluded from the
-                # Laspeyres aggregation denominator below.
+            div_index = division_indices.get(div_code, np.nan)
+            if item_cnt == 0 or np.isnan(div_index):
                 div_index = np.nan
-                obs_cnt = 0
-                item_cnt = 0
                 log.info("Division %s (%s) has no items on %s — reweighting headline aggregation.",
                          div_code, DIVISION_NAMES.get(div_code, ""), calc_date)
+            else:
+                if splice_factor != 1.0 and not np.isnan(div_index):
+                    div_index = div_index * splice_factor
 
             div_records.append({
                 "calculation_date": calc_date,
@@ -973,37 +947,34 @@ class CPICalculationEngine:
 
         df_div = pd.DataFrame(div_records)
 
-        # Higher-Level Laspeyres Aggregation for Headline CPI
-        # Only include divisions that actually have observed items;
-        # exclude missing divisions from both numerator and denominator.
+        # Step 4: Higher-Level Laspeyres Aggregation for Headline CPI
         active_div = df_div[df_div["item_count"] > 0]
         if active_div.empty:
             headline_cpi = 100.0 * splice_factor
             coverage_weight = 0.0
             active_div_count = 0
+            active_ea_count = 0
+            ea_cov_wt = 0.0
         else:
             total_weight = active_div["weight"].sum()
             headline_cpi = float((active_div["weight"] * active_div["division_index"]).sum() / total_weight)
-            # CoverageWeight_t = sum(W_d for d in A_t) where A_t is divisions with >= 5 observations (ILO/IMF standard)
+            
+            # Active EAs & coverage weight:
+            active_ea_count = len(ea_indices)
+            ea_cov_wt = round(sum(self.hierarchy.elementary_aggregates[ea].weight for ea in ea_indices if ea in self.hierarchy.elementary_aggregates), 4)
+            
             well_observed = df_div[df_div["observation_count"] >= 5]
             raw_cov_wt = float(well_observed["weight"].sum())
             coverage_weight = round(raw_cov_wt * 100.0 if raw_cov_wt <= 1.01 else raw_cov_wt, 4)
             active_div_count = len(well_observed)
 
-        # Core CPI (Ex-Food & Energy): Excludes Division 01 (Food & Non-Alcoholic Beverages),
-        # Division 04 (Housing, Water, Electricity, Gas & Fuels), and Division 07 (Transport
-        # & Automotive Fuels) — in alignment with NIS Cambodia & National Bank of Cambodia
-        # core inflation standards and the project README.
+        # Step 5: Core CPI (Ex-Food & Energy: excludes 01, 04, 07)
         core_exclusions = {"01", "04", "07"}
         core_divisions = active_div[~active_div["coicop_division"].isin(core_exclusions)]
         core_weight = core_divisions["weight"].sum()
-        # Renormalise the denominator to the sum of the CORE weights only. Using
-        # the full 12-division total_weight here caused core_cpi to collapse to
-        # ~25.9 on a base-period day (the sum of core weights) instead of 100.0.
-        # See audit C1.
         core_cpi = float((core_divisions["weight"] * core_divisions["division_index"]).sum() / core_weight) if core_weight > 0 else headline_cpi
 
-        imp_cnt = int(elementary_df["is_imputed"].sum()) if "is_imputed" in elementary_df.columns else 0
+        imp_cnt = int(elementary_df["is_imputed"].sum()) if ("is_imputed" in elementary_df.columns and not elementary_df.empty) else 0
         total_itms = len(elementary_df)
         imputation_rate = round((imp_cnt / total_itms * 100.0), 4) if total_itms > 0 else 0.0
 
@@ -1012,11 +983,15 @@ class CPICalculationEngine:
             "headline_cpi": headline_cpi,
             "core_cpi": core_cpi,
             "total_items": total_itms,
-            "total_observations": int(elementary_df["observation_count"].sum()),
+            "total_observations": int(elementary_df["observation_count"].sum()) if ("observation_count" in elementary_df.columns and not elementary_df.empty) else total_itms,
             "coverage_weight": coverage_weight,
+            "ea_coverage_weight": ea_cov_wt,
             "active_division_count": active_div_count,
+            "active_elementary_aggregate_count": active_ea_count,
             "imputation_rate": imputation_rate,
         }
+
+        return df_div, headline_summary
 
         return df_div, headline_summary
 

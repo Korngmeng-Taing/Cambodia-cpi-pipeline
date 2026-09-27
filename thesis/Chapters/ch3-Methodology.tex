@@ -191,7 +191,7 @@
 \hs To calculate true longitudinal price changes over time, the system must track the exact same product from day to day across a master catalog of over 50,300+ canonical products. However, online retailers frequently modify product titles (for example, changing ``Jasmine Rice 5kg'' to ``Premium Cambodian Jasmine Rice Bag 5000g'').
 \hs Standard text-matching algorithms often make catastrophic errors in retail data. For example, simple string similarity might treat a single can of Coca-Cola (330ml) and a 24-can carton of the same brand as the same item because their titles share over $90\%$ of the same lexical tokens. Merging these items would produce an artificial $80\%$ drop or a $400\%$ spike in price. Similarly, a 128GB smartphone and a 256GB model could merge erroneously due to near-identical model nomenclature.
 
-\hs To achieve bulletproof precision without sacrificing throughput, the pipeline deploys a deterministic \textbf{Five-Level Hierarchical Entity Resolution Ladder} operating strictly sequentially (Levels 1 through 5), illustrated in Figure~\ref{fig:matching_ladder}:
+\hs To achieve bulletproof precision without sacrificing throughput, the pipeline deploys a deterministic \textbf{Five-Level Hierarchical Entity Resolution Ladder} operating strictly sequentially (Levels 1 through 5):
 
 \begin{enumerate}
     \item \textbf{Level 1: Multi-Barcode Alias Resolution (GTIN-13 / EAN):}

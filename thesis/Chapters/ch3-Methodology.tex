@@ -452,24 +452,70 @@ Each retailer receives exactly $50\%$ voting power, preventing catalog upload vo
     \item \textbf{Mixed-Frequency / High-Dimensional Indicator Asymmetry in Nowcasting:} In macro nowcasting (Section~\ref{sec:nowcasting_engine}), the system combines 30 daily price momentum signals with a limited monthly historical sample of official NIS prints. To prevent overfitting on noisy daily high-frequency indicators, the engine utilizes \textbf{Regularized Ridge Regression ($L_2$ penalty)} combined with \textbf{Empirical Bayesian Prior Shrinkage} and dynamic uncertainty envelopes ($U_t = \pm 1.96 \cdot \sigma \cdot \sqrt{(T-t)/T}$).
 \end{enumerate}
 
-\subsubsection{UN COICOP 2018 5-Digit Taxonomy and Hierarchical Roll-Up}
-\hs To achieve high microeconomic granularity while preserving official macroeconomic benchmarking, the pipeline maps all 50,692 canonical commodities into the \textbf{UN COICOP 2018 5-Digit Subclass Taxonomy} ($DD.G.C.S$, spanning 112 active subclasses across all 12 divisions). This separates granular consumption staples that were previously pooled together in 4-digit categories:
+\subsubsection{Handling Irregular COICOP Hierarchies: Elementary Aggregates and Dynamic Multi-Tier Roll-Up}
+\hs In standard textbook models, economists often assume that every consumption category has a neat, uniform structure: every Division has Groups, every Group has Classes, and every Class has detailed Subclasses. However, real-world national expenditure statistics in Cambodia follow an \textbf{irregular COICOP hierarchy}. Specifically:
 \begin{itemize}
-    \item \textbf{01.1.1 Bread and Cereals:} Granularly segmented into Rice (\texttt{01.1.1.1}, CEIC weight $6.162\%$), Bread (\texttt{01.1.1.2}, $0.173\%$), Pasta and Noodles (\texttt{01.1.1.3}, $1.008\%$), Biscuits (\texttt{01.1.1.4}, $0.280\%$), Cakes (\texttt{01.1.1.5}, $0.561\%$), and Flour/Other Grains (\texttt{01.1.1.9}, $0.090\%$).
-    \item \textbf{01.1.2 Meat:} Segregated into Fresh Pork (\texttt{01.1.2.1}, $5.618\%$), Fresh Beef (\texttt{01.1.2.2}, $2.165\%$), Fresh Poultry (\texttt{01.1.2.3}, $1.303\%$), Fresh Duck (\texttt{01.1.2.4}, $0.319\%$), and Processed Meats (\texttt{01.1.2.5}, $0.276\%$).
-    \item \textbf{01.1.3 Fish and Seafood:} Segregated into Fresh Fish (\texttt{01.1.3.1}, $7.435\%$), Crustaceans/Seafood (\texttt{01.1.3.2}, $0.229\%$), and Prahok/Processed Fish (\texttt{01.1.3.3}, $1.646\%$).
-    \item \textbf{07.2.2 Automotive Fuels:} Disaggregated into Gasoline (\texttt{07.2.2.1}, $4.969\%$), Diesel (\texttt{07.2.2.2}, $0.144\%$), and Lubricants (\texttt{07.2.2.3}, $0.062\%$).
+    \item Some classes (such as Bread and Cereals \texttt{01.1.1} or Meat \texttt{01.1.2}) have detailed household expenditure weights at the subclass level.
+    \item Many other classes (such as Oils and Fats \texttt{01.1.5}, Beer \texttt{02.1.3}, Electricity \texttt{04.5.1}, Pharmaceuticals \texttt{06.1.1}, or Telecommunications \texttt{08.2.0}) have official expenditure weights available \textit{only} at the 4-digit Class level, with no further official breakdown.
 \end{itemize}
 
-\hs \textbf{Axiomatic Hierarchical Roll-Up:} Because the National Institute of Statistics official expenditure baseline relies on 4-digit CSES household budget survey weights ($W_d$ and $\beta_c$), the aggregation engine implements an axiomatic hierarchical roll-up operator $\psi: \{DD.G.C.S\} \to \{DD.G.C\}$:
+\hs To handle this real-world structure without introducing artificial assumptions, the pipeline strictly adheres to international UN and ILO guidelines \citep{imf2020cpi} by implementing two fundamental rules:
+\begin{enumerate}
+    \item \textbf{Dynamic Elementary Aggregate (EA) Detection:} The Elementary Aggregate is defined as the lowest level in the available hierarchy that possesses reliable official expenditure weights and sufficiently homogeneous products. Artificial subclasses are never invented for categories that lack official detailed weights.
+    \item \textbf{Anti-Double-Counting Principle:} If a parent category has detailed weighted children, only the child categories enter the weighted aggregation. The parent weight is never added as an independent aggregate. Conversely, if a category has no children, its own weight is used directly.
+\end{enumerate}
+
+\paragraph{Two Operational Calculation Cases:}
+The compilation engine dynamically inspects whether a COICOP category has weighted children, dividing the calculation into two explicit cases:
+
+\begin{itemize}
+    \item \textbf{Case A --- Class Has Detailed Weighted Subclasses (8 Classes):}
+    For categories with granular survey weights (e.g., Class \texttt{01.1.1} Bread and Cereals, with child subclasses for Rice Quality 1, Rice Quality 2, Glutinous Rice, Bread, Pasta, Biscuits, Cakes, and Flour):
+    \begin{enumerate}
+        \item Compute product-level price relatives against the base period: $r_{i, s, t} = P_{i, s, t} / P_{i, s, 0}$.
+        \item Within each subclass (Elementary Aggregate), calculate the store-balanced Jevons elementary index $I_{\text{EA}, t}$:
+        \begin{equation}
+            I_{\text{EA}, t} = 100 \times \exp\left( \frac{1}{S} \sum_{s=1}^S \frac{1}{n_s} \sum_{i=1}^{n_s} \ln r_{i, s, t} \right)
+        \end{equation}
+        \item Aggregate the subclass elementary indices to the parent Class using normalized subclass expenditure weights ($w_e$):
+        \begin{equation}
+            I_{\text{Class}, t} = \frac{\sum_{e \in \text{Class}} w_e \cdot I_{e, t}}{\sum_{e \in \text{Class}} w_e}
+        \end{equation}
+    \end{enumerate}
+
+    \item \textbf{Case B --- Class Has NO Weighted Subclasses (41 Classes):}
+    For categories without subclass breakdowns (e.g., Class \texttt{01.1.5} Oils and Fats, Class \texttt{04.5.1} Electricity, or Class \texttt{06.1.1} Pharmaceuticals):
+    \begin{enumerate}
+        \item Do \textit{not} generate synthetic subclasses.
+        \item Treat the Class itself directly as the Elementary Aggregate ($I_{\text{Class}, t} = I_{\text{EA}, t}$).
+        \item Apply the two-stage store-balanced Jevons formula directly across all eligible products belonging to that Class:
+        \begin{equation}
+            I_{\text{Class}, t} = I_{\text{EA}, t} = 100 \times \exp\left( \frac{1}{S} \sum_{s=1}^S \frac{1}{n_s} \sum_{i=1}^{n_s} \ln r_{i, s, t} \right)
+        \end{equation}
+    \end{enumerate}
+\end{itemize}
+
+\paragraph{Multi-Tier Roll-Up Pipeline:}
+Once all Class indices are established through either Case A or Case B, the pipeline rolls up higher-level indicators through an expenditure-weighted multi-tier pipeline:
+\begin{center}
+$\text{Products} \;\longrightarrow\; \text{Price Relatives} \;\longrightarrow\; \text{Store-Balanced Jevons} \;\longrightarrow\; \text{Elementary Aggregates (76 EAs)}$ \\
+$\;\longrightarrow\; \text{Classes (49)} \;\longrightarrow\; \text{Groups (28)} \;\longrightarrow\; \text{Divisions (12)} \;\longrightarrow\; \text{Headline CPI}$
+\end{center}
+Formally, each parent node $p$ aggregates its available active children $c \in \mathcal{C}(p)$:
 \begin{equation}
-    I_{c, t}^{\text{4-digit}} = \prod_{s \in \mathcal{C}(c)} \left( I_{s, t}^{\text{5-digit}} \right)^{\omega_s} \quad \text{where} \quad \sum_{s \in \mathcal{C}(c)} \omega_s = 1.0
+    I_{p, t} = \frac{\sum_{c \in \mathcal{C}(p)} w_c \cdot I_{c, t}}{\sum_{c \in \mathcal{C}(p)} w_c}
 \end{equation}
-where $\mathcal{C}(c)$ represents the child 5-digit subclasses under parent class $c$. Subclass indices are then synthesized into 12 broad division indices ($I_{d, t}$) and the national Headline CPI via official fixed-basket Laspeyres expenditure shares:
-\begin{equation}
-    I_{d, t} = \frac{\sum_{c \in d} \beta_c \cdot I_{c, t}}{\sum_{c \in d} \beta_c}, \qquad \text{CPI}_t^{\text{Headline}} = \sum_{d=1}^{12} w_d \cdot I_{d, t}
-\end{equation}
-where $\sum_{d=1}^{12} w_d = 1.00000$ ($100.000\%$). This guarantees seamless backward compatibility with official sovereign statistics while delivering unprecedented analytical resolution for commodity-specific policy analysis.
+
+\hs In Cambodia's calibrated expenditure structure, this yields exactly \textbf{76 leaf Elementary Aggregates} (35 Case A Subclasses under 8 detailed Classes, plus 41 Case B Classes). The weights of these 76 leaf aggregates sum to exactly \textbf{100.000\%}, completely preventing double-counting.
+
+\paragraph{Missing Data Handling and Weight Renormalization:}
+If temporary market stockouts mean that an Elementary Aggregate has zero active price observations on day $t$:
+\begin{itemize}
+    \item The missing aggregate is temporarily excluded from the current day's higher-level aggregation.
+    \item The weights of all currently available sister aggregates are automatically renormalized to sum to 100\% of the observed basket ($\sum w_{\text{active}}$).
+    \item The pipeline \textit{never} assigns an artificial index of 100.0 to missing categories (which would falsely suggest zero inflation).
+    \item The system explicitly tracks and persists \texttt{coverage\_weight} and \texttt{active\_elementary\_aggregate\_count} to provide full transparency into daily market coverage.
+\end{itemize}
 
 \subsection{Continuous Series Chain-Linking and Splice Factor Formulation}
 \hs In production price statistics, baseline updating or index rebasing (e.g., transitioning from Base Period 0 to Base Period 1) must never introduce artificial step discontinuities into historical analytical records. To ensure seamless longitudinal continuity across rebasing events, the pipeline implements an axiomatic \textbf{Continuous Series Chain-Linking Splice Factor}:

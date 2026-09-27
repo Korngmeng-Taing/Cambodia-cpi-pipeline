@@ -53,60 +53,99 @@ DIVISION_NAMES = {
     "12": "Miscellaneous Goods and Services",
 }
 
-# Official NIS Cambodia 4-Digit COICOP Class Expenditure Weights (Base: Oct-Dec 2006 = 100)
+# Official NIS / CEIC Cambodia COICOP Subclass & Class Expenditure Weights (Base: Oct-Dec 2006 = 100)
 # Matches dbt/seeds/cambodia_cpi_coicop_weights_breakdown.csv
-# In this architecture, the 4-digit COICOP Class is defined as the official Elementary Aggregate level.
-DEFAULT_CLASS_WEIGHTS = {
-    "01.1.1": 17.230,  # Bread and cereals
-    "01.1.2": 8.450,   # Meat
-    "01.1.3": 7.120,   # Fish and seafood
-    "01.1.4": 1.850,   # Milk, cheese and eggs
-    "01.1.5": 1.140,   # Oils and fats
-    "01.1.6": 2.460,   # Fruit
-    "01.1.7": 2.380,   # Vegetables
-    "01.1.8": 0.720,   # Sugar, jam, honey, chocolate
-    "01.1.9": 0.630,   # Food products n.e.c.
-    "01.2.1": 0.515,   # Coffee, tea and cocoa
-    "01.2.2": 2.280,   # Mineral waters, soft drinks, juices
-    "02.1.1": 0.210,   # Spirits and liqueurs
-    "02.1.2": 0.085,   # Wine
-    "02.1.3": 0.750,   # Beer
-    "02.2.0": 0.580,   # Tobacco
-    "03.1.2": 2.140,   # Garments
-    "03.1.3": 0.146,   # Other articles of clothing & accessories
-    "03.2.1": 0.750,   # Shoes and other footwear
-    "04.1.1": 9.420,   # Actual rentals paid by tenants
-    "04.3.1": 1.120,   # Materials for dwelling maintenance
-    "04.4.1": 1.860,   # Water supply
-    "04.5.1": 2.820,   # Electricity
-    "04.5.2": 1.650,   # Gas
-    "04.5.4": 0.214,   # Solid fuels
-    "05.1.1": 0.820,   # Furniture and furnishings
-    "05.2.1": 0.450,   # Household textiles
-    "05.5.1": 0.380,   # Glassware, tableware, household utensils
-    "05.6.1": 1.600,   # Non-durable household goods
-    "06.1.1": 3.450,   # Pharmaceutical products
-    "06.1.2": 0.370,   # Other medical products
-    "06.2.1": 1.740,   # Medical services
-    "07.1.2": 3.120,   # Motorcycles
-    "07.2.2": 6.850,   # Fuels and lubricants
-    "07.2.3": 0.560,   # Maintenance & repair of transport
-    "07.3.2": 1.650,   # Passenger transport by bus, coach, van
-    "08.2.0": 1.420,   # Telephone equipment
-    "08.3.0": 2.500,   # Telephone and internet services
-    "09.1.1": 0.620,   # Audio/visual reception & reproduction
-    "09.1.3": 0.560,   # Information processing equipment
-    "09.3.1": 0.420,   # Games, toys and hobbies
-    "09.5.1": 0.310,   # Books and stationery
-    "10.1.0": 1.510,   # Education services (tuition fees)
-    "11.1.1": 2.435,   # Restaurants, cafes and the like
-    "11.2.0": 0.650,   # Accommodation services
-    "12.1.1": 0.405,   # Hairdressing & grooming
-    "12.1.3": 0.930,   # Personal care appliances & products
-    "12.3.1": 0.410,   # Jewellery, clocks and watches
-    "12.3.2": 0.320,   # Other personal effects
+DEFAULT_SUBCLASS_WEIGHTS = {
+    # --- 5-Digit / Detailed Subclasses ---
+    "01.1.1.1": 6.162,  # Rice
+    "01.1.1.1.1": 3.052,  # Rice: Quality 1 (Jasmine / Phka Rumduol)
+    "01.1.1.1.2": 2.681,  # Rice: Quality 2 (Mixed White Rice)
+    "01.1.1.1.3": 0.429,  # Rice: Glutinous (Sticky Rice)
+    "01.1.1.2": 0.173,  # Bread (French Baguette / Sandwich)
+    "01.1.1.3": 1.008,  # Noodles and pasta
+    "01.1.1.4": 0.280,  # Biscuits and crackers
+    "01.1.1.5": 0.561,  # Traditional cakes and pastries
+    "01.1.1.9": 0.090,  # Other cereals and flour
+    "01.1.2.1": 5.618,  # Fresh pork
+    "01.1.2.2": 2.165,  # Fresh beef
+    "01.1.2.3": 1.303,  # Fresh chicken
+    "01.1.2.4": 0.319,  # Fresh duck
+    "01.1.2.5": 0.276,  # Locally processed meat (Pork sausage, paté)
+    "01.1.3.1": 7.435,  # Fresh fish (Freshwater & marine)
+    "01.1.3.2": 0.229,  # Seafood (Fresh shrimp, crab, squid)
+    "01.1.3.3": 1.646,  # Processed fish and seafood (Prahok, dried fish, canned)
+    "01.1.4.1": 1.013,  # Fresh eggs (Chicken and duck eggs)
+    "01.1.4.2": 0.079,  # Processed eggs (Salted & century eggs)
+    "01.1.4.3": 1.552,  # Dairy products (Condensed milk, fresh milk)
+    "01.1.6.1": 4.094,  # Fresh fruit (Bananas, mangoes, oranges)
+    "01.1.6.2": 0.556,  # Dried nuts and edible seeds
+    "01.1.6.3": 0.086,  # Dried and preserved fruit
+    "01.1.7.1": 2.031,  # Leaf and stalk vegetables (Morning glory, cabbage)
+    "01.1.7.2": 1.138,  # Fruit vegetables (Tomatoes, cucumbers, chili)
+    "01.1.7.3": 0.456,  # Root vegetables (Carrots, onions, garlic)
+    "01.1.7.4": 0.439,  # Tubers and mushrooms (Potatoes, cassava, mushrooms)
+    "01.1.7.5": 0.413,  # Pulses and legumes (Soybeans, long beans)
+    "01.1.7.6": 0.337,  # Preserved and prepared vegetables (Pickles)
+    "03.1.2.1": 1.065,  # Garments: Women and girls
+    "03.1.2.2": 0.621,  # Garments: Men and boys
+    "03.1.2.3": 0.054,  # Garments: Infant (< 1 year)
+    "03.1.2.9": 0.222,  # Other garments
+    "07.2.2.1": 4.969,  # Gasoline (Super 95 and Regular)
+    "07.2.2.2": 0.144,  # Diesel fuel
+    "07.2.2.3": 0.062,  # Motor oil and engine lubricants
+
+    # --- 4-Digit Classes (Parent Fallbacks) ---
+    "01.1.1": 8.274,  # Bread and cereals
+    "01.1.2": 9.681,  # Meat
+    "01.1.3": 9.310,  # Fish and seafood
+    "01.1.4": 2.644,  # Milk, cheese and eggs
+    "01.1.5": 0.920,  # Oils and fats
+    "01.1.6": 4.736,  # Fruit
+    "01.1.7": 4.814,  # Vegetables
+    "01.1.8": 1.489,  # Sugar, jam, honey, chocolate and confectionery
+    "01.1.9": 1.404,  # Food products n.e.c. (Salt, fish sauce, spices)
+    "01.2.1": 0.755,  # Coffee, tea and cocoa
+    "01.2.2": 0.748,  # Mineral waters, soft drinks, fruit and vegetable juices
+    "02.1.1": 0.014,  # Spirits and liqueurs (Whisky, brandy, vodka)
+    "02.1.2": 0.248,  # Wine (Red wine, white wine)
+    "02.1.3": 0.532,  # Beer (Angkor, Anchor, Cambodia, Heineken)
+    "02.2.0": 0.831,  # Tobacco (Cigarettes, cigars)
+    "03.1.1": 0.334,  # Clothing materials (Fabrics)
+    "03.1.2": 1.962,  # Garments
+    "03.1.3": 0.059,  # Other articles of clothing and clothing accessories
+    "03.1.4": 0.040,  # Cleaning, repair and hire of clothing
+    "03.2.1": 0.641,  # Shoes and other footwear
+    "04.1.1": 1.054,  # Actual rentals paid by tenants
+    "04.3.1": 3.663,  # Materials for dwelling maintenance and repair
+    "04.3.2": 0.435,  # Services for dwelling maintenance and repair
+    "04.4.1": 2.307,  # Water supply (Municipal piped tap water)
+    "04.5.1": 5.352,  # Electricity (EDC grid power)
+    "04.5.2": 2.699,  # Gas (LPG cooking gas cylinder refill)
+    "04.5.3": 0.099,  # Liquid fuels (Kerosene)
+    "04.5.4": 1.475,  # Solid fuels (Firewood, charcoal)
+    "05.1.1": 0.626,  # Furniture and carpets
+    "05.2.1": 0.015,  # Household textiles (Bedsheets, blankets, towels)
+    "05.3.1": 0.397,  # Major and small household appliances (Refrigerators, fans)
+    "05.4.1": 0.078,  # Glassware and tableware
+    "05.5.1": 0.017,  # Household tools and equipment
+    "05.6.1": 1.610,  # Non-durable household goods (Detergents, cleaners, soaps)
+    "06.1.1": 3.588,  # Pharmaceutical products (Medicines, painkillers, vitamins)
+    "06.2.1": 1.141,  # Medical services (Doctor consultation, private clinics)
+    "06.3.1": 0.412,  # Hospital services (Inpatient care)
+    "07.1.1": 3.053,  # Motor cars
+    "07.1.2": 2.736,  # Motorcycles and scooters
+    "07.1.3": 0.103,  # Bicycles
+    "07.2.1": 0.084,  # Spare parts and accessories for personal transport equipment
+    "07.2.2": 5.175,  # Fuels and lubricants for personal transport equipment
+    "07.2.3": 0.265,  # Maintenance and repair of personal transport equipment
+    "07.3.2": 0.812,  # Passenger transport by bus, taxi, tuk-tuk
+    "08.2.0": 1.136,  # Telephone equipment and internet services
+    "09.1.1": 2.912,  # Audio-visual and cultural goods
+    "10.1.0": 1.174,  # Pre-primary to tertiary education (Tuition fees)
+    "11.1.1": 5.861,  # Restaurants, cafes and food stalls (Dining out)
+    "12.1.1": 2.285,  # Hairdressing, personal grooming and personal care products
 }
-DEFAULT_SUBCLASS_WEIGHTS = DEFAULT_CLASS_WEIGHTS  # Backward-compatibility alias
+DEFAULT_CLASS_WEIGHTS = DEFAULT_SUBCLASS_WEIGHTS  # Alias for backward-compatibility
 
 # Sibling and child COICOP codes mapped hierarchically to official 2006 NIS Cambodia leaf classes
 DEFAULT_COICOP_CLASS_MAPPING = {
@@ -174,9 +213,9 @@ class CPICalculationEngine:
             try:
                 df = pd.read_csv(csv_path, dtype=str)
                 df["weight_pct"] = pd.to_numeric(df["weight_pct"], errors="coerce")
-                # Strictly filter for Class-level breakdown rows only to prevent Group/Division double-counting
+                # Filter for Class and Subclass breakdown rows to enable 5-digit granularity while preventing Group/Division double-counting
                 if "coicop_level" in df.columns:
-                    df = df[df["coicop_level"].astype(str).str.strip().str.lower() == "class"]
+                    df = df[df["coicop_level"].astype(str).str.strip().str.lower().isin(["class", "subclass"])]
                 for _, row in df.iterrows():
                     code = str(row.get("coicop_code", "")).strip()
                     wt = row.get("weight_pct")

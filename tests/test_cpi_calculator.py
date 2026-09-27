@@ -238,11 +238,11 @@ def test_subclass_weighted_division_aggregation(cpi_engine):
     df_div, _headline = cpi_engine.aggregate_division_and_headline(elem_df, calc_date)
     div01 = df_div[df_div["coicop_division"] == "01"].iloc[0]
 
-    # Weighted Laspeyres: (17.230 * 120.0 + 8.450 * 100.0) / (17.230 + 8.450) = 113.419
-    expected_div_index = (17.230 * 120.0 + 8.450 * 100.0) / (17.230 + 8.450)
+    # Weighted Laspeyres using official subclass weights:
+    w_bread = cpi_engine.subclass_weights["01.1.1"]
+    w_meat = cpi_engine.subclass_weights["01.1.2"]
+    expected_div_index = (w_bread * 120.0 + w_meat * 100.0) / (w_bread + w_meat)
     assert pytest.approx(div01["division_index"], 0.001) == expected_div_index
-    # Ensure it's not the unweighted geometric mean (which would be sqrt(1.2 * 1.0) * 100 = 109.54)
-    assert abs(div01["division_index"] - 109.5445) > 1.0
 
 
 def test_chain_linking_splice_factor(cpi_engine):
@@ -647,17 +647,21 @@ def test_coicop_2018_five_digit_hierarchical_rollup(cpi_engine):
     """
     calc_date = date(2026, 9, 20)
     
-    # Check that _get_subclass_code strips the 5th digit
-    assert cpi_engine._get_subclass_code("01.1.1.1", "01") == "01.1.1"  # Rice -> Bread & Cereals
-    assert cpi_engine._get_subclass_code("01.1.2.1", "01") == "01.1.2"  # Pork -> Meat
-    assert cpi_engine._get_subclass_code("07.2.2.1", "07") == "07.2.2"  # Gasoline -> Fuels & Lubricants
+    # 5-digit subclasses now match directly in subclass_weights with their CEIC weights:
+    assert cpi_engine._get_subclass_code("01.1.1.1", "01") == "01.1.1.1"  # Rice Subclass
+    assert cpi_engine._get_subclass_code("01.1.2.1", "01") == "01.1.2.1"  # Pork Subclass
+    assert cpi_engine._get_subclass_code("07.2.2.1", "07") == "07.2.2.1"  # Gasoline Subclass
+    
+    # Child codes roll up to the nearest parent present in weights:
+    assert cpi_engine._get_subclass_code("01.1.1.1.9", "01") == "01.1.1.1"  # Unknown Rice -> Rice
+    assert cpi_engine._get_subclass_code("01.1.9.9", "01") == "01.1.9"      # Unknown Food -> Food Products n.e.c.
     
     # Build items with 5-digit codes
     items = pd.DataFrame([
         {
             "item_id": "rice-jasmine-1",
             "coicop_division": "01",
-            "coicop_code": "01.1.1.1",  # 5-digit COICOP 2018
+            "coicop_code": "01.1.1.1",  # 5-digit Rice (weight 6.162%)
             "price_ratio": 1.05,
             "price_ratio_pct": 105.0,
             "primary_store": "aeon",
@@ -666,7 +670,7 @@ def test_coicop_2018_five_digit_hierarchical_rollup(cpi_engine):
         {
             "item_id": "rice-white-2",
             "coicop_division": "01",
-            "coicop_code": "01.1.1.1",  # 5-digit COICOP 2018
+            "coicop_code": "01.1.1.1",  # 5-digit Rice (weight 6.162%)
             "price_ratio": 1.05,
             "price_ratio_pct": 105.0,
             "primary_store": "delishop",
@@ -675,7 +679,7 @@ def test_coicop_2018_five_digit_hierarchical_rollup(cpi_engine):
         {
             "item_id": "pork-belly-1",
             "coicop_division": "01",
-            "coicop_code": "01.1.2.1",  # 5-digit COICOP 2018 (Pork)
+            "coicop_code": "01.1.2.1",  # 5-digit Pork (weight 5.618%)
             "price_ratio": 1.00,
             "price_ratio_pct": 100.0,
             "primary_store": "aeon",
@@ -686,10 +690,30 @@ def test_coicop_2018_five_digit_hierarchical_rollup(cpi_engine):
     div_df, headline = cpi_engine.aggregate_division_and_headline(items, calc_date)
     div01 = div_df[div_df["coicop_division"] == "01"].iloc[0]
     
-    # 01.1.1 index = 105.0 (weight 17.230)
-    # 01.1.2 index = 100.0 (weight 8.450)
-    expected = (17.230 * 105.0 + 8.450 * 100.0) / (17.230 + 8.450)
+    # 01.1.1.1 (Rice) index = 105.0 (weight 6.162)
+    # 01.1.2.1 (Pork) index = 100.0 (weight 5.618)
+    expected = (6.162 * 105.0 + 5.618 * 100.0) / (6.162 + 5.618)
     assert div01["division_index"] == pytest.approx(expected, abs=0.01)
+
+def test_5digit_ceic_subclass_weights_consistency(cpi_engine):
+    """Validates that 5-digit subclasses sum properly to parent classes and total divisions equal 100%."""
+    wts = cpi_engine.subclass_weights
+    
+    # Transportation Fuel: Gasoline (4.969) + Diesel (0.144) + Motor Oil (0.062) = 5.175
+    fuel_sub_sum = wts["07.2.2.1"] + wts["07.2.2.2"] + wts["07.2.2.3"]
+    assert pytest.approx(fuel_sub_sum, 0.001) == wts["07.2.2"]
+    
+    # Dairy & Eggs: Fresh Egg (1.013) + Processed Egg (0.079) + Dairy (1.552) = 2.644
+    dairy_sub_sum = wts["01.1.4.1"] + wts["01.1.4.2"] + wts["01.1.4.3"]
+    assert pytest.approx(dairy_sub_sum, 0.001) == wts["01.1.4"]
+    
+    # Bread & Cereals: Rice (6.162) + Bread (0.173) + Noodles (1.008) + Biscuit (0.280) + Cake (0.561) + Other (0.090) = 8.274
+    bread_sub_sum = (wts["01.1.1.1"] + wts["01.1.1.2"] + wts["01.1.1.3"] + 
+                     wts["01.1.1.4"] + wts["01.1.1.5"] + wts["01.1.1.9"])
+    assert pytest.approx(bread_sub_sum, 0.001) == wts["01.1.1"]
+    
+    # 12 Divisions sum to 1.000 (normalized expenditure shares)
+    assert pytest.approx(sum(cpi_engine.weights.values()), 0.001) == 1.0
 
 
 

@@ -1,0 +1,702 @@
+[
+  {
+    "index": 1,
+    "title": "AB: Beverage: Alcoholic",
+    "weight": 0.794,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-ab-beverage-alcoholic"
+  },
+  {
+    "index": 2,
+    "title": "AB: Beverage: Alcoholic: Beer",
+    "weight": 0.532,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-ab-beverage-alcoholic-beer"
+  },
+  {
+    "index": 3,
+    "title": "AB: Beverage: Alcoholic: Spirits",
+    "weight": 0.014,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-ab-beverage-alcoholic-spirits"
+  },
+  {
+    "index": 4,
+    "title": "AB: Beverage: Alcoholic: Wine",
+    "weight": 0.248,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-ab-beverage-alcoholic-wine"
+  },
+  {
+    "index": 5,
+    "title": "AB: Tobacco",
+    "weight": 0.831,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-ab-tobacco"
+  },
+  {
+    "index": 6,
+    "title": "Alcoholic Beverage, Tobacco & Narcotics (AB)",
+    "weight": 1.625,
+    "date": "Jul 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-alcoholic-beverage-tobacco--narcotics-ab"
+  },
+  {
+    "index": 7,
+    "title": "CF: Clothing",
+    "weight": 2.395,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-cf-clothing"
+  },
+  {
+    "index": 8,
+    "title": "CF: Clothing: Cleaning, Repair & Hire",
+    "weight": 0.04,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-cf-clothing-cleaning-repair--hire"
+  },
+  {
+    "index": 9,
+    "title": "CF: Clothing: Clothing Materials",
+    "weight": 0.334,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-cf-clothing-clothing-materials"
+  },
+  {
+    "index": 10,
+    "title": "CF: Clothing: Garments",
+    "weight": 1.962,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-cf-clothing-garments"
+  },
+  {
+    "index": 11,
+    "title": "CF: Clothing: Garments: Infant: < 1 Yr",
+    "weight": 0.054,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-cf-clothing-garments-infant--1-yr"
+  },
+  {
+    "index": 12,
+    "title": "CF: Clothing: Garments: Men & Boys",
+    "weight": 0.621,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-cf-clothing-garments-men--boys"
+  },
+  {
+    "index": 13,
+    "title": "CF: Clothing: Garments: Others",
+    "weight": 0.222,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-cf-clothing-garments-others"
+  },
+  {
+    "index": 14,
+    "title": "CF: Clothing: Garments: Women & Girls",
+    "weight": 1.065,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-cf-clothing-garments-women--girls"
+  },
+  {
+    "index": 15,
+    "title": "CF: Clothing: Others & Accessories",
+    "weight": 0.059,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-cf-clothing-others--accessories"
+  },
+  {
+    "index": 16,
+    "title": "CF: Footwear",
+    "weight": 0.641,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-cf-footwear"
+  },
+  {
+    "index": 17,
+    "title": "Clothing & Footwear (CF)",
+    "weight": 3.036,
+    "date": "Jul 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-clothing--footwear-cf"
+  },
+  {
+    "index": 18,
+    "title": "Communication",
+    "weight": 1.136,
+    "date": "Jul 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-communication"
+  },
+  {
+    "index": 19,
+    "title": "Education",
+    "weight": 1.174,
+    "date": "Jul 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-education"
+  },
+  {
+    "index": 20,
+    "title": "FB: Beverage: Non Alcoholic",
+    "weight": 1.503,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-beverage-non-alcoholic"
+  },
+  {
+    "index": 21,
+    "title": "FB: Beverage: Non Alcoholic: Coffee, Tea & Cocoa",
+    "weight": 0.755,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-beverage-non-alcoholic-coffee-tea--cocoa"
+  },
+  {
+    "index": 22,
+    "title": "FB: Beverage: Non Alcoholic: Soft Drink: Juice",
+    "weight": 0.748,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-beverage-non-alcoholic-soft-drink-juice"
+  },
+  {
+    "index": 23,
+    "title": "FB: Food",
+    "weight": 43.272,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food"
+  },
+  {
+    "index": 24,
+    "title": "FB: Food: BC: Biscuit",
+    "weight": 0.28,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-bc-biscuit"
+  },
+  {
+    "index": 25,
+    "title": "FB: Food: BC: Bread",
+    "weight": 0.173,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-bc-bread"
+  },
+  {
+    "index": 26,
+    "title": "FB: Food: BC: Noodles",
+    "weight": 1.008,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-bc-noodles"
+  },
+  {
+    "index": 27,
+    "title": "FB: Food: BC: Other Grains",
+    "weight": 0.09,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-bc-other-grains"
+  },
+  {
+    "index": 28,
+    "title": "FB: Food: BC: Rice",
+    "weight": 6.162,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-bc-rice"
+  },
+  {
+    "index": 29,
+    "title": "FB: Food: BC: Rice: Glutinous Quality 1",
+    "weight": 0.429,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-bc-rice-glutinous-quality-1"
+  },
+  {
+    "index": 30,
+    "title": "FB: Food: BC: Rice: Quality 1",
+    "weight": 3.052,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-bc-rice-quality-1"
+  },
+  {
+    "index": 31,
+    "title": "FB: Food: BC: Rice: Quality 2",
+    "weight": 2.681,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-bc-rice-quality-2"
+  },
+  {
+    "index": 32,
+    "title": "FB: Food: BC: Traditional Cake",
+    "weight": 0.561,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-bc-traditional-cake"
+  },
+  {
+    "index": 33,
+    "title": "FB: Food: Bread & Cereals (BC)",
+    "weight": 8.274,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-bread--cereals-bc"
+  },
+  {
+    "index": 34,
+    "title": "FB: Food: FS: Fresh Fish",
+    "weight": 7.435,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-fs-fresh-fish"
+  },
+  {
+    "index": 35,
+    "title": "FB: Food: FS: Processed Fish & Seafood",
+    "weight": 1.646,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-fs-processed-fish--seafood"
+  },
+  {
+    "index": 36,
+    "title": "FB: Food: FS: Seafood",
+    "weight": 0.229,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-fs-seafood"
+  },
+  {
+    "index": 37,
+    "title": "FB: Food: Fish & Seafood (FS)",
+    "weight": 9.31,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-fish--seafood-fs"
+  },
+  {
+    "index": 38,
+    "title": "FB: Food: Fruit",
+    "weight": 4.736,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-fruit"
+  },
+  {
+    "index": 39,
+    "title": "FB: Food: Fruit: Dried & Preserved",
+    "weight": 0.086,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-fruit-dried--preserved"
+  },
+  {
+    "index": 40,
+    "title": "FB: Food: Fruit: Dried Nuts & Edible Seeds",
+    "weight": 0.556,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-fruit-dried-nuts--edible-seeds"
+  },
+  {
+    "index": 41,
+    "title": "FB: Food: Fruit: Fresh Fruit",
+    "weight": 4.094,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-fruit-fresh-fruit"
+  },
+  {
+    "index": 42,
+    "title": "FB: Food: ME: Dairy Product",
+    "weight": 1.552,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-me-dairy-product"
+  },
+  {
+    "index": 43,
+    "title": "FB: Food: ME: Fresh Egg",
+    "weight": 1.013,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-me-fresh-egg"
+  },
+  {
+    "index": 44,
+    "title": "FB: Food: ME: Processed Egg",
+    "weight": 0.079,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-me-processed-egg"
+  },
+  {
+    "index": 45,
+    "title": "FB: Food: Meat",
+    "weight": 9.681,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-meat"
+  },
+  {
+    "index": 46,
+    "title": "FB: Food: Meat: Fresh Beef",
+    "weight": 2.165,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-meat-fresh-beef"
+  },
+  {
+    "index": 47,
+    "title": "FB: Food: Meat: Fresh Chicken",
+    "weight": 1.303,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-meat-fresh-chicken"
+  },
+  {
+    "index": 48,
+    "title": "FB: Food: Meat: Fresh Duck",
+    "weight": 0.319,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-meat-fresh-duck"
+  },
+  {
+    "index": 49,
+    "title": "FB: Food: Meat: Fresh Pork",
+    "weight": 5.618,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-meat-fresh-pork"
+  },
+  {
+    "index": 50,
+    "title": "FB: Food: Meat: Locally Processed Meat",
+    "weight": 0.276,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-meat-locally-processed-meat"
+  },
+  {
+    "index": 51,
+    "title": "FB: Food: Milk, Cheese & Egg (ME)",
+    "weight": 2.644,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-milk-cheese--egg-me"
+  },
+  {
+    "index": 52,
+    "title": "FB: Food: Oil & Fat",
+    "weight": 0.92,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-oil--fat"
+  },
+  {
+    "index": 53,
+    "title": "FB: Food: Other Food Product, nec",
+    "weight": 1.404,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-other-food-product-nec"
+  },
+  {
+    "index": 54,
+    "title": "FB: Food: Sugar ,Jam, Honey, Choco & Confection",
+    "weight": 1.489,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-sugar-jam-honey-choco--confection"
+  },
+  {
+    "index": 55,
+    "title": "FB: Food: Vegetable",
+    "weight": 4.814,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-vegetable"
+  },
+  {
+    "index": 56,
+    "title": "FB: Food: Vegetable: Fruit Vegetable",
+    "weight": 1.138,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-vegetable-fruit-vegetable"
+  },
+  {
+    "index": 57,
+    "title": "FB: Food: Vegetable: Leaf & Stalk",
+    "weight": 2.031,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-vegetable-leaf--stalk"
+  },
+  {
+    "index": 58,
+    "title": "FB: Food: Vegetable: Pluses, Legumes",
+    "weight": 0.413,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-vegetable-pluses-legumes"
+  },
+  {
+    "index": 59,
+    "title": "FB: Food: Vegetable: Preserved & Prepared Veg",
+    "weight": 0.337,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-vegetable-preserved--prepared-veg"
+  },
+  {
+    "index": 60,
+    "title": "FB: Food: Vegetable: Root Vegetable",
+    "weight": 0.456,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-vegetable-root-vegetable"
+  },
+  {
+    "index": 61,
+    "title": "FB: Food: Vegetable: Tubers & Mushrooms",
+    "weight": 0.439,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fb-food-vegetable-tubers--mushrooms"
+  },
+  {
+    "index": 62,
+    "title": "FH: Furniture & Carpets",
+    "weight": 0.626,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fh-furniture--carpets"
+  },
+  {
+    "index": 63,
+    "title": "FH: Glassware & Tableware (GT)",
+    "weight": 0.078,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fh-glassware--tableware-gt"
+  },
+  {
+    "index": 64,
+    "title": "FH: Household Appliances",
+    "weight": 0.397,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fh-household-appliances"
+  },
+  {
+    "index": 65,
+    "title": "FH: Household Maintenance",
+    "weight": 1.61,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fh-household-maintenance-"
+  },
+  {
+    "index": 66,
+    "title": "FH: Household Textiles",
+    "weight": 0.015,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fh-household-textiles"
+  },
+  {
+    "index": 67,
+    "title": "FH: Household Tools & Equipment",
+    "weight": 0.017,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-fh-household-tools--equipment"
+  },
+  {
+    "index": 68,
+    "title": "Food & Non Alcoholic Beverage (FB)",
+    "weight": 44.775,
+    "date": "Jul 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-food--non-alcoholic-beverage-fb"
+  },
+  {
+    "index": 69,
+    "title": "Furnishing & Household Maintenance (FH)",
+    "weight": 2.743,
+    "date": "Jul 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-furnishing--household-maintenance-fh"
+  },
+  {
+    "index": 70,
+    "title": "HU: EG: Electricity",
+    "weight": 5.352,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-hu-eg-electricity"
+  },
+  {
+    "index": 71,
+    "title": "HU: EG: Gas",
+    "weight": 2.699,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-hu-eg-gas"
+  },
+  {
+    "index": 72,
+    "title": "HU: EG: Liquid Fuels",
+    "weight": 0.099,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-hu-eg-liquid-fuels"
+  },
+  {
+    "index": 73,
+    "title": "HU: EG: Solid Fuels",
+    "weight": 1.475,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-hu-eg-solid-fuels"
+  },
+  {
+    "index": 74,
+    "title": "HU: Electricity, Gas & Other Fuel (EG)",
+    "weight": 9.625,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-hu-electricity-gas--other-fuel-eg"
+  },
+  {
+    "index": 75,
+    "title": "HU: Housing: HM: Materials",
+    "weight": 3.663,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-hu-housing-hm-materials"
+  },
+  {
+    "index": 76,
+    "title": "HU: Housing: HM: Services",
+    "weight": 0.435,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-hu-housing-hm-services"
+  },
+  {
+    "index": 77,
+    "title": "HU: Housing: House Maintenance & Repairs (HM)",
+    "weight": 4.098,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-hu-housing-house-maintenance--repairs-hm"
+  },
+  {
+    "index": 78,
+    "title": "HU: Housing: Rentals",
+    "weight": 1.054,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-hu-housing-rentals"
+  },
+  {
+    "index": 79,
+    "title": "HU: Water Supplies & Miscellaneous Services",
+    "weight": 2.307,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-hu-water-supplies--miscellaneous-services"
+  },
+  {
+    "index": 80,
+    "title": "Health",
+    "weight": 5.141,
+    "date": "Jul 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-health"
+  },
+  {
+    "index": 81,
+    "title": "Health: Hospital Services",
+    "weight": 0.412,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-health-hospital-services"
+  },
+  {
+    "index": 82,
+    "title": "Health: Medical Products & Equipments",
+    "weight": 3.588,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-health-medical-products--equipments"
+  },
+  {
+    "index": 83,
+    "title": "Health: Outpatient Services",
+    "weight": 1.141,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-health-outpatient-services"
+  },
+  {
+    "index": 84,
+    "title": "Housing & Utilities (HU)",
+    "weight": 17.084,
+    "date": "Jul 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-housing--utilities-hu"
+  },
+  {
+    "index": 85,
+    "title": "Miscellaneous Goods & Services (MGS)",
+    "weight": 2.285,
+    "date": "Jul 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-miscellaneous-goods--services-mgs"
+  },
+  {
+    "index": 86,
+    "title": "Recreation & Culture",
+    "weight": 2.912,
+    "date": "Jul 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-recreation--culture"
+  },
+  {
+    "index": 87,
+    "title": "Restaurants",
+    "weight": 5.861,
+    "date": "Jul 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-restaurants"
+  },
+  {
+    "index": 88,
+    "title": "Transportation",
+    "weight": 12.228,
+    "date": "Jul 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-transportation"
+  },
+  {
+    "index": 89,
+    "title": "Transportation: OP: FL: Diesel",
+    "weight": 0.144,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-transportation-op-fl-diesel"
+  },
+  {
+    "index": 90,
+    "title": "Transportation: OP: FL: Gasoline",
+    "weight": 4.969,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-transportation-op-fl-gasoline"
+  },
+  {
+    "index": 91,
+    "title": "Transportation: OP: FL: Motor Oil",
+    "weight": 0.062,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-transportation-op-fl-motor-oil"
+  },
+  {
+    "index": 92,
+    "title": "Transportation: OP: Fuel & Lubricants (FL)",
+    "weight": 5.175,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-transportation-op-fuel--lubricants-fl"
+  },
+  {
+    "index": 93,
+    "title": "Transportation: OP: Maintenance & Repair",
+    "weight": 0.265,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-transportation-op-maintenance--repair"
+  },
+  {
+    "index": 94,
+    "title": "Transportation: OP: Spare Parts",
+    "weight": 0.084,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-transportation-op-spare-parts"
+  },
+  {
+    "index": 95,
+    "title": "Transportation: Operation Transport Equip (OP)",
+    "weight": 5.524,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-transportation-operation-transport-equip-op"
+  },
+  {
+    "index": 96,
+    "title": "Transportation: Transport Services",
+    "weight": 0.812,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-transportation-transport-services"
+  },
+  {
+    "index": 97,
+    "title": "Transportation: VP: Bicycles",
+    "weight": 0.103,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-transportation-vp-bicycles"
+  },
+  {
+    "index": 98,
+    "title": "Transportation: VP: Motor Cars",
+    "weight": 3.053,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-transportation-vp-motor-cars"
+  },
+  {
+    "index": 99,
+    "title": "Transportation: VP: Motor Cycles",
+    "weight": 2.736,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-transportation-vp-motor-cycles"
+  },
+  {
+    "index": 100,
+    "title": "Transportation: Vehicles Purchase (VP)",
+    "weight": 5.892,
+    "date": "Apr 2026",
+    "href": "https://www.ceicdata.com/en/cambodia/consumer-price-index-phnom-penh-octdec-2006100-weights/cpi-weights-pnp-transportation-vehicles-purchase-vp"
+  }
+]

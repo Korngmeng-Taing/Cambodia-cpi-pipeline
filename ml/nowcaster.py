@@ -1110,7 +1110,7 @@ class CPINowcaster:
         - Horizon Convergence Telemetry
         """
         if evaluation_days is None:
-            evaluation_days = [5, 10, 15, 20, 25]
+            evaluation_days = [5, 10, 15, 20, 25, 30]
 
         if df_daily.empty:
             return {"error": "Empty daily dataset"}

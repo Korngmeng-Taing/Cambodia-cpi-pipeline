@@ -53,9 +53,10 @@ DIVISION_NAMES = {
     "12": "Miscellaneous Goods and Services",
 }
 
-# Official NIS Cambodia 4-Digit COICOP Subclass / Class Expenditure Weights (Base: Oct-Dec 2006 = 100)
+# Official NIS Cambodia 4-Digit COICOP Class Expenditure Weights (Base: Oct-Dec 2006 = 100)
 # Matches dbt/seeds/cambodia_cpi_coicop_weights_breakdown.csv
-DEFAULT_SUBCLASS_WEIGHTS = {
+# In this architecture, the 4-digit COICOP Class is defined as the official Elementary Aggregate level.
+DEFAULT_CLASS_WEIGHTS = {
     "01.1.1": 17.230,  # Bread and cereals
     "01.1.2": 8.450,   # Meat
     "01.1.3": 7.120,   # Fish and seafood
@@ -105,6 +106,7 @@ DEFAULT_SUBCLASS_WEIGHTS = {
     "12.3.1": 0.410,   # Jewellery, clocks and watches
     "12.3.2": 0.320,   # Other personal effects
 }
+DEFAULT_SUBCLASS_WEIGHTS = DEFAULT_CLASS_WEIGHTS  # Backward-compatibility alias
 
 # Sibling and child COICOP codes mapped hierarchically to official 2006 NIS Cambodia leaf classes
 DEFAULT_COICOP_CLASS_MAPPING = {
@@ -380,9 +382,9 @@ class CPICalculationEngine:
             base_df = base_df.copy()
             base_df["unit_price_khr"] = base_df["price_khr"]
 
-        # Strategy A: Base Price Promo Regularization (ILO CPI Manual §6.82)
-        # Deep clearance promotions on the base date distort base prices downward.
-        # If an observation on base date has on_promo == True and discount_pct >= 45% (or original_price_khr >= 1.45 * price_khr),
+        # Strategy A: Project-Defined Promotion Regularization Rule (adhering to ILO CPI Manual §6.82 principles)
+        # International standard: Deep clearance promotions on the base date distort base prices downward.
+        # Project operational heuristic: If an observation on base date has on_promo == True and discount_pct >= 45% (or original_price_khr >= 1.45 * price_khr),
         # use original regular MSRP shelf price to compute base prices.
         if "on_promo" in base_df.columns and "original_price_khr" in base_df.columns:
             orig = pd.to_numeric(base_df["original_price_khr"], errors="coerce")
@@ -727,11 +729,11 @@ class CPICalculationEngine:
                     if val is not None and not pd.isna(val) and float(val) > 0:
                         div = str(getattr(r, "coicop_division", "01"))
                         sc = str(getattr(r, "coicop_code", "")).strip() if pd.notna(getattr(r, "coicop_code", None)) else ""
-                        # Three-tier ILO Class-Mean Imputation:
-                        # Tier 1: 4-digit Subclass (Class) geometric movement if available
+                        # Project-Implemented Hierarchical Geometric-Mean Imputation (ILO-compliant):
+                        # Tier 1: 4-digit Class geometric movement if available
                         # Tier 2: 3-digit Group geometric movement fallback
                         # Tier 3: 2-digit Division geometric movement fallback
-                        # (Missing > 7 days are excluded from the basket below)
+                        # Operational cutoff: Missing items > 7 days are excluded from the active basket
                         grp = ".".join(sc.split(".")[:2]) if ("." in sc and len(sc.split(".")) >= 2) else ""
                         if sc and sc in subclass_movement_ratios:
                             movement = subclass_movement_ratios[sc]
@@ -962,14 +964,19 @@ class CPICalculationEngine:
         # See audit C1.
         core_cpi = float((core_divisions["weight"] * core_divisions["division_index"]).sum() / core_weight) if core_weight > 0 else headline_cpi
 
+        imp_cnt = int(elementary_df["is_imputed"].sum()) if "is_imputed" in elementary_df.columns else 0
+        total_itms = len(elementary_df)
+        imputation_rate = round((imp_cnt / total_itms * 100.0), 4) if total_itms > 0 else 0.0
+
         headline_summary = {
             "calculation_date": calc_date,
             "headline_cpi": headline_cpi,
             "core_cpi": core_cpi,
-            "total_items": len(elementary_df),
+            "total_items": total_itms,
             "total_observations": int(elementary_df["observation_count"].sum()),
             "coverage_weight": coverage_weight,
-            "active_division_count": active_div_count
+            "active_division_count": active_div_count,
+            "imputation_rate": imputation_rate,
         }
 
         return df_div, headline_summary
@@ -1252,6 +1259,8 @@ class CPICalculationEngine:
                         core_cpi NUMERIC(10, 4),
                         item_count INTEGER,
                         observation_count INTEGER,
+                        coverage_weight NUMERIC(8, 4),
+                        imputation_rate NUMERIC(8, 4),
                         created_at TIMESTAMPTZ DEFAULT NOW(),
                         PRIMARY KEY (calculation_date, coicop_division)
                     );
@@ -1264,6 +1273,8 @@ class CPICalculationEngine:
                     DO $$ BEGIN
                         ALTER TABLE gold.fct_elementary_indices ADD COLUMN IF NOT EXISTS price_ratio_pct NUMERIC(10, 4);
                         ALTER TABLE gold.fct_elementary_indices ADD COLUMN IF NOT EXISTS elementary_index NUMERIC(10, 4);
+                        ALTER TABLE gold.fct_cpi_daily ADD COLUMN IF NOT EXISTS coverage_weight NUMERIC(8, 4);
+                        ALTER TABLE gold.fct_cpi_daily ADD COLUMN IF NOT EXISTS imputation_rate NUMERIC(8, 4);
                     EXCEPTION WHEN duplicate_column THEN NULL;
                     END $$;
                     UPDATE gold.fct_elementary_indices
@@ -1313,15 +1324,17 @@ class CPICalculationEngine:
                         r.calculation_date, r.coicop_division, r.division_name, r.weight,
                         None if pd.isna(r.division_index) else float(r.division_index),
                         headline["headline_cpi"], headline["core_cpi"],
-                        int(r.item_count), int(r.observation_count)
+                        int(r.item_count), int(r.observation_count),
+                        headline.get("coverage_weight"), headline.get("imputation_rate")
                     )
                     for r in df_div.itertuples(index=False)
                 ]
                 execute_batch(cur, """
                     INSERT INTO gold.fct_cpi_daily (
                         calculation_date, coicop_division, division_name, weight,
-                        division_index, headline_cpi, core_cpi, item_count, observation_count
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        division_index, headline_cpi, core_cpi, item_count, observation_count,
+                        coverage_weight, imputation_rate
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (calculation_date, coicop_division) DO UPDATE
                     SET division_name = EXCLUDED.division_name,
                         weight = EXCLUDED.weight,
@@ -1329,7 +1342,9 @@ class CPICalculationEngine:
                         headline_cpi = EXCLUDED.headline_cpi,
                         core_cpi = EXCLUDED.core_cpi,
                         item_count = EXCLUDED.item_count,
-                        observation_count = EXCLUDED.observation_count
+                        observation_count = EXCLUDED.observation_count,
+                        coverage_weight = EXCLUDED.coverage_weight,
+                        imputation_rate = EXCLUDED.imputation_rate
                 """, cpi_rows)
 
                 conn.commit()

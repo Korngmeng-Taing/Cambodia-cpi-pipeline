@@ -1,5 +1,6 @@
 -- fct_coicop_class_daily
--- Intermediate 4-Digit COICOP Class Level Aggregate Mart (e.g. 01.1.1 Bread and Cereals)
+-- Authoritative Elementary Aggregate Mart at 4-Digit COICOP Class Level (e.g. 01.1.1 Bread and Cereals)
+-- Compiles Jevons Elementary Aggregate Index from product price relatives.
 {{ config(
     materialized='incremental',
     incremental_strategy='delete+insert',

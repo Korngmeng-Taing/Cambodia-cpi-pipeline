@@ -1,7 +1,7 @@
 \mychapter{III. METHODOLOGY}{III. METHODOLOGY}
 
 \section{Methodological Framework and System Architecture}
-\hs This research designs, implements, and evaluates an automated, high-frequency price collection, econometric aggregation, and real-time inflation nowcasting system for Cambodia. The overarching methodology is organized around an end-to-end \textbf{Medallion Data Architecture}, structured into four progressive stages: multi-source automated data ingestion (Bronze Layer), data cleaning, unit normalization, and artificial intelligence classification (Silver Layer), axiomatic econometric index calculation and real-time inflation nowcasting (Gold Layer), and interactive decision-support visualization (Serving Layer).
+\hs This research designs, implements, and evaluates an automated, high-frequency price collection, econometric aggregation, and real-time inflation nowcasting system for Cambodia. The overarching methodology is structured into \textbf{Five Core Methodological Pillars}: (1) Multi-Source Data Ingestion, (2) Data Preprocessing, Normalization, and Entity Matching, (3) COICOP Classification, Product Replacement, and Quality Adjustment, (4) Econometric CPI Compilation and Missing Imputation, and (5) Real-Time Inflation Nowcasting, Quality Assurance, and Official Validation.
 
 \begin{figure}[H]
     \centering
@@ -12,7 +12,7 @@
 
 \hs The architecture is designed to address the fundamental trade-off in economic measurement: combining the massive scale and daily speed of web-scraped big data with the strict mathematical rigor and international compliance required by national statistical institutions.
 
-\section{Phase 1: Multi-Source Data Ingestion and Infrastructure Design}
+\section{Pillar 1: Multi-Source Data Ingestion and Infrastructure Design}
 
 \subsection{The Medallion Data Engineering Framework}
 \hs In modern data science, managing large-scale, high-frequency web data requires a multi-stage data lakehouse architecture. The pipeline implements the three-tier Medallion architecture:
@@ -172,7 +172,7 @@
     \item \textbf{Timezone and Date Normalization:} All price observations are strictly normalized to Indochina Time (Asia/Phnom\_Penh, UTC+7), ensuring consistent calendar day alignment between online retail scraping and official government administrative announcements.
 \end{itemize}
 
-\section{Phase 2: Data Preprocessing, Normalization, and AI Classification}
+\section{Pillar 2: Data Preprocessing, Normalization, and Entity Matching Ladder}
 
 \subsection{Text Cleaning and Unit Standardization}
 \hs Raw price listings harvested from the web are inherently noisy. The Silver layer applies a rigorous, multi-step data cleansing workflow:
@@ -224,6 +224,8 @@
     If an incoming listing fails all previous four levels, it is identified as a genuinely novel product. A new canonical master record is generated with a unique \texttt{canonical\_item\_id}, and its text embedding, physical specs, and metadata are indexed for subsequent daily tracking.
 \end{enumerate}
 
+\section{Pillar 3: COICOP Classification, Product Replacement, and Quality Adjustment}
+
 \subsection{The Two-Tier COICOP Classification Architecture: High-Throughput AI Bootstrap and Zero-Latency Daily Inheritance}
 \hs To classify hundreds of thousands of diverse consumer listings into official National Institute of Statistics (NIS) Cambodia 4-digit COICOP Classes (Division.Group.Class, 48 official Elementary Aggregate classes) across all 12 divisions, the production pipeline implements an optimized \textbf{Two-Tier COICOP Classification Architecture} separating the initial catalog bootstrap from routine daily operations.
 
@@ -271,7 +273,7 @@ In the production database, Store Purity accounts for \textbf{14.34\%} of the ma
 \end{itemize}
 
 
-\section{Phase 3: Econometric CPI Compilation and Missing Price Imputation}
+\section{Pillar 4: Econometric CPI Compilation Engine and Imputation}
 
 \subsection{The Micro-Level: Elementary Aggregate Definition and Jevons Log-Price Compilation}
 \hs Once clean price observations are assigned to their respective consumption categories, the Gold layer computes price relatives comparing current prices to the baseline period (August 18, 2026 = 100.00).
@@ -491,7 +493,7 @@ where $\mathcal{D}_{\text{core}}$ comprises all core non-food, non-energy expend
 Specifically, Division 01 (Food and Non-Alcoholic Beverages: $44.775\%$) is excluded in its entirety. Within Division 04 (Housing and Utilities), residential electricity (Class 04.5.1) and cooking LPG cylinder refills (Class 04.5.2) are excised, retaining shelter rents and water supply. Within Division 07 (Transport), retail petroleum fuels and lubricants (Class 07.2.2) are excised, retaining passenger transit services and vehicle purchases. The resulting Refined Core CPI represents $52.200\%$ of the total national consumption basket, effectively filtering out international commodity and harvest supply noise to isolate domestic underlying monetary trends.
 
 
-\section{Phase 4: Real-Time Inflation Nowcasting and Micro-to-Macro Econometrics}\label{sec:nowcasting_engine}
+\section{Pillar 5: Real-Time Inflation Nowcasting, Quality Assurance, and Validation Framework}\label{sec:nowcasting_engine}
 
 \subsection{The Official Reporting Lag and Micro-to-Macro Nowcasting Formulation}
 \hs While conventional statistical agencies rely on retrospective monthly consumer surveys published 30 to 60 days after price collection, monetary authorities and fiscal planners require continuous, real-time macroeconomic intelligence \citep{cavallo2016billion, macias2023nowcasting}. To bridge this critical temporal gap, the pipeline implements an autonomous \textbf{Two-Stage Hybrid Ridge Disaggregated Nowcasting Engine}. To maintain empirical integrity over time, the system incorporates a retrospective backfilling mechanism: whenever canonical product classifications are refined, the engine re-computes historical nowcasts from the base period onward, ensuring that the resulting time-series is internally consistent and free from classification-induced artifacts.
@@ -696,7 +698,7 @@ and verifying whether actual inflation fell within the estimated 95\% confidence
     providing policymakers with verified quantitative confidence in digital price sensing.
 \end{enumerate}
 
-\section{Phase 5: Interactive Dashboard Architecture and Production Deployment}
+\section{Production Deployment and Analytical Dashboard Architecture}
 
 \subsection{Consolidated 3-Dashboard Metabase Architecture and BI Serving}
 \hs To ensure that the analytical outputs of the pipeline are immediately usable by economic policymakers, researchers, and data engineers, the system provisions \textbf{3 consolidated enterprise Metabase dashboards} (Port 3001/3000) and Microsoft Power BI reporting:

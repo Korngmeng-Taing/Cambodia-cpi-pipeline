@@ -3,7 +3,8 @@
 -- (within float rounding tolerance of 0.01).
 with total as (
     select sum(weight_pct) as sum_weight_pct
-    from {{ ref('category_weights') }}
+    from {{ ref('cambodia_cpi_coicop_weights_breakdown') }}
+    where coicop_level = 'Division'
 )
 select sum_weight_pct
 from total

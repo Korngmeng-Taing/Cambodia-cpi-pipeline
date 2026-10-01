@@ -37,14 +37,7 @@ seeds:
   cpi:
     +schema: silver
     +quote_columns: false
-    category_weights:
-      +schema: gold
-      +column_types:
-        coicop_division: varchar(16)
-        division_name: text
-        weight_pct: numeric(6, 3)
-        source: text
-        effective_date: date
+
     cambodia_cpi_coicop_weights_breakdown:
       +schema: gold
       +column_types:

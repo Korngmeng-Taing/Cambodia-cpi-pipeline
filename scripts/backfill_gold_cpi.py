@@ -100,11 +100,15 @@ def run_backfill():
         history_start = target_date - timedelta(days=9)
         df_history = df_all[(df_all["scrape_date"] >= history_start) & (df_all["scrape_date"] <= target_date)]
         
-        # Compute elementary indices
-        elementary_df = engine.compute_daily_elementary_indices(target_date, base_df, df_history)
+        # Compute elementary indices with shadow tracking to prevent new item dilution
+        elementary_df = engine.compute_daily_elementary_indices(
+            target_date, base_df, df_history, shadow_track_new_items=True
+        )
         
-        # Aggregate division and headline CPI
-        df_div, headline = engine.aggregate_division_and_headline(elementary_df, target_date, splice_factor=splice_factor)
+        # Aggregate division and headline CPI with invariant fixed-weight imputation
+        df_div, headline = engine.aggregate_division_and_headline(
+            elementary_df, target_date, splice_factor=splice_factor, impute_missing_divisions=True
+        )
         
         # Save to database
         engine._save_to_database(elementary_df, df_div, headline)

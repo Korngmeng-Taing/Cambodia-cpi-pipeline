@@ -1,9 +1,7 @@
 # Cambodia Daily Consumer Price Index (CPI) Medallion Pipeline
 *Automated Daily Web-Scraped Inflation Tracking across 12 UN COICOP Divisions (PostgreSQL 16 · dbt · Airflow · Metabase · Vector Embeddings · Gemini Pro/Flash)*
 
-![Cambodia CPI Architecture Diagram](docs/cpi_architecture_clean.png)
-
-> **✅ Implementation Status:** The **data pipeline is 100% live and verified in production** end-to-end — scraping → Bronze ingestion → Silver cleaning / hybrid vector item matching / zero-mismatch 12-division AI-First classification → Gold star schema → Jevons/Laspeyres CPI calculation & ML nowcasting. All **1,000,000+ price observations** across 27 historical scrape dates (`2026-08-18` to `2026-09-14`) and **45,080 daily clean observations** are 100% classified into official **NIS Cambodia 4-digit COICOP Classes (`DD.G.C`)** with **0 code-division mismatches** and **0 unclassified items**, tracking **38,712 active elementary items** (Headline CPI: `100.3016`, Core CPI: `99.9296`, Nowcast MoM: `+0.714%`). Test suites: **dbt data & unit tests (`PASS=33 WARN=0 ERROR=0`)** and **Python tests passing (100% pass rate)**. For details on the architecture and visual workflows, see [Architecture Diagrams](docs/ARCHITECTURE_DIAGRAMS.md).
+> **✅ Implementation Status:** The **data pipeline is 100% live and verified in production** end-to-end — scraping → Bronze ingestion → Silver cleaning / hybrid vector item matching / zero-mismatch 12-division AI-First classification → Gold star schema → Jevons/Laspeyres CPI calculation & ML nowcasting. All **1,000,000+ price observations** across 27 historical scrape dates (`2026-08-18` to `2026-09-14`) and **45,080 daily clean observations** are 100% classified into official **NIS Cambodia 4-digit COICOP Classes (`DD.G.C`)** with **0 code-division mismatches** and **0 unclassified items**, tracking **38,712 active elementary items** (Headline CPI: `100.3016`, Core CPI: `99.9296`, Nowcast MoM: `+0.714%`). Test suites: **dbt data & unit tests (`PASS=33 WARN=0 ERROR=0`)** and **Python tests passing (100% pass rate)**.
 
 ---
 
@@ -91,7 +89,7 @@
   - *Tier 1 (Realized Elapsed Days $1 \dots d$)*: 100% axiomatic scraped ground truth reality with zero econometric model error.
   - *Tier 2 (Forward Econometric Projection $d+1 \dots T$)*: `RidgeCV` $L_2$ regularization with Bayesian shrinkage priors modeling high-velocity basket drift with cross-sector fuel pass-through, USD/KHR exchange rate momentum, and Khmer holiday decay kernels.
   - *Dynamic Horizon Blending*: Time-weighted convergence formula ($Nowcast(d) = \frac{d}{T}\bar{I}_{\text{realized}} + \frac{T-d}{T}\hat{I}_{\text{projected}}$) with monotonically decaying uncertainty bounds ($U_d = \sqrt{(T-d)/T}$).
-  - *Architecture Flowchart*: See [Nowcasting Engine Flowchart](thesis/images/nowcasting_flowchart.png).
+  - *Architecture Flowchart*: Generated and maintained via `scripts/generate_nowcasting_flowchart.py`.
 - **Serving Views & Metabase Dashboards** (`sql/views.sql`):
   - `gold.v_nowcast_evaluation`: Real-time out-of-sample audit tracking daily nowcast error vs. official NIS monthly releases.
   - `gold.v_cpi_monthly_summary`: Monthly national headline and core CPI with MoM (%) and YoY (%) inflation indicators.
@@ -166,22 +164,6 @@ CPI PIPELINE/
 │   ├── schema.sql         # Full relational schema (647 lines)
 │   ├── views.sql          # Metabase serving views (143 lines)
 │   └── migrations/        # Incremental migration scripts
-├── thesis/                # Academic Engineering Thesis LaTeX & Assets
-│   ├── main.tex           # Master LaTeX compilation document
-│   ├── Chapters/          # Ch 1-5 (Introduction, Literature Review, Methodology, Results)
-│   ├── Cover_Pages/       # Multilingual covers (EN, KH, FR), acknowledgements, abstracts
-│   └── Literature_Review_Matrix.xlsx # Comprehensive 4-tab systematic review spreadsheet
-├── docs/                  # Centralized technical documentation & architectural guides
-│   ├── ARCHITECTURE_DIAGRAMS.md # All 4 Medallion layer architectural diagrams
-│   ├── diagrams/          # Individual .mmd Mermaid diagram source files
-│   ├── COICOP_MAPPING.md  # 12-Division hierarchy & store domain classification
-│   ├── LITERATURE_REVIEW.md # Academic foundation & comparative matrix
-│   ├── PRODUCT_CLASSIFICATION_WORKFLOW.md # Pipeline lifecycle from scrape to gold
-│   ├── SCRAPER_METHODOLOGY_GUIDE.md # 20 Source scraping specifications & tariffs
-│   ├── SILVER_LAYOUT_DESIGN.md # Silver cleaned tables & operational data model
-│   ├── GOLD_LAYER_CPI_METHODOLOGY_GUIDE.md # CPI calculation methodology
-│   ├── GOLD_LAYER_IMPLEMENTATION_PLAN.md # Gold layer implementation roadmap
-│   └── rebasing_policy.md # Annual CPI rebasing methodology
 ├── tests/                 # Full pytest suite (435+ unit test cases across 20 test modules)
 ├── postgres-init/         # PostgreSQL initialization scripts
 ├── docker-compose.yml     # Multi-service stack (PostgreSQL, Airflow, Metabase)
@@ -330,7 +312,7 @@ cpi_pipeline_success
 - **FX Rate Card Fix**: Updated `Official MEF USD/KHR Rate Today` on Dashboard 02 to correctly query `staging.exchange_rates` (rendering live `4,047.00 KHR`).
 
 ### MocGasolineScraper Tela Telegram Fuel & LPG Ingestion (2026-09-03)
-- **Files**: `scrapers/sources/gasoline.py`, `tests/test_sources.py`, `docs/SCRAPER_METHODOLOGY_GUIDE.md`
+- **Files**: `scrapers/sources/gasoline.py`, `tests/test_sources.py`
 - **Issue**: MOC web portal and GraphQL backend (`graphql.moc.gov.kh`) ceased updating retail fuel prices, freezing at stale placeholders, while MOC and retail distributors regularly post 10-day price ceiling notices on Telegram and Facebook. In addition, static hardcoded baseline fallbacks masked live scraper failures.
 - **Fix**:
   - Removed frozen MOC GraphQL endpoint (`_query_line_report`, `_is_graphql_stale`) and static baseline fallbacks (`MOC_FUEL_BASELINE`).
@@ -408,7 +390,7 @@ cpi_pipeline_success
   4. Updated `ItemMatcher` to batch-persist 768-dimensional embeddings to PostgreSQL.
 
 ### Dual-Currency USD/KHR ERPT Drift & Automated Nowcasting Backtest (2026-09-06)
-- **Files**: `ml/nowcaster.py`, `tests/test_nowcasting.py`, `Cambodia_CPI_Definitive_Handbook.pdf`
+- **Files**: `ml/nowcaster.py`, `tests/test_nowcasting.py`
 - **Feature**: Econometric upgrade to real-time inflation nowcasting:
   1. Integrated 7-day USD/KHR exchange rate momentum into projected daily drift: $\hat{\delta}_{\text{FX}} = \beta_{\text{ERPT}} \cdot (\Delta \text{FX}_{7d} / 7)$ with empirical pass-through elasticity $\beta_{\text{ERPT}} = 0.28$.
   2. Implemented automated expanding-window backtesting harness (`CPINowcaster.evaluate_historical_accuracy()`) computing RMSE, MAE, and directional accuracy across 5 forecast horizons (Days 5, 10, 15, 20, 25).
@@ -561,11 +543,11 @@ python -m pytest tests/ --cov=pipeline --cov-report=term-missing
 
 ---
 
-## 10. Master Documentation & Definitive Handbook
-
-The complete system architecture, daily scraping methodologies, AI vector embedding algorithms, COICOP hierarchical aggregation math, and policy use cases are compiled in the master guide:
-* **[Cambodia Daily Consumer Price Index (CPI) System: Definitive Master Handbook](Cambodia_CPI_Definitive_Handbook.pdf)** (46 pages, PDF format with native Khmer font support).
-* Explains all **24 core mathematical equations** and the complete **10-equation inflation nowcasting system** in plain language with real shopping arithmetic.
+## 10. Master System Architecture & Methodology
+ 
+The complete system implements end-to-end automated scraping, AI vector embedding algorithms, COICOP hierarchical aggregation math, and high-frequency nowcasting:
+* Full formulation of all **24 core mathematical equations** and the complete **10-equation inflation nowcasting system** with real shopping arithmetic and store balancing.
+* Multi-source daily scrapers, robust ILO class-mean imputation, and annual chain-linking with December overlap.
 
 ---
 

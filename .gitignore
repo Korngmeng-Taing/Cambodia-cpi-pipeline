@@ -75,18 +75,11 @@ Thumbs.db
 *.nav
 *.snm
 *.vrb
-Cambodia_CPI_Definitive_Handbook_*.pdf
-thesis/*.aux
-thesis/*.bbl
-thesis/*.blg
-thesis/*.fdb_latexmk
-thesis/*.fls
-thesis/*.lof
-thesis/*.lot
-thesis/*.out
-thesis/*.synctex.gz
-thesis/*.toc
-thesis/*.xdv
+*.pdf
+
+# ── Private / Thesis / Documentation ──────────────────────────────────────────
+thesis/
+docs/
 
 # ── Local dev & build scripts ────────────────────────────────────────────────
 mcp_config.json

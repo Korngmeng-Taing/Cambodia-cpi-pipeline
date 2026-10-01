@@ -259,4 +259,48 @@ For central bankers at the National Bank of Cambodia (NBC), temporary global oil
     \end{itemize}
 \end{itemize}
 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.96\linewidth]{thesis/images/nowcasting_flowchart.png}
+    \caption*{Figure 2: Architecture Flowchart of the Two-Tier Inflation Nowcasting Engine}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\linewidth]{thesis/images/cpi_nowcasting_convergence.png}
+    \caption*{Figure 3: Intra-Month Nowcasting Convergence with Monotonically Decaying Error Bounds}
+\end{figure}
+
+\vspace{0.2cm}
+\section*{5. Decision-Support Metabase Dashboards \& Monitoring}
+\noindent
+To provide actionable macroeconomic intelligence and continuous pipeline observability, the system implements three dedicated production dashboards in Metabase (deployed via Docker containers):
+
+\subsection*{Dashboard 1: Macro CPI \& Inflation Analytics}
+\noindent
+Presents real-time daily Headline CPI and Core CPI (excluding volatile Food \& Energy), month-over-month (MoM) and year-over-year (YoY) inflation rates, 12 COICOP division breakdowns, and out-of-sample tracking error against official National Institute of Statistics (NIS) monthly reports.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\linewidth]{thesis/images/dashboard_97_macro_cpi.png}
+    \caption*{Figure 4: Metabase Dashboard 1 --- Real-Time Macro CPI \& Inflation Analytics}
+\end{figure}
+
+\subsection*{Dashboard 2: Operations \& Data Source Telemetry}
+\noindent
+Monitors daily ingestion health across all 11 retail and service data sources. Displays daily scraped observation counts, scraper execution runtimes, HTTP status codes, browser automation latency, and active catalog availability.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\linewidth]{thesis/images/dashboard_98_telemetry.png}
+    \caption*{Figure 5: Metabase Dashboard 2 --- Data Lake Operations \& Scraping Telemetry}
+\end{figure}
+
+\subsection*{Dashboard 3: Silver Layer Data Quality Screener}
+\noindent
+Performs live quality screening across raw-to-silver transformations. Tracks unit normalization rates (conversions to 1kg/1L), dual currency conversion (USD/KHR via daily MEF rates), 5-step entity matching waterfall hit rates (Barcode, SKU, text+size, vector pgvector, fuzzy), and Gemini AI classification guardrails (preventing pet food/cleaning chemical classification errors).
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\linewidth]{thesis/images/dashboard_99_silver_quality.png}
+    \caption*{Figure 6: Metabase Dashboard 3 --- Silver Layer Data Quality \& Classification Screener}
+\end{figure}
+
 \end{document}

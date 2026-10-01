@@ -447,6 +447,25 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
         p.add_run(tt).font.bold = True
         p.add_run(td)
 
+    # Nowcasting Flowchart Image
+    flowchart_path = os.path.join(os.path.dirname(__file__), "..", "thesis", "images", "nowcasting_flowchart.png")
+    if os.path.exists(flowchart_path):
+        p_fc = doc.add_paragraph()
+        p_fc.paragraph_format.space_before = Pt(6)
+        p_fc.paragraph_format.space_after = Pt(2)
+        p_fc.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_fc.add_run().add_picture(flowchart_path, width=Inches(5.8))
+        
+        p_cap = doc.add_paragraph()
+        p_cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_cap.paragraph_format.space_before = Pt(1)
+        p_cap.paragraph_format.space_after = Pt(6)
+        r_cap = p_cap.add_run("Figure 2: Architecture Flowchart of the Two-Tier Inflation Nowcasting Engine")
+        r_cap.font.name = "Calibri"
+        r_cap.font.size = Pt(8.5)
+        r_cap.font.italic = True
+        r_cap.font.color.rgb = RGBColor(100, 100, 100)
+
     p_feat = doc.add_paragraph()
     p_feat.paragraph_format.space_before = Pt(4)
     p_feat.paragraph_format.space_after = Pt(2)
@@ -465,8 +484,91 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
         p.add_run(ft).font.bold = True
         p.add_run(fd)
 
-    doc.save(filename)
-    print(f"Document successfully created: {filename}")
+    # Convergence plot
+    conv_path = os.path.join(os.path.dirname(__file__), "..", "thesis", "images", "cpi_nowcasting_convergence.png")
+    if os.path.exists(conv_path):
+        p_conv = doc.add_paragraph()
+        p_conv.paragraph_format.space_before = Pt(6)
+        p_conv.paragraph_format.space_after = Pt(2)
+        p_conv.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_conv.add_run().add_picture(conv_path, width=Inches(5.6))
+        
+        p_cap = doc.add_paragraph()
+        p_cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_cap.paragraph_format.space_before = Pt(1)
+        p_cap.paragraph_format.space_after = Pt(6)
+        r_cap = p_cap.add_run("Figure 3: Intra-Month Nowcasting Convergence with Monotonically Decaying Error Bounds")
+        r_cap.font.name = "Calibri"
+        r_cap.font.size = Pt(8.5)
+        r_cap.font.italic = True
+        r_cap.font.color.rgb = RGBColor(100, 100, 100)
+
+    # ── 5. METABASE MONITORING & DASHBOARDS ───────────────────────────────────
+    h5 = doc.add_heading("5. Decision-Support Metabase Dashboards & Monitoring", level=1)
+    h5.paragraph_format.space_before = Pt(10)
+    h5.paragraph_format.space_after = Pt(4)
+
+    doc.add_paragraph(
+        "To provide actionable macroeconomic intelligence and continuous pipeline observability, the system "
+        "implements three dedicated production dashboards in Metabase (running in Docker containers):"
+    )
+
+    dashboards = [
+        ("Dashboard 1: Macro CPI & Inflation Analytics",
+         "Presents real-time daily Headline CPI and Core CPI (excluding volatile Food & Energy), "
+         "month-over-month (MoM) and year-over-year (YoY) inflation rates, 12 COICOP division breakdowns, "
+         "and out-of-sample tracking error against official National Institute of Statistics (NIS) monthly reports.",
+         "dashboard_97_macro_cpi.png",
+         "Figure 4: Metabase Dashboard 1 — Real-Time Macro CPI & Inflation Analytics"),
+
+        ("Dashboard 2: Operations & Data Source Telemetry",
+         "Monitors daily ingestion health across all 11 retail and service data sources. Displays daily scraped "
+         "observation counts, scraper execution runtimes, HTTP status codes, browser automation latency, "
+         "and active catalog availability.",
+         "dashboard_98_telemetry.png",
+         "Figure 5: Metabase Dashboard 2 — Data Lake Operations & Scraping Telemetry"),
+
+        ("Dashboard 3: Silver Layer Data Quality Screener",
+         "Performs live quality screening across raw-to-silver transformations. Tracks unit normalization "
+         "rates (conversions to 1kg/1L), dual currency conversion (USD/KHR via daily MEF rates), 5-step entity matching "
+         "waterfall hit rates (Barcode, SKU, text+size, vector pgvector, fuzzy), and Gemini AI classification "
+         "guardrails (preventing pet food/cleaning chemical classification errors).",
+         "dashboard_99_silver_quality.png",
+         "Figure 6: Metabase Dashboard 3 — Silver Layer Data Quality & Classification Screener")
+    ]
+
+    for title, desc, img_file, caption in dashboards:
+        doc.add_heading(title, level=2)
+        p_desc = doc.add_paragraph(desc)
+        p_desc.paragraph_format.space_before = Pt(1)
+        p_desc.paragraph_format.space_after = Pt(4)
+
+        img_path = os.path.join(os.path.dirname(__file__), "..", "thesis", "images", img_file)
+        if os.path.exists(img_path):
+            p_img = doc.add_paragraph()
+            p_img.paragraph_format.space_before = Pt(4)
+            p_img.paragraph_format.space_after = Pt(2)
+            p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_img.add_run().add_picture(img_path, width=Inches(5.8))
+
+            p_cap = doc.add_paragraph()
+            p_cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_cap.paragraph_format.space_before = Pt(1)
+            p_cap.paragraph_format.space_after = Pt(6)
+            r_cap = p_cap.add_run(caption)
+            r_cap.font.name = "Calibri"
+            r_cap.font.size = Pt(8.5)
+            r_cap.font.italic = True
+            r_cap.font.color.rgb = RGBColor(100, 100, 100)
+
+    try:
+        doc.save(filename)
+        print(f"Document successfully created: {filename}")
+    except PermissionError:
+        fallback = filename.replace(".docx", "_v2.docx")
+        doc.save(fallback)
+        print(f"Original file was open in Word. Saved to: {fallback}")
 
 if __name__ == "__main__":
-    build_docx()
+    out_file = "Nowcasting_Inflation_via_Daily_Web_Scraping_Price.docx"
+    build_docx(out_file)

@@ -237,14 +237,17 @@ class COICOPHierarchy:
         return eas
 
     def aggregate_multi_tier(
-        self, ea_indices: Dict[str, float]
+        self, ea_indices: Dict[str, float], use_geometric_subclass: bool = False
     ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
         """
         Executes hierarchical aggregation according to UN COICOP / ILO 2020:
         EA indices -> Class indices -> Group indices -> Division indices.
 
-        Case A: Class has detailed weighted subclasses:
-            I_Class = sum(w_e * I_e) / sum(w_e) over active leaf EAs under that Class.
+        Case A: Class has detailed subclasses:
+            - If use_geometric_subclass=True:
+                I_Class = exp( (1/K) * sum(ln(I_e)) ) over active leaf EAs (equal-weight geometric).
+            - Default (weighted):
+                I_Class = sum(w_e * I_e) / sum(w_e) over active leaf EAs under that Class.
         Case B: Class has NO detailed weighted subclasses:
             I_Class = I_EA (Class itself is the EA).
 
@@ -271,16 +274,21 @@ class COICOPHierarchy:
                 else:
                     class_indices[cls_code] = np.nan
             else:
-                # Case A: Class has detailed weighted subclasses
+                # Case A: Class has detailed subclasses
                 child_eas = self.get_elementary_aggregates_for_class(cls_code)
                 active_eas = [
                     ea for ea in child_eas 
-                    if ea.node_code in ea_indices and not pd.isna(ea_indices[ea.node_code])
+                    if ea.node_code in ea_indices and not pd.isna(ea_indices[ea.node_code]) and ea_indices[ea.node_code] > 0
                 ]
                 if active_eas:
-                    sum_w = sum(ea.weight for ea in active_eas)
-                    sum_w_idx = sum(ea.weight * ea_indices[ea.node_code] for ea in active_eas)
-                    class_indices[cls_code] = float(sum_w_idx / sum_w) if sum_w > 0 else np.nan
+                    if use_geometric_subclass:
+                        # Two-stage equal-weight geometric mean (Jevons-of-Jevons)
+                        log_vals = [np.log(ea_indices[ea.node_code]) for ea in active_eas]
+                        class_indices[cls_code] = float(np.exp(np.mean(log_vals)))
+                    else:
+                        sum_w = sum(ea.weight for ea in active_eas)
+                        sum_w_idx = sum(ea.weight * ea_indices[ea.node_code] for ea in active_eas)
+                        class_indices[cls_code] = float(sum_w_idx / sum_w) if sum_w > 0 else np.nan
                 else:
                     class_indices[cls_code] = np.nan
 

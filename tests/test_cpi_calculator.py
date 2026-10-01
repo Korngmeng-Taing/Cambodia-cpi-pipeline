@@ -722,7 +722,60 @@ def test_5digit_ceic_subclass_weights_consistency(cpi_engine):
     assert pytest.approx(sum(cpi_engine.weights.values()), 0.001) == 1.0
 
 
+def test_fixed_weight_invariant_headline_aggregation(cpi_engine):
+    """Verifies that impute_missing_divisions=True maintains invariant national weights
 
+    and prevents volatile food/fuel shocks from expanding into unobserved divisions.
+    """
+    calc_date = date(2026, 9, 20)
+    # Division 01 (Food) has a 20% spike (index 120.0)
+    # Division 02 (Alcohol/Tobacco) stays flat (index 100.0)
+    # Division 04 (Housing, 17.08% weight) is completely unobserved
+    elem_df = pd.DataFrame([
+        {
+            "calculation_date": calc_date,
+            "item_id": "rice-1",
+            "coicop_division": "01",
+            "coicop_code": "01.1.1",
+            "base_price_khr": 1000.0,
+            "current_price_khr": 1200.0,
+            "price_ratio": 1.20,
+            "price_ratio_pct": 120.0,
+            "is_imputed": False,
+            "observation_count": 5,
+        },
+        {
+            "calculation_date": calc_date,
+            "item_id": "beer-1",
+            "coicop_division": "02",
+            "coicop_code": "02.1.1",
+            "base_price_khr": 2000.0,
+            "current_price_khr": 2000.0,
+            "price_ratio": 1.00,
+            "price_ratio_pct": 100.0,
+            "is_imputed": False,
+            "observation_count": 5,
+        },
+    ])
 
+    # 1. Under legacy dynamic reweighting: missing divisions are dropped
+    df_div_legacy, headline_legacy = cpi_engine.aggregate_division_and_headline(
+        elem_df, calc_date, impute_missing_divisions=False
+    )
+    # 2. Under invariant fixed weighting: unobserved divisions are imputed
+    df_div_fixed, headline_fixed = cpi_engine.aggregate_division_and_headline(
+        elem_df, calc_date, impute_missing_divisions=True
+    )
 
+    # Missing division 04 must still be represented as NaN/None in df_div for SQL NULL serialization
+    div04 = df_div_fixed[df_div_fixed["coicop_division"] == "04"].iloc[0]
+    assert pd.isna(div04["division_index"])
 
+    # Under legacy reweighting, food's 43.2% weight dominates the active basket (~43.2 / (43.2 + 2.5) ~ 94.5%)
+    # resulting in a much higher headline CPI
+    assert headline_legacy["headline_cpi"] > headline_fixed["headline_cpi"]
+
+    # In fixed weighting, national weight is invariant (sum == 1.0) and unobserved divisions are imputed
+    # Division 02 is core (100.0), so imputed core is 100.0.
+    # Total headline incorporates the imputed 100.0 across unobserved weights, keeping the index grounded.
+    assert 100.0 < headline_fixed["headline_cpi"] < headline_legacy["headline_cpi"]

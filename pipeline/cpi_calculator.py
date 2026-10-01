@@ -365,7 +365,8 @@ class CPICalculationEngine:
         self, 
         base_date: date, 
         df_prices: pd.DataFrame | None = None,
-        base_window_days: int = 7
+        base_window_days: int = 7,
+        regularize_base_promos: bool = False
     ) -> pd.DataFrame:
         """
         Computes the base geometric mean price per item_id on the base date or launch window.
@@ -374,6 +375,7 @@ class CPICalculationEngine:
         2. Items from newly launched stores or newer items (e.g. BookMeBus, RedBus, Grab UCare)
            establish their reference base price on their first appearance.
         3. Tracks both shelf price and metric unit price for strict dimensional comparison.
+        4. When regularize_base_promos=False (default), actual transaction prices are preserved.
         """
         if df_prices is None:
             df_prices = self.load_clean_prices(base_date, base_date + timedelta(days=base_window_days))
@@ -402,10 +404,9 @@ class CPICalculationEngine:
             base_df["unit_price_khr"] = base_df["price_khr"]
 
         # Strategy A: Project-Defined Promotion Regularization Rule (adhering to ILO CPI Manual §6.82 principles)
-        # International standard: Deep clearance promotions on the base date distort base prices downward.
-        # Project operational heuristic: If an observation on base date has on_promo == True and discount_pct >= 45% (or original_price_khr >= 1.45 * price_khr),
-        # use original regular MSRP shelf price to compute base prices.
-        if "on_promo" in base_df.columns and "original_price_khr" in base_df.columns:
+        # When regularize_base_promos=True, replaces deep promotional prices (discount >= 45%) with MSRP.
+        # When regularize_base_promos=False (default), strictly uses actual transaction prices.
+        if regularize_base_promos and "on_promo" in base_df.columns and "original_price_khr" in base_df.columns:
             orig = pd.to_numeric(base_df["original_price_khr"], errors="coerce")
             disc = pd.to_numeric(base_df.get("discount_pct", pd.Series(0, index=base_df.index)), errors="coerce").fillna(0)
             is_promo = base_df["on_promo"].fillna(False).astype(bool)
@@ -815,6 +816,8 @@ class CPICalculationEngine:
         df: pd.DataFrame,
         group_col: str = "coicop_division",
         z_threshold: float = 3.5,
+        min_ratio: float = 0.20,
+        max_ratio: float = 4.00,
     ) -> pd.DataFrame:
         """
         Filters price ratio outliers using Median Absolute Deviation (MAD) on log price ratios
@@ -827,7 +830,7 @@ class CPICalculationEngine:
             robust_sigma = 1.4826 * mad
             outlier if |log_r - med| > z_threshold * robust_sigma
         When group size is small (N < 5) or mad == 0, falls back to conservative
-        bounds: 0.33 <= price_ratio <= 3.00.
+        bounds: min_ratio <= price_ratio <= max_ratio.
         """
         if df.empty or "price_ratio" not in df.columns:
             return df
@@ -838,7 +841,7 @@ class CPICalculationEngine:
             n = len(ratios)
 
             # Global guardrails (catches 10x-100x decimal glitches)
-            base_mask = (ratios >= 0.20) & (ratios <= 4.00)
+            base_mask = (ratios >= min_ratio) & (ratios <= max_ratio)
 
             if n >= 5:
                 log_r = np.log(ratios)
@@ -849,9 +852,13 @@ class CPICalculationEngine:
                     mad_mask = np.abs(log_r - med) <= (z_threshold * robust_sigma)
                     keep_mask = base_mask & mad_mask
                 else:
-                    keep_mask = base_mask & (ratios >= 0.33) & (ratios <= 3.00)
+                    fallback_min = max(min_ratio, 0.33)
+                    fallback_max = min(max_ratio, 3.00)
+                    keep_mask = base_mask & (ratios >= fallback_min) & (ratios <= fallback_max)
             else:
-                keep_mask = base_mask & (ratios >= 0.33) & (ratios <= 3.00)
+                fallback_min = max(min_ratio, 0.33)
+                fallback_max = min(max_ratio, 3.00)
+                keep_mask = base_mask & (ratios >= fallback_min) & (ratios <= fallback_max)
 
             clean_indices.extend(group.index[keep_mask])
 
@@ -861,13 +868,17 @@ class CPICalculationEngine:
         self, 
         elementary_df: pd.DataFrame, 
         calc_date: date,
-        splice_factor: float = 1.0
+        splice_factor: float = 1.0,
+        store_weights: dict[str, float] | None = None,
+        use_geometric_subclass: bool = False,
+        impute_missing_divisions: bool = False
     ) -> tuple[pd.DataFrame, dict]:
         """
         Aggregates elementary indices into 12 COICOP division indices and Headline / Core CPI.
         Implements UN COICOP / ILO 2020 Multi-Tier Hierarchical Aggregation:
           Tier 1: Two-stage Store-Balanced Jevons geometric mean of price ratios
-                  within each Elementary Aggregate (EA).
+                  within each Elementary Aggregate (EA). Supports optional store outlet weights
+                  (defaults to equal store weighting across contributing retailers).
                   Case A: Subclass is the EA if Class has detailed weighted subclasses.
                   Case B: Class itself is the EA if Class has no detailed subclasses.
           Tier 2: Laspeyres expenditure-weighted aggregation of EAs to form Class indices.
@@ -906,6 +917,12 @@ class CPICalculationEngine:
                     )
                     valid_store_means = store_means[store_means > 0].dropna()
                     if not valid_store_means.empty:
+                        if store_weights:
+                            active_stores = [s for s in valid_store_means.index if s in store_weights and store_weights[s] > 0]
+                            if active_stores:
+                                total_w = sum(store_weights[s] for s in active_stores)
+                                weighted_log = sum(store_weights[s] * np.log(valid_store_means[s]) for s in active_stores) / total_w
+                                return float(np.exp(weighted_log) * 100.0)
                         return float(np.exp(np.mean(np.log(valid_store_means))) * 100.0)
                 valid_ratios = sub_df["price_ratio"][sub_df["price_ratio"] > 0].dropna()
                 if len(valid_ratios) > 0:
@@ -916,7 +933,9 @@ class CPICalculationEngine:
                 ea_indices[str(ea_code)] = _store_balanced_jevons(grp)
 
         # Step 2: Multi-Tier Aggregation (EA -> Class -> Group -> Division)
-        class_indices, group_indices, division_indices = self.hierarchy.aggregate_multi_tier(ea_indices)
+        class_indices, group_indices, division_indices = self.hierarchy.aggregate_multi_tier(
+            ea_indices, use_geometric_subclass=use_geometric_subclass
+        )
 
         # Step 3: Division DataFrame
         div_records = []
@@ -956,8 +975,27 @@ class CPICalculationEngine:
             active_ea_count = 0
             ea_cov_wt = 0.0
         else:
-            total_weight = active_div["weight"].sum()
-            headline_cpi = float((active_div["weight"] * active_div["division_index"]).sum() / total_weight)
+            total_active_weight = active_div["weight"].sum()
+            if impute_missing_divisions:
+                # Invariant Fixed-Weight Higher Aggregation (Task 2.2):
+                # When divisions are missing (e.g., Housing/Utilities), do not renormalize remaining divisions.
+                # Impute missing divisions at Core CPI movement (or overall observed movement)
+                # and sum across the complete invariant national basket weight (sum W == 1.0).
+                core_exclusions = {"01", "04", "07"}
+                core_candidates = active_div[~active_div["coicop_division"].isin(core_exclusions)]
+                if not core_candidates.empty and core_candidates["weight"].sum() > 0:
+                    imputed_div_val = float((core_candidates["weight"] * core_candidates["division_index"]).sum() / core_candidates["weight"].sum())
+                else:
+                    imputed_div_val = float((active_div["weight"] * active_div["division_index"]).sum() / total_active_weight)
+
+                total_national_weight = sum(self.weights.values())
+                active_sum = float((active_div["weight"] * active_div["division_index"]).sum())
+                missing_div = df_div[df_div["item_count"] == 0]
+                missing_sum = float((missing_div["weight"] * imputed_div_val).sum())
+                headline_cpi = float((active_sum + missing_sum) / total_national_weight) if total_national_weight > 0 else imputed_div_val
+            else:
+                total_weight = active_div["weight"].sum()
+                headline_cpi = float((active_div["weight"] * active_div["division_index"]).sum() / total_weight)
             
             # Active EAs & coverage weight:
             active_ea_count = len(ea_indices)
@@ -990,8 +1028,6 @@ class CPICalculationEngine:
             "active_elementary_aggregate_count": active_ea_count,
             "imputation_rate": imputation_rate,
         }
-
-        return df_div, headline_summary
 
         return df_div, headline_summary
 
@@ -1210,7 +1246,9 @@ class CPICalculationEngine:
             log.error(f"No clean price data available between {history_start} and {target_date}")
             return
 
-        elementary_df = self.compute_daily_elementary_indices(target_date, base_df, df_history)
+        elementary_df = self.compute_daily_elementary_indices(
+            target_date, base_df, df_history, shadow_track_new_items=True
+        )
 
         # Lookup continuous series chain-linking splice factor if not explicitly passed
         if splice_factor is None:
@@ -1235,7 +1273,9 @@ class CPICalculationEngine:
             except Exception as e:
                 log.debug("Could not query gold.cpi_base_dates for splice factor: %s. Defaulting to 1.0", e)
 
-        df_div, headline = self.aggregate_division_and_headline(elementary_df, target_date, splice_factor=splice_factor)
+        df_div, headline = self.aggregate_division_and_headline(
+            elementary_df, target_date, splice_factor=splice_factor, impute_missing_divisions=True
+        )
 
         log.info(f"📊 {target_date} Headline CPI: {headline['headline_cpi']:.2f} | Core CPI: {headline['core_cpi']:.2f} | Active Basket Items: {headline['total_items']}")
 
@@ -1363,6 +1403,10 @@ class CPICalculationEngine:
 
                 conn.commit()
                 log.info(f"✅ Successfully persisted {len(elem_rows)} elementary indices and {len(cpi_rows)} division CPI facts!")
+        except Exception as e:
+            conn.rollback()
+            log.error(f"❌ Failed to persist daily CPI calculation to database: {e}")
+            raise
         finally:
             conn.close()
 

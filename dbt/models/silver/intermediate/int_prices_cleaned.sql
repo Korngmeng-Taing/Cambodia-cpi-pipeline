@@ -82,10 +82,10 @@ parsed as (
             (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\s*[xX*]\s*([0-9]+)\y', 'i'))[3]::numeric,
             (regexp_match(raw.name_raw, '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\y', 'i'))[1]::numeric,
             (regexp_match(raw.name_raw, '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\s*[xX*]\s*([0-9]+)\y', 'i'))[3]::numeric,
-            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[1]::numeric,
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb|can|bottle|pack|pkt|box|pc|pcs|tin|bar)\y', 'i'))[1]::numeric,
             case 
                 when (raw.name_raw ~* '\mcase\M' or raw.name_raw ~* '\(case\)' or raw.name_raw ~* '\mctn\M' or raw.name_raw ~* '\(ctn\)')
-                     and raw.name_raw !~* 'pencil|trolley|phone|dispenser|brief|stroller'
+                     and raw.name_raw !~* 'pencil|trolley|phone|dispenser|brief|stroller|laptop|screen|monitor|cable|charger|tv|case\s*for'
                      and raw.name_raw ~* '(beer|stout|cider|ale|soda|coke|cola|pepsi|water|drink|tea|coffee)'
                 then 24
                 else null
@@ -99,7 +99,7 @@ parsed as (
             (regexp_match(raw.name_raw, '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\y', 'i'))[2]::numeric,
             (regexp_match(raw.name_raw, '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\s*[xX*]\s*([0-9]+)\y', 'i'))[1]::numeric,
             (regexp_match(raw.name_raw, '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\y', 'i'))[1]::numeric,
-            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[1]::numeric,
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb|can|bottle|pack|pkt|box|pc|pcs|tin|bar)\y', 'i'))[1]::numeric,
             null
         ) as size_value,
         lower(coalesce(
@@ -109,7 +109,7 @@ parsed as (
             (regexp_match(raw.name_raw, '([0-9]+)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\y', 'i'))[3],
             (regexp_match(raw.name_raw, '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\s*[xX*]\s*([0-9]+)\y', 'i'))[2],
             (regexp_match(raw.name_raw, '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb)\y', 'i'))[2],
-            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)'))[2],
+            (regexp_match(coalesce(raw.size_norm, ''), '([0-9]+(?:\.[0-9]+)?)\s*(kg|g|ml|l|cl|oz|lb|can|bottle|pack|pkt|box|pc|pcs|tin|bar)\y', 'i'))[2],
             ''
         )) as size_unit,
         case

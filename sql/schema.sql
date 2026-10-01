@@ -282,9 +282,12 @@ CREATE INDEX IF NOT EXISTS idx_clean_store_prices_coicop_code
     ON silver.clean_store_prices (coicop_code);
 CREATE INDEX IF NOT EXISTS idx_clean_store_prices_coicop_division 
     ON silver.clean_store_prices (coicop_division);
+CREATE INDEX IF NOT EXISTS idx_clean_store_prices_item_scrape_date 
+    ON silver.clean_store_prices (item_id, scrape_date);
 
 -- Gold Conformed Daily Price Fact Table (Essential Metrics & Foreign Keys)
 CREATE TABLE IF NOT EXISTS gold.fct_daily_prices (
+    observation_id BIGSERIAL,
     scrape_date DATE NOT NULL,
     store_slug VARCHAR(64) NOT NULL,
     item_id TEXT NOT NULL,
@@ -301,6 +304,8 @@ CREATE TABLE IF NOT EXISTS gold.fct_daily_prices (
     is_fallback BOOLEAN,
     PRIMARY KEY (scrape_date, store_slug, item_id)
 );
+ALTER TABLE gold.fct_daily_prices ADD COLUMN IF NOT EXISTS observation_id BIGSERIAL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_fct_daily_prices_obs_id ON gold.fct_daily_prices(observation_id);
 
 -- Gold Canonical Item Baseline Reference Prices Registry (ILO CPI Manual §6.30)
 CREATE TABLE IF NOT EXISTS gold.dim_item_base_prices (

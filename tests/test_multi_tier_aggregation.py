@@ -162,3 +162,49 @@ def test_missing_elementary_aggregates_weight_renormalization(cpi_engine):
     # Coverage weight: EA level is Gasoline (4.969%), division level is Transport (12.228%)
     assert pytest.approx(headline["ea_coverage_weight"], 0.001) == 4.969
     assert pytest.approx(headline["coverage_weight"], 0.001) == 12.228
+
+
+def test_geometric_subclass_aggregation(cpi_engine):
+    """
+    Verifies that when use_geometric_subclass=True, subclasses combine
+    via an equal-weighted geometric mean (Jevons-of-Jevons):
+    I_class = exp((1/K) * sum(ln(I_e))).
+    """
+    ea_indices = {
+        "01.1.1.1.1": 110.0,
+        "01.1.1.1.2": 90.0,
+        "01.1.1.2": 100.0,
+    }
+    class_indices, _, _ = cpi_engine.hierarchy.aggregate_multi_tier(
+        ea_indices, use_geometric_subclass=True
+    )
+    expected_geom = float(np.exp((np.log(110.0) + np.log(90.0) + np.log(100.0)) / 3))
+    assert pytest.approx(class_indices["01.1.1"], 0.001) == expected_geom
+
+
+def test_store_weighted_jevons(cpi_engine):
+    """
+    Verifies that store_weights parameter weights store geometric means
+    by their turnover market shares:
+    I_EA = exp(sum(theta_s * ln(I_s))).
+    """
+    calc_date = date(2026, 9, 27)
+    items = pd.DataFrame([
+        # Store A: 10% inflation
+        {"item_id": "item-a", "coicop_division": "01", "coicop_code": "01.1.5",
+         "price_ratio": 1.10, "primary_store": "aeon", "observation_count": 100},
+        # Store B: 0% inflation
+        {"item_id": "item-b", "coicop_division": "01", "coicop_code": "01.1.5",
+         "price_ratio": 1.00, "primary_store": "lucky", "observation_count": 5},
+    ])
+    # Case 1: Equal store weights (default) -> sqrt(1.10 * 1.00) * 100 = 104.88
+    _, headline_eq = cpi_engine.aggregate_division_and_headline(items, calc_date)
+    expected_eq = float(np.exp((np.log(1.10) + np.log(1.00)) / 2) * 100.0)
+    assert pytest.approx(headline_eq["headline_cpi"], 0.01) == expected_eq
+
+    # Case 2: Store A has 80% market share, Store B has 20%
+    store_wts = {"aeon": 0.80, "lucky": 0.20}
+    _, headline_wt = cpi_engine.aggregate_division_and_headline(items, calc_date, store_weights=store_wts)
+    expected_wt = float(np.exp(0.80 * np.log(1.10) + 0.20 * np.log(1.00)) * 100.0)
+    assert pytest.approx(headline_wt["headline_cpi"], 0.01) == expected_wt
+

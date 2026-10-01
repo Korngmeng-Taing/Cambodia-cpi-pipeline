@@ -271,20 +271,20 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
     doc.add_heading("Stage 1: Web Scraping Layer", level=2)
     p_sc = doc.add_paragraph()
     p_sc.paragraph_format.space_after = Pt(2)
-    p_sc.add_run("Automated Daily Ingestion: ").font.bold = True
-    p_sc.add_run("Every morning at 08:00 AM, Apache Airflow orchestrates daily automated data extraction across 11 key retail and service sectors in Cambodia.")
+    p_sc.add_run("Automated Daily Collection: ").font.bold = True
+    p_sc.add_run("Every morning at 08:00 AM, the system automatically collects prices across 11 key stores and services in Cambodia.")
 
     p_pm = doc.add_paragraph()
     p_pm.paragraph_format.space_before = Pt(3)
     p_pm.paragraph_format.space_after = Pt(2)
-    p_pm.add_run("Protocols & Methods:").font.bold = True
+    p_pm.add_run("How We Collect Prices:").font.bold = True
 
     scrape_methods = [
-        ("Direct Store APIs (REST & GraphQL): ", "Directly targets internal reverse-proxy endpoints (AEON 1, AEON 3, DeliShop Asia, BookMeBus) and GraphQL queries (L192) to download structured JSON product catalogs, bypassing client-side web rendering."),
-        ("TLS Fingerprinting (curl_cffi): ", "Executes HTTP requests with Chrome TLS/JA3 fingerprint impersonation to bypass Cloudflare anti-bot defenses and Web Application Firewalls (WAF) with polite throttling (0.5s–1.0s delay)."),
-        ("Dynamic Browser Escalation (Headless Playwright): ", "Automatically launches an asynchronous headless Chromium browser context when encountering Cloudflare challenges or HTTP 403 Forbidden barriers (e.g., AEON) to render dynamic JavaScript and extract live prices."),
-        ("Public Web Feeds & HTML Parsing: ", "Uses BeautifulSoup to extract housing rentals (Khmer24, Realestate.com.kh), scrapes official fuel price caps via Tela Khmer Telegram web feeds with Khmer numeral translation (០–៩ → 0–9), and fetches daily official MEF USD/KHR exchange rates."),
-        ("Defensive Quality Controls: ", "Enforces a zero-record circuit breaker (raises an error on empty scrapes to prevent data wipeout) and maintains a static fallback matrix if third-party websites undergo outages.")
+        ("Direct Store APIs: ", "Connects directly to the backend of online supermarkets (AEON, DeliShop) and apps (L192, BookMeBus) to download product lists and prices quickly without loading heavy web pages."),
+        ("Browser Disguise (curl_cffi): ", "Sends fast automated requests that look like a real Google Chrome browser so store security systems (like Cloudflare) do not block our computer."),
+        ("Invisible Browser (Playwright): ", "If a website blocks direct requests with security checks (like 403 Forbidden), the system automatically opens an invisible browser to load the page and read the prices like a real user."),
+        ("Public Pages & Feeds: ", "Reads apartment rental listings from Khmer24, fuel prices from the Tela Khmer public channel (translating Khmer numbers 0-9), and official daily exchange rates from the Ministry of Economy and Finance (MEF)."),
+        ("Safety & Backup Rules: ", "Pauses 1 second between requests so we do not slow down store websites, and sends an alert if 0 products are found so bad data is never saved.")
     ]
     for sm_t, sm_d in scrape_methods:
         p = doc.add_paragraph(style='List Bullet')
@@ -526,24 +526,17 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
 
     dashboards = [
         ("Dashboard 1: Macro CPI & Inflation Analytics",
-         "Presents real-time daily Headline CPI and Core CPI (excluding volatile Food & Energy), "
-         "month-over-month (MoM) and year-over-year (YoY) inflation rates, 12 COICOP division breakdowns, "
-         "and out-of-sample tracking error against official National Institute of Statistics (NIS) monthly reports.",
+         "Shows daily Headline CPI and Core CPI (which removes volatile food and fuel prices), monthly inflation rates, and price changes across all 12 consumption categories compared against official government reports.",
          "dashboard_97_macro_cpi.png",
          "Figure 4: Metabase Dashboard 1 — Real-Time Macro CPI & Inflation Analytics"),
 
         ("Dashboard 2: Operations & Data Source Telemetry",
-         "Monitors daily ingestion health across all 11 retail and service data sources. Displays daily scraped "
-         "observation counts, scraper execution runtimes, HTTP status codes, browser automation latency, "
-         "and active catalog availability.",
+         "Tracks the daily health of our scrapers across all 11 sources. It shows how many product prices were collected each day, scraping speed, and website connection status.",
          "dashboard_98_telemetry.png",
          "Figure 5: Metabase Dashboard 2 — Data Lake Operations & Scraping Telemetry"),
 
         ("Dashboard 3: Silver Layer Data Quality Screener",
-         "Performs live quality screening across raw-to-silver transformations. Tracks unit normalization "
-         "rates (conversions to 1kg/1L), dual currency conversion (USD/KHR via daily MEF rates), 5-step entity matching "
-         "waterfall hit rates (Barcode, SKU, text+size, vector pgvector, fuzzy), and Gemini AI classification "
-         "guardrails (preventing pet food/cleaning chemical classification errors).",
+         "Checks the cleanliness of our data every day. It tracks product size standardization (converting items to 1kg or 1L), USD to Khmer Riel currency conversion, product matching across stores, and AI classification accuracy.",
          "dashboard_99_silver_quality.png",
          "Figure 6: Metabase Dashboard 3 — Silver Layer Data Quality & Classification Screener")
     ]

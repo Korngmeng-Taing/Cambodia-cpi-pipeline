@@ -81,6 +81,8 @@ Thumbs.db
 *.ppt
 *.pps
 *.ppsx
+*.docx
+*.doc
 
 # ── Private / Thesis / Documentation ──────────────────────────────────────────
 thesis/

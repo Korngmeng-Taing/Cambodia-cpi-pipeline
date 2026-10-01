@@ -325,9 +325,11 @@ class CPINowcaster:
         return {}
 
     def fetch_training_data(
-        self, target_date: date
+        self, target_date: date | None = None
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame | None]:
         """Fetches daily CPI facts, FX rates, monthly aggregations, and NIS benchmarks."""
+        if target_date is None:
+            target_date = date.today()
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:

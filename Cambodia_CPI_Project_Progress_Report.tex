@@ -82,6 +82,23 @@
     \item \textbf{Build a Decision-Support Dashboard:} Develop an interactive dashboard that presents daily CPI results and inflation for easy monitoring.
 \end{itemize}
 
+\vspace{-0.10cm}
+\subsection*{1.1 Scope and Limitations of the Study}
+\begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
+    \item \textbf{Geographical Scope:} Focuses on supermarkets, e-commerce platforms, pharmacies, and service providers in Phnom Penh, Cambodia's primary economic hub.
+    \item \textbf{Product Coverage:} Spans all 12 official United Nations COICOP spending categories (food, housing, transport, health, communication, etc.).
+    \item \textbf{Dual-Currency Handling:} Standardizes prices in US Dollars (USD) and Cambodian Riel (KHR) into a unified currency using official daily Ministry of Economy and Finance (MEF) exchange rates.
+    \item \textbf{Limitations \& Boundaries:} Does not cover informal wet markets or roadside street stalls; analyzes broad group-level price trends; and runs automated resilience routines to handle occasional retailer layout updates.
+\end{itemize}
+
+\vspace{-0.10cm}
+\subsection*{1.2 Literature Review: Three Theoretical Pillars}
+\begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
+    \item \textbf{Pillar 1 --- AI \& Semantic Vector Classification (BIS / ECB / Bundesbank - Project Spectrum 2024--2026):} Combines dense semantic vector embeddings (768-dim) with large language model edge-case arbitration and database memoization caching. Achieves over 95\% precision and cuts processing runtime from days to under 3 minutes.
+    \item \textbf{Pillar 2 --- Econometric Index Theory (IMF, ILO, OECD, Eurostat, UN, World Bank - CPI Manual 2020):} Validates index formulas against core mathematical axioms (Time-Reversal, Scale Invariance). Proves that the unweighted geometric mean (Jevons) eliminates arithmetic formula bias (Carli/Dutot drift), and specifies geometric class-mean imputation for temporary missing items.
+    \item \textbf{Pillar 3 --- Macroeconomic Nowcasting (De Mol, Giannone, Reichlin):} Resolves severe multicollinearity in high-dimensional daily price series where standard OLS collapses. Uses Bayesian shrinkage ($L_2$ Ridge regression) to keep matrix inversion stable, achieving a 10\% to 20\% forecast error reduction over standard autoregressive models.
+\end{itemize}
+
 \vspace{-0.05cm}
 
 % =============================================================================
@@ -252,6 +269,14 @@ Within each store and product category, the pipeline calculates the unweighted g
 \end{equation*}
 Store-level indices are subsequently aggregated across all eligible stores to compute the Elementary Aggregate index for category $e$ at day $t$.
 
+\subsubsection*{4.4.3 Why Store Balancing is Essential (1 Store = 1 Vote)}
+\noindent
+\textbf{Core Question:} If a big supermarket lists 90 types of rice and a small local shop lists 10, should the big supermarket control 90\% of our inflation calculation?
+\begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
+    \item \textbf{Without Store Balancing (Danger):} Stores with the largest catalogs get an overwhelming majority of mathematical power. Having more items on a web page does not mean households buy more there. If a mega-store runs a flash sale, the entire national CPI would artificially crash.
+    \item \textbf{With Store Balancing (Our Solution):} Fair voting system where 1 store = 1 vote regardless of catalog size. A sale at one individual store cannot distort the national price index by itself, faithfully reflecting genuine cross-market price trends.
+\end{itemize}
+
 \subsubsection*{4.4.4 Higher-Level Aggregation (Laspeyres CSES 2020 Weights)}
 \noindent
 To reflect Cambodian household spending, the 12 COICOP divisions are synthesized using official CSES 2020 survey weights:
@@ -280,6 +305,11 @@ To reflect Cambodian household spending, the 12 COICOP divisions are synthesized
         \item \textit{Result:} Discontinued items cleanly exit; new products become official base; and the multi-year index climbs continuously with zero New Year cliffs.
     \end{itemize}
 \end{itemize}
+
+\subsubsection*{4.4.6 New Products on Non-Base Dates (Baseline Entry Price Splicing)}
+\noindent
+\textbf{Challenge:} How do we calculate the price relative when a brand-new product appears in a store after the official base date (e.g., coffee launched on August 20 at \$5.00 with no price on August 18)?\\
+\textbf{Solution:} On its first appearance day, the system establishes the item's first observed entry price as its personal baseline price (\$5.00 / \$5.00 = 1.00). On subsequent days, the pipeline tracks relative price movements against this baseline without creating fictitious historical shocks.
 
 \subsubsection*{4.4.7 Missing Price \& Out-of-Stock Handling}
 \noindent
@@ -323,33 +353,45 @@ When an item is missing from today's scrape, how do we handle it?
 \vspace{0.2cm}
 \section*{5. Decision-Support Metabase Dashboards \& Monitoring}
 \noindent
-To provide actionable macroeconomic intelligence and continuous pipeline observability, the system implements three dedicated production dashboards in Metabase (deployed via Docker containers):
+To provide actionable macroeconomic intelligence for MEF policymakers and continuous operational observability for data engineers, the system implements three dedicated dashboards in Metabase. Below is a detailed breakdown of what the system monitors and what is presented across each dashboard:
 
-\subsection*{Dashboard 1: Macro CPI \& Inflation Analytics}
-\noindent
-Shows daily Headline CPI and Core CPI (which removes volatile food and fuel prices), monthly inflation rates, and price changes across all 12 consumption categories compared against official government reports.
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.95\linewidth]{thesis/images/dashboard_97_macro_cpi.png}
-    \caption*{Figure 4: Metabase Dashboard 1 --- Real-Time Macro CPI \& Inflation Analytics}
-\end{figure}
+\subsection*{5.1 What We Monitor Across the System}
+\begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
+    \item \textbf{High-Frequency Price Momentum:} Daily price movements across essential household goods to catch inflation spikes weeks before official monthly statistics are compiled.
+    \item \textbf{Core vs Headline Stability:} Tracks underlying price changes by stripping out volatile seasonal food and global fuel costs.
+    \item \textbf{Multi-Store Catalog Dynamics:} Monitors price discrepancies, store discounts, and stock availability across major retail chains in Phnom Penh.
+    \item \textbf{Supply Chain \& Spillover Effects:} Measures how fuel price adjustments at Tela Khmer translate into food delivery and transport cost inflation.
+    \item \textbf{Pipeline Operational Health:} Tracks automated daily Airflow DAG executions, scraping runtimes, network retries, and data ingestion volumes.
+    \item \textbf{Data Quality \& Integrity:} Continuously audits currency conversion accuracy, metric normalization, product matching confidence, and AI classification coverage.
+\end{itemize}
 
-\subsection*{Dashboard 2: Operations \& Data Source Telemetry}
-\noindent
-Tracks the daily health of our scrapers across all 11 sources. It shows how many product prices were collected each day, scraping speed, and website connection status.
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.95\linewidth]{thesis/images/dashboard_98_telemetry.png}
-    \caption*{Figure 5: Metabase Dashboard 2 --- Data Lake Operations \& Scraping Telemetry}
-\end{figure}
+\subsection*{5.2 What We Show on Each Metabase Dashboard}
 
-\subsection*{Dashboard 3: Silver Layer Data Quality Screener}
-\noindent
-Checks the cleanliness of our data every day. It tracks product size standardization (converting items to 1kg or 1L), USD to Khmer Riel currency conversion, product matching across stores, and AI classification accuracy.
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.95\linewidth]{thesis/images/dashboard_99_silver_quality.png}
-    \caption*{Figure 6: Metabase Dashboard 3 --- Silver Layer Data Quality \& Classification Screener}
-\end{figure}
+\subsubsection*{Dashboard 1: Macro CPI \& Inflation Analytics (Policy Decision-Support)}
+\begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
+    \item \textbf{Daily Headline CPI Tracker:} Interactive time-series displaying the composite daily CPI index anchored at August 18, 2026 = 100.00.
+    \item \textbf{Refined Core CPI Indicator:} Parallel trendline isolating structural core inflation from volatile agricultural food and energy swings.
+    \item \textbf{Month-to-Date (MTD) \& Year-to-Date (YTD) Inflation Cards:} Real-time summary KPI cards showing current monthly inflation momentum.
+    \item \textbf{12 UN COICOP Division Breakdown:} Comparative bar and area charts tracking individual indices for all 12 divisions weighted by CSES 2020 household expenditure shares.
+    \item \textbf{Early Inflation Nowcast vs Official NIS:} Forward-looking monthly inflation forecast plotted with dynamic uncertainty bounds, predicting official figures 25 to 45 days in advance.
+    \item \textbf{Official Benchmark Conversion:} Unified baseline converter displaying calculated indices on the official NIS 2006 = 100 scale (using the 2.19007 conversion multiplier).
+\end{itemize}
+
+\subsubsection*{Dashboard 2: Operations \& Scraping Telemetry (Pipeline Observability)}
+\begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
+    \item \textbf{Daily Scraping Yield per Store:} Bar chart tracking the total number of valid price quotes successfully scraped each morning across AEON, DeliShop, GrabMart, L192, Khmer24, etc.
+    \item \textbf{Scraper Execution Status \& Latency:} Real-time health indicator reporting job run durations, HTTP response times, and error rates.
+    \item \textbf{Anti-Blocking Resilience Monitor:} Tracks connection modes, recording successful direct API calls vs automated fallbacks to Playwright headless browser disguised sessions.
+    \item \textbf{Raw Data Lake Ingestion Volume:} Daily count of raw price records ingested into \texttt{bronze.raw\_prices} with timestamp and batch ID tracking.
+\end{itemize}
+
+\subsubsection*{Dashboard 3: Silver Layer Data Quality Screener (Integrity \& AI Audit)}
+\begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
+    \item \textbf{Product Matching \& Deduplication Rates:} Summary table showing the number of items linked via Barcodes (Level 1), Store SKUs (Level 2), Clean Titles (Level 3), and Vector Embeddings (Level 4).
+    \item \textbf{AI COICOP Classification Coverage:} Audit gauge tracking the percentage of catalog items mapped to official NIS 5-digit codes vs pending edge cases.
+    \item \textbf{Out-of-Stock \& Discontinuation Screener:} Monitors temporarily unavailable items undergoing ILO class-mean price imputation and flags discontinued products dropped after 7 consecutive days.
+    \item \textbf{Price Anomaly \& Extreme Outlier Guard:} Automated alert card highlighting any scraped price change exceeding 10x or falling below 0.1x for human review before Gold layer index aggregation.
+    \item \textbf{Currency \& Unit Standardization Screener:} Verification table tracking daily MEF official exchange rates and metric conversion consistency (e.g., KHR/kg and KHR/L).
+\end{itemize}
 
 \end{document}

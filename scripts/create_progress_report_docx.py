@@ -115,9 +115,51 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
         r.font.color.rgb = NAVY
         p.add_run(text)
 
+    # ── 1.2 SCOPE & LIMITATIONS ───────────────────────────────────────────────
+    h1_2 = doc.add_heading("1.1 Scope and Limitations of the Study", level=2)
+    h1_2.paragraph_format.space_before = Pt(4)
+    h1_2.paragraph_format.space_after = Pt(2)
+
+    scope_points = [
+        ("Geographical Scope: ", "Focuses on supermarkets, e-commerce platforms, pharmacies, and service providers in Phnom Penh, Cambodia's primary economic hub."),
+        ("Product Coverage: ", "Spans all 12 official United Nations COICOP spending categories (food, housing, transport, health, communication, etc.)."),
+        ("Dual-Currency Handling: ", "Standardizes prices in US Dollars (USD) and Cambodian Riel (KHR) into a unified currency using official daily Ministry of Economy and Finance (MEF) exchange rates."),
+        ("Limitations & Boundaries: ", "Does not cover informal wet markets or roadside street stalls; analyzes broad group-level price trends; and runs automated resilience routines to handle occasional retailer layout updates.")
+    ]
+    for st, sd in scope_points:
+        p = doc.add_paragraph(style='List Bullet')
+        p.paragraph_format.space_before = Pt(1)
+        p.paragraph_format.space_after = Pt(2)
+        r = p.add_run(st)
+        r.font.bold = True
+        r.font.color.rgb = NAVY
+        p.add_run(sd)
+
+    # ── 1.3 LITERATURE REVIEW ─────────────────────────────────────────────────
+    h1_3 = doc.add_heading("1.2 Literature Review: Three Theoretical Pillars", level=2)
+    h1_3.paragraph_format.space_before = Pt(4)
+    h1_3.paragraph_format.space_after = Pt(2)
+
+    lit_pillars = [
+        ("Pillar 1 — AI & Semantic Vector Classification (BIS / ECB / Bundesbank - Project Spectrum 2024–2026): ", 
+         "Combines dense semantic vector embeddings (768-dim) with large language model edge-case arbitration and database memoization caching. Achieves over 95% classification precision and cuts processing runtime from days to under 3 minutes."),
+        ("Pillar 2 — Econometric Index Theory (IMF, ILO, OECD, Eurostat, UN, World Bank - CPI Manual 2020): ", 
+         "Validates index formulas against core mathematical axioms (Time-Reversal, Scale Invariance). Proves that the unweighted geometric mean (Jevons) eliminates arithmetic formula bias (Carli/Dutot drift), and specifies geometric class-mean imputation for temporary missing items."),
+        ("Pillar 3 — Macroeconomic Nowcasting (De Mol, Giannone, Reichlin): ", 
+         "Resolves severe multicollinearity in high-dimensional daily price series where standard OLS collapses. Uses Bayesian shrinkage (L2 Ridge regression) to keep matrix inversion stable, achieving a 10% to 20% forecast error reduction over standard autoregressive models.")
+    ]
+    for lt, ld in lit_pillars:
+        p = doc.add_paragraph(style='List Bullet')
+        p.paragraph_format.space_before = Pt(1)
+        p.paragraph_format.space_after = Pt(2)
+        r = p.add_run(lt)
+        r.font.bold = True
+        r.font.color.rgb = TEAL
+        p.add_run(ld)
+
     # ── 2. ARCHITECTURE ───────────────────────────────────────────────────────
     h2 = doc.add_heading("2. Architecture", level=1)
-    h2.paragraph_format.space_before = Pt(12)
+    h2.paragraph_format.space_before = Pt(10)
     h2.paragraph_format.space_after = Pt(4)
 
     # Insert Architecture Diagram if available
@@ -483,6 +525,26 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
     r_jeveq.font.color.rgb = TEAL
     p_jev_eq.add_run("Store-level indices are then aggregated across all eligible stores to compute the Elementary Aggregate index for category e at day t.")
 
+    # 4.4.3 Why Store Balancing is Essential
+    doc.add_heading("4.4.3 Why Store Balancing is Essential (1 Store = 1 Vote)", level=3)
+    p_bal_q = doc.add_paragraph()
+    p_bal_q.paragraph_format.space_before = Pt(1)
+    p_bal_q.paragraph_format.space_after = Pt(2)
+    r_bq = p_bal_q.add_run("Core Question: If a big supermarket lists 90 types of rice and a small local shop lists 10, should the big supermarket control 90% of our inflation calculation?")
+    r_bq.font.bold = True
+    r_bq.font.italic = True
+
+    bal_points = [
+        ("Without Store Balancing (Danger): ", "Stores with the largest catalogs get an overwhelming majority of mathematical power. Having more items on a web page does not mean households buy more there. If a mega-store runs a flash sale, the entire national CPI would artificially crash."),
+        ("With Store Balancing (Our Solution): ", "Fair voting system where 1 store = 1 vote regardless of catalog size. A sale at one individual store cannot distort the national price index by itself, faithfully reflecting genuine cross-market price trends.")
+    ]
+    for bt, bd in bal_points:
+        p = doc.add_paragraph(style='List Bullet')
+        p.paragraph_format.space_before = Pt(1)
+        p.paragraph_format.space_after = Pt(1)
+        p.add_run(bt).font.bold = True
+        p.add_run(bd)
+
     # 4.4.4 Higher-Level Aggregation
     doc.add_heading("4.4.4 Higher-Level Aggregation (Laspeyres CSES 2020 Weights)", level=3)
     doc.add_paragraph("To reflect Cambodian household spending, the 12 COICOP divisions are synthesized using official CSES 2020 survey weights:")
@@ -522,6 +584,16 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
     p_cl2.add_run("• The Problem: What happens when December ends and the basket resets? If January resets back to 100.0, the graph shows a fake collapse.\n")
     p_cl2.add_run("• The Solution: We calculate the December monthly average (e.g., 105.0). The new series starts fresh at 100.0, but is multiplied by 1.05.\n")
     p_cl2.add_run("• Result: Discontinued items cleanly exit; new products become official base; and the multi-year index climbs continuously with zero New Year cliffs.")
+
+    # 4.4.6 New Products on Non-Base Dates
+    doc.add_heading("4.4.6 New Products on Non-Base Dates (Baseline Entry Price Splicing)", level=3)
+    p_nb = doc.add_paragraph()
+    p_nb.paragraph_format.space_before = Pt(1)
+    p_nb.paragraph_format.space_after = Pt(2)
+    p_nb.add_run("Challenge: ").font.bold = True
+    p_nb.add_run("How do we calculate the price relative when a brand-new product appears in a store after the official base date (e.g., coffee launched on August 20 at $5.00 with no price on August 18)?\n")
+    p_nb.add_run("Solution: ").font.bold = True
+    p_nb.add_run("On its first appearance day, the system establishes the item's first observed entry price as its personal baseline price ($5.00 / $5.00 = 1.00). On subsequent days, the pipeline tracks relative price movements against this baseline without creating fictitious historical shocks.")
 
     # 4.4.7 Missing Price & Out of Stock
     doc.add_heading("4.4.7 Missing Price & Out-of-Stock Handling", level=3)
@@ -620,50 +692,68 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
     h5.paragraph_format.space_after = Pt(4)
 
     doc.add_paragraph(
-        "To provide actionable macroeconomic intelligence and continuous pipeline observability, the system "
-        "implements three dedicated production dashboards in Metabase (running in Docker containers):"
+        "To provide actionable macroeconomic intelligence for MEF policymakers and continuous operational observability "
+        "for data engineers, the system implements three dedicated dashboards in Metabase. Below is a detailed breakdown "
+        "of what the system monitors and what is presented across each dashboard:"
     )
 
-    dashboards = [
-        ("Dashboard 1: Macro CPI & Inflation Analytics",
-         "Shows daily Headline CPI and Core CPI (which removes volatile food and fuel prices), monthly inflation rates, and price changes across all 12 consumption categories compared against official government reports.",
-         "dashboard_97_macro_cpi.png",
-         "Figure 4: Metabase Dashboard 1 — Real-Time Macro CPI & Inflation Analytics"),
+    # 5.1 What We Monitor
+    doc.add_heading("5.1 What We Monitor Across the System", level=2)
+    
+    monitor_items = [
+        ("High-Frequency Price Momentum: ", "Daily price movements across essential household goods to catch inflation spikes weeks before official monthly statistics are compiled."),
+        ("Core vs Headline Stability: ", "Tracks underlying price changes by stripping out volatile seasonal food and global fuel costs."),
+        ("Multi-Store Catalog Dynamics: ", "Monitors price discrepancies, store discounts, and stock availability across major retail chains in Phnom Penh."),
+        ("Supply Chain & Spillover Effects: ", "Measures how fuel price adjustments at Tela Khmer translate into food delivery and transport cost inflation."),
+        ("Pipeline Operational Health: ", "Tracks automated daily Airflow DAG executions, scraping runtimes, network retries, and data ingestion volumes."),
+        ("Data Quality & Integrity: ", "Continuously audits currency conversion accuracy, metric normalization, product matching confidence, and AI classification coverage.")
+    ]
+    for mt, md in monitor_items:
+        p = doc.add_paragraph(style='List Bullet')
+        p.paragraph_format.space_before = Pt(1)
+        p.paragraph_format.space_after = Pt(2)
+        r = p.add_run(mt)
+        r.font.bold = True
+        r.font.color.rgb = NAVY
+        p.add_run(md)
 
-        ("Dashboard 2: Operations & Data Source Telemetry",
-         "Tracks the daily health of our scrapers across all 11 sources. It shows how many product prices were collected each day, scraping speed, and website connection status.",
-         "dashboard_98_telemetry.png",
-         "Figure 5: Metabase Dashboard 2 — Data Lake Operations & Scraping Telemetry"),
+    # 5.2 Dashboard Breakdown
+    doc.add_heading("5.2 What We Show on Each Metabase Dashboard", level=2)
 
-        ("Dashboard 3: Silver Layer Data Quality Screener",
-         "Checks the cleanliness of our data every day. It tracks product size standardization (converting items to 1kg or 1L), USD to Khmer Riel currency conversion, product matching across stores, and AI classification accuracy.",
-         "dashboard_99_silver_quality.png",
-         "Figure 6: Metabase Dashboard 3 — Silver Layer Data Quality & Classification Screener")
+    db_details = [
+        ("Dashboard 1: Macro CPI & Inflation Analytics (Policy Decision-Support)", [
+            ("Daily Headline CPI Tracker: ", "Interactive time-series displaying the composite daily CPI index anchored at August 18, 2026 = 100.00."),
+            ("Refined Core CPI Indicator: ", "Parallel trendline isolating structural core inflation from volatile agricultural food and energy swings."),
+            ("Month-to-Date (MTD) & Year-to-Date (YTD) Inflation Cards: ", "Real-time summary KPI cards showing current monthly inflation momentum."),
+            ("12 UN COICOP Division Breakdown: ", "Comparative bar and area charts tracking individual indices for all 12 divisions weighted by CSES 2020 household expenditure shares."),
+            ("Early Inflation Nowcast vs Official NIS: ", "Forward-looking monthly inflation forecast plotted with dynamic uncertainty bounds, predicting official figures 25 to 45 days in advance."),
+            ("Official Benchmark Conversion: ", "Unified baseline converter displaying calculated indices on the official NIS 2006 = 100 scale (using the 2.19007 conversion multiplier).")
+        ]),
+        ("Dashboard 2: Operations & Scraping Telemetry (Pipeline Observability)", [
+            ("Daily Scraping Yield per Store: ", "Bar chart tracking the total number of valid price quotes successfully scraped each morning across AEON, DeliShop, GrabMart, L192, Khmer24, etc."),
+            ("Scraper Execution Status & Latency: ", "Real-time health indicator reporting job run durations, HTTP response times, and error rates."),
+            ("Anti-Blocking Resilience Monitor: ", "Tracks connection modes, recording successful direct API calls vs automated fallbacks to Playwright headless browser disguised sessions."),
+            ("Raw Data Lake Ingestion Volume: ", "Daily count of raw price records ingested into bronze.raw_prices with timestamp and batch ID tracking.")
+        ]),
+        ("Dashboard 3: Silver Layer Data Quality Screener (Integrity & AI Audit)", [
+            ("Product Matching & Deduplication Rates: ", "Summary table showing the number of items linked via Barcodes (Level 1), Store SKUs (Level 2), Clean Titles (Level 3), and Vector Embeddings (Level 4)."),
+            ("AI COICOP Classification Coverage: ", "Audit gauge tracking the percentage of catalog items mapped to official NIS 5-digit codes vs pending edge cases."),
+            ("Out-of-Stock & Discontinuation Screener: ", "Monitors temporarily unavailable items undergoing ILO class-mean price imputation and flags discontinued products dropped after 7 consecutive days."),
+            ("Price Anomaly & Extreme Outlier Guard: ", "Automated alert card highlighting any scraped price change exceeding 10x or falling below 0.1x for human review before Gold layer index aggregation."),
+            ("Currency & Unit Standardization Screener: ", "Verification table tracking daily MEF official exchange rates and metric conversion consistency (e.g., KHR/kg and KHR/L).")
+        ])
     ]
 
-    for title, desc, img_file, caption in dashboards:
-        doc.add_heading(title, level=2)
-        p_desc = doc.add_paragraph(desc)
-        p_desc.paragraph_format.space_before = Pt(1)
-        p_desc.paragraph_format.space_after = Pt(4)
-
-        img_path = os.path.join(os.path.dirname(__file__), "..", "thesis", "images", img_file)
-        if os.path.exists(img_path):
-            p_img = doc.add_paragraph()
-            p_img.paragraph_format.space_before = Pt(4)
-            p_img.paragraph_format.space_after = Pt(2)
-            p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p_img.add_run().add_picture(img_path, width=Inches(5.8))
-
-            p_cap = doc.add_paragraph()
-            p_cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p_cap.paragraph_format.space_before = Pt(1)
-            p_cap.paragraph_format.space_after = Pt(6)
-            r_cap = p_cap.add_run(caption)
-            r_cap.font.name = "Calibri"
-            r_cap.font.size = Pt(8.5)
-            r_cap.font.italic = True
-            r_cap.font.color.rgb = RGBColor(100, 100, 100)
+    for d_title, cards in db_details:
+        doc.add_heading(d_title, level=3)
+        for c_bold, c_desc in cards:
+            p = doc.add_paragraph(style='List Bullet')
+            p.paragraph_format.space_before = Pt(1)
+            p.paragraph_format.space_after = Pt(1.5)
+            r = p.add_run(c_bold)
+            r.font.bold = True
+            r.font.color.rgb = TEAL
+            p.add_run(c_desc)
 
     try:
         doc.save(filename)
@@ -673,6 +763,13 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
         doc.save(fallback)
         print(f"Original file was open in Word. Saved to: {fallback}")
 
+    try:
+        doc.save("Cambodia_CPI_Project_Progress_Report.docx")
+        print("Also saved to Cambodia_CPI_Project_Progress_Report.docx")
+    except Exception as e:
+        pass
+
 if __name__ == "__main__":
     out_file = "Nowcasting_Inflation_via_Daily_Web_Scraping_Price.docx"
     build_docx(out_file)
+

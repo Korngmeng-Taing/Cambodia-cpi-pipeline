@@ -1,10 +1,12 @@
 \documentclass[11pt,a4paper,oneside]{article}
 
 \usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{graphicx}
+\usepackage{float}
 \usepackage{fontspec}
 \setmainfont{Times New Roman}
 \setmonofont{Courier New}[Scale=0.86]
-\newfontfamily\khmerfont{Khmer OS Content}[Script=Khmer]
+\newfontfamily\khmerfont{Segoe UI}
 \newcommand{\khmer}[1]{{\khmerfont #1}}
 
 \usepackage{amsmath,amssymb,amsfonts,amsthm}
@@ -602,6 +604,20 @@ There is another big reason we use the Jevons rule: \textbf{real human behavior}
 \end{itemize}
 Simple arithmetic averages assume that people are robots who never change their shopping habits, no matter how expensive something gets. The Jevons geometric mean naturally accounts for the fact that when one item gets too expensive, smart shoppers switch to cheaper substitutes.
 
+\subsection{Why Store Balancing is Essential (1 Store = 1 Vote)}
+Imagine a scenario in Phnom Penh:
+\begin{itemize}
+    \item Supermarket A (a mega-store) lists \textbf{90 different brands and varieties of rice} online.
+    \item Supermarket B (a smaller local vendor) lists \textbf{10 types of rice}.
+\end{itemize}
+\textbf{The Question:} Should Supermarket A control 90\% of Cambodia's national rice inflation index just because its website has more product listings?\\
+\textbf{The Danger Without Balancing:} If you simply pool all 100 prices together without store balancing, the retailer with the most web listings gets an overwhelming monopoly on mathematical voting power. If Supermarket A runs a flash promotional sale on its private-label rice, the entire national CPI would artificially crash, even though 90\% of real Cambodian shoppers didn't buy that rice!\\
+\textbf{The Solution (Equal Store Voting):} We compute the unweighted geometric Jevons index \textbf{inside each store first}:
+\begin{equation}
+\ln I_{s, t}^{\text{Jevons}} = \frac{1}{n_s} \sum_{i=1}^{n_s} \left( \ln P_{i, s, t} - \ln P_{i, s, 0} \right)
+\end{equation}
+Then, we combine the stores equally: \textbf{1 store = 1 vote}. A sale at one supermarket cannot drag down the whole national price index on its own, ensuring the published numbers faithfully reflect genuine market-wide price trends.
+
 \newpage
 
 % =============================================================================
@@ -639,6 +655,18 @@ To solve this, we use a technique called \textbf{Hedonic Quality Adjustment}:
     \item If the extra memory and better camera are worth \$70, then only \textbf{\$30} is real inflation.
     \item The system records only the pure \$30 price increase, making sure tech upgrades don't artificially pump up national inflation.
 \end{enumerate}
+
+\subsection{Handling New Products on Non-Base Dates (Baseline Entry Price Splicing)}
+What happens when a brand-new product appears on store shelves weeks or months after our project started?
+\begin{itemize}
+    \item Suppose on August 18 (our official base date), a store sells 10 brands of coffee.
+    \item On August 20, a brand-new iced coffee brand launches in the store for \textbf{\$5.00}.
+    \item We do not have a price for this item on August 18 because it didn't exist yet! How can we calculate its price relative ($P_t / P_0$)?
+\end{itemize}
+\textbf{The Solution:}\\
+On the day a new product first appears (Day 1), our system sets its first observed quote as its personal baseline price:
+$$P_{i, s, 0} = \$5.00 \implies r_{i, s, \text{entry}} = \frac{\$5.00}{\$5.00} = \mathbf{1.00}$$
+From Day 2 onwards, the pipeline tracks genuine price movements relative to that \$5.00 starting baseline. This prevents the pipeline from creating fake historical shocks or dropping newly launched items that consumers are actively buying.
 
 \newpage
 
@@ -1140,6 +1168,13 @@ Ridge regression solves these exact failure modes by imposing an $L_2$ penalty o
 
 \subsection{Complete Mathematical Formulation of the Two-Stage Hybrid Model}
 For an active calendar month $M$ having $T$ total days, let $t = N_{\text{obs}}$ denote the number of observed calendar days to date ($1 \le t \le T$), and let $N_{\text{rem}} = T - t$ denote the remaining unobserved days.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{thesis/images/nowcasting_flowchart.png}
+\caption{End-to-End Two-Tier Inflation Nowcasting Engine Architecture Flowchart.}
+\label{fig:nowcasting_flowchart_handbook}
+\end{figure}
 
 \subsubsection{Stage 1: Micro-Aggregation of Realized Trajectory}
 For every basket $k \in \mathcal{K} = \{01, 02, 04, 07, 11\}$, the realized daily elementary Jevons price index $P_{k, s}$ is observed for each day $s \in \{1, \dots, t\}$. The realized Month-to-Date (MTD) mean index is:

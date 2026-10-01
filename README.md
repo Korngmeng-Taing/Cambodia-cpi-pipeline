@@ -55,11 +55,14 @@
 - **Ingestion Circuit Breaker (`pipeline/circuit_breaker.py`)**: Real-time quality gate checking volume drops (≥ 30% rolling median) and price velocity anomalies (± 50% deviation) with dynamic USD/KHR currency conversion using daily MEF exchange rates to prevent false alerts on USD-denominated retailers (Delishop, Cellcard, Hyatt, Sokha). Telemetry persisted to `ops.circuit_breaker_events`.
 
 ### Silver (Clean, Standardize & Resolve Observations)
-- **Clean Store Observations**: `silver.clean_store_prices` — unified daily appended table containing cleaned, standardized prices across all stores with exchange rates applied (KHR), unit normalization, promo clamping, and zero-price filtering.
-- **Item Matching Service**: Python (`pipeline/item_matcher.py` & `pipeline/vector_item_matcher.py`) executing Barcode exact → SKU exact → Exact Text → Vectorized Matrix Cosine (S = M · v) + RapidFuzz with deterministic spec guards to reject storage/pack conflicts.
-- **12-Division & 4-Digit NIS COICOP Engine**: `pipeline/gemini_coicop_classifier.py` executing AI-first NIS Cambodia 4-digit COICOP Class (`DD.G.C`, 48 classes) classification: human overrides → deterministic text rules → Gemini Flash batch classification with domain guardrails and automated memoization in PostgreSQL (`silver.canonical_items` and `silver.clean_store_prices`). 100% classified with 0 nulls and 0 unclassified residues.
+- **Clean Store Observations**: `silver.clean_store_prices` — unified daily appended table containing cleaned, standardized prices across all stores with exchange rates applied (KHR via official MEF rate), Khmer numeral conversion (e.g. ៥០០ → 500), metric unit normalization (500g → 0.5kg, 1500ml → 1.5L), promo clamping, and unit price calculation ($P_{\text{unit}} = \text{Price in KHR} / \text{Normalized Metric}$).
+- **4-Level Product Matching Waterfall**:
+  1. *Level 1 (Universal Barcode)*: Matches identical items across different stores (e.g., AEON ↔ DeliShop) using global GTIN/EAN-13 barcodes.
+  2. *Level 2 (Store ID + SKU Composite Key)*: Solves SKU collisions across retailers using a composite `(store_id, sku)` key with a "Learn once, cache forever" strategy to track returning items day-after-day.
+  3. *Level 3 (Exact Clean Text Matching)*: Links identical products across retailers with different internal SKUs when barcodes are missing.
+  4. *Level 4 (Vector Embedding & Deterministic Spec Guard)*: High-speed 768-dim semantic search (`gemini-embedding-2` via PostgreSQL `pgvector` HNSW Cosine Index Top 30) paired with a strict deterministic spec guard that rejects false physical merges (e.g., `1 can` $\neq$ `24-pack`, `128GB` $\neq$ `256GB`) with threshold $\ge 0.80$.
+- **12-Division & 5-Digit NIS COICOP Engine**: `pipeline/gemini_coicop_classifier.py` executing a two-tier strategy: Tier 1 deterministic single-category store assignment (Smart/Cellcard → 08.3.0, BookMeBus → 07.3.2) + Tier 2 Gemini Flash batching (40 items/batch across 4 rotating API keys) with domain guardrails and permanent memoization in PostgreSQL (`silver.canonical_items`).
 - **Operational Triage Queue**: `silver.classification_queue` captures unclassified or low-confidence items for automated review or human labeling.
-- **COICOP Override System**: `silver.coicop_override` (seed-driven) + `silver.coicop_override_manual` (operator-driven) for persistent classification rules.
 
 ### Gold (Kimball Star Schema & Jevons/Laspeyres CPI Engine)
 - **Dimensional Modeling (Star Schema & Aggregate Marts)**:
@@ -67,31 +70,28 @@
   - `gold.dim_items_history`: dbt SCD Type 2 snapshot tracking longitudinal changes in brand packaging and classification.
   - `gold.dim_stores`: Store & retailer master dimension.
   - `gold.fct_daily_prices`: Conformed daily price fact table at grain `(scrape_date, store_slug, item_id)` with KHR prices, unit prices, promo/outlier/fallback flags, and COICOP attribution.
-  - `gold.fct_coicop_class_daily`: Intermediate 4-digit COICOP class-level aggregate mart (e.g. `01.1.1` Bread & Cereals) for sub-division policy drilldown.
-  - `gold.fct_cpi_monthly`: Monthly conformed 12-division and national headline/core CPI aggregate mart with Month-over-Month (MoM %) and Year-over-Year (YoY %) inflation rates. Authoritatively managed by `pipeline/cpi_calculator.py` (`CPICalculationEngine.save_monthly_cpi`) as the single writer.
-  - `gold.dim_nis_official_cpi`: Official NIS Cambodia monthly CPI releases (Oct–Dec 2006 = 100) and full 12 COICOP division index benchmarks scraped directly from NIS monthly Excel workbooks.
-  - `gold.fct_cpi_nis_comparison`: Tracking error and benchmark evaluation mart comparing high-frequency pipeline CPI against official NIS monthly headline and division releases (MAE, percentage errors, directional concordance).
+  - `gold.fct_coicop_class_daily`: Intermediate 4-digit and 5-digit COICOP class-level aggregate mart for sub-division policy drilldown.
+  - `gold.fct_cpi_monthly`: Monthly conformed 12-division and national headline/core CPI aggregate mart with Month-over-Month (MoM %) and Year-over-Year (YoY %) inflation rates.
+  - `gold.dim_nis_official_cpi`: Official NIS Cambodia monthly CPI releases (Oct–Dec 2006 = 100) and full 12 COICOP division index benchmarks.
+  - `gold.fct_cpi_nis_comparison`: Tracking error and benchmark evaluation mart comparing high-frequency pipeline CPI against official NIS monthly releases.
   - `gold.fct_cpi_nowcast`: Daily generated current-month inflation nowcasts with dynamic 95% confidence intervals, uncertainty decay ratios, and official NIS chain-linking.
 - **Economic Index Calculation Engine (`pipeline/cpi_calculator.py`)**:
-  - **Two-Tier Elementary & Subclass Aggregation (ILO/IMF CPI Manual)**:
-    - *Tier 1 (Subclass Elementary Index)*: Unweighted Jevons geometric mean of price ratios for all items within each 4-digit COICOP subclass ($I_c$).
-    - *Tier 2 (Division Laspeyres Roll-Up)*: Subclasses are aggregated into COICOP divisions using official NIS Cambodia expenditure weights from `dbt/seeds/cambodia_cpi_coicop_weights_breakdown.csv`:
-      $$I_{\text{Div}} = \frac{\sum_{c \in \text{Div}} W_c \cdot I_c}{\sum_{c \in \text{Div}} W_c}$$
-  - **Continuous Series Chain-Linking Splice Factor**: Automatically queries `gold.cpi_base_dates` for the effective `avg_december_cpi`, applying $S = \bar{I}_{\text{Dec}} / 100.0$ to link annual rebasings onto a continuous historical series without step jumps.
-  - **ILO Class-Mean Imputation Engine**: Missing items ($\le 7$ days) are dynamically imputed using the geometric mean rate of change of observed items in the corresponding COICOP division:
-    $$P_{i,t} = P_{i,t-k} \times \left( \prod_{j \in D_i} \frac{P_{j,t}}{P_{j,t-1}} \right)^{\frac{1}{|D_i|}}$$
-  - **Hedonic Quality Adjustment Bridge**: Directly bridges `silver.hedonic_adjusted_prices` to adjust for technology/electronic quality improvements (Division 08/09).
-  - **Laspeyres 12-Division Weighting**: Official National Institute of Statistics (NIS) Cambodia expenditure shares compiled into Headline and Core CPI (`gold.fct_cpi_daily` & `gold.fct_cpi_monthly`).
-  - **Harmonized Monthly Headline & Core CPI**: Computed as the windowed Laspeyres sum of monthly division indices:
-    $$\text{monthly\_headline\_cpi} = \frac{\sum_{\text{active}} W_d \cdot I_d^{\text{month}}}{\sum_{\text{active}} W_d}$$
-  - **Refined Core CPI**: Excludes volatile food (Division 01), housing & utilities (Division 04), and transport fuel (Division 07) in accordance with NIS and National Bank of Cambodia core inflation standards.
+  - **Axiomatic Store-Balanced Jevons Elementary Aggregation (IMF/ILO CPI Manual 2020)**:
+    - *Store-Level Jevons Index*: Unweighted geometric mean of micro-price relatives using numerical log-prices to eliminate arithmetic formula bias (Carli/Dutot drift):
+      $$\ln I_{s,t}^{\text{Jevons}} = \frac{1}{n_s} \sum_{i=1}^{n_s} (\ln P_{i,s,t} - \ln P_{i,s,0})$$
+    - *Store Balancing ("1 Store = 1 Vote")*: Elementary aggregates weight eligible stores equally within each category, preventing catalog-heavy retailers (e.g. 90 types of rice vs 10 types of rice) from overpowering smaller shops.
+  - **New Products on Non-Base Dates (Baseline Entry Price Splicing)**: Products appearing after the initial base date establish their first observed quote as their personal baseline ($P_{i,s,0} = P_{\text{entry}}$, ratio 1.00), tracking subsequent price movements without creating fictitious historical shocks.
+  - **ILO Class-Mean Imputation Engine**: Missing items ($\le 7$ days) are dynamically imputed using the geometric mean rate of change of observed items in the corresponding category. Items absent for $>7$ consecutive days are flagged as discontinued and cleanly dropped.
+  - **Dual Chain-Linking Architecture**:
+    - *Official NIS Benchmark Splicing*: Spliced to the official NIS 2006 base ($219.007$) using a conversion factor of $2.19007$ ($CPI_{\text{unified}} = CPI_{\text{web}} \times 2.19007$) for direct comparability with sovereign releases.
+    - *Annual December Overlap Chain-Linking*: Resets annual base weights via the December monthly average, preventing artificial New Year index cliffs.
+  - **Laspeyres 12-Division Weighting**: Synthesized using official Cambodia Socio-Economic Survey (CSES 2020) expenditure shares: Food & Beverages (44.775%), Housing & Utilities (17.062%), Transport (12.203%), and remaining 9 divisions (25.960%).
+  - **Refined Core CPI**: Excludes volatile food (Division 01) and energy/utilities (Division 04) to monitor underlying structural macroeconomic price stability.
 - **Two-Stage Hybrid Ridge Daily Inflation Nowcasting Engine (`ml/nowcaster.py`)**:
-  - **Axiomatic Bottom-Up 5-Basket Price Relatives**: Directly models price relatives across **5 key consumption divisions** (Food 44.78%, Alcohol 1.63%, Housing/Energy 17.08%, Transport 12.23%, Restaurants 5.86%) covering **81.58%** of Cambodia's national basket.
-  - **Empirical Bayes Ridge Drift Estimator (`RidgeBasketDriftEstimator`)**: Uses `RidgeCV` across rolling multi-horizon momentum features (3d/7d/14d food momentum, 3d/7d transport momentum, 7d/14d MEF FX momentum, holiday demand proximity) with empirical Bayesian shrinkage prior to forecast remaining-days drift.
-  - **Exact Laspeyres Axiomatic Aggregation**: Synthesizes basket-level trajectories using cumulative midpoint expectations and weights them into the official headline CPI nowcast:
-    $$\widehat{\text{HeadlineCPI}}_T = \sum_{k \in \mathcal{K}} w_k \cdot \bar{I}_{k, \text{month}} + \sum_{m \notin \mathcal{K}} w_m \cdot I_{m, \text{baseline}}$$
-  - **Official Benchmark Chain-Linking**: Translates pipeline growth rates into chain-linked official NIS Phnom Penh index numbers (Base Oct–Dec 2006 = 100).
-  - **Uncertainty Decay Modeling**: Computes dynamic 95% confidence intervals that narrow as the month progresses ($U_t = \sqrt{(T-t)/T}$).
+  - *Tier 1 (Realized Elapsed Days $1 \dots d$)*: 100% axiomatic scraped ground truth reality with zero econometric model error.
+  - *Tier 2 (Forward Econometric Projection $d+1 \dots T$)*: `RidgeCV` $L_2$ regularization with Bayesian shrinkage priors modeling high-velocity basket drift with cross-sector fuel pass-through, USD/KHR exchange rate momentum, and Khmer holiday decay kernels.
+  - *Dynamic Horizon Blending*: Time-weighted convergence formula ($Nowcast(d) = \frac{d}{T}\bar{I}_{\text{realized}} + \frac{T-d}{T}\hat{I}_{\text{projected}}$) with monotonically decaying uncertainty bounds ($U_d = \sqrt{(T-d)/T}$).
+  - *Architecture Flowchart*: See [Nowcasting Engine Flowchart](thesis/images/nowcasting_flowchart.png).
 - **Serving Views & Metabase Dashboards** (`sql/views.sql`):
   - `gold.v_nowcast_evaluation`: Real-time out-of-sample audit tracking daily nowcast error vs. official NIS monthly releases.
   - `gold.v_cpi_monthly_summary`: Monthly national headline and core CPI with MoM (%) and YoY (%) inflation indicators.

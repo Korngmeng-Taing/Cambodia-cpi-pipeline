@@ -21,6 +21,8 @@
 \usepackage{hyperref}
 
 \setmainfont{Times New Roman}
+\newfontfamily\khmerfont{Segoe UI}
+\newcommand{\khmer}[1]{{\khmerfont #1}}
 
 \hypersetup{
     colorlinks=true,
@@ -116,18 +118,30 @@ where $\boldsymbol{\Theta} = \{\hat{\alpha}_{\text{daily}}, \hat{\boldsymbol{\be
 Before econometric modeling occurs, raw retail price microdata is collected daily across 25 modern supermarket chains, wholesale outlets, and e-commerce platforms in Phnom Penh ($\approx 41,500$ raw product listings per day).
 
 \paragraph{1. Data Cleansing and Silver Standardization:}
-Raw scraped records are mapped into conformed silver tables (\texttt{silver.retail\_prices}). Dual currencies are normalized into Khmer Riel (KHR) using daily official exchange rates, units of measurement are converted into uniform metrics (price per kg, liter, or unit), and product descriptions are matched to 4-digit NIS COICOP subclasses through a 5-tier matching waterfall supported by few-shot LLM classification.
+Raw scraped records are mapped into conformed silver tables (\texttt{silver.clean\_store\_prices}). Dual currencies are normalized into Khmer Riel (KHR) using daily official MEF exchange rates, Khmer numerals are mapped to standard digits (e.g., \khmer{៥០០} $\rightarrow$ 500), units of measurement are converted into uniform metrics ($500\text{g} \rightarrow 0.5\text{kg}$, $1500\text{ml} \rightarrow 1.5\text{L}$), and product varieties are resolved through a 4-tier matching waterfall: Universal Barcode (EAN-13) $\rightarrow$ Store ID + SKU composite key with persistent memoization $\rightarrow$ Clean Text Matching $\rightarrow$ 768-dim Vector Embeddings (\texttt{gemini-embedding-2} with PostgreSQL \texttt{pgvector} HNSW index) guarded by deterministic pack/spec checks (Cosine $\ge 0.80$).
 
-\paragraph{2. Unweighted Geometric Jevons Elementary Aggregation:}
-For each elementary item category $k$ containing $n_k$ matched product varieties, the elementary price index relative to the base period $0$ is computed using the axiomatic \textbf{Jevons formula} (recommended by the UN/IMF CPI Manual to eliminate base-period plutocratic substitution bias):
+\paragraph{2. Store-Balanced Geometric Jevons Aggregation (1 Store = 1 Vote):}
+To prevent retailers with large product catalogs (e.g., 90 rice varieties vs. 10 at a smaller vendor) from distorting national price trends, the pipeline implements an axiomatic two-stage store-balanced Jevons index:
 \begin{equation}
-    I_{k, t}^{\text{Jevons}} = \prod_{i=1}^{n_k} \left( \frac{p_{i, t}}{p_{i, 0}} \right)^{1/n_k} = \exp\left( \frac{1}{n_k} \sum_{i=1}^{n_k} \ln\left( \frac{p_{i, t}}{p_{i, 0}} \right) \right)
+    \ln I_{s, t}^{\text{Jevons}} = \frac{1}{n_{s, k}} \sum_{i=1}^{n_{s, k}} \left( \ln p_{i, s, t} - \ln p_{i, s, 0} \right)
 \end{equation}
+Within each elementary category $k$, eligible retail outlets receive equal voting weight:
+\begin{equation}
+    I_{k, t}^{\text{Elementary}} = \frac{1}{|S_k|} \sum_{s \in S_k} \exp\left( \ln I_{s, t}^{\text{Jevons}} \right)
+\end{equation}
+This mathematical design unconditionally satisfies time-reversal and scale invariance while eliminating catalog-volume distortion.
 
-\paragraph{3. Missing Price Imputation Policy:}
-Retail products experience temporary stockouts. The pipeline enforces a 7-day carry-forward imputation rule: if product $i$ is unobserved on day $t$, its price is imputed as $\hat{p}_{i, t} = p_{i, t-1}$. If an item remains missing for $>7$ consecutive days, it is flagged as permanently discontinued and dynamically removed from the elementary basket to prevent stale-price bias.
+\paragraph{3. Handling New Products on Non-Base Dates:}
+For products that appear on store shelves after the initial base date, the pipeline dynamically splices their first observed quote as their personal baseline ($p_{i, s, 0} = p_{i, s, \text{entry}}$, relative price = $1.00$ on Day 1), tracking subsequent price movements without creating fictitious historical shocks.
 
-\paragraph{4. Synthesis into 12 Division Indices:}
+\paragraph{4. Missing Price Policy (ILO Class-Mean Imputation):}
+When a product experiences temporary stockouts, its price is dynamically imputed using the geometric mean rate of change of observed items in the corresponding category (ILO standard):
+\begin{equation}
+    \hat{p}_{i, t} = p_{i, t-1} \times \left( \prod_{j \in C_i} \frac{p_{j, t}}{p_{j, t-1}} \right)^{1/|C_i|}
+\end{equation}
+If an item remains unobserved for $>7$ consecutive days, it is recognized as discontinued and permanently dropped from the active basket.
+
+\paragraph{5. Synthesis into 12 Division Indices:}
 The elementary indices are aggregated into the 12 official COICOP division indices $I_{j, t}$ published in \texttt{gold.fct\_cpi\_daily}, forming the input space for the nowcaster.
 
 \subsection{Why Stationarity via Log-Differencing is Required}
@@ -152,26 +166,9 @@ The nowcasting engine avoids the pitfalls of purely statistical black-box foreca
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[
-    box/.style={rectangle, draw=primaryblue, fill=lightbg, thick, minimum width=4.2cm, minimum height=1.1cm, align=center, rounded corners=2pt, font=\small},
-    arrow/.style={->, >=stealth, thick, color=primaryblue}
-]
-    \node[box] (realized) at (0, 3) {\textbf{Tier 1: Past Observed Days ($1 \dots d$)}\\Axiomatic Scraped Data\\$I_{j, \text{realized}}(d) = \frac{1}{d}\sum_{\tau=1}^d P_{j,\tau}$};
-    \node[box] (projected) at (7, 3) {\textbf{Tier 2: Unobserved Future ($d+1 \dots D$)}\\Ridge Drift + Prior Shrinkage\\$I_{j, \text{projected}}(d) = \frac{1}{N}\sum_{k=1}^N P_{j,d} e^{\mu_j(d) k}$};
-    
-    \node[box, fill=blue!10, minimum width=11.2cm] (blend) at (3.5, 1.2) {\textbf{Time-Weighted Horizon Blending}\\$I_{j, M}(d) = \left(\frac{d}{D}\right) I_{j, \text{realized}}(d) + \left(\frac{D-d}{D}\right) I_{j, \text{projected}}(d)$};
-    
-    \node[box, fill=green!10, minimum width=11.2cm] (laspeyres) at (3.5, -0.5) {\textbf{Axiomatic Laspeyres Synthesis (Fixed CSES Weights $w_j$)}\\$\text{Headline CPI}_M(d) = \sum_{j=1}^{12} w_j \cdot I_{j, M}(d)$};
-    
-    \node[box, fill=yellow!15, minimum width=11.2cm] (chain) at (3.5, -2.1) {\textbf{Exponential Chain-Linking to Official NIS Phnom Penh Base ($2006=100$)}\\$\widehat{\text{CPI}}_{\text{NIS}, M}(d) = \text{CPI}_{\text{NIS}, M-1} \times \exp\left( \Delta \ln \text{Headline CPI}_M(d) \right)$};
-
-    \draw[arrow] (realized) -- (0, 1.8) -- (1.5, 1.8);
-    \draw[arrow] (projected) -- (7, 1.8) -- (5.5, 1.8);
-    \draw[arrow] (blend) -- (laspeyres);
-    \draw[arrow] (laspeyres) -- (chain);
-\end{tikzpicture}
-\caption{The Two-Tier Hybrid Nowcasting Workflow.}
-\label{fig:hybrid_workflow}
+\includegraphics[width=\linewidth]{../thesis/images/nowcasting_flowchart.png}
+\caption{End-to-End Two-Tier Inflation Nowcasting Engine Architecture Flowchart.}
+\label{fig:nowcasting_flowchart}
 \end{figure}
 
 \subsection{Layer 1: Fixed-Weight Axiomatic Aggregation and Core CPI}

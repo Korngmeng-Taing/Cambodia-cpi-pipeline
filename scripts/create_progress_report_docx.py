@@ -313,8 +313,8 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
 
     doc.add_page_break()
 
-    # Stage 3
-    doc.add_heading("Stage 3: Silver Layer (Standardization, AI Classification & Quality Control)", level=2)
+    # ── Stage 3: Silver Layer ─────────────────────────────────────────────────
+    doc.add_heading("Stage 3: Silver Layer (Data Preprocessing, Matching & AI Classification)", level=2)
     p_s_table = doc.add_paragraph()
     p_s_table.paragraph_format.space_after = Pt(2)
     p_s_table.add_run("Database Table: ").font.bold = True
@@ -324,7 +324,8 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
     r_flow.font.bold = True
     r_flow.font.color.rgb = NAVY
 
-    doc.add_heading("1. Data Cleaning & Standardization", level=3)
+    # 4.3.1 Data Cleaning & Standardization
+    doc.add_heading("4.3.1 Data Cleaning & Standardization", level=3)
     clean_points = [
         ("Clean product names and text: ", "Remove HTML, special characters, promotional words (SALE, HOT DEAL, 50% OFF), unnecessary text, and convert text to lowercase."),
         ("Convert Khmer numerals → Arabic numerals: ", "Convert Khmer digits (e.g., ៥០០ → 500) for consistent processing."),
@@ -339,33 +340,103 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
         p.add_run(ct).font.bold = True
         p.add_run(cd)
 
-    doc.add_heading("2. Product Matching (Find the Same Item)", level=3)
-    doc.add_paragraph("Connects identical products across different stores (e.g., AEON vs. DeliShop) using a 5-step waterfall:")
-    match_steps = [
-        ("Level 1 — Barcode (GTIN/EAN): ", "Exact barcode match."),
-        ("Level 2 — Store SKU: ", "Match with past days' catalog."),
-        ("Level 3 — Clean Name & Size: ", "Exact text match with size protection (prevents 330ml matching 1.5L)."),
-        ("Level 4 — AI Vector (pgvector): ", "Matches English and Khmer equivalents (≥95% similarity)."),
-        ("Level 5 — Fuzzy Spelling: ", "Catches small typos.")
-    ]
-    for mt, md in match_steps:
-        p = doc.add_paragraph(style='List Bullet')
-        p.paragraph_format.space_before = Pt(1)
-        p.paragraph_format.space_after = Pt(2)
-        p.add_run(mt).font.bold = True
-        p.add_run(md)
+    # 4.3.2 Product Matching
+    doc.add_heading("4.3.2 Product Matching (4-Level Waterfall)", level=3)
+    doc.add_paragraph("Connects identical products across different stores and tracks them day-after-day:")
 
-    doc.add_heading("3. Classify into Official Baskets (UN COICOP)", level=3)
-    p_cl = doc.add_paragraph(style='List Bullet')
-    p_cl.paragraph_format.space_before = Pt(1)
-    p_cl.paragraph_format.space_after = Pt(2)
-    p_cl.add_run("Uses Google Gemini AI in batches to assign the official 4-digit government code (e.g., 01.1.1 for Rice/Bread).")
-    
+    # Level 1
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(2)
+    p.paragraph_format.space_after = Pt(1)
+    p.add_run("Level 1 — Barcode (GTIN / EAN): ").font.bold = True
+    p.add_run("Matches the exact same item across different stores (e.g., AEON ↔ DeliShop) using global standard barcodes.")
+
+    # Level 2
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(2)
+    p.paragraph_format.space_after = Pt(1)
+    p.add_run("Level 2 — Store ID + SKU (Composite Key): ").font.bold = True
+    p.add_run("Remembers the item day-after-day within the same store (AEON yesterday ↔ AEON today).")
+
+    sku_points = [
+        ("What is SKU? ", "A unique Stock Keeping Unit code assigned by a store, extracted directly from product URLs or store APIs."),
+        ("The Problem: ", "Different stores reuse the same SKU number (e.g., SKU 100 at AEON is Beef Curry, but at DeliShop is Fruit Syrup)."),
+        ("The Solution (Composite Key): ", "Combines (store_id, sku) so each store catalog remains strictly isolated."),
+        ("Learn Once, Cache Forever: ", "The first time an item is scraped, it is saved into canonical tables. On daily scrapes, the system instantly recognizes it without re-matching.")
+    ]
+    for st, sd in sku_points:
+        sp = doc.add_paragraph(style='List Bullet')
+        sp.paragraph_format.space_before = Pt(1)
+        sp.paragraph_format.space_after = Pt(1)
+        sp.add_run(st).font.bold = True
+        sp.add_run(sd)
+
+    # Level 3
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(2)
+    p.paragraph_format.space_after = Pt(1)
+    p.add_run("Level 3 — Exact Text Matching: ").font.bold = True
+    p.add_run("Links different stores selling the exact same product when no barcode is available.")
+
+    text_points = [
+        ("When Triggered? ", "When no universal barcode is provided and the store SKU is unseen."),
+        ("Why Needed? ", "Different stores assign different SKUs to the exact same item (e.g., AEON SKU 123 vs. AryStore SKU 999 for 'Samsung Galaxy A27 128GB' at $250 vs $240). Without text matching, the system would mistakenly treat them as two different items."),
+        ("How We Connect Them: ", "Ignores store SKUs and matches on the cleaned product title and package size to link both stores to the exact same item.")
+    ]
+    for tt, td in text_points:
+        tp = doc.add_paragraph(style='List Bullet')
+        tp.paragraph_format.space_before = Pt(1)
+        tp.paragraph_format.space_after = Pt(1)
+        tp.add_run(tt).font.bold = True
+        tp.add_run(td)
+
+    # Level 4
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(2)
+    p.paragraph_format.space_after = Pt(1)
+    p.add_run("Level 4 — Vector Embedding + Deterministic Spec Guard: ").font.bold = True
+    p.add_run("Matches English and Khmer equivalents and catches minor product title variations using machine learning.")
+
+    vec_points = [
+        ("What is Vector Embedding? ", "A technique that converts words and sentences into a 768-dimensional sequence of numbers (vector) in high-dimensional semantic space."),
+        ("Stage 1 (Fast Vector Search): ", "Converts cleaned title into a 768-dim embedding (gemini-embedding-2) and searches silver.canonical_items using PostgreSQL pgvector HNSW Cosine Index to return the Top 30 candidate matches."),
+        ("Stage 2 (Deterministic Spec Guard): ", "Inspects physical specs of Top 30 candidates to automatically REJECT false merges:"),
+        ("  • Pack Count Rejection: ", "'1 can' != '24-pack carton' ──► REJECTED"),
+        ("  • Storage Rejection: ", "'128GB' != '256GB' ──► REJECTED"),
+        ("Decision Rule: ", "Match approved if Cosine Similarity ≥ 0.80 and passes Spec Guard ──► Merged into True Canonical Item. Otherwise, split as a new item.")
+    ]
+    for vt, vd in vec_points:
+        vp = doc.add_paragraph(style='List Bullet')
+        vp.paragraph_format.space_before = Pt(1)
+        vp.paragraph_format.space_after = Pt(1)
+        vp.add_run(vt).font.bold = True
+        vp.add_run(vd)
+
+    # 4.3.3 AI Classification
+    doc.add_heading("4.3.3 AI Classification into Official COICOP Baskets", level=3)
+    p_coicop_def = doc.add_paragraph()
+    p_coicop_def.paragraph_format.space_before = Pt(1)
+    p_coicop_def.paragraph_format.space_after = Pt(2)
+    p_coicop_def.add_run("What is COICOP? ").font.bold = True
+    p_coicop_def.add_run("Classification of Individual Consumption According to Purpose. It is the official standard used by the United Nations and Cambodia's National Institute of Statistics (NIS) to group products to calculate CPI.")
+
+    doc.add_paragraph("Two-Tier Classification Process:").runs[0].font.bold = True
+    coicop_tiers = [
+        ("Tier 1 — Store-Specific Matching: ", "For single-category stores, the database automatically assigns both the 2-digit division and exact 5-digit subclass without calling AI. Examples: Telecom (Smart, Cellcard) ──► 08 | 08.3.0 (Telephone & Internet Services); Transport (BookMeBus) ──► 07 | 07.3.2 (Passenger Road Transport)."),
+        ("Tier 2 — Gemini AI (Supermarkets & Multi-Category): ", "For broad stores (AEON, DeliShop, Lucky), products are sent in batches of 40 to Gemini AI to assign the official NIS 5-digit code. Rotates across 4 API keys with 30s cooldown, returning structured JSON directly into PostgreSQL."),
+        ("The 'Learn Once, Cache Forever' Strategy: ", "Products are classified on their first scrape and stored permanently in the database. Daily runs match existing items and skip AI classification entirely, only sending truly new products.")
+    ]
+    for ct, cd in coicop_tiers:
+        cp = doc.add_paragraph(style='List Bullet')
+        cp.paragraph_format.space_before = Pt(1)
+        cp.paragraph_format.space_after = Pt(1)
+        cp.add_run(ct).font.bold = True
+        cp.add_run(cd)
+
     p_gr = doc.add_paragraph()
     p_gr.paragraph_format.space_before = Pt(2)
     p_gr.paragraph_format.space_after = Pt(2)
     p_gr.add_run("Strict Guardrails prevent AI mistakes:").font.bold = True
-
     guardrails = [
         ("Pet Food: ", "Goes to Pets (09.3.1), never human food."),
         ("Shampoo / Soap: ", "Goes to Personal Care (12.1.3), never food."),
@@ -374,44 +445,51 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
     for gt, gd in guardrails:
         p = doc.add_paragraph(style='List Bullet')
         p.paragraph_format.space_before = Pt(1)
-        p.paragraph_format.space_after = Pt(2)
+        p.paragraph_format.space_after = Pt(1)
         p.add_run(gt).font.bold = True
         p.add_run(gd)
 
     doc.add_page_break()
 
-    # The Gold Layer in Brief
-    doc.add_heading("The Gold Layer in Brief: From Clean Products to Official CPI", level=2)
-    p_g_desc = doc.add_paragraph()
-    p_g_desc.paragraph_format.space_after = Pt(3)
-    p_g_desc.add_run("The Gold Layer applies official international standards (ILO / UN guidelines) to turn thousands of clean daily prices into national economic indicators.\n")
-    p_g_desc.add_run("It does this in 3 main steps:\n")
-    r_gflow = p_g_desc.add_run("[Clean Silver Items] ──► 1. Jevons Index ──► 2. Laspeyres Aggregation ──► 3. Core CPI & Marts")
-    r_gflow.font.bold = True
-    r_gflow.font.color.rgb = NAVY
+    # ── Stage 4.4: CPI Calculation ───────────────────────────────────────────
+    doc.add_heading("4.4 CPI Calculation (From Thousands of Scraped Prices to One CPI Number)", level=2)
 
-    doc.add_heading("1. Elementary Index Calculation (Jevons Formula)", level=3)
-    p_jev = doc.add_paragraph(style='List Bullet')
-    p_jev.paragraph_format.space_before = Pt(1)
-    p_jev.paragraph_format.space_after = Pt(2)
-    p_jev.add_run("(Jevons Geometric Mean): ").font.bold = True
-    p_jev.add_run("Instead of a simple average (which gets distorted by expensive luxury items), the system uses the geometric mean:\n")
-    r_eq1 = p_jev.add_run("I_rice,t = ( (P_1,t / P_1,0) × (P_2,t / P_2,0) × ... × (P_n,t / P_n,0) )^(1/n)")
-    r_eq1.font.bold = True
-    r_eq1.font.color.rgb = TEAL
+    p_cpi_flow = doc.add_paragraph()
+    p_cpi_flow.paragraph_format.space_after = Pt(3)
+    p_cpi_flow.add_run("Calculation Aggregation Pipeline:\n").font.bold = True
+    r_pipe = p_cpi_flow.add_run("Product Quote ──► Relative Price ──► Store-Level Jevons ──► Elementary Aggregation ──► Class Weight ──► Group Weight ──► Division Weight ──► National CPI")
+    r_pipe.font.bold = True
+    r_pipe.font.color.rgb = NAVY
 
-    p_imp = doc.add_paragraph(style='List Bullet')
-    p_imp.paragraph_format.space_before = Pt(1)
-    p_imp.paragraph_format.space_after = Pt(2)
-    p_imp.add_run("Missing Price Imputation: ").font.bold = True
-    p_imp.add_run("If an item is temporarily out-of-stock, a 7-day carry-forward rule fills in the price so the index doesn't jump wildly.")
+    # 4.4.1 Relative Price
+    doc.add_heading("4.4.1 Relative Price", level=3)
+    doc.add_paragraph("How do we track a product's price change relative to the baseline?")
+    p_rel = doc.add_paragraph()
+    p_rel.paragraph_format.space_before = Pt(1)
+    p_rel.paragraph_format.space_after = Pt(2)
+    r_rform = p_rel.add_run("r_{i, s, t} = P_{i, s, t} / P_{i, s, 0}\n")
+    r_rform.font.bold = True
+    r_rform.font.color.rgb = TEAL
+    p_rel.add_run("Where:\n• i: specific item | s: specific store | t: current date | e: elementary aggregate (subclass/class)\n• P_{i, s, t}: price of item i at store s on day t\n• P_{i, s, 0}: reference base price of item i at store s\n• r > 1: price increase | r < 1: price decrease")
 
-    doc.add_heading("2. Official National Aggregation (Laspeyres Formula)", level=3)
-    doc.add_paragraph("Cambodians spend more money on food than on furniture. To reflect real life, the 12 COICOP divisions are combined using official government survey expenditure weights (CSES 2020):")
+    # 4.4.2 Store-Level Jevons & Elementary Aggregation
+    doc.add_heading("4.4.2 Store-Level Jevons & Elementary Aggregation", level=3)
+    doc.add_paragraph("Within each store and product category, the pipeline calculates the unweighted geometric mean (Jevons formula) using numerical log-prices to prevent arithmetic distortion and floating-point errors:")
+    p_jev_eq = doc.add_paragraph()
+    p_jev_eq.paragraph_format.space_before = Pt(1)
+    p_jev_eq.paragraph_format.space_after = Pt(2)
+    r_jeveq = p_jev_eq.add_run("ln I_{s, t}^{Jevons} = (1 / n) ∑ (ln P_{i, s, t} - ln P_{i, s, 0})\n")
+    r_jeveq.font.bold = True
+    r_jeveq.font.color.rgb = TEAL
+    p_jev_eq.add_run("Store-level indices are then aggregated across all eligible stores to compute the Elementary Aggregate index for category e at day t.")
+
+    # 4.4.4 Higher-Level Aggregation
+    doc.add_heading("4.4.4 Higher-Level Aggregation (Laspeyres CSES 2020 Weights)", level=3)
+    doc.add_paragraph("To reflect Cambodian household spending, the 12 COICOP divisions are synthesized using official CSES 2020 survey weights:")
     p_lasp = doc.add_paragraph()
     p_lasp.paragraph_format.space_before = Pt(1)
     p_lasp.paragraph_format.space_after = Pt(2)
-    r_eq2 = p_lasp.add_run("Headline CPI = ∑ ( Weight × Division Index )")
+    r_eq2 = p_lasp.add_run("Headline CPI = ∑ ( Weight_j × Division_Index_j )")
     r_eq2.font.bold = True
     r_eq2.font.color.rgb = TEAL
 
@@ -419,26 +497,47 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
         ("Food & Drinks (01): ", "44.775% (Highest weight in Cambodia)"),
         ("Housing & Electricity (04): ", "17.062%"),
         ("Transport & Fuel (07): ", "12.203%"),
-        ("All other 9 Divisions: ", "Remaining 25.960% (Clothing, Health, Telecom, etc.)")
+        ("All other 9 Divisions: ", "Remaining 25.960% (Clothing, Health, Telecom, etc.)"),
+        ("Refined Core CPI: ", "Excludes volatile Food (01) and Energy (04) to measure underlying long-term price stability.")
     ]
     for lt, ld in lasp_weights:
         p = doc.add_paragraph(style='List Bullet')
         p.paragraph_format.space_before = Pt(1)
-        p.paragraph_format.space_after = Pt(2)
+        p.paragraph_format.space_after = Pt(1)
         p.add_run(lt).font.bold = True
         p.add_run(ld)
 
-    doc.add_heading("3. Central Bank Metric: Core CPI", level=3)
-    doc.add_paragraph("For central bankers at the National Bank of Cambodia (NBC), temporary global oil spikes or seasonal vegetable floods distort the real picture:")
-    p_core = doc.add_paragraph(style='List Bullet')
-    p_core.paragraph_format.space_before = Pt(1)
-    p_core.paragraph_format.space_after = Pt(2)
-    p_core.add_run("Refined Core CPI: ").font.bold = True
-    p_core.add_run("The system calculates a second official index that removes Food (01) and Energy (04):\n")
-    r_eq3 = p_core.add_run("Core CPI = ( ∑_{ex-Food, ex-Energy} w_j · I_j ) / ( ∑ w_j )\n")
-    r_eq3.font.bold = True
-    r_eq3.font.color.rgb = TEAL
-    p_core.add_run("This shows the underlying, long-term price stability of the economy.")
+    # 4.4.5 Chain-Linking
+    doc.add_heading("4.4.5 Chain-Linking (Connecting to Official NIS & Rolling into Next Year)", level=3)
+    p_cl1 = doc.add_paragraph()
+    p_cl1.paragraph_format.space_after = Pt(2)
+    p_cl1.add_run("1. Connecting to Official NIS Benchmark (Base Converter):\n").font.bold = True
+    p_cl1.add_run("• What is the problem? NIS started measuring in 2006 at 100. Over 20 years, prices doubled and their August CPI reached 219.007. Our web scraper started August 18, 2026 at 100. How can we compare NIS 219 vs. Our 99.76%?\n")
+    p_cl1.add_run("• The Solution (Converter / Splicing): We multiply our monthly index by the official base factor (219.007 / 100 = 2.19007). If our calculated August index is 99.76%, then: 99.76 × 2.19007 = 218.47. Now our daily results are directly comparable to official NIS releases.")
+
+    p_cl2 = doc.add_paragraph()
+    p_cl2.paragraph_format.space_before = Pt(3)
+    p_cl2.paragraph_format.space_after = Pt(2)
+    p_cl2.add_run("2. Annual Chain-Linking (December Overlap — Rolling into Next Year):\n").font.bold = True
+    p_cl2.add_run("• The Problem: What happens when December ends and the basket resets? If January resets back to 100.0, the graph shows a fake collapse.\n")
+    p_cl2.add_run("• The Solution: We calculate the December monthly average (e.g., 105.0). The new series starts fresh at 100.0, but is multiplied by 1.05.\n")
+    p_cl2.add_run("• Result: Discontinued items cleanly exit; new products become official base; and the multi-year index climbs continuously with zero New Year cliffs.")
+
+    # 4.4.7 Missing Price & Out of Stock
+    doc.add_heading("4.4.7 Missing Price & Out-of-Stock Handling", level=3)
+    doc.add_paragraph("When an item is missing from today's scrape, how do we handle it?")
+    miss_rules = [
+        ("Why we cannot drop it immediately: ", "The basket would change size every day, creating fake jumps when the item returns in stock."),
+        ("Why we cannot set price to $0: ", "The entire category index would collapse to 0."),
+        ("Why we cannot freeze last price indefinitely: ", "If prices are rising across the market, freezing the price pretends inflation is lower than it really is."),
+        ("Our Solution (ILO Class-Mean Imputation): ", "When an item is temporarily out-of-stock, its price is estimated using the average price change of similar products in the same category. If missing for more than a week (7 days), the item is recognized as discontinued and cleanly dropped from active calculation.")
+    ]
+    for mrt, mrd in miss_rules:
+        p = doc.add_paragraph(style='List Bullet')
+        p.paragraph_format.space_before = Pt(1)
+        p.paragraph_format.space_after = Pt(2)
+        p.add_run(mrt).font.bold = True
+        p.add_run(mrd)
 
     # Stage 4: Nowcasting
     doc.add_heading("Stage 4: Nowcasting", level=2)

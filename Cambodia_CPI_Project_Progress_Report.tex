@@ -166,85 +166,129 @@ Sokha, Hyatt, Bayon BKK & Restaurant and Hotel \\ \bottomrule
     \item \textbf{Stored Fields:} \texttt{store\_id}, \texttt{source\_name}, \texttt{item\_description\_raw}, \texttt{price}, \texttt{currency}, \texttt{source\_url}, \texttt{scraped\_at}, \texttt{batch\_id}.
 \end{itemize}
 
-\subsection*{Stage 3: Silver Layer (Standardization, AI Classification \& Quality Control)}
+\subsection*{4.3 Data Cleaning, Matching, and AI Classification}
 \noindent\textbf{Database Table:} \texttt{silver.standardized\_prices}\\[0.05cm]
-The Silver Layer has 3 main jobs:
+The Silver Layer transforms messy raw scraped microdata into standardized economic items through 3 core jobs:
 \begin{center}
     \textbf{[Raw Scrape] $\longrightarrow$ 1. Clean Data $\longrightarrow$ 2. Match Product $\longrightarrow$ 3. Classify Basket $\longrightarrow$ [Clean Silver Item]}
 \end{center}
 
-\vspace{-0.15cm}
-\subsubsection*{1. Data Cleaning \& Standardization}
+\subsubsection*{4.3.1 Data Cleaning \& Standardization}
 \begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
-    \item \textbf{Clean product names and text:} Remove HTML, special characters, promotional words (SALE, HOT DEAL, 50\% OFF), unnecessary text, and convert text to lowercase.
+    \item \textbf{Clean product names and text:} Remove HTML tags, special characters, promotional words (SALE, HOT DEAL, 50\% OFF), unnecessary text, and convert text to lowercase.
     \item \textbf{Convert Khmer numerals $\rightarrow$ Arabic numerals:} Convert Khmer digits (e.g., {\khmerfont ៥០០} $\rightarrow$ 500) for consistent processing.
     \item \textbf{Convert USD $\rightarrow$ KHR:} Convert dual currencies using the official MEF daily exchange rate.
     \item \textbf{Standardize weight, volume, and package units:} Convert package sizes into standard metric units (e.g., 500g to 0.5kg, 1500ml to 1.5L).
     \item \textbf{Calculate unit prices (KHR/kg, KHR/L, etc.):} Compute unit price ($P_{\text{unit}} = \text{Price in KHR} / \text{Normalized Metric}$) to fairly compare different product sizes.
 \end{itemize}
 
-\subsubsection*{2. Product Matching (Find the Same Item)}
+\subsubsection*{4.3.2 Product Matching (4-Level Waterfall)}
 \noindent
-Connects identical products across different stores (e.g., AEON vs. DeliShop) using a 5-step waterfall:
+Connects identical products across different stores and tracks them day-after-day:
 \begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
-    \item \textbf{Level 1 --- Barcode (GTIN/EAN):} Exact barcode match.
-    \item \textbf{Level 2 --- Store SKU:} Match with past days' catalog.
-    \item \textbf{Level 3 --- Clean Name \& Size:} Exact text match with size protection (prevents 330ml matching 1.5L).
-    \item \textbf{Level 4 --- AI Vector (pgvector):} Matches English and Khmer equivalents ($\ge 95\%$ similarity).
-    \item \textbf{Level 5 --- Fuzzy Spelling:} Catches small typos.
-\end{itemize}
-
-\subsubsection*{3. Classify into Official Baskets (UN COICOP)}
-\begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
-    \item Uses Google Gemini AI in batches to assign the official 4-digit government code (e.g., \texttt{01.1.1} for Rice/Bread).
-    \item \textbf{Strict Guardrails prevent AI mistakes:}
+    \item \textbf{Level 1 --- Barcode (GTIN / EAN):} Matches the exact same item across different stores (e.g., AEON $\leftrightarrow$ DeliShop) using global standard barcodes.
+    \item \textbf{Level 2 --- Store ID + SKU (Composite Key):} Remembers the item day-after-day within the same store (AEON yesterday $\leftrightarrow$ AEON today).
     \begin{itemize}[noitemsep]
-        \item Pet Food $\rightarrow$ Goes to Pets (\texttt{09.3.1}), never human food.
-        \item Shampoo / Soap $\rightarrow$ Goes to Personal Care (\texttt{12.1.3}), never food.
-        \item Beer / Wine $\rightarrow$ Goes to Alcohol (\texttt{02.1}), isolated from soft drinks.
+        \item \textit{What is SKU?} A unique Stock Keeping Unit code assigned by a store, extracted directly from product URLs or store APIs.
+        \item \textit{The Problem:} Different stores reuse the same SKU number (e.g., SKU 100 at AEON is Beef Curry, but at DeliShop is Fruit Syrup).
+        \item \textit{The Solution (Composite Key):} Combines (\texttt{store\_id}, \texttt{sku}) so each store catalog remains strictly isolated.
+        \item \textit{Learn Once, Cache Forever:} The first time an item is scraped, it is saved into canonical tables. On daily scrapes, the system instantly recognizes it without re-matching.
+    \end{itemize}
+    \item \textbf{Level 3 --- Exact Text Matching:} Links different stores selling the exact same product when no barcode is available.
+    \begin{itemize}[noitemsep]
+        \item \textit{When Triggered?} When no universal barcode is provided and the store SKU is unseen.
+        \item \textit{Why Needed?} Different stores assign different SKUs to the exact same item (e.g., AEON SKU 123 vs. AryStore SKU 999 for "Samsung Galaxy A27 128GB" at \$250 vs \$240). Without text matching, the system would mistakenly treat them as two different items.
+        \item \textit{How We Connect Them:} Ignores store SKUs and matches on the cleaned product title and package size to link both stores to the exact same item.
+    \end{itemize}
+    \item \textbf{Level 4 --- Vector Embedding + Deterministic Spec Guard:} Matches English and Khmer equivalents and catches minor product title variations using machine learning.
+    \begin{itemize}[noitemsep]
+        \item \textit{What is Vector Embedding?} A technique that converts words and sentences into a 768-dimensional sequence of numbers (vector) in high-dimensional semantic space.
+        \item \textit{Stage 1 (Fast Vector Search):} Converts cleaned title into a 768-dim embedding (\texttt{gemini-embedding-2}) and searches \texttt{silver.canonical\_items} using PostgreSQL \texttt{pgvector} HNSW Cosine Index to return the Top 30 candidate matches.
+        \item \textit{Stage 2 (Deterministic Spec Guard):} Inspects physical specs of Top 30 candidates to automatically REJECT false merges:
+        \begin{itemize}[noitemsep]
+            \item Pack Count Rejection: \texttt{1 can} $\ne$ \texttt{24-pack carton} $\longrightarrow$ \textbf{REJECTED}
+            \item Storage Rejection: \texttt{128GB} $\ne$ \texttt{256GB} $\longrightarrow$ \textbf{REJECTED}
+        \end{itemize}
+        \item \textit{Decision Rule:} Match approved if Cosine Similarity $\ge 0.80$ and passes Spec Guard $\longrightarrow$ Merged into True Canonical Item. Otherwise, split as a new item.
     \end{itemize}
 \end{itemize}
 
-\vspace{-0.10cm}
-\subsection*{The Gold Layer in Brief: From Clean Products to Official CPI}
+\subsubsection*{4.3.3 AI Classification into Official COICOP Baskets}
 \noindent
-The Gold Layer applies official international standards (ILO / UN guidelines) to turn thousands of clean daily prices into national economic indicators in 3 main steps:
-\begin{center}
-    \textbf{[Clean Silver Items] $\longrightarrow$ 1. Jevons Index $\longrightarrow$ 2. Laspeyres Aggregation $\longrightarrow$ 3. Core CPI \& Marts}
-\end{center}
-
-\vspace{-0.15cm}
-\subsubsection*{1. Elementary Index Calculation (Jevons Formula)}
+\textbf{What is COICOP?} Classification of Individual Consumption According to Purpose. It is the official standard used by the United Nations and Cambodia's National Institute of Statistics (NIS) to group products and calculate national CPI.\\[0.1cm]
+\noindent\textbf{Two-Tier Classification Process:}
 \begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
-    \item \textbf{Jevons Geometric Mean:} Instead of a simple average (which gets distorted by expensive luxury items), the system uses the geometric mean:
-    \begin{equation*}
-        I_{\text{rice}, t} = \left( \frac{P_{1,t}}{P_{1,0}} \times \frac{P_{2,t}}{P_{2,0}} \times \cdots \times \frac{P_{n,t}}{P_{n,0}} \right)^{\frac{1}{n}}
-    \end{equation*}
-    \item \textbf{Missing Price Imputation:} If an item is temporarily out-of-stock, a 7-day carry-forward rule fills in the price so the index doesn't jump wildly.
+    \item \textbf{Tier 1 --- Store-Specific Matching:} For single-category stores, the database automatically assigns both the 2-digit division and exact 5-digit subclass without calling AI. Examples: Telecom (Smart, Cellcard) $\longrightarrow$ \texttt{08 | 08.3.0} (Telephone \& Internet Services); Transport (BookMeBus) $\longrightarrow$ \texttt{07 | 07.3.2} (Passenger Road Transport).
+    \item \textbf{Tier 2 --- Gemini AI (Supermarkets \& Multi-Category):} For broad stores (AEON, DeliShop, Lucky), products are sent in batches of 40 to Gemini AI to assign the official NIS 5-digit code. Rotates across 4 API keys with 30s cooldown, returning structured JSON directly into PostgreSQL.
+    \item \textbf{The "Learn Once, Cache Forever" Strategy:} Products are classified on their first scrape and stored permanently in the database. Daily runs match existing items and skip AI classification entirely, only sending truly new products.
+    \item \textbf{Strict Guardrails prevent AI mistakes:}
+    \begin{itemize}[noitemsep]
+        \item Pet Food $\longrightarrow$ Goes to Pets (\texttt{09.3.1}), never human food.
+        \item Shampoo / Soap $\longrightarrow$ Goes to Personal Care (\texttt{12.1.3}), never food.
+        \item Beer / Wine $\longrightarrow$ Goes to Alcohol (\texttt{02.1}), isolated from soft drinks.
+    \end{itemize}
 \end{itemize}
 
-\subsubsection*{2. Official National Aggregation (Laspeyres Formula)}
+\subsection*{4.4 CPI Calculation (From Thousands of Scraped Prices to One CPI Number)}
 \noindent
-Cambodians spend more money on food than on furniture. To reflect real life, the 12 COICOP divisions are combined using official government survey expenditure weights (CSES 2020):
+\textbf{Calculation Aggregation Pipeline:}
+\begin{center}
+    \textbf{Product Quote $\longrightarrow$ Relative Price $\longrightarrow$ Store-Level Jevons $\longrightarrow$ Elementary Aggregation $\longrightarrow$ Class Weight $\longrightarrow$ Group Weight $\longrightarrow$ Division Weight $\longrightarrow$ National CPI}
+\end{center}
+
+\subsubsection*{4.4.1 Relative Price}
+\noindent
+Tracks a product's price change relative to the baseline period:
 \begin{equation*}
-    \text{Headline CPI} = \sum \Big( \text{Weight} \times \text{Division Index} \Big)
+    r_{i, s, t} = \frac{P_{i, s, t}}{P_{i, s, 0}}
+\end{equation*}
+Where: $i$: specific item, $s$: store, $t$: current date, $e$: elementary aggregate. $P_{i, s, t}$: price on day $t$; $P_{i, s, 0}$: base price. $r > 1$: price increase; $r < 1$: price decrease.
+
+\subsubsection*{4.4.2 Store-Level Jevons \& Elementary Aggregation}
+\noindent
+Within each store and product category, the pipeline calculates the unweighted geometric mean (Jevons formula) using numerical log-prices to prevent arithmetic distortion and floating-point errors:
+\begin{equation*}
+    \ln I_{s, t}^{\text{Jevons}} = \frac{1}{n} \sum_{i} \Big( \ln P_{i, s, t} - \ln P_{i, s, 0} \Big)
+\end{equation*}
+Store-level indices are subsequently aggregated across all eligible stores to compute the Elementary Aggregate index for category $e$ at day $t$.
+
+\subsubsection*{4.4.4 Higher-Level Aggregation (Laspeyres CSES 2020 Weights)}
+\noindent
+To reflect Cambodian household spending, the 12 COICOP divisions are synthesized using official CSES 2020 survey weights:
+\begin{equation*}
+    \text{Headline CPI} = \sum \Big( \text{Weight}_j \times \text{Division Index}_j \Big)
 \end{equation*}
 \begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
     \item \textbf{Food \& Drinks (01):} 44.775\% (Highest weight in Cambodia)
     \item \textbf{Housing \& Electricity (04):} 17.062\%
     \item \textbf{Transport \& Fuel (07):} 12.203\%
     \item \textbf{All other 9 Divisions:} Remaining 25.960\% (Clothing, Health, Telecom, etc.)
+    \item \textbf{Refined Core CPI:} Excludes volatile Food (\texttt{01}) and Energy (\texttt{04}) to measure underlying long-term price stability.
 \end{itemize}
 
-\subsubsection*{3. Central Bank Metric: Core CPI}
-\noindent
-For central bankers at the National Bank of Cambodia (NBC), temporary global oil spikes or seasonal vegetable floods distort the real picture.
+\subsubsection*{4.4.5 Chain-Linking (Connecting to Official NIS \& Rolling into Next Year)}
 \begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
-    \item \textbf{Refined Core CPI:} The system calculates a second official index that removes Food (\texttt{01}) and Energy (\texttt{04}):
-    \begin{equation*}
-        \text{Core CPI} = \frac{\sum_{\text{ex-Food, ex-Energy}} w_j \cdot I_j}{\sum w_j}
-    \end{equation*}
-    This shows the underlying, long-term price stability of the economy.
+    \item \textbf{1. Connecting to Official NIS Benchmark (Base Converter):}
+    \begin{itemize}[noitemsep]
+        \item \textit{What is the problem?} NIS started measuring in 2006 at 100. Over 20 years, prices doubled and their August CPI reached 219.007. Our web scraper started August 18, 2026 at 100. How can we compare NIS 219 vs. Our 99.76\%?
+        \item \textit{The Solution (Converter / Splicing):} We multiply our monthly index by the official base factor ($219.007 / 100 = 2.19007$). If our calculated August index is 99.76\%, then: $99.76 \times 2.19007 = 218.47$. Now our daily results are directly comparable to official NIS releases.
+    \end{itemize}
+    \item \textbf{2. Annual Chain-Linking (December Overlap --- Rolling into Next Year):}
+    \begin{itemize}[noitemsep]
+        \item \textit{The Problem:} What happens when December ends and the basket resets? If January resets back to 100.0, the graph shows a fake collapse.
+        \item \textit{The Solution:} We calculate the December monthly average (e.g., 105.0). The new series starts fresh at 100.0, but is multiplied by 1.05.
+        \item \textit{Result:} Discontinued items cleanly exit; new products become official base; and the multi-year index climbs continuously with zero New Year cliffs.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection*{4.4.7 Missing Price \& Out-of-Stock Handling}
+\noindent
+When an item is missing from today's scrape, how do we handle it?
+\begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
+    \item \textbf{Why we cannot drop it immediately:} The basket would change size every day, creating fake jumps when the item returns in stock.
+    \item \textbf{Why we cannot set price to \$0:} The entire category index would collapse to 0.
+    \item \textbf{Why we cannot freeze last price indefinitely:} If prices are rising across the market, freezing the price pretends inflation is lower than it really is.
+    \item \textbf{Our Solution (ILO Class-Mean Imputation):} When an item is temporarily out-of-stock, its price is estimated using the average price change of similar products in the same category. If missing for more than a week (7 days), the item is recognized as discontinued and cleanly dropped from active calculation.
 \end{itemize}
 
 \subsection*{Stage 4: Nowcasting}

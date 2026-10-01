@@ -148,11 +148,14 @@ Sokha, Hyatt, Bayon BKK & Restaurant and Hotel \\ \bottomrule
 \section*{4. Methodology}
 
 \subsection*{Stage 1: Web Scraping Layer}
+\noindent\textbf{Automated Daily Ingestion:} Every morning at 08:00 AM, Apache Airflow orchestrates daily automated data extraction across 11 key retail and service sectors in Cambodia.\\[0.1cm]
 \noindent\textbf{Protocols \& Methods:}
 \begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
-    \item \textbf{REST / GraphQL APIs:} Reverse-proxy APIs for supermarkets (AEON, DeliShop) and marketplaces (L192).
-    \item \textbf{HTTP Requests with TLS Fingerprinting:} \texttt{curl\_cffi} using Chrome TLS fingerprint impersonation to bypass anti-bot defenses.
-    \item \textbf{Headless Playwright:} Dynamic browser escalation if Cloudflare or 403 Forbidden is met.
+    \item \textbf{Direct Store APIs (REST \& GraphQL):} Directly targets internal reverse-proxy endpoints (AEON 1, AEON 3, DeliShop Asia, BookMeBus) and GraphQL queries (L192) to download structured JSON product catalogs, bypassing client-side web rendering.
+    \item \textbf{TLS Fingerprinting (\texttt{curl\_cffi}):} Executes HTTP requests with Chrome TLS/JA3 fingerprint impersonation to bypass Cloudflare anti-bot defenses and Web Application Firewalls (WAF) with polite throttling (0.5s--1.0s delay).
+    \item \textbf{Dynamic Browser Escalation (Headless Playwright):} Automatically launches an asynchronous headless Chromium browser context when encountering Cloudflare challenges or HTTP 403 Forbidden barriers (e.g., AEON) to render dynamic JavaScript and extract live prices.
+    \item \textbf{Public Web Feeds \& HTML Parsing:} Uses BeautifulSoup to extract housing rentals (Khmer24, Realestate.com.kh), scrapes official fuel price caps via Tela Khmer Telegram web feeds with Khmer numeral translation (Khmer digits $\rightarrow$ 0--9), and fetches daily official MEF USD/KHR exchange rates.
+    \item \textbf{Defensive Quality Controls:} Enforces a zero-record circuit breaker (raises an error on empty scrapes to prevent data wipeout) and maintains a static fallback matrix if third-party websites undergo outages.
 \end{itemize}
 
 \subsection*{Stage 2: Bronze Layer (Raw Lake Ingestion)}

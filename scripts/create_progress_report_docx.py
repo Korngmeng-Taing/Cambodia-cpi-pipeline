@@ -269,11 +269,22 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
 
     # Stage 1
     doc.add_heading("Stage 1: Web Scraping Layer", level=2)
-    doc.add_paragraph("Protocols & Methods:").runs[0].font.bold = True
+    p_sc = doc.add_paragraph()
+    p_sc.paragraph_format.space_after = Pt(2)
+    p_sc.add_run("Automated Daily Ingestion: ").font.bold = True
+    p_sc.add_run("Every morning at 08:00 AM, Apache Airflow orchestrates daily automated data extraction across 11 key retail and service sectors in Cambodia.")
+
+    p_pm = doc.add_paragraph()
+    p_pm.paragraph_format.space_before = Pt(3)
+    p_pm.paragraph_format.space_after = Pt(2)
+    p_pm.add_run("Protocols & Methods:").font.bold = True
+
     scrape_methods = [
-        ("REST / GraphQL APIs: ", "Reverse-proxy APIs for supermarkets (AEON, DeliShop) and marketplaces (L192)."),
-        ("HTTP Requests with TLS Fingerprinting: ", "curl_cffi using Chrome TLS fingerprint impersonation to bypass anti-bot defenses."),
-        ("Headless Playwright: ", "Dynamic browser escalation if Cloudflare or 403 Forbidden is met.")
+        ("Direct Store APIs (REST & GraphQL): ", "Directly targets internal reverse-proxy endpoints (AEON 1, AEON 3, DeliShop Asia, BookMeBus) and GraphQL queries (L192) to download structured JSON product catalogs, bypassing client-side web rendering."),
+        ("TLS Fingerprinting (curl_cffi): ", "Executes HTTP requests with Chrome TLS/JA3 fingerprint impersonation to bypass Cloudflare anti-bot defenses and Web Application Firewalls (WAF) with polite throttling (0.5s–1.0s delay)."),
+        ("Dynamic Browser Escalation (Headless Playwright): ", "Automatically launches an asynchronous headless Chromium browser context when encountering Cloudflare challenges or HTTP 403 Forbidden barriers (e.g., AEON) to render dynamic JavaScript and extract live prices."),
+        ("Public Web Feeds & HTML Parsing: ", "Uses BeautifulSoup to extract housing rentals (Khmer24, Realestate.com.kh), scrapes official fuel price caps via Tela Khmer Telegram web feeds with Khmer numeral translation (០–៩ → 0–9), and fetches daily official MEF USD/KHR exchange rates."),
+        ("Defensive Quality Controls: ", "Enforces a zero-record circuit breaker (raises an error on empty scrapes to prevent data wipeout) and maintains a static fallback matrix if third-party websites undergo outages.")
     ]
     for sm_t, sm_d in scrape_methods:
         p = doc.add_paragraph(style='List Bullet')

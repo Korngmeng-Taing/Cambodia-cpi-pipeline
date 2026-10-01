@@ -3,6 +3,7 @@
 \usepackage[margin=0.55in, top=0.52in, bottom=0.52in]{geometry}
 \usepackage{fontspec}
 \setmainfont{Times New Roman}
+\newfontfamily\khmerfont{Segoe UI}
 
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{booktabs}
@@ -173,23 +174,24 @@ The Silver Layer has 3 main jobs:
 \end{center}
 
 \vspace{-0.15cm}
-\subsubsection*{1. Clean the Data (Standardize)}
+\subsubsection*{1. Data Cleaning \& Standardization}
 \begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
-    \item \textbf{Removes noise:} Deletes marketing words (SALE, HOT DEAL, 50\% OFF) and old price tags.
-    \item \textbf{Normalizes units:} Converts volumes and weights into standard sizes (500ml, 1kg) to calculate price per liter/kg.
-    \item \textbf{Handles dual currency:} Converts USD and Khmer Riel using the daily MEF exchange rate.
-    \item \textbf{Fixes Khmer text:} Segments unspaced Khmer words and translates digits (Khmer digits $\rightarrow$ 0--9).
+    \item \textbf{Clean product names and text:} Remove HTML, special characters, promotional words (SALE, HOT DEAL, 50\% OFF), unnecessary text, and convert text to lowercase.
+    \item \textbf{Convert Khmer numerals $\rightarrow$ Arabic numerals:} Convert Khmer digits (e.g., {\khmerfont ៥០០} $\rightarrow$ 500) for consistent processing.
+    \item \textbf{Convert USD $\rightarrow$ KHR:} Convert dual currencies using the official MEF daily exchange rate.
+    \item \textbf{Standardize weight, volume, and package units:} Convert package sizes into standard metric units (e.g., 500g to 0.5kg, 1500ml to 1.5L).
+    \item \textbf{Calculate unit prices (KHR/kg, KHR/L, etc.):} Compute unit price ($P_{\text{unit}} = \text{Price in KHR} / \text{Normalized Metric}$) to fairly compare different product sizes.
 \end{itemize}
 
-\subsubsection*{2. Match the Product (Find the Same Item)}
+\subsubsection*{2. Product Matching (Find the Same Item)}
 \noindent
 Connects identical products across different stores (e.g., AEON vs. DeliShop) using a 5-step waterfall:
 \begin{itemize}[noitemsep,topsep=1pt,leftmargin=*]
-    \item \textbf{Barcode (GTIN):} Exact match.
-    \item \textbf{Store SKU:} Match with past days' catalog.
-    \item \textbf{Clean Name \& Size:} Exact text match with size protection (prevents 330ml matching 1.5L).
-    \item \textbf{AI Vector (pgvector):} Matches English and Khmer equivalents ($\ge 95\%$ similarity).
-    \item \textbf{Fuzzy Spelling:} Catches small typos.
+    \item \textbf{Level 1 --- Barcode (GTIN/EAN):} Exact barcode match.
+    \item \textbf{Level 2 --- Store SKU:} Match with past days' catalog.
+    \item \textbf{Level 3 --- Clean Name \& Size:} Exact text match with size protection (prevents 330ml matching 1.5L).
+    \item \textbf{Level 4 --- AI Vector (pgvector):} Matches English and Khmer equivalents ($\ge 95\%$ similarity).
+    \item \textbf{Level 5 --- Fuzzy Spelling:} Catches small typos.
 \end{itemize}
 
 \subsubsection*{3. Classify into Official Baskets (UN COICOP)}

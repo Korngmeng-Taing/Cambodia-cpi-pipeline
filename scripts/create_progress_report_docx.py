@@ -324,12 +324,13 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
     r_flow.font.bold = True
     r_flow.font.color.rgb = NAVY
 
-    doc.add_heading("1. Clean the Data (Standardize)", level=3)
+    doc.add_heading("1. Data Cleaning & Standardization", level=3)
     clean_points = [
-        ("Removes noise: ", "Deletes marketing words (SALE, HOT DEAL, 50% OFF) and old price tags."),
-        ("Normalizes units: ", "Converts volumes and weights into standard sizes (500ml, 1kg) to calculate price per liter/kg."),
-        ("Handles dual currency: ", "Converts USD and Khmer Riel using the daily MEF exchange rate."),
-        ("Fixes Khmer text: ", "Segments unspaced Khmer words and translates digits (០-៩ → 0-9).")
+        ("Clean product names and text: ", "Remove HTML, special characters, promotional words (SALE, HOT DEAL, 50% OFF), unnecessary text, and convert text to lowercase."),
+        ("Convert Khmer numerals → Arabic numerals: ", "Convert Khmer digits (e.g., ៥០០ → 500) for consistent processing."),
+        ("Convert USD → KHR: ", "Convert dual currencies using the official MEF daily exchange rate."),
+        ("Standardize weight, volume, and package units: ", "Convert package sizes into standard metric units (e.g., 500g to 0.5kg, 1500ml to 1.5L)."),
+        ("Calculate unit prices (KHR/kg, KHR/L, etc.): ", "Compute unit price (P_unit = Price in KHR / Normalized Metric) to fairly compare different product sizes.")
     ]
     for ct, cd in clean_points:
         p = doc.add_paragraph(style='List Bullet')
@@ -338,14 +339,14 @@ def build_docx(filename="Cambodia_CPI_Project_Progress_Report.docx"):
         p.add_run(ct).font.bold = True
         p.add_run(cd)
 
-    doc.add_heading("2. Match the Product (Find the Same Item)", level=3)
+    doc.add_heading("2. Product Matching (Find the Same Item)", level=3)
     doc.add_paragraph("Connects identical products across different stores (e.g., AEON vs. DeliShop) using a 5-step waterfall:")
     match_steps = [
-        ("Barcode (GTIN): ", "Exact match."),
-        ("Store SKU: ", "Match with past days' catalog."),
-        ("Clean Name & Size: ", "Exact text match with size protection (prevents 330ml matching 1.5L)."),
-        ("AI Vector (pgvector): ", "Matches English and Khmer equivalents (≥95% similarity)."),
-        ("Fuzzy Spelling: ", "Catches small typos.")
+        ("Level 1 — Barcode (GTIN/EAN): ", "Exact barcode match."),
+        ("Level 2 — Store SKU: ", "Match with past days' catalog."),
+        ("Level 3 — Clean Name & Size: ", "Exact text match with size protection (prevents 330ml matching 1.5L)."),
+        ("Level 4 — AI Vector (pgvector): ", "Matches English and Khmer equivalents (≥95% similarity)."),
+        ("Level 5 — Fuzzy Spelling: ", "Catches small typos.")
     ]
     for mt, md in match_steps:
         p = doc.add_paragraph(style='List Bullet')

@@ -35,6 +35,14 @@
     \item \textbf{Official Government Administrative Data Feeds (Divisions 07, 04, and 12):} The Ministry of Commerce (MOC) and Kampuchea Tela retail petroleum and LPG determinations (regular gasoline, premium gasoline, diesel, and cooking gas) and the Ministry of Economy and Finance (MEF) official daily foreign exchange rate (USD/KHR).
 \end{itemize}
 
+\subsection{Methodological Scope, Geographic Focus, and Representativeness Framework}
+\hs To ensure rigorous econometric interpretation, the operational scope of the price collection system is defined across three key dimensions:
+\begin{enumerate}
+    \item \textbf{Online Retail as a High-Frequency Proxy (Addressing Physical Market Boundaries):} Web-scraped price indices observe digitized catalogs and transactional delivery platforms. The pipeline is explicitly designed as a \textbf{high-frequency nowcasting and early-warning proxy indicator} to bridge the 20-to-40-day reporting lag of traditional official statistics \citep{cavallo2016billion, aparicio2021targeted}. It does not claim to replace rural in-person wet-market surveys conducted by the National Institute of Statistics (NIS), but rather provides central bank and finance ministry policymakers with instantaneous urban price velocity.
+    \item \textbf{Geographic Demarcation (Phnom Penh Metropolitan Area):} The participating commercial retailers (AEON, DeliShop, Chip Mong, Lucky, GrabMart, Community Pharmacy) operate fulfillment hubs primarily across Greater Phnom Penh. Therefore, the empirical price relatives reflect \textbf{Phnom Penh urban consumer market dynamics}. Accordingly, throughout this research, pipeline indices are calibrated and benchmarked against the authoritative \textbf{NIS Phnom Penh Consumer Price Index}, which forms the primary economic anchor of the Kingdom's official inflation releases.
+    \item \textbf{Longitudinal Category Continuity vs. Physical Product Replacement:} The pipeline does not assume physical product identity across multi-decade horizons (2006 vs. 2026). Rather, economic continuity is preserved through standardized **UN COICOP consumption categories** (e.g., staple rice \texttt{01.1.1.1}, motor fuels \texttt{07.2.2.1}) and official household budget weights, tracking short-term relative price changes across verified, active matched panels.
+\end{enumerate}
+
 \subsection{Formal Data Source Inventory}
 \hs Table~\ref{tab:data_sources} presents the complete inventory of the 25 daily data sources organized by market channel and COICOP division coverage. For each source, the table identifies the technical extraction protocol employed and the approximate daily observation yield. This systematic documentation ensures full reproducibility and enables future researchers to replicate or extend the data collection framework.
 
@@ -266,7 +274,7 @@ In the production database, Store Purity accounts for \textbf{14.34\%} of the ma
 \subsection{Empirical Quality Quarantines and Boundary Case Disambiguation}
 \hs Operating web scrapers in developing retail environments encounters boundary edge cases that distort elementary indices if unaddressed:
 \begin{itemize}
-    \item \textbf{Median Absolute Deviation (MAD) Outlier Filter:} In addition to standard price relative ratio clamping ($0.20 \le P_t/P_0 \le 5.00$), the pipeline applies a non-parametric Median Absolute Deviation (MAD) filter. Aberrant price shocks exceeding $3.5 \times \text{MAD}$ from subclass rolling medians are flagged as statistical outliers and excluded from CPI calculation, shielding elementary indices from retailer input typos and promotional anomalies.
+    \item \textbf{Median Absolute Deviation (MAD) Outlier Filter:} Rather than screening across broad COICOP divisions (which conflates divergent items), the non-parametric Median Absolute Deviation (MAD) filter is evaluated within each \textbf{Store $\times$ Elementary Aggregate $\times$ Day} cell (falling back to Elementary Aggregate $\times$ Day when observations are sparse). Observations with normalized distance $z_i > 3.5 \times \text{MAD}$ are flagged as statistical outliers and excluded. In addition, operational validation bounds ($0.20 \le P_t/P_0 \le 4.00$) serve as data-quality screening rules to intercept extreme web-parsing and decimal errors rather than universal economic laws.
     \item \textbf{Land for Rent Outlier Quarantine:} Real estate portals frequently list agricultural land and development acreage alongside residential dwellings. Listings representing raw commercial land parcels are programmatically quarantined, preventing massive land valuations from distorting residential rental metrics.
     \item \textbf{Retail Transport Leakage Guardrail:} Supermarkets and electronics retailers frequently sell automotive accessories (such as car phone chargers and dashboard diffusers). Explicit retailer constraints prohibit general retail stores from classifying into Division 07 (Transport), ensuring electronics are routed to Division 08 and air fresheners to Division 05.
     \item \textbf{Automated Text Entity Sanitization and Size Fallbacks:} Specialized sanitization routines decode obfuscated HTML escape entities, while fallback text extraction rules parse package quantities directly from raw item titles when structured attribute fields are unpopulated.
@@ -276,18 +284,20 @@ In the production database, Store Purity accounts for \textbf{14.34\%} of the ma
 \section{Pillar 4: Econometric CPI Compilation Engine and Imputation}
 
 \subsection{The Micro-Level: Elementary Aggregate Definition and Jevons Log-Price Compilation}
-\hs Once clean price observations are assigned to their respective consumption categories, the Gold layer computes price relatives comparing current prices to the baseline period (August 18, 2026 = 100.00).
+\hs Once clean price observations are assigned to their respective consumption categories, the Gold layer computes price relatives comparing current prices to the project's operational baseline reference period ($T_0$).
 
 \subsubsection{Formal Definition of the Elementary Aggregate}
-\hs Following international statistical standards \citep{imf2020cpi}, an \textbf{Elementary Aggregate (EA)} is defined as the lowest hierarchical stratum in the index calculation for which reliable expenditure weights are available and products are sufficiently homogeneous. In this architecture, an Elementary Aggregate is explicitly defined as:
-\begin{quote}
-\textit{The set of all homogeneous, quality-standardized product varieties belonging to the lowest reliable COICOP level (a detailed Subclass in Case A, or the Class itself in Case B) observed on day $t$ across all monitored retail outlets.}
-\end{quote}
+\hs In statistical index theory, an \textbf{Elementary Aggregate (EA)} is defined as the lowest COICOP level at which sufficiently comparable price observations are available \citep{imf2020cpi}. The methodology does not assume that every elementary aggregate must always be a 4-digit or 5-digit subclass. Some COICOP categories have detailed subclasses while others do not.
+
+The framework supports the full hierarchical aggregation:
+$$\text{Product } (i) \;\longrightarrow\; \text{Elementary Aggregate } (e) \;\longrightarrow\; \text{Class } (c) \;\longrightarrow\; \text{Group } (g) \;\longrightarrow\; \text{Division } (k) \;\longrightarrow\; \text{National CPI}$$
+Where detailed 5-digit subclasses with reliable expenditure weights exist (e.g., in staple food items), the subclass serves as the elementary aggregate. Where granular subclass breakdowns do not exist, the 4-digit class (or lowest available parent node) serves directly as the elementary aggregate.
+
 Formally, let $\mathcal{S}_{e, t}$ denote the active matched basket for elementary aggregate $e$ on day $t$:
 \begin{equation}
-    \mathcal{S}_{e, t} = \left\{ (i, s) \;\middle|\; \text{Item } i \text{ sold at store } s \text{ with standardized price } P_{i,s,t} > 0, \; \text{EA}(i) = e \right\}
+    \mathcal{S}_{e, t} = \left\{ (i, s) \;\middle|\; \text{Item } i \text{ sold at store } s \text{ with price } P_{s,e,i,t} > 0, \; \text{EA}(i) = e \right\}
 \end{equation}
-Within stratum $\mathcal{S}_{e, t}$, all multi-store observations representing the same canonical item are converted into continuous metric unit prices (KHR/kg or KHR/L) to enforce pure price dimensional homogeneity prior to aggregation.
+Unit-price normalization (KHR/kg or KHR/L) is applied strictly to consumable grocery items, while standardized shelf prices per item are maintained for discrete durables and services.
 
 \subsubsection{Jevons Geometric Mean and Log-Price Formulation}
 \hs Because web scrapers observe daily price tags ($P$) without corresponding transaction sales quantities ($Q$), weighting individual brand varieties within an elementary aggregate is empirically impossible. Under the ILO and UN CPI guidelines, the unweighted geometric mean (\textbf{Jevons formula}) is mathematically mandated:
@@ -305,10 +315,11 @@ where $p_{i, t}$ is the price of product $i$ on day $t$, $p_{i, 0}$ is its refer
 \end{equation}
 where $\Delta \ln p_{i, t} = \ln p_{i, t} - \ln p_{i, 0}$ represents the continuous logarithmic rate of return (log price relative).
 
-\hs In addition to numerical robustness, operating in logarithmic space offers fundamental econometric advantages:
+\hs In addition to numerical robustness, the Jevons index is chosen over alternative elementary formulas (Carli and Dutot) based on axiomatic index theory:
 \begin{enumerate}
-    \item \textbf{Exact Symmetry and Invariance to Basis:} Log price relatives treat positive and negative price shocks symmetrically ($\ln(2.0) = +0.693$ vs. $\ln(0.5) = -0.693$), strictly preserving the time-reversal property without distortion.
-    \item \textbf{Consumer Substitution Bias Elimination:} By adopting the geometric mean, the Jevons formula implicitly assumes a unitary elasticity of consumer substitution ($\sigma = 1$). If one brand of rice experiences a temporary price surge, consumers substitute toward relatively cheaper alternative brands within the same 4-digit class. Unlike arithmetic aggregators (Dutot and Carli indices), Jevons completely eliminates upward formula drift caused by retail price bouncing.
+    \item \textbf{Comparison with the Carli Index:} The Carli index (arithmetic mean of price relatives, $I_{\text{Carli}} = \frac{1}{n}\sum \frac{P_t}{P_0}$) fails the axiomatic time-reversal test ($I_{0,t} \cdot I_{t,0} \neq 1$) and exhibits severe upward formula drift under price bouncing and retail promotional cycles. The Jevons index treats price increases and decreases symmetrically, strictly satisfying the time-reversal test and eliminating Carli upward drift.
+    \item \textbf{Comparison with the Dutot Index:} The Dutot index (ratio of arithmetic average prices, $I_{\text{Dutot}} = \frac{\sum P_t / n}{\sum P_0 / n}$) depends directly on price levels and units of measurement, making it suitable only for strictly homogeneous items. For heterogeneous product varieties with differing base price levels, higher-priced items dominate the Dutot index. The Jevons index is scale-invariant and works directly with price relatives, making it suitable for unweighted heterogeneous retail observations.
+    \item \textbf{Operational Transitivity Qualification:} While the Jevons index satisfies circular transitivity on a fixed matched panel, practical daily scraped data experiences product churn, temporary stockouts, and imputations. Perfect transitivity across the full operational pipeline is therefore not claimed.
 \end{enumerate}
 
 \subsubsection{Decoupling Taxonomic Classification from Index Basket Inclusion}
@@ -387,26 +398,44 @@ where $P_{i, t}$ is the observed unit price in KHR, $X_{i, k}$ denotes quantifie
 \end{equation}
 \hs To ensure pipeline resilience, the hedonic engine enforces automated numerical guards: if the sample size is inadequate ($n < 5$) or the characteristic design matrix exhibits multicollinearity or rank-deficiency, the engine seamlessly switches to an analytical Ordinary Least Squares solver or passes observed prices forward untouched, preventing matrix singularity crashes during production runs.
 
-\subsection{The Micro-to-Macro Hierarchy: Two-Stage Store-Balanced Jevons and UN COICOP 2018 5-Digit Aggregation}
-\hs In multi-store web-scraped price collection, a severe methodological flaw of conventional unweighted geometric mean (Flat Jevons) aggregation is \textit{catalog-size dominance bias} \citep{imf2020cpi, cavallo2016billion}. When an expansive online hypermarket (e.g., Delishop with 20,000 listed products) contributes $75\%$ of raw price observations while traditional or specialized retail outlets (e.g., Grab Supermarket or Chip Mong with 700 to 1,500 products) contribute modest sample sizes, an unweighted elementary index effectively reflects the pricing policies of the single largest retailer rather than the broader market.
+\subsection{The Micro-to-Macro Hierarchy: Store-Balanced Jevons and COICOP Aggregation}\label{sec:store_balancing}
+\hs In multi-store web-scraped price collection, a significant methodological concern is \textit{catalog-size dominance bias} within elementary aggregates \citep{imf2020cpi, cavallo2016billion}. Different online retailers maintain vastly different catalog sizes. For instance, in a specific food subclass, a large online hypermarket may list 300 products, while a smaller grocer lists only 20 products. If all products are pooled into a single unweighted Jevons formula, the retailer with the largest scraped catalog exerts disproportionate influence over the subclass index, regardless of actual market share. Importantly, this store imbalance matters \textit{within each elementary aggregate}, rather than across total catalog sizes.
 
-\subsubsection{Formulation of the Two-Stage Store-Balanced Jevons Elementary Index}
-\hs To satisfy the international standards codified in the \textit{ILO/IMF Consumer Price Index Manual} \citep{imf2020cpi} (§6.57--6.68), the pipeline formulates a \textbf{Two-Stage Store-Balanced Jevons Elementary Index}. Let $\mathcal{S}_c$ denote the set of active retail establishments selling commodities within subclass $c$, with cardinality $S_c = |\mathcal{S}_c|$. Within each individual retail store $s \in \mathcal{S}_c$, let $\mathcal{U}_{c, s}$ denote the set of verified canonical commodities observed on calculation date $t$, with sample size $N_{c, s} = |\mathcal{U}_{c, s}|$.
+\subsubsection{Formulation of the Store-Level Jevons and Store Balancing}
+\hs To address catalog imbalance within each elementary aggregate $e$, the index is compiled in two distinct stages:
 
-\hs The store-specific geometric micro-index $I_{c, s, t}$ is evaluated first:
+\paragraph{Stage 1: Store-Level Jevons Index}
+For each store $s$ and elementary aggregate $e$ on day $t$, the store-specific geometric index $J_{s, e, t}$ is evaluated using all valid matched products in that store:
 \begin{equation}
-    I_{c, s, t} = \prod_{i \in \mathcal{U}_{c, s}} \left( \frac{P_{s, i, t}}{P_{s, i, 0}} \right)^{\frac{1}{N_{c, s}}} = \exp\left( \frac{1}{N_{c, s}} \sum_{i \in \mathcal{U}_{c, s}} \ln \left( \frac{P_{s, i, t}}{P_{s, i, 0}} \right) \right)
+    J_{s, e, t} = \left[ \prod_{i=1}^{n_{s, e, t}} \left( \frac{P_{s, e, i, t}}{P_{s, e, i, 0}} \right) \right]^{\frac{1}{n_{s, e, t}}} = \exp\left( \frac{1}{n_{s, e, t}} \sum_{i=1}^{n_{s, e, t}} \ln \left( \frac{P_{s, e, i, t}}{P_{s, e, i, 0}} \right) \right)
 \end{equation}
-where $P_{s, i, t}$ is the metric-standardized unit price (KHR/kg or KHR/L) for consumable items and unit price for durables, and $P_{s, i, 0}$ is the baseline anchor price.
+where:
+\begin{itemize}
+    \item $P_{s, e, i, t}$ is the price of product $i$ in store $s$ under elementary aggregate $e$ on day $t$ (unit price in KHR/kg or KHR/L for consumables, and shelf price for durables).
+    \item $P_{s, e, i, 0}$ is its reference base price established in baseline period $T_0$.
+    \item $n_{s, e, t}$ is the number of valid matched items in store $s$ for elementary aggregate $e$. All valid items in the store are utilized rather than randomly discarded or downsampled.
+\end{itemize}
 
-\hs In the second stage, the store-balanced elementary index $I_{c, t}^{\text{balanced}}$ averages the store-level micro-indices with equal store weights $w_s = 1 / S_c$:
+\paragraph{Store Eligibility Screening}
+To prevent an outlet with only 1 or 2 isolated listings from receiving the same influence as a well-covered outlet, a store must satisfy a minimum product-coverage threshold:
 \begin{equation}
-    I_{c, t}^{\text{balanced}} = \prod_{s \in \mathcal{S}_c} \left( I_{c, s, t} \right)^{\frac{1}{S_c}} \times 100 = \exp\left( \frac{1}{S_c} \sum_{s \in \mathcal{S}_c} \frac{1}{N_{c, s}} \sum_{i \in \mathcal{U}_{c, s}} \ln R_{s, i, t} \right) \times 100
+    n_{s, e, t} \ge n_{\text{min}} \quad (\text{with } n_{\text{min}} = 3)
 \end{equation}
-where $R_{s, i, t} = P_{s, i, t} / P_{s, i, 0}$. This mathematical formulation strictly guarantees retailer catalog-size invariance: a promotion on 5,000 items in a hypermarket cannot distort the aggregate elementary index beyond its assigned establishment weight ($1/S_c$).
 
-\subsubsection{Economic Meaning of Equal Store Weighting and the Catalog Dominance Dilemma}
-\hs In statistical price index methodology, \textbf{``equal weighting'' ($w_s = 1/S_c$)} denotes that each active retail establishment operates as an independent geographic market sampling unit in the urban economy. When transactional sales volume ($q_{s, i}$) is unobserved in web-scraped or scanner feeds, granting each outlet equal voting power is recommended by the \textit{ILO/IMF CPI Manual} \citep{imf2020cpi} (§6.57--6.68) to prevent e-commerce catalog size from masquerading as economic market share.
+\paragraph{Stage 2: Store Balancing to Elementary Aggregate Index}
+Because reliable merchant-level transaction turnover weights are unavailable in Cambodia, eligible store indices are combined using equal weights across eligible stores via an unweighted geometric mean in log space:
+\begin{equation}
+    I_{e, t} = 100 \times \exp\left( \frac{1}{|S_{e, t}^{\text{elig}}|} \sum_{s \in S_{e, t}^{\text{elig}}} \ln J_{s, e, t} \right) = 100 \times \left( \prod_{s \in S_{e, t}^{\text{elig}}} J_{s, e, t} \right)^{\frac{1}{|S_{e, t}^{\text{elig}}|}}
+\end{equation}
+where $S_{e, t}^{\text{elig}}$ is the set of eligible stores meeting the coverage threshold ($n_{s, e, t} \ge 3$) for elementary aggregate $e$ on day $t$.
+
+\begin{quote}
+\textbf{Critical Methodological Principles:}
+\begin{enumerate}
+    \item \textbf{Dataset Balancing at the Subclass Level (Not Product Downsampling):} The system does \textit{not} discard, prune, or restrict the number of products within each retailer. Store $s$ retains all its $n_{s, e, t}$ valid products to accurately capture internal price variance. The balancing occurs at the \textbf{lowest available COICOP level} (the Elementary Aggregate $e$---Subclass if available, Class if not), where each verified retailer provides one balanced signal with equal weight ($1/|S_{e, t}^{\text{elig}}|$).
+    \item \textbf{Outlet Balancing vs. Household Expenditure Weights:} Equal store weighting ($1/|S_{e, t}^{\text{elig}}|$) is an internal micro-level outlet balancing assumption designed to neutralize retailer catalog-size asymmetry. It must \textbf{not} be confused with official macro household expenditure weights ($W_d$), which are applied exclusively at higher COICOP tiers.
+\end{enumerate}
+\end{quote}
 
 \hs To understand the mathematical necessity of this approach, consider a stylized empirical scenario tracking the daily Rice subclass (\texttt{01.1.1.1}) across two licensed supermarkets in Phnom Penh:
 \begin{itemize}
@@ -508,35 +537,103 @@ Formally, each parent node $p$ aggregates its available active children $c \in \
 
 \hs In Cambodia's calibrated expenditure structure, this yields exactly \textbf{76 leaf Elementary Aggregates} (35 Case A Subclasses under 8 detailed Classes, plus 41 Case B Classes). The weights of these 76 leaf aggregates sum to exactly \textbf{100.000\%}, completely preventing double-counting.
 
-\paragraph{Missing Data Handling and Weight Renormalization:}
-If temporary market stockouts mean that an Elementary Aggregate has zero active price observations on day $t$:
+\paragraph{Missing Data Handling and the Coverage Screening Rule:}
+In automated web scraping pipelines, server outages or website layout changes may occasionally cause entire COICOP divisions to yield zero observations on day $t$.
+
+Silently renormalizing weights over whatever divisions happen to be observed:
+\begin{equation}
+    \text{CPI}_t^{\text{naive}} = \frac{\sum_{k \in \mathcal{A}_t} W_k \cdot I_{\text{div}, k, t}}{\sum_{k \in \mathcal{A}_t} W_k}
+\end{equation}
+artificially inflates the influence of the remaining active divisions. For example, if Division 04 (Housing and Utilities, 17.084\%) is temporarily unobserved, naive reweighting redistributes its weight across the remaining categories, forcing Food (Division 01) from 44.775\% to over 54\% of the index and generating false index volatility.
+
+To prevent silent weight distortion, the pipeline enforces a \textbf{Minimum Coverage Screening Rule}:
+\begin{enumerate}
+    \item A daily National Headline CPI is compiled only if:
+    \begin{itemize}
+        \item Division 01 (Food and Non-Alcoholic Beverages) is active, and
+        \item The total active expenditure weight satisfies:
+        \begin{equation}
+            \Omega_t = \sum_{k \in \mathcal{A}_t} W_k \ge 0.70 \quad (70\% \text{ of national expenditure})
+        \end{equation}
+    \end{itemize}
+    \item If $\Omega_t < 0.70$ or Division 01 is missing, day $t$ is \textbf{flagged as incomplete}, and headline index publication is withheld for that day.
+    \item On valid days where minor non-food divisions are temporarily unobserved ($\Omega_t \ge 0.70$), the headline index is compiled with an explicit transparency flag:
+    \begin{equation}
+        \text{CPI}_{\text{Headline}, t} = \frac{\sum_{k \in \mathcal{A}_t} W_k \cdot I_{\text{div}, k, t}}{\sum_{k \in \mathcal{A}_t} W_k} \quad (\text{for } \Omega_t \ge 0.70)
+    \end{equation}
+\end{enumerate}
+
+\subsection{Continuous Series Chain-Linking and Splicing Methodology}
+\hs In production price statistics, baseline updates, annual basket revisions, and macroeconomic benchmarking must never introduce artificial step discontinuities into historical analytical records. To ensure seamless longitudinal continuity across rebase events and sovereign benchmarks, the methodology formally distinguishes between two distinct operations: an \textbf{Annual Operational Chain-Linking Splice} (for ongoing forward pipeline maintenance) and an \textbf{Institutional Macro Spliced Anchor} (for connecting the digital pipeline to official historical records).
+
+\paragraph{1. Annual Operational Chain-Linking Splice (Digital Pipeline Continuity):}
+\hs When annual household expenditure weights or elementary aggregate baskets are updated between year $\tau-1$ and year $\tau$, the pipeline implements standard ILO/IMF chain-linking \citep{imf2020cpi} by compiling both old and new basket specifications concurrently across an annual overlap period (the month of December, $m = 12$):
+\begin{equation}
+    S_\tau = S_{\tau-1} \times \frac{\overline{\text{CPI}}_{\text{Dec}, \tau-1}^{\text{old}}}{\overline{\text{CPI}}_{\text{Dec}, \tau-1}^{\text{new}}} = S_{\tau-1} \times \frac{\overline{\text{CPI}}_{\text{Dec}, \tau-1}^{\text{old}}}{100.0000}
+\end{equation}
+\begin{equation}
+    \text{CPI}_t^{\text{continuous}} = S_\tau \times \frac{\text{CPI}_t^{\text{new}}}{100.0000}
+\end{equation}
+where $\overline{\text{CPI}}_{\text{Dec}, \tau-1}^{\text{old}}$ is the monthly arithmetic average compiled on the expiring basket, and $\overline{\text{CPI}}_{\text{Dec}, \tau-1}^{\text{new}} = 100.0000$ is the normalized base level of the newly inaugurated basket. By multiplying the new index by cumulative splice factor $S_\tau$, the continuous series preserves high-frequency percentage price changes while eliminating level jumps.
+
+\paragraph{2. Institutional Macro Spliced Anchor (Oct--Dec 2006 to 2026 Sovereign Scaling):}
+\hs A classical chain link requires a concurrent sample overlap period in which both the old physical survey index and the new digital web-scraped index are simultaneously compiled. Because granular daily web-scraping microdata did not exist during the 2006 reference period, the link between the official retrospective series of the National Institute of Statistics (NIS) (Base Oct--Dec 2006 = 100) and the web-scraped pipeline series (Base August 18, 2026 = 100) is methodologically defined as an \textbf{Index-Level Spliced Anchor}:
+\begin{equation}
+    S_{\text{macro}} = \frac{\text{CPI}_{2026-07}^{\text{NIS}}}{100.0000} = \frac{219.0070}{100.0000} = 2.190070
+\end{equation}
+\begin{equation}
+    \text{CPI}_{t, \text{spliced}}^{\text{NIS-scale}} = S_{\text{macro}} \times \text{CPI}_t^{\text{pipeline}}
+\end{equation}
+where $\text{CPI}_{2026-07}^{\text{NIS}} = 219.0070$ represents the official published NIS Phnom Penh Headline CPI for the reference month of July 2026 (the latest verified sovereign print available when daily automated scraping commenced on August 18, 2026). 
+
+\begin{quote}
+\textbf{Clarification on Base Dates and Splicing Semantics:}
+\begin{enumerate}
+    \item \textbf{Index-Level Splice vs. Simultaneous Chain Link:} Splicing to the official $2006=100$ scale is an index-level anchor; it does not assume or require identical individual physical items from 2006. Continuity is preserved through the structural COICOP taxonomy and expenditure shares.
+    \item \textbf{Benchmark Timing:} The anchor $219.0070$ represents the full monthly official NIS price release for July 2026. August 18, 2026 serves strictly as the operational launch date for initializing daily scraped base prices ($P_{i, 0} = 100.0$).
+\end{enumerate}
+\end{quote}
+
+\subsection{Experimental Exclusion-Based Core CPI Compilation}
+\hs Headline CPI is often subject to temporary price spikes driven by weather disruptions or global energy shocks. To observe underlying medium-term price trends, an \textbf{Experimental Exclusion-Based Core CPI} is constructed.
+
+In this research, the core indicator is compiled by excluding three divisions characterized by volatile commodity prices or regulated utility rates:
 \begin{itemize}
-    \item The missing aggregate is temporarily excluded from the current day's higher-level aggregation.
-    \item The weights of all currently available sister aggregates are automatically renormalized to sum to 100\% of the observed basket ($\sum w_{\text{active}}$).
-    \item The pipeline \textit{never} assigns an artificial index of 100.0 to missing categories (which would falsely suggest zero inflation).
-    \item The system explicitly tracks and persists \texttt{coverage\_weight} and \texttt{active\_elementary\_aggregate\_count} to provide full transparency into daily market coverage.
+    \item Division 01: Food and Non-Alcoholic Beverages (44.775\%)
+    \item Division 04: Housing, Water, Electricity, Gas and Other Fuels (17.084\%)
+    \item Division 07: Transport (12.228\%)
 \end{itemize}
+\begin{equation}
+    \text{CPI}_{\text{Core}, t}^{\text{Experimental}} = \frac{\sum_{k \notin \{01, 04, 07\}} W_k \cdot I_{\text{div}, k, t}}{\sum_{k \notin \{01, 04, 07\}} W_k}
+\end{equation}
+The excluded divisions represent $74.087\%$ of the consumer basket, leaving a remaining core basket of $25.913\%$ covering clothing, furnishings, healthcare, communication, recreation, education, dining, and personal care.
 
-\subsection{Continuous Series Chain-Linking and Splice Factor Formulation}
-\hs In production price statistics, baseline updating or index rebasing (e.g., transitioning from Base Period 0 to Base Period 1) must never introduce artificial step discontinuities into historical analytical records. To ensure seamless longitudinal continuity across rebasing events, the pipeline implements an axiomatic \textbf{Continuous Series Chain-Linking Splice Factor}:
-\begin{equation}
-    S = \frac{\text{CPI}_{\text{overlap}}^{\text{old}}}{\text{CPI}_{\text{overlap}}^{\text{new}}} = \frac{\text{CPI}_{\text{overlap}}^{\text{old}}}{100.0000}
-\end{equation}
-\begin{equation}
-    \text{CPI}_t^{\text{continuous}} = S \times \text{CPI}_t^{\text{new}}
-\end{equation}
-where $\text{CPI}_{\text{overlap}}^{\text{old}}$ is the historical index level evaluated on the overlap rebase date, and $\text{CPI}_{\text{overlap}}^{\text{new}} = 100.0000$ represents the normalized rebase benchmark. By multiplying the new rebased series by splice factor $S$, the continuous series preserves exact percentage changes while eliminating level jumps, guaranteeing uninterrupted empirical time-series for macroeconometric modeling.
+\begin{quote}
+\textbf{Methodological Qualification:} This measure is an \textit{experimental research indicator}. It is not an official definition of Core CPI published by the NIS or the National Bank of Cambodia, which may apply different exclusion or statistical trimming criteria.
+\end{quote}
 
-\subsection{Refined Core CPI Compilation}
-\hs To provide central bankers and fiscal planners with visibility into underlying structural inflation pressures, the pipeline simultaneously compiles a \textbf{Refined Core CPI} indicator. The Core CPI excludes volatile food categories and volatile regulated energy components across COICOP divisions:
+\subsection{Monthly Temporal Aggregation and Inflation Measures}
+\hs To evaluate the daily online indicator against official monthly statistics from the NIS, the daily series is aggregated to a monthly frequency.
+
+\paragraph{Monthly Average Index:}
+Following standard practice for comparing high-frequency price data with official monthly series (ILO et al., 2020, §8.40), the monthly index $\overline{\text{CPI}}_m$ is computed as the simple arithmetic average of valid daily headline indices within reference month $m$:
 \begin{equation}
-    \text{CPI}_t^{\text{Core}} = \frac{\sum_{d \in \mathcal{D}_{\text{core}}} w_d \cdot I_{d, t}^{\text{core}}}{\sum_{d \in \mathcal{D}_{\text{core}}} w_d}
+    \overline{\text{CPI}}_m = \frac{1}{D_m} \sum_{t=1}^{D_m} \text{CPI}_{\text{Headline}, t}
 \end{equation}
-where $\mathcal{D}_{\text{core}}$ comprises all core non-food, non-energy expenditure categories:
-\begin{equation}
-    \mathcal{D}_{\text{core}} = \{02, 03, 05, 06, 08, 09, 10, 11, 12\} \cup \{04_{\text{ex-energy}}, 07_{\text{ex-fuel}}\}
-\end{equation}
-Specifically, Division 01 (Food and Non-Alcoholic Beverages: $44.775\%$) is excluded in its entirety. Within Division 04 (Housing and Utilities), residential electricity (Class 04.5.1) and cooking LPG cylinder refills (Class 04.5.2) are excised, retaining shelter rents and water supply. Within Division 07 (Transport), retail petroleum fuels and lubricants (Class 07.2.2) are excised, retaining passenger transit services and vehicle purchases. The resulting Refined Core CPI represents $52.200\%$ of the total national consumption basket, effectively filtering out international commodity and harvest supply noise to isolate domestic underlying monetary trends.
+where $D_m$ is the count of valid daily observations in month $m$. This monthly average serves as a comparable research indicator and does not reproduce the physical survey collection process of the NIS.
+
+\paragraph{Monthly Inflation Rates:}
+From the monthly series, standard rate-of-change indicators are calculated:
+\begin{enumerate}
+    \item \textbf{Month-on-Month (MoM) Inflation Rate:}
+    \begin{equation}
+        \pi_m^{\text{MoM}} = \left( \frac{\overline{\text{CPI}}_m - \overline{\text{CPI}}_{m-1}}{\overline{\text{CPI}}_{m-1}} \right) \times 100
+    \end{equation}
+    \item \textbf{Year-on-Year (YoY) Inflation Rate:}
+    \begin{equation}
+        \pi_m^{\text{YoY}} = \left( \frac{\overline{\text{CPI}}_m - \overline{\text{CPI}}_{m-12}}{\overline{\text{CPI}}_{m-12}} \right) \times 100
+    \end{equation}
+\end{enumerate}
 
 
 \section{Pillar 5: Real-Time Inflation Nowcasting, Quality Assurance, and Validation Framework}\label{sec:nowcasting_engine}
@@ -677,11 +774,15 @@ From this synthesized headline index, the projected Month-over-Month inflation r
 \begin{equation}
     \widehat{\pi}_{\text{MoM}, M}(t) = \left( \frac{\widehat{\text{CPI}}_M(t) - \text{CPI}_{M-1}}{\text{CPI}_{M-1}} \right) \times 100\%
 \end{equation}
-\hs To ensure seamless institutional compatibility with official government releases published by the National Institute of Statistics (NIS), the nowcasted rate is chain-linked directly to the official NIS Phnom Penh benchmark series (Base Oct--Dec 2006 = 100) using continuous exponential compounding:
+\hs To ensure seamless institutional compatibility with official government releases published by the National Institute of Statistics (NIS), the nowcasted rate is anchored directly to the official NIS Phnom Penh benchmark series (Base Oct--Dec 2006 = 100) using continuous exponential compounding:
 \begin{equation}
     \widehat{\text{CPI}}_{\text{NIS}, M}(t) = \text{CPI}_{\text{NIS}, M-1} \times \exp\left( \frac{\widehat{\pi}_{\text{MoM}, M}(t)}{100} \right)
 \end{equation}
-This exponential formulation maintains exact mathematical symmetry under positive and negative price innovations and prevents compounding distortion over long horizons.
+This exponential formulation maintains exact mathematical symmetry under positive and negative price innovations and prevents compounding distortion over long horizons. For typical low-inflation regimes where $|\widehat{\pi}_{\text{MoM}}| \le 2\%$, the first-order Taylor expansion yields:
+\begin{equation}
+    \exp\left( \frac{\widehat{\pi}_{\text{MoM}}}{100} \right) \approx 1 + \frac{\widehat{\pi}_{\text{MoM}}}{100} \implies \widehat{\text{CPI}}_{\text{NIS}, M}(t) \approx \text{CPI}_{\text{NIS}, M-1} \left( 1 + \frac{\widehat{\pi}_{\text{MoM}, M}(t)}{100} \right)
+\end{equation}
+The production codebase computes both the exact continuous exponential path and logs the first-order linear approximation, ensuring numerical concordance across classical statistical and continuous financial accounting standards.
 
 \subsection{36-Month 5-Basket RidgeCV Macro Calibration Engine}
 \hs While daily price quotes provide high-frequency signals within an active month, the long-run pass-through elasticities $\boldsymbol{\beta}$ between individual divisions and the national price level require empirical macroeconomic calibration. To estimate these structural relationships, the pipeline implements an automated \textbf{5-Basket RidgeCV Macro Calibration Engine}:
@@ -730,10 +831,11 @@ and verifying whether actual inflation fell within the estimated 95\% confidence
 \hs To provide rigorous, continuous validation against the sovereign statistical standard, the pipeline implements an automated \textbf{Official NIS Ground-Truth Ingestion and Tracking Error Engine}:
 \begin{enumerate}
     \item \textbf{Weekly Benchmark Ingestion:} Scheduled every Monday at 08:00 AM (ICT), the automated official benchmark ingestion engine queries the National Institute of Statistics portal, extracts the latest published 12-group monthly index releases, and synchronizes the official benchmark master dimension.
-    \item \textbf{Index Rebasing Formulation:} Because the daily web-scraped pipeline is anchored to August 18, 2026 ($100.00$), whereas official NIS series are anchored to Oct--Dec 2006 ($100.00$), the Gold benchmark tracking mart splices the pipeline series onto the official scale using the baseline anchor index:
+    \item \textbf{Index Splicing Formulation:} Because the daily web-scraped pipeline is anchored to August 18, 2026 ($100.00$), whereas official NIS series are anchored to Oct--Dec 2006 ($100.00$), the Gold benchmark tracking mart splices the pipeline series onto the official scale using the verified baseline anchor index:
     \begin{equation}
-        \text{CPI}_{M, \text{rebased}}^{\text{pipeline}} = \left( \frac{\text{CPI}_M^{\text{pipeline}}}{100.0} \right) \times \text{CPI}_{2026-08}^{\text{NIS}}
+        \text{CPI}_{M, \text{rebased}}^{\text{pipeline}} = \left( \frac{\text{CPI}_M^{\text{pipeline}}}{100.0} \right) \times \text{CPI}_{2026-07}^{\text{NIS}}
     \end{equation}
+    where $\text{CPI}_{2026-07}^{\text{NIS}} = 219.0070$ is the latest published official NIS Phnom Penh monthly release prior to pipeline deployment. Because official statistical agencies operate on a standard one-month publication lag, the July 2026 print serves as the sovereign anchor for initial operational benchmarking.
     \item \textbf{Tracking Error and Directional Concordance:} The mart continuously computes the level tracking error and month-over-month inflation differential:
     \begin{equation}
         \epsilon_{\text{tracking}, M} = \text{CPI}_{M, \text{rebased}}^{\text{pipeline}} - \text{CPI}_M^{\text{NIS}}

@@ -44,7 +44,7 @@ data/cold_storage/
 playwright-report/
 test-results/
 
-# ── IDE / Editor ────────────────────────────────────────────────────────────
+# ── IDE / Editor / Office ───────────────────────────────────────────────────
 .vscode/
 .idea/
 .continue/
@@ -52,6 +52,7 @@ test-results/
 *.swo
 .DS_Store
 Thumbs.db
+~$*
 
 # ── Large transient artifacts ──────────────────────────────────────────────
 *.log

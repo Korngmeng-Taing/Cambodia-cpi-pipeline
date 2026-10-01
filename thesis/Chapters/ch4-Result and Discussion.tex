@@ -271,9 +271,9 @@ and seamlessly rescales subsequent elementary trajectories. Empirical simulation
 \subsection{Official Benchmark Comparison and Historical Backfill Performance}
 \hs The complete daily CPI engine was backfilled across all \textbf{41 historical calculation dates} (from inception on August 18, 2026 through September 27, 2026), generating over 490 division-level observations and updating the core Kimball star-schema data models.
 
-\hs To verify compliance with national accounts, the pipeline's rebased monthly index was directly benchmarked against the official release from the National Institute of Statistics (NIS) for August 2026:
+\hs To verify compliance with national accounts, the pipeline's rebased monthly index was directly benchmarked against the official release from the National Institute of Statistics (NIS) for the baseline reference month of July 2026:
 \begin{itemize}
-    \item \textbf{Official NIS August 2026 CPI Release:} 219.0070
+    \item \textbf{Official NIS July 2026 CPI Release:} 219.0070 (Base Oct--Dec 2006 = 100)
     \item \textbf{Pipeline Daily Rebased \& Spliced Benchmark:} 218.8863
     \item \textbf{Mean Absolute Tracking Error (MAE):} \textbf{0.1207 index points} (only \textbf{0.055\% relative difference}).
 \end{itemize}
@@ -486,7 +486,7 @@ the pipeline outputs an exact estimated index level directly compatible with off
     \label{fig:store_balancing_ablation}
 \end{figure}
 
-\hs Figure~\ref{fig:store_balancing_ablation} displays the ablation divergence spread ($\Delta I = I_{\text{Flat}} - I_{\text{Balanced}}$). As formalized in Section~3.6.2, Flat Jevons allocates an implicit weight proportional to item count (giving $95\%$ weight to a retailer listing $190$ SKUs over a grocer listing $10$ SKUs), allowing a single establishment's stock updates to dictate the index. In the empirical dataset, during promotional campaigns launched by the dominant hypermarket, Flat Jevons produced spurious aggregate index fluctuations of up to $\pm 1.8$ index points, inducing a persistent upward distortion of \textbf{+0.52 index points} ($101.62$ under Flat Jevons vs. $101.15$ under Two-Stage Store-Balanced Jevons on the terminal evaluation checkpoint).
+\hs Figure~\ref{fig:store_balancing_ablation} displays the ablation divergence spread ($\Delta I = I_{\text{Flat}} - I_{\text{Balanced}}$). As formalized in Section~\ref{sec:store_balancing}, Flat Jevons allocates an implicit weight proportional to item count (giving $95\%$ weight to a retailer listing $190$ SKUs over a grocer listing $10$ SKUs), allowing a single establishment's stock updates to dictate the index. In the empirical dataset, during promotional campaigns launched by the dominant hypermarket, Flat Jevons produced spurious aggregate index fluctuations of up to $\pm 1.8$ index points, inducing a persistent upward distortion of \textbf{+0.52 index points} ($101.62$ under Flat Jevons vs. $101.15$ under Two-Stage Store-Balanced Jevons on the terminal evaluation checkpoint).
 
 \hs To rigorously quantify this effect, Table~\ref{tab:sensitivity_jevons} compares the deployed Two-Stage Store-Balanced Jevons against the Single-Stage Flat Jevons across key statistical metrics:
 

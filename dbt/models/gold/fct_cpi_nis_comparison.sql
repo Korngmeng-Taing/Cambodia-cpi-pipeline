@@ -47,7 +47,9 @@ nis_benchmark as (
 nis_anchor as (
     select nis_headline_cpi as anchor_nis_headline
     from nis_benchmark
-    where cpi_month = '2026-08-01'
+    where nis_headline_cpi is not null
+      and cpi_month <= '2026-08-31'
+    order by cpi_month desc
     limit 1
 ),
 joined as (

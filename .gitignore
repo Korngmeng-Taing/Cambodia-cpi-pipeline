@@ -76,6 +76,11 @@ Thumbs.db
 *.snm
 *.vrb
 *.pdf
+*.tex
+*.pptx
+*.ppt
+*.pps
+*.ppsx
 
 # ── Private / Thesis / Documentation ──────────────────────────────────────────
 thesis/
